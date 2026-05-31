@@ -71,11 +71,13 @@ CHANNEL_CONNECTOR_OVERRIDES: dict[str, dict[str, Any]] = {
         "setup": "Install signal-cli, register/link a number, and bridge events to the Paideia gateway.",
     },
     "matrix": {
-        "connector_status": "external_plugin_required",
-        "ingress": "normalized_gateway_after_matrix_plugin",
-        "delivery": "matrix_plugin",
+        "connector_status": "paideia_direct_ingress_delivery_ready",
+        "ingress": "matrix_room_event_or_normalized_gateway",
+        "delivery": "matrix_client_send_message",
         "required_env_vars": ["MATRIX_HOMESERVER_URL", "MATRIX_ACCESS_TOKEN", "MATRIX_USER_ID"],
-        "setup": "Configure a Matrix bot account and room allowlist, then bridge events through the gateway.",
+        "setup": "Configure a Matrix bot account and room allowlist, then route Matrix room events through the Paideia gateway.",
+        "direct_raw_ingress_ready": True,
+        "direct_delivery_ready": True,
     },
     "microsoft-teams": {
         "connector_status": "external_plugin_required_enterprise",
@@ -85,11 +87,13 @@ CHANNEL_CONNECTOR_OVERRIDES: dict[str, dict[str, Any]] = {
         "setup": "Configure Bot Framework credentials and tenant/channel allowlists.",
     },
     "google-chat": {
-        "connector_status": "external_plugin_required",
+        "connector_status": "paideia_direct_ingress_delivery_ready",
         "ingress": "google_chat_http_event_to_normalized_gateway",
-        "delivery": "google_chat_webhook_or_api_plugin",
+        "delivery": "google_chat_webhook_message",
         "required_env_vars": ["GOOGLE_CHAT_WEBHOOK_URL"],
-        "setup": "Configure a Google Chat app or webhook and map spaces to allowlisted conversations.",
+        "setup": "Configure a Google Chat app or webhook, map spaces to allowlisted conversations, then use Paideia direct ingress and outbound delivery.",
+        "direct_raw_ingress_ready": True,
+        "direct_delivery_ready": True,
     },
     "imessage": {
         "connector_status": "openclaw_bundled_imsg_bridge_required",
@@ -106,18 +110,22 @@ CHANNEL_CONNECTOR_OVERRIDES: dict[str, dict[str, Any]] = {
         "setup": "Connect an IRC bridge and map channels/DMs to Paideia conversation ids.",
     },
     "line": {
-        "connector_status": "external_plugin_required",
+        "connector_status": "paideia_direct_ingress_delivery_ready",
         "ingress": "line_webhook_to_normalized_gateway",
-        "delivery": "line_messaging_api_plugin",
+        "delivery": "line_messaging_api_push_message",
         "required_env_vars": ["LINE_CHANNEL_ACCESS_TOKEN", "LINE_CHANNEL_SECRET"],
         "setup": "Configure LINE Messaging API webhook and allowlist user/group ids.",
+        "direct_raw_ingress_ready": True,
+        "direct_delivery_ready": True,
     },
     "mattermost": {
-        "connector_status": "external_plugin_required",
-        "ingress": "normalized_gateway_after_mattermost_plugin",
-        "delivery": "mattermost_bot_api",
+        "connector_status": "paideia_direct_ingress_delivery_ready",
+        "ingress": "mattermost_outgoing_webhook_to_normalized_gateway",
+        "delivery": "mattermost_create_post",
         "required_env_vars": ["MATTERMOST_URL", "MATTERMOST_BOT_TOKEN"],
         "setup": "Create a Mattermost bot account and channel allowlist.",
+        "direct_raw_ingress_ready": True,
+        "direct_delivery_ready": True,
     },
     "nextcloud-talk": {
         "connector_status": "external_plugin_required",
@@ -148,18 +156,22 @@ CHANNEL_CONNECTOR_OVERRIDES: dict[str, dict[str, Any]] = {
         "setup": "Configure QQ bot credentials and private/group allowlists.",
     },
     "sms": {
-        "connector_status": "external_plugin_required",
+        "connector_status": "paideia_direct_ingress_delivery_ready",
         "ingress": "twilio_webhook_to_normalized_gateway",
-        "delivery": "twilio_sms_plugin",
+        "delivery": "twilio_sms_message",
         "required_env_vars": ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_FROM_NUMBER"],
         "setup": "Configure Twilio webhook and phone-number allowlists.",
+        "direct_raw_ingress_ready": True,
+        "direct_delivery_ready": True,
     },
     "synology-chat": {
-        "connector_status": "external_plugin_required",
+        "connector_status": "paideia_direct_ingress_delivery_ready",
         "ingress": "synology_outgoing_webhook_to_normalized_gateway",
         "delivery": "synology_incoming_webhook",
         "required_env_vars": ["SYNOLOGY_CHAT_WEBHOOK_URL"],
         "setup": "Configure Synology outgoing and incoming webhooks.",
+        "direct_raw_ingress_ready": True,
+        "direct_delivery_ready": True,
     },
     "tlon": {
         "connector_status": "external_plugin_required",
@@ -230,20 +242,30 @@ def _connector_entry(channel: dict[str, Any]) -> dict[str, Any]:
     override = CHANNEL_CONNECTOR_OVERRIDES.get(channel_id, {})
     connector_status = override.get("connector_status", "external_plugin_required")
     generic_gateway_ready = True
+    direct_raw_ingress_ready = override.get(
+        "direct_raw_ingress_ready",
+        connector_status
+        in {
+            "paideia_direct_ingress_delivery_ready",
+            "paideia_loopback_ready",
+        },
+    )
+    direct_delivery_ready = override.get(
+        "direct_delivery_ready",
+        connector_status
+        in {
+            "paideia_direct_ingress_delivery_ready",
+            "paideia_loopback_ready",
+        },
+    )
     return {
         "channel_id": channel_id,
         "label": channel["label"],
         "transport": channel["transport"],
         "connector_status": connector_status,
         "generic_normalized_gateway_ready": generic_gateway_ready,
-        "direct_raw_ingress_ready": connector_status in {
-            "paideia_direct_ingress_delivery_ready",
-            "paideia_loopback_ready",
-        },
-        "direct_delivery_ready": connector_status in {
-            "paideia_direct_ingress_delivery_ready",
-            "paideia_loopback_ready",
-        },
+        "direct_raw_ingress_ready": direct_raw_ingress_ready,
+        "direct_delivery_ready": direct_delivery_ready,
         "ingress": override.get("ingress", "normalized_gateway_after_external_plugin"),
         "delivery": override.get("delivery", "external_plugin_delivery"),
         "required_env_vars": override.get("required_env_vars", []),

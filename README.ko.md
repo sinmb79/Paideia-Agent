@@ -271,7 +271,7 @@ ai22b-talent-foundry doctor-openclaw-channel-connectors `
 
 OpenClaw식 key resolution도 반영합니다. Paideia는 `OPENCLAW_LIVE_<PROVIDER>_KEY`, `<PROVIDER>_API_KEYS`, `<PROVIDER>_API_KEY`, 그리고 `ARCEEAI_API_KEY`, `VOLCANO_ENGINE_API_KEY`, `DASHSCOPE_API_KEY`, `XIAOMI_TOKEN_PLAN_API_KEY` 같은 provider별 환경변수를 확인합니다. 쉼표/세미콜론 key list가 있으면 첫 번째 non-empty key를 live smoke test에 사용합니다.
 
-Telegram, Discord, Slack, WebChat은 Paideia 직접 adapter가 있습니다. 현재 OpenClaw iMessage 지원은 `imessage`/`imsg` 경로가 기준이며, `bluebubbles`는 기존 설정을 옮기기 위한 legacy migration 대상으로만 표시합니다. `clickclack`과 `qa-channel`도 catalog에 포함되어 각각 bot-token plugin, deterministic QA scenario plugin으로 표시됩니다. 나머지 OpenClaw 채널은 normalized gateway envelope를 사용할 수 있지만 WhatsApp QR pairing, signal-cli, Matrix bot, Bot Framework, 지역 플랫폼 토큰처럼 raw platform bridge가 필요한 항목은 doctor가 별도 준비 단계로 표시합니다.
+Telegram, Discord, Slack, Google Chat, LINE, Matrix, Mattermost, SMS, Synology Chat, WebChat은 Paideia 직접 adapter가 있습니다. 일반 HTTP API나 webhook을 제공하는 채널은 검토된 inbound/outbound gateway flow로 바로 테스트할 수 있습니다. 현재 OpenClaw iMessage 지원은 `imessage`/`imsg` 경로가 기준이며, `bluebubbles`는 기존 설정을 옮기기 위한 legacy migration 대상으로만 표시합니다. `clickclack`과 `qa-channel`도 catalog에 포함되어 각각 bot-token plugin, deterministic QA scenario plugin으로 표시됩니다. 나머지 OpenClaw 채널은 normalized gateway envelope를 사용할 수 있지만 WhatsApp QR pairing, signal-cli, Bot Framework, 지역 계정/session plugin처럼 raw platform bridge가 필요한 항목은 doctor가 별도 준비 단계로 표시합니다.
 
 반환된 outbound envelope는 기본 dry-run delivery adapter로 먼저 검토할 수 있습니다.
 

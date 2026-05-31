@@ -167,6 +167,122 @@ def _slack_event(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _google_chat_event(payload: dict[str, Any]) -> dict[str, Any]:
+    message = payload.get("message") if isinstance(payload.get("message"), dict) else payload
+    space = payload.get("space") if isinstance(payload.get("space"), dict) else message.get("space", {})
+    sender = payload.get("user") if isinstance(payload.get("user"), dict) else message.get("sender", {})
+    space_id = str(space.get("name") or message.get("space", {}).get("name") or "unknown").replace(":", "_")
+    thread = message.get("thread") if isinstance(message.get("thread"), dict) else {}
+    conversation_id = f"agent:main:google-chat:space:{space_id}"
+    if thread.get("name"):
+        conversation_id += f":thread:{str(thread['name']).replace(':', '_')}"
+    sender_id = str(sender.get("name") or sender.get("email") or "unknown")
+    return {
+        "channel_id": "google-chat",
+        "conversation_id": conversation_id,
+        "sender_id": f"google-chat:{sender_id}",
+        "text": _message_text(message),
+        "attachments": [],
+        "metadata": {
+            "platform_event_type": payload.get("type") or "MESSAGE",
+            "google_chat_message_name": message.get("name"),
+            "space_name": space.get("name"),
+            "display_name": sender.get("displayName") or sender.get("name"),
+        },
+    }
+
+
+def _line_event(payload: dict[str, Any]) -> dict[str, Any]:
+    events = payload.get("events") if isinstance(payload.get("events"), list) else [payload]
+    event = next((item for item in events if isinstance(item, dict)), {})
+    source = event.get("source") if isinstance(event.get("source"), dict) else {}
+    message = event.get("message") if isinstance(event.get("message"), dict) else {}
+    source_type = str(source.get("type") or "user")
+    target = str(source.get("groupId") or source.get("roomId") or source.get("userId") or "unknown")
+    sender = str(source.get("userId") or target)
+    return {
+        "channel_id": "line",
+        "conversation_id": f"agent:main:line:{source_type}:{target}",
+        "sender_id": f"line:{sender}",
+        "text": _message_text(message),
+        "attachments": [{"type": message.get("type"), "present": True}] if message.get("type") != "text" else [],
+        "metadata": {
+            "platform_event_type": event.get("type"),
+            "line_reply_token_present": bool(event.get("replyToken")),
+            "display_name": sender,
+        },
+    }
+
+
+def _matrix_event(payload: dict[str, Any]) -> dict[str, Any]:
+    content = payload.get("content") if isinstance(payload.get("content"), dict) else payload
+    room_id = str(payload.get("room_id") or payload.get("roomId") or "unknown")
+    sender = str(payload.get("sender") or "unknown")
+    return {
+        "channel_id": "matrix",
+        "conversation_id": f"agent:main:matrix:room:{room_id}",
+        "sender_id": f"matrix:{sender}",
+        "text": str(content.get("body") or content.get("text") or ""),
+        "attachments": [],
+        "metadata": {
+            "platform_event_type": payload.get("type") or content.get("msgtype"),
+            "matrix_event_id": payload.get("event_id"),
+            "display_name": sender,
+        },
+    }
+
+
+def _mattermost_event(payload: dict[str, Any]) -> dict[str, Any]:
+    channel_id = str(payload.get("channel_id") or payload.get("channelId") or "unknown")
+    user_id = str(payload.get("user_id") or payload.get("userId") or payload.get("user_name") or "unknown")
+    return {
+        "channel_id": "mattermost",
+        "conversation_id": f"agent:main:mattermost:channel:{channel_id}",
+        "sender_id": f"mattermost:{user_id}",
+        "text": _message_text(payload),
+        "attachments": [],
+        "metadata": {
+            "platform_event_type": payload.get("trigger_word") or "message",
+            "mattermost_post_id": payload.get("post_id"),
+            "display_name": payload.get("user_name") or user_id,
+        },
+    }
+
+
+def _sms_event(payload: dict[str, Any]) -> dict[str, Any]:
+    from_number = str(payload.get("From") or payload.get("from") or "unknown")
+    to_number = str(payload.get("To") or payload.get("to") or "unknown")
+    return {
+        "channel_id": "sms",
+        "conversation_id": f"agent:main:sms:phone:{from_number}",
+        "sender_id": f"sms:{from_number}",
+        "text": str(payload.get("Body") or payload.get("body") or ""),
+        "attachments": [],
+        "metadata": {
+            "platform_event_type": "twilio_sms_webhook",
+            "sms_to": to_number,
+            "sms_message_sid": payload.get("MessageSid") or payload.get("SmsMessageSid"),
+            "display_name": from_number,
+        },
+    }
+
+
+def _synology_chat_event(payload: dict[str, Any]) -> dict[str, Any]:
+    channel_id = str(payload.get("channel_id") or payload.get("channelId") or payload.get("token") or "unknown")
+    sender = str(payload.get("user_id") or payload.get("username") or payload.get("user_name") or "unknown")
+    return {
+        "channel_id": "synology-chat",
+        "conversation_id": f"agent:main:synology-chat:channel:{channel_id}",
+        "sender_id": f"synology-chat:{sender}",
+        "text": _message_text(payload),
+        "attachments": [],
+        "metadata": {
+            "platform_event_type": "synology_outgoing_webhook",
+            "display_name": payload.get("username") or payload.get("user_name") or sender,
+        },
+    }
+
+
 def _envelope_from_parts(parts: dict[str, Any]) -> dict[str, Any]:
     return {
         "schema": OPENCLAW_CHANNEL_MESSAGE_SCHEMA,
@@ -246,6 +362,18 @@ def translate_openclaw_platform_event(
         parts = _discord_event(payload)
     elif normalized_channel_id == "slack":
         parts = _slack_event(payload)
+    elif normalized_channel_id == "google-chat":
+        parts = _google_chat_event(payload)
+    elif normalized_channel_id == "line":
+        parts = _line_event(payload)
+    elif normalized_channel_id == "matrix":
+        parts = _matrix_event(payload)
+    elif normalized_channel_id == "mattermost":
+        parts = _mattermost_event(payload)
+    elif normalized_channel_id == "sms":
+        parts = _sms_event(payload)
+    elif normalized_channel_id == "synology-chat":
+        parts = _synology_chat_event(payload)
     else:
         raise ValueError(f"Platform ingress adapter is not implemented for channel: {normalized_channel_id}")
     channel_message = _envelope_from_parts(parts)

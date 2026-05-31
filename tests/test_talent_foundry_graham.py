@@ -767,6 +767,9 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertEqual(provider_by_id["openrouter"]["support_level"], "paideia_direct_or_openclaw_gateway_ready")
         self.assertEqual(provider_by_id["qwen-oauth"]["support_level"], "openclaw_plugin_or_oauth_required")
         self.assertEqual(channel_by_id["telegram"]["support_level"], "paideia_direct_flow_ready")
+        self.assertEqual(channel_by_id["line"]["support_level"], "paideia_direct_flow_ready")
+        self.assertEqual(channel_by_id["matrix"]["support_level"], "paideia_direct_flow_ready")
+        self.assertEqual(channel_by_id["sms"]["support_level"], "paideia_direct_flow_ready")
         self.assertEqual(channel_by_id["webchat"]["support_level"], "loopback_chat_ready")
         self.assertEqual(channel_by_id["whatsapp"]["support_level"], "normalized_gateway_ready_plugin_delivery_required")
         self.assertIn("run-graham-junior-quickstart", matrix["operator_paths"]["first_sample_agent"])
@@ -888,10 +891,16 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertTrue(by_id["telegram"]["direct_raw_ingress_ready"])
         self.assertTrue(by_id["telegram"]["direct_delivery_ready"])
         self.assertEqual(by_id["whatsapp"]["connector_status"], "external_plugin_required_qr_pairing")
-        self.assertEqual(by_id["matrix"]["connector_status"], "external_plugin_required")
+        self.assertEqual(by_id["matrix"]["connector_status"], "paideia_direct_ingress_delivery_ready")
+        self.assertTrue(by_id["matrix"]["direct_raw_ingress_ready"])
+        self.assertTrue(by_id["matrix"]["direct_delivery_ready"])
+        self.assertTrue(by_id["google-chat"]["direct_delivery_ready"])
+        self.assertTrue(by_id["line"]["direct_raw_ingress_ready"])
+        self.assertTrue(by_id["sms"]["direct_delivery_ready"])
         self.assertEqual(by_id["signal"]["connector_status"], "local_bridge_required")
         self.assertEqual(by_id["webchat"]["connector_status"], "paideia_loopback_ready")
         self.assertFalse(doctor_by_id["whatsapp"]["ready_for_live_delivery"])
+        self.assertFalse(doctor_by_id["matrix"]["ready_for_live_delivery"])
         self.assertTrue(doctor_by_id["webchat"]["ready_for_live_delivery"])
         self.assertFalse(doctor["secret_values_stored"])
 
@@ -1830,6 +1839,15 @@ class GrahamTalentFoundryTests(unittest.TestCase):
                 "text": "Discord dry-run reply",
             },
         }
+        matrix_run = {
+            "schema": "ai22b-openclaw-channel-run/v1",
+            "outbound": {
+                "channel_id": "matrix",
+                "conversation_id": "agent:main:matrix:room:!room123",
+                "reply_to_message_id": "openclaw_msg_matrix",
+                "text": "Matrix dry-run reply",
+            },
+        }
 
         with tempfile.TemporaryDirectory() as tmp:
             config_path = Path(tmp) / "delivery_config.json"
@@ -1846,11 +1864,15 @@ class GrahamTalentFoundryTests(unittest.TestCase):
                 delivery_method="bot",
                 token_env_var="PAIDEIA_TEST_DISCORD_TOKEN",
             )
+            matrix = send_openclaw_channel_outbound(matrix_run, mode="dry-run")
             config_exists = config_path.exists()
             telegram_delivery_exists = telegram_path.exists()
 
         self.assertEqual(config["schema"], "ai22b-openclaw-channel-delivery-config/v1")
         self.assertTrue(config_exists)
+        self.assertIn("matrix", {item["channel_id"] for item in config["channels"]})
+        self.assertIn("google-chat", {item["channel_id"] for item in config["channels"]})
+        self.assertIn("sms", {item["channel_id"] for item in config["channels"]})
         self.assertEqual(telegram["status"], "prepared_not_sent")
         self.assertFalse(telegram["network_call_performed"])
         self.assertEqual(telegram["payload"]["chat_id"], "-1001234567890")
@@ -1860,6 +1882,10 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertEqual(discord["payload"]["content"], "Discord dry-run reply")
         self.assertTrue(discord["target_valid"])
         self.assertFalse(discord["auth"]["token_present"])
+        self.assertEqual(matrix["http_method"], "PUT")
+        self.assertEqual(matrix["payload"]["msgtype"], "m.text")
+        self.assertFalse(matrix["auth"]["token_present"])
+        self.assertFalse(matrix["auth"]["base_url_present"])
 
     def test_channel_ingress_translates_platform_events_with_allowlist(self) -> None:
         from ai22b.talent_foundry.channel_ingress import (
@@ -1889,9 +1915,19 @@ class GrahamTalentFoundryTests(unittest.TestCase):
                 "ts": "1717171717.000100",
             },
         }
+        line_event = {
+            "events": [
+                {
+                    "type": "message",
+                    "replyToken": "reply-token",
+                    "source": {"type": "group", "groupId": "G123", "userId": "U123"},
+                    "message": {"type": "text", "text": "LINE inbound test"},
+                }
+            ]
+        }
         access = build_openclaw_channel_access_config(
-            channels=["telegram", "slack"],
-            allowed_senders=["telegram:12345"],
+            channels=["telegram", "slack", "line"],
+            allowed_senders=["telegram:12345", "line:U123"],
         )
 
         telegram = translate_openclaw_platform_event(
@@ -1902,6 +1938,11 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         slack = translate_openclaw_platform_event(
             channel_id="slack",
             payload=slack_event,
+            access_config=access,
+        )
+        line = translate_openclaw_platform_event(
+            channel_id="line",
+            payload=line_event,
             access_config=access,
         )
 
@@ -1921,6 +1962,99 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             slack["channel_message"]["conversation_id"],
             "agent:main:slack:channel:C123456:thread:1717171717.000100",
         )
+        self.assertTrue(line["access"]["allowed"])
+        self.assertEqual(line["channel_message"]["channel"]["channel_id"], "line")
+        self.assertEqual(line["channel_message"]["conversation_id"], "agent:main:line:group:G123")
+        self.assertEqual(line["channel_message"]["sender"]["sender_id"], "line:U123")
+
+    def test_channel_delivery_live_extended_openclaw_http_adapters_do_not_store_secrets(self) -> None:
+        from ai22b.talent_foundry.channel_delivery import send_openclaw_channel_outbound
+
+        captured_json: list[dict[str, object]] = []
+        captured_form: list[dict[str, object]] = []
+
+        def fake_request_json(**kwargs: object) -> dict:
+            captured_json.append(dict(kwargs))
+            return {"ok": True, "id": "sent"}
+
+        def fake_request_form(**kwargs: object) -> dict:
+            captured_form.append(dict(kwargs))
+            return {"sid": "SM123", "status": "queued"}
+
+        line_run = {
+            "schema": "ai22b-openclaw-channel-run/v1",
+            "outbound": {
+                "channel_id": "line",
+                "conversation_id": "agent:main:line:group:G123",
+                "reply_to_message_id": "line_msg",
+                "text": "LINE live adapter test",
+            },
+        }
+        matrix_run = {
+            "schema": "ai22b-openclaw-channel-run/v1",
+            "outbound": {
+                "channel_id": "matrix",
+                "conversation_id": "agent:main:matrix:room:!room123",
+                "reply_to_message_id": "matrix_msg",
+                "text": "Matrix live adapter test",
+            },
+        }
+        google_run = {
+            "schema": "ai22b-openclaw-channel-run/v1",
+            "outbound": {
+                "channel_id": "google-chat",
+                "conversation_id": "agent:main:google-chat:space:AAA",
+                "reply_to_message_id": "google_msg",
+                "text": "Google Chat live adapter test",
+            },
+        }
+        sms_run = {
+            "schema": "ai22b-openclaw-channel-run/v1",
+            "outbound": {
+                "channel_id": "sms",
+                "conversation_id": "agent:main:sms:phone:+821012345678",
+                "reply_to_message_id": "sms_msg",
+                "text": "SMS live adapter test",
+            },
+        }
+
+        env = {
+            "LINE_CHANNEL_ACCESS_TOKEN": "line-secret-token",
+            "MATRIX_HOMESERVER_URL": "https://matrix.example.test",
+            "MATRIX_ACCESS_TOKEN": "matrix-secret-token",
+            "GOOGLE_CHAT_WEBHOOK_URL": "https://chat.googleapis.com/v1/spaces/AAA/messages?key=secret",
+            "TWILIO_ACCOUNT_SID": "AC123",
+            "TWILIO_AUTH_TOKEN": "twilio-secret-token",
+            "TWILIO_FROM_NUMBER": "+82025550100",
+        }
+        with patch.dict(os.environ, env), patch(
+            "ai22b.talent_foundry.channel_delivery._request_json",
+            side_effect=fake_request_json,
+        ), patch(
+            "ai22b.talent_foundry.channel_delivery._request_form",
+            side_effect=fake_request_form,
+        ):
+            line = send_openclaw_channel_outbound(line_run, mode="live")
+            matrix = send_openclaw_channel_outbound(matrix_run, mode="live")
+            google = send_openclaw_channel_outbound(google_run, mode="live")
+            sms = send_openclaw_channel_outbound(sms_run, mode="live")
+
+        combined = json.dumps([line, matrix, google, sms], ensure_ascii=False)
+        self.assertEqual(line["status"], "sent")
+        self.assertEqual(line["payload"]["to"], "G123")
+        self.assertEqual(line["headers"], {"Authorization": "<redacted>"})
+        self.assertEqual(matrix["http_method"], "PUT")
+        self.assertEqual(captured_json[1]["method"], "PUT")
+        self.assertEqual(matrix["headers"], {"Authorization": "<redacted>"})
+        self.assertEqual(google["adapter"], "google_chat_webhook_message")
+        self.assertTrue(google["auth"]["webhook_url_present"])
+        self.assertEqual(sms["request_format"], "form")
+        self.assertEqual(captured_form[0]["payload"]["To"], "+821012345678")
+        self.assertEqual(sms["headers"], {"Authorization": "<redacted>"})
+        self.assertNotIn("line-secret-token", combined)
+        self.assertNotIn("matrix-secret-token", combined)
+        self.assertNotIn("twilio-secret-token", combined)
+        self.assertFalse(sms["security"]["secret_values_stored"])
 
     def test_channel_gateway_server_routes_allowed_platform_event(self) -> None:
         from ai22b.talent_foundry.blueprint import create_agent_training_blueprint

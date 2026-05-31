@@ -33,6 +33,8 @@ def _channel_support_level(channel: dict[str, Any]) -> str:
         return "loopback_chat_ready"
     if channel["direct_raw_ingress_ready"] and channel["direct_delivery_ready"]:
         return "paideia_direct_flow_ready"
+    if channel["direct_delivery_ready"]:
+        return "paideia_direct_delivery_ready_ingress_plugin_required"
     if channel["generic_normalized_gateway_ready"]:
         return "normalized_gateway_ready_plugin_delivery_required"
     return "external_bridge_required"
@@ -87,6 +89,8 @@ def _channel_recommended_path(channel: dict[str, Any], support_level: str) -> st
         return "Run the local WebChat or channel gateway and test without external platform secrets."
     if support_level == "paideia_direct_flow_ready":
         return "Use doctor-openclaw-channel-flow first; enable live delivery only after channel tokens and allowlists are configured."
+    if support_level == "paideia_direct_delivery_ready_ingress_plugin_required":
+        return "Use the normalized gateway for inbound events, then enable Paideia direct outbound delivery only after tokens, targets, and allowlists are configured."
     if support_level == "normalized_gateway_ready_plugin_delivery_required":
         return channel["setup"]
     return "Configure an external bridge, then post normalized OpenClaw-style envelopes to Paideia."
