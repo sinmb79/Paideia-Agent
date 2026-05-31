@@ -57,6 +57,7 @@
    - community skills와 external channels는 기본 비활성화입니다.
    - OpenClaw 스타일 gateway는 매니페스트만 준비하고, loopback/private network 정책을 확인하기 전까지 실행하지 않습니다.
    - Hermes/OpenClaw 어댑터는 `adapter_manifests/`에 export shape만 둡니다.
+   - 아직 Paideia 카탈로그에 없는 OpenClaw `provider/model`과 `openclaw-channel-*` 선택자는 직접 지원을 주장하지 않고 Gateway-owned route로 보존합니다.
 
 6. 외부 스킬 마이그레이션
    - Hermes/OpenClaw/generic skill 폴더를 `migrate-agent-assets`로 가져올 수 있습니다.

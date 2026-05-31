@@ -14,6 +14,7 @@ from ai22b.talent_foundry.openclaw_compat import (
     find_openclaw_channel,
     find_openclaw_provider,
     normalize_openclaw_channel_id,
+    resolve_openclaw_channel,
 )
 from ai22b.talent_foundry.openclaw_support_matrix import build_openclaw_support_matrix
 
@@ -53,9 +54,8 @@ def _provider_id_from_selection(selected_llm_service: dict[str, Any]) -> str | N
 def _channel_ids_from_selection(chat_surface: dict[str, Any], channels: list[str] | None) -> list[str]:
     selected: list[str] = []
     for raw_channel in channels or []:
-        channel = find_openclaw_channel(raw_channel)
-        if channel is not None:
-            selected.append(str(channel["channel_id"]))
+        channel = resolve_openclaw_channel(raw_channel)
+        selected.append(str(channel["channel_id"]))
     surface_channel = chat_surface.get("openclaw_channel_id")
     if surface_channel:
         channel = find_openclaw_channel(str(surface_channel))

@@ -9,8 +9,8 @@ from typing import Any
 from ai22b.talent_foundry.openclaw_compat import (
     OPENCLAW_MANIFEST_ONLY_PROVIDERS,
     OPENCLAW_MODEL_PROVIDERS,
-    find_openclaw_provider,
     openclaw_provider_manifest,
+    resolve_openclaw_provider,
 )
 
 
@@ -49,7 +49,9 @@ def _provider_entry(provider: dict[str, Any]) -> dict[str, Any]:
     base_url = provider.get("base_url")
     live_adapter_ready = api_protocol in LIVE_ADAPTER_PROTOCOLS and engine != "openclaw_manifest_only"
     local_endpoint = str(base_url or "").startswith(("http://localhost", "http://127.0.0.1"))
-    if engine == "openclaw_manifest_only":
+    if provider.get("external_openclaw_provider"):
+        connector_status = "openclaw_gateway_owned_provider"
+    elif engine == "openclaw_manifest_only":
         connector_status = "provider_plugin_required"
     elif live_adapter_ready:
         connector_status = "paideia_live_adapter_ready"
@@ -71,6 +73,8 @@ def _provider_entry(provider: dict[str, Any]) -> dict[str, Any]:
         "secret_env_vars": provider.get("secret_env_vars", []),
         "aliases": provider.get("aliases", []),
         "status": provider.get("status"),
+        "external_openclaw_provider": bool(provider.get("external_openclaw_provider")),
+        "claim_boundary": provider.get("claim_boundary"),
         "policy": {
             "secret_values_stored": False,
             "identity_boundary": "provider supplies language generation only; Paideia talent identity stays in local artifacts",
@@ -90,9 +94,7 @@ def build_openclaw_provider_connector_catalog(
     entries = []
     seen: set[str] = set()
     for provider_id in selected:
-        provider = find_openclaw_provider(provider_id)
-        if provider is None:
-            raise ValueError(f"Unsupported OpenClaw provider: {provider_id}")
+        provider = resolve_openclaw_provider(provider_id)
         key = provider["provider_id"]
         if key in seen:
             continue
@@ -188,6 +190,8 @@ def doctor_openclaw_provider_connectors(
 
 
 def _next_step(provider: dict[str, Any], checks: list[dict[str, Any]]) -> str:
+    if provider.get("external_openclaw_provider"):
+        return "Let OpenClaw Gateway own provider auth/execution for this provider/model selector, then run the Gateway LLM doctor."
     if provider["manifest_only"]:
         return "Configure the OpenClaw provider plugin, OAuth profile, media tool, or custom runner before live use."
     if provider["local_endpoint"]:

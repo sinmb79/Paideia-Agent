@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from ai22b.talent_foundry.channel_gateway import OPENCLAW_CHANNEL_MESSAGE_SCHEMA
-from ai22b.talent_foundry.openclaw_compat import find_openclaw_channel
+from ai22b.talent_foundry.openclaw_compat import resolve_openclaw_channel
 
 
 OPENCLAW_CHANNEL_ACCESS_CONFIG_SCHEMA = "ai22b-openclaw-channel-access-config/v1"
@@ -32,9 +32,7 @@ def build_openclaw_channel_access_config(
     selected_channels = channels or ["telegram", "discord", "slack"]
     resolved_channels = []
     for channel_id in selected_channels:
-        channel = find_openclaw_channel(channel_id)
-        if channel is None:
-            raise ValueError(f"Unsupported OpenClaw channel: {channel_id}")
+        channel = resolve_openclaw_channel(channel_id)
         resolved_channels.append(channel["channel_id"])
     config = {
         "schema": OPENCLAW_CHANNEL_ACCESS_CONFIG_SCHEMA,
@@ -352,9 +350,7 @@ def translate_openclaw_platform_event(
     access_config: dict[str, Any] | None = None,
     output_path: Path | None = None,
 ) -> dict[str, Any]:
-    channel = find_openclaw_channel(channel_id)
-    if channel is None:
-        raise ValueError(f"Unsupported OpenClaw channel: {channel_id}")
+    channel = resolve_openclaw_channel(channel_id)
     normalized_channel_id = channel["channel_id"]
     if normalized_channel_id == "telegram":
         parts = _telegram_event(payload)

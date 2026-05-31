@@ -231,6 +231,8 @@ powershell -ExecutionPolicy Bypass -File .\refresh_openclaw_onboarding_menu.ps1 
 
 The `OPENCLAW_ONBOARDING_MENU.md` file lists every OpenClaw-compatible provider/channel known to Paideia, plus the free-form `provider/model` and `openclaw-channel-<channel>` selectors that let OpenClaw Gateway own future providers or chat plugins Paideia has not hard-coded yet.
 
+If OpenClaw supports a provider or chat channel that Paideia has not cataloged yet, keep the native OpenClaw selector. For example, `future-provider/future-model` is preserved as an OpenClaw Gateway-owned LLM route, and `openclaw-channel-futurechat` is preserved as a normalized channel route. Paideia will not claim a direct adapter for that provider or channel; it records the selector, builds the Gateway/runtime handoff, and leaves provider authentication, channel pairing, and live delivery to OpenClaw or the reviewed plugin.
+
 Doctor the kit before first use:
 
 ```powershell

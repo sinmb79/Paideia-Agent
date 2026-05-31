@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from ai22b.talent_foundry.channel_connectors import build_openclaw_channel_connector_catalog
-from ai22b.talent_foundry.openclaw_compat import find_openclaw_channel
+from ai22b.talent_foundry.openclaw_compat import resolve_openclaw_channel
 
 
 OPENCLAW_CHANNEL_PAIRING_DOCTOR_SCHEMA = "ai22b-openclaw-channel-pairing-doctor/v1"
@@ -184,9 +184,7 @@ def doctor_openclaw_channel_pairing(
     selected_channels = channels or []
     normalized: list[str] = []
     for raw_channel in selected_channels:
-        channel = find_openclaw_channel(raw_channel)
-        if channel is None:
-            raise ValueError(f"Unsupported OpenClaw channel: {raw_channel}")
+        channel = resolve_openclaw_channel(raw_channel)
         normalized.append(str(channel["channel_id"]))
     catalog = build_openclaw_channel_connector_catalog(channels=normalized or None)
     results: list[dict[str, Any]] = []

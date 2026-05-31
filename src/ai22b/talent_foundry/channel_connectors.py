@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from ai22b.talent_foundry.openclaw_compat import OPENCLAW_CHANNELS, find_openclaw_channel, openclaw_channel_manifest
+from ai22b.talent_foundry.openclaw_compat import OPENCLAW_CHANNELS, openclaw_channel_manifest, resolve_openclaw_channel
 
 
 OPENCLAW_CHANNEL_CONNECTOR_CATALOG_SCHEMA = "ai22b-openclaw-channel-connector-catalog/v1"
@@ -270,6 +270,8 @@ def _connector_entry(channel: dict[str, Any]) -> dict[str, Any]:
         "delivery": override.get("delivery", "external_plugin_delivery"),
         "required_env_vars": override.get("required_env_vars", []),
         "setup": override.get("setup", "Configure an OpenClaw-compatible channel plugin and post normalized messages to Paideia."),
+        "external_openclaw_channel": bool(channel.get("external_openclaw_channel")),
+        "claim_boundary": channel.get("claim_boundary"),
     }
 
 
@@ -281,9 +283,7 @@ def build_openclaw_channel_connector_catalog(
     selected = channels or [channel["channel_id"] for channel in OPENCLAW_CHANNELS]
     entries = []
     for channel_id in selected:
-        channel = find_openclaw_channel(channel_id)
-        if channel is None:
-            raise ValueError(f"Unsupported OpenClaw channel: {channel_id}")
+        channel = resolve_openclaw_channel(channel_id)
         entries.append(_connector_entry(channel))
     catalog = {
         "schema": OPENCLAW_CHANNEL_CONNECTOR_CATALOG_SCHEMA,

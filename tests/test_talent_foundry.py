@@ -1926,6 +1926,71 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(step_status["live_llm_chat_smoke"], "skipped_live_not_requested")
         self.assertEqual(step_status["live_channel_message_smoke"], "skipped_live_not_requested")
 
+    def test_openclaw_gateway_preserves_not_yet_cataloged_provider_and_channel_selectors(self) -> None:
+        from ai22b.talent_foundry.demo import run_demo
+        from ai22b.talent_foundry.openclaw_bridge_setup import build_openclaw_bridge_setup_kit
+        from ai22b.talent_foundry.openclaw_channel_flow import doctor_openclaw_channel_flow
+        from ai22b.talent_foundry.openclaw_runtime_bundle import build_openclaw_runtime_bundle
+        from ai22b.talent_foundry.registry import hire_installed_agent
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            outputs = run_demo(output_dir=tmp_path / "runs")
+            hiring = hire_installed_agent(
+                outputs["installed_agent_manifest"],
+                employer="Boss",
+                role="OpenClaw Gateway parity tester",
+                llm_service="future-provider/future-model-v1",
+                chat_surface="openclaw-channel-futurechat",
+            )
+            employment_record = hiring["employment_record"]
+            employment = json.loads(employment_record.read_text(encoding="utf-8"))
+            bundle = build_openclaw_runtime_bundle(
+                employment_record,
+                channels=["futurechat"],
+                channel_models=["futurechat:boss-thread=future-provider/future-model-v2"],
+                bindings=["futurechat:boss-thread=paideia-future-agent"],
+                output_dir=tmp_path / "openclaw_runtime_bundle",
+            )
+            flow = doctor_openclaw_channel_flow(
+                employment_record,
+                channels=["futurechat"],
+                output_path=tmp_path / "future_channel_flow.json",
+                output_dir=tmp_path / "future_channel_flow_artifacts",
+            )
+            bridge_setup = build_openclaw_bridge_setup_kit(
+                providers=["future-provider"],
+                channels=["futurechat"],
+                output_dir=tmp_path / "future_bridge_setup",
+            )
+            provider_auth = json.loads(
+                Path(bundle["artifacts"]["provider_auth_doctor"]).read_text(encoding="utf-8")
+            )
+            channel_connectors = json.loads(
+                Path(bundle["artifacts"]["channel_connector_catalog"]).read_text(encoding="utf-8")
+            )
+
+        self.assertEqual(employment["llm_service"]["engine"], "openclaw_gateway_http")
+        self.assertTrue(employment["llm_service"]["openclaw_provider_unverified"])
+        self.assertEqual(employment["llm_service"]["openclaw_model"], "future-provider/future-model-v1")
+        self.assertTrue(employment["chat_surface"]["external_openclaw_channel"])
+        self.assertEqual(employment["chat_surface"]["openclaw_channel_id"], "futurechat")
+        self.assertEqual(bundle["selection"]["provider_id"], "future-provider")
+        self.assertEqual(bundle["selection"]["model"], "future-provider/future-model-v1")
+        self.assertEqual(bundle["selection"]["channels"], ["futurechat"])
+        self.assertEqual(
+            bundle["selection"]["channel_model_map"]["futurechat"]["boss-thread"],
+            "future-provider/future-model-v2",
+        )
+        self.assertEqual(bundle["selection"]["bindings"][0]["match"]["channel"], "futurechat")
+        self.assertEqual(provider_auth["results"][0]["auth_kind"], "openclaw_gateway_owned_provider_or_plugin")
+        self.assertTrue(provider_auth["results"][0]["openclaw_gateway_recommended"])
+        self.assertTrue(channel_connectors["channels"][0]["external_openclaw_channel"])
+        self.assertEqual(flow["status"], "pass")
+        self.assertEqual(flow["channels"][0]["delivery"]["status"], "not_applicable")
+        self.assertEqual(bridge_setup["readiness"]["provider_summary"]["provider_count"], 1)
+        self.assertEqual(bridge_setup["readiness"]["channel_summary"]["channel_count"], 1)
+
     def test_cli_build_paideia_agent_kit_and_doctor_agent_program(self) -> None:
         from ai22b.talent_foundry.cli import main as cli_main
         from ai22b.talent_foundry.demo import run_demo

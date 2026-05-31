@@ -7,7 +7,7 @@ from typing import Any
 
 from ai22b.talent_foundry.channel_delivery import SUPPORTED_DELIVERY_CHANNELS, send_openclaw_channel_outbound
 from ai22b.talent_foundry.channel_gateway import run_openclaw_channel_message
-from ai22b.talent_foundry.openclaw_compat import find_openclaw_channel
+from ai22b.talent_foundry.openclaw_compat import resolve_openclaw_channel
 
 
 OPENCLAW_CHANNEL_FLOW_DOCTOR_SCHEMA = "ai22b-openclaw-channel-flow-doctor/v1"
@@ -49,9 +49,7 @@ def _normalize_channels(employment: dict[str, Any], channels: list[str] | None) 
     normalized: list[str] = []
     seen: set[str] = set()
     for raw_channel in requested:
-        channel = find_openclaw_channel(raw_channel)
-        if channel is None:
-            raise ValueError(f"Unsupported OpenClaw channel: {raw_channel}")
+        channel = resolve_openclaw_channel(raw_channel)
         channel_id = str(channel["channel_id"])
         if channel_id not in seen:
             normalized.append(channel_id)

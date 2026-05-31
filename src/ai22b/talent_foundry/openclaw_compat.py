@@ -737,6 +737,15 @@ def external_openclaw_channel_descriptor(identifier: str) -> dict[str, Any]:
     }
 
 
+def resolve_openclaw_channel(identifier: str) -> dict[str, Any]:
+    channel = find_openclaw_channel(identifier)
+    if channel is not None:
+        return channel
+    if identifier.strip():
+        return external_openclaw_channel_descriptor(identifier)
+    raise ValueError("OpenClaw channel cannot be empty")
+
+
 def find_openclaw_channel(identifier: str) -> dict[str, Any] | None:
     value = normalize_openclaw_channel_id(identifier)
     for channel in OPENCLAW_CHANNELS:
@@ -748,6 +757,15 @@ def find_openclaw_channel(identifier: str) -> dict[str, Any] | None:
         if value in ids:
             return deepcopy(channel)
     return None
+
+
+def resolve_openclaw_provider(identifier: str) -> dict[str, Any]:
+    provider = find_openclaw_provider(identifier)
+    if provider is not None:
+        return provider
+    if identifier.strip():
+        return external_openclaw_provider_descriptor(identifier)
+    raise ValueError("OpenClaw provider cannot be empty")
 
 
 def find_openclaw_provider(identifier: str) -> dict[str, Any] | None:

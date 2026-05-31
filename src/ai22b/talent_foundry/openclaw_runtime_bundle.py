@@ -19,10 +19,12 @@ from ai22b.talent_foundry.channel_gateway import build_openclaw_gateway_config
 from ai22b.talent_foundry.channel_ingress import build_openclaw_channel_access_config
 from ai22b.talent_foundry.onboarding_choices import build_llm_service_health
 from ai22b.talent_foundry.openclaw_compat import (
-    find_openclaw_channel,
     find_openclaw_provider,
+    normalize_openclaw_provider_id,
     openclaw_channel_manifest,
     openclaw_provider_manifest,
+    resolve_openclaw_channel,
+    resolve_openclaw_provider,
 )
 from ai22b.talent_foundry.openclaw_channel_pairing import doctor_openclaw_channel_pairing
 from ai22b.talent_foundry.openclaw_gateway_llm import doctor_openclaw_gateway_llm
@@ -209,9 +211,7 @@ def _normalize_channels(employment: dict[str, Any], channels: list[str] | None) 
         requested = ["webchat"]
     normalized: list[str] = []
     for channel_id in requested:
-        channel = find_openclaw_channel(channel_id)
-        if channel is None:
-            raise ValueError(f"Unsupported OpenClaw channel: {channel_id}")
+        channel = resolve_openclaw_channel(channel_id)
         normalized.append(str(channel["channel_id"]))
     return _dedupe(normalized)
 
@@ -223,7 +223,11 @@ def _validate_model_selector(model_selector: str) -> str:
     if "/" in model:
         provider_id = model.split("/", 1)[0].strip()
         if not find_openclaw_provider(provider_id):
-            raise ValueError(f"Unsupported OpenClaw provider in channel model: {provider_id}")
+            provider_id = normalize_openclaw_provider_id(provider_id)
+            remainder = model.split("/", 1)[1].strip()
+            if provider_id and remainder:
+                return f"{provider_id}/{remainder}"
+            raise ValueError("OpenClaw model selector must look like PROVIDER/MODEL")
     return model
 
 
@@ -242,9 +246,7 @@ def _normalize_channel_model_map(raw: Any) -> dict[str, dict[str, str]]:
         return {}
     normalized: dict[str, dict[str, str]] = {}
     for raw_channel, raw_targets in raw.items():
-        channel = find_openclaw_channel(str(raw_channel))
-        if channel is None:
-            raise ValueError(f"Unsupported OpenClaw channel in channel model map: {raw_channel}")
+        channel = resolve_openclaw_channel(str(raw_channel))
         channel_id = str(channel["channel_id"])
         if isinstance(raw_targets, str):
             normalized.setdefault(channel_id, {})["*"] = _validate_model_selector(raw_targets)
@@ -273,9 +275,7 @@ def _parse_channel_model_specs(specs: list[str] | None) -> dict[str, dict[str, s
             target = target.strip() or "*"
         else:
             raw_channel, target = left, "*"
-        channel = find_openclaw_channel(raw_channel)
-        if channel is None:
-            raise ValueError(f"Unsupported OpenClaw channel in channel model spec: {raw_channel}")
+        channel = resolve_openclaw_channel(raw_channel)
         channel_id = str(channel["channel_id"])
         parsed.setdefault(channel_id, {})[target] = _validate_model_selector(model)
     return parsed
@@ -286,9 +286,7 @@ def _binding_to_openclaw(binding: dict[str, Any], default_agent_id: str) -> dict
     raw_channel = match.get("channel") or binding.get("channel_id") or binding.get("channel")
     if not raw_channel:
         return None
-    channel = find_openclaw_channel(str(raw_channel))
-    if channel is None:
-        raise ValueError(f"Unsupported OpenClaw channel in binding: {raw_channel}")
+    channel = resolve_openclaw_channel(str(raw_channel))
     openclaw_match: dict[str, Any] = {"channel": str(channel["channel_id"])}
     for key in (
         "accountId",
@@ -325,9 +323,7 @@ def _parse_binding_specs(specs: list[str] | None, *, default_agent_id: str) -> l
             raw_channel, conversation = left.split(":", 1)
         else:
             raw_channel, conversation = left, ""
-        channel = find_openclaw_channel(raw_channel)
-        if channel is None:
-            raise ValueError(f"Unsupported OpenClaw channel in binding spec: {raw_channel}")
+        channel = resolve_openclaw_channel(raw_channel)
         match: dict[str, Any] = {"channel": str(channel["channel_id"])}
         if conversation.strip() and conversation.strip() != "*":
             match["conversation"] = conversation.strip()
@@ -801,9 +797,8 @@ def build_openclaw_runtime_bundle(
     ]
     selected_channels = _normalize_channels(employment, _dedupe(list(channels or []) + extra_channels))
     provider_id = _infer_provider_id(employment)
-    provider = find_openclaw_provider(provider_id)
-    if provider is None:
-        raise ValueError(f"Unsupported OpenClaw provider: {provider_id}")
+    provider = resolve_openclaw_provider(provider_id)
+    provider_id = str(provider["provider_id"])
     model = _model_selector(employment, provider_id)
     channel_model_map = _merge_channel_model_maps(
         {channel_id: {"*": model} for channel_id in selected_channels},

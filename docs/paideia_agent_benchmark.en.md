@@ -45,6 +45,7 @@ Paideia adapts this as:
 - per-talent install kits,
 - `doctor-agent-program`,
 - `run_openclaw_smoke_sequence.ps1` for a safe installed-kit OpenClaw smoke run,
+- preservation of not-yet-cataloged OpenClaw `provider/model` and `openclaw-channel-*` selectors as Gateway-owned routes,
 - local storage outside the source tree,
 - `skills/imported/<runtime>/<skill>/` for migrated skills,
 - bounded active memory routing into chat/work runs,
@@ -54,6 +55,7 @@ What Paideia does differently:
 
 - imported skills are quarantined by default,
 - the default smoke runner stays offline unless live Gateway/LLM/channel probes are explicitly requested,
+- future OpenClaw providers/channels are not claimed as direct Paideia adapters; they are routed through OpenClaw Gateway handoff artifacts,
 - external channels are disabled until explicitly configured,
 - each hired talent receives isolated runtime records,
 - skill promotion requires owner review and test evidence.

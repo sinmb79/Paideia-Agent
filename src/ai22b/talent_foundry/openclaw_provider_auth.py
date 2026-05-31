@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from ai22b.talent_foundry.provider_connectors import build_openclaw_provider_connector_catalog
-from ai22b.talent_foundry.openclaw_compat import find_openclaw_provider
+from ai22b.talent_foundry.openclaw_compat import resolve_openclaw_provider
 
 
 OPENCLAW_PROVIDER_AUTH_DOCTOR_SCHEMA = "ai22b-openclaw-provider-auth-doctor/v1"
@@ -154,6 +154,8 @@ def _provider_hints_from_config(config: Any) -> set[str]:
 
 def _auth_kind(provider: dict[str, Any]) -> str:
     provider_id = str(provider["provider_id"])
+    if provider.get("external_openclaw_provider"):
+        return "openclaw_gateway_owned_provider_or_plugin"
     if provider_id == "openai":
         return "api_key_or_codex_host_bridge"
     if provider.get("manifest_only"):
@@ -181,6 +183,8 @@ def _auth_status(
     provider_id = str(provider["provider_id"])
     provider_hints = set(str(item) for item in config_report.get("provider_hints", []))
     has_provider_hint = provider_id in provider_hints
+    if provider.get("external_openclaw_provider"):
+        return "ready_for_openclaw_gateway_review" if has_provider_hint else "needs_openclaw_provider_auth"
     if provider.get("manifest_only"):
         return "ready_for_openclaw_gateway_review" if has_provider_hint else "needs_openclaw_provider_auth"
     if auth_kind == "local_server_endpoint":
@@ -199,7 +203,21 @@ def _next_actions(provider: dict[str, Any], auth_kind: str) -> list[str]:
     actions = [
         f"ai22b-talent-foundry doctor-openclaw-provider-connectors --provider {provider_id} --output provider_connector_doctor.json",
     ]
-    if provider.get("manifest_only"):
+    if provider.get("external_openclaw_provider"):
+        actions.extend(
+            [
+                "openclaw onboard",
+                "openclaw models auth list",
+                "openclaw config --section model",
+                "openclaw gateway run",
+                (
+                    "ai22b-talent-foundry doctor-openclaw-gateway-llm "
+                    "--employment-record <employment_record.json> --probe-gateway --probe-chat "
+                    "--output openclaw_gateway_llm_doctor.live.json"
+                ),
+            ]
+        )
+    elif provider.get("manifest_only"):
         actions.extend(
             [
                 "openclaw onboard",
@@ -245,9 +263,7 @@ def doctor_openclaw_provider_auth(
 ) -> dict[str, Any]:
     selected: list[str] = []
     for raw_provider in providers or []:
-        provider = find_openclaw_provider(raw_provider)
-        if provider is None:
-            raise ValueError(f"Unsupported OpenClaw provider: {raw_provider}")
+        provider = resolve_openclaw_provider(raw_provider)
         selected.append(str(provider["provider_id"]))
     catalog = build_openclaw_provider_connector_catalog(providers=selected or None)
     config_report = _load_redacted_openclaw_config(openclaw_config_path)
@@ -298,7 +314,9 @@ def doctor_openclaw_provider_auth(
                     config_report=config_report,
                 ),
                 "paideia_live_adapter_ready": provider["live_adapter_ready"],
-                "openclaw_gateway_recommended": bool(provider.get("manifest_only")),
+                "openclaw_gateway_recommended": bool(
+                    provider.get("manifest_only") or provider.get("external_openclaw_provider")
+                ),
                 "local_endpoint": provider["local_endpoint"],
                 "base_url_recorded": provider["base_url_recorded"],
                 "checks": checks,

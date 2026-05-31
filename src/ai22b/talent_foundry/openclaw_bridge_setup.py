@@ -7,7 +7,7 @@ from typing import Any
 
 from ai22b.talent_foundry.channel_connectors import doctor_openclaw_channel_connectors
 from ai22b.talent_foundry.channel_ingress import build_openclaw_channel_access_config
-from ai22b.talent_foundry.openclaw_compat import find_openclaw_channel, find_openclaw_provider
+from ai22b.talent_foundry.openclaw_compat import resolve_openclaw_channel, resolve_openclaw_provider
 from ai22b.talent_foundry.openclaw_channel_pairing import doctor_openclaw_channel_pairing
 from ai22b.talent_foundry.openclaw_provider_auth import doctor_openclaw_provider_auth
 from ai22b.talent_foundry.openclaw_runtime_bundle import OPENCLAW_REFERENCE_URLS
@@ -96,9 +96,7 @@ def _normalize_providers(providers: list[str] | None, manifest_path: Path | None
         selected = ["openai"]
     normalized: list[str] = []
     for provider_id in selected:
-        provider = find_openclaw_provider(provider_id)
-        if provider is None:
-            raise ValueError(f"Unsupported OpenClaw provider: {provider_id}")
+        provider = resolve_openclaw_provider(provider_id)
         normalized.append(provider["provider_id"])
     return _dedupe(normalized)
 
@@ -109,9 +107,7 @@ def _normalize_channels(channels: list[str] | None, manifest_path: Path | None) 
         selected = ["webchat"]
     normalized: list[str] = []
     for channel_id in selected:
-        channel = find_openclaw_channel(channel_id)
-        if channel is None:
-            raise ValueError(f"Unsupported OpenClaw channel: {channel_id}")
+        channel = resolve_openclaw_channel(channel_id)
         normalized.append(channel["channel_id"])
     return _dedupe(normalized)
 

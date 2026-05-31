@@ -454,3 +454,5 @@ powershell -ExecutionPolicy Bypass -File .\start_openclaw_webchat.ps1 -Port 8722
 - `start_openclaw_webchat.ps1`: 외부 봇 토큰 없이 `127.0.0.1`에서 브라우저 채팅창을 열어 설치된 인재를 테스트합니다.
 
 WebChat은 `/api/runtime`과 `/api/smoke-plan`을 함께 제공하므로, 사용자는 현재 선택된 LLM 서비스, 모델, 채널 경로, smoke-test 순서를 확인한 뒤 실제 Gateway나 외부 채널 연결을 진행할 수 있습니다.
+
+OpenClaw가 지원하지만 아직 Paideia 카탈로그에 없는 provider/channel도 원래 선택자를 보존합니다. 예를 들어 `future-provider/future-model`은 OpenClaw Gateway가 소유하는 LLM 경로로, `openclaw-channel-futurechat`은 normalized channel 경로로 기록됩니다. Paideia는 해당 provider/channel의 직접 어댑터가 있다고 주장하지 않고, 선택자와 runtime handoff를 보존한 뒤 provider 인증, channel pairing, live delivery는 OpenClaw 또는 검토된 플러그인이 맡게 합니다.
