@@ -200,6 +200,168 @@ def _normalize_channels(employment: dict[str, Any], channels: list[str] | None) 
     return _dedupe(normalized)
 
 
+def _validate_model_selector(model_selector: str) -> str:
+    model = model_selector.strip()
+    if not model:
+        raise ValueError("OpenClaw model selector cannot be empty")
+    if "/" in model:
+        provider_id = model.split("/", 1)[0].strip()
+        if not find_openclaw_provider(provider_id):
+            raise ValueError(f"Unsupported OpenClaw provider in channel model: {provider_id}")
+    return model
+
+
+def _merge_channel_model_maps(
+    base: dict[str, dict[str, str]],
+    override: dict[str, dict[str, str]],
+) -> dict[str, dict[str, str]]:
+    merged: dict[str, dict[str, str]] = {channel: dict(targets) for channel, targets in base.items()}
+    for channel_id, targets in override.items():
+        merged.setdefault(channel_id, {}).update(targets)
+    return merged
+
+
+def _normalize_channel_model_map(raw: Any) -> dict[str, dict[str, str]]:
+    if not isinstance(raw, dict):
+        return {}
+    normalized: dict[str, dict[str, str]] = {}
+    for raw_channel, raw_targets in raw.items():
+        channel = find_openclaw_channel(str(raw_channel))
+        if channel is None:
+            raise ValueError(f"Unsupported OpenClaw channel in channel model map: {raw_channel}")
+        channel_id = str(channel["channel_id"])
+        if isinstance(raw_targets, str):
+            normalized.setdefault(channel_id, {})["*"] = _validate_model_selector(raw_targets)
+        elif isinstance(raw_targets, dict):
+            for target, raw_model in raw_targets.items():
+                if isinstance(raw_model, str):
+                    normalized.setdefault(channel_id, {})[str(target)] = _validate_model_selector(raw_model)
+                elif isinstance(raw_model, dict):
+                    model = raw_model.get("model") or raw_model.get("primary") or raw_model.get("default")
+                    if model:
+                        normalized.setdefault(channel_id, {})[str(target)] = _validate_model_selector(str(model))
+    return normalized
+
+
+def _parse_channel_model_specs(specs: list[str] | None) -> dict[str, dict[str, str]]:
+    parsed: dict[str, dict[str, str]] = {}
+    for spec in specs or []:
+        if "=" not in spec:
+            raise ValueError("Channel model specs must look like CHANNEL[:TARGET]=PROVIDER/MODEL")
+        left, model = spec.split("=", 1)
+        left = left.strip()
+        if not left:
+            raise ValueError("Channel model spec is missing a channel")
+        if ":" in left:
+            raw_channel, target = left.split(":", 1)
+            target = target.strip() or "*"
+        else:
+            raw_channel, target = left, "*"
+        channel = find_openclaw_channel(raw_channel)
+        if channel is None:
+            raise ValueError(f"Unsupported OpenClaw channel in channel model spec: {raw_channel}")
+        channel_id = str(channel["channel_id"])
+        parsed.setdefault(channel_id, {})[target] = _validate_model_selector(model)
+    return parsed
+
+
+def _binding_to_openclaw(binding: dict[str, Any], default_agent_id: str) -> dict[str, Any] | None:
+    match = binding.get("match") if isinstance(binding.get("match"), dict) else {}
+    raw_channel = match.get("channel") or binding.get("channel_id") or binding.get("channel")
+    if not raw_channel:
+        return None
+    channel = find_openclaw_channel(str(raw_channel))
+    if channel is None:
+        raise ValueError(f"Unsupported OpenClaw channel in binding: {raw_channel}")
+    openclaw_match: dict[str, Any] = {"channel": str(channel["channel_id"])}
+    for key in (
+        "accountId",
+        "channelId",
+        "conversation",
+        "guildId",
+        "peer",
+        "roles",
+        "roomId",
+        "teamId",
+        "threadId",
+        "topicId",
+    ):
+        if key in match and match[key] not in (None, ""):
+            openclaw_match[key] = match[key]
+    return {
+        "match": openclaw_match,
+        "agentId": str(binding.get("agentId") or binding.get("agent_id") or binding.get("agent") or default_agent_id),
+        "secretValuesStored": False,
+    }
+
+
+def _parse_binding_specs(specs: list[str] | None, *, default_agent_id: str) -> list[dict[str, Any]]:
+    bindings: list[dict[str, Any]] = []
+    for spec in specs or []:
+        if "=" not in spec:
+            raise ValueError("Binding specs must look like CHANNEL[:CONVERSATION]=AGENT_ID")
+        left, agent_id = spec.split("=", 1)
+        left = left.strip()
+        agent_id = agent_id.strip() or default_agent_id
+        if not left:
+            raise ValueError("Binding spec is missing a channel")
+        if ":" in left:
+            raw_channel, conversation = left.split(":", 1)
+        else:
+            raw_channel, conversation = left, ""
+        channel = find_openclaw_channel(raw_channel)
+        if channel is None:
+            raise ValueError(f"Unsupported OpenClaw channel in binding spec: {raw_channel}")
+        match: dict[str, Any] = {"channel": str(channel["channel_id"])}
+        if conversation.strip() and conversation.strip() != "*":
+            match["conversation"] = conversation.strip()
+        bindings.append({"match": match, "agentId": agent_id, "secretValuesStored": False})
+    return bindings
+
+
+def _load_openclaw_import_hints(import_manifest_path: Path | None, *, default_agent_id: str) -> tuple[dict[str, dict[str, str]], list[dict[str, Any]]]:
+    if import_manifest_path is None:
+        return {}, []
+    manifest = _read_json(import_manifest_path.expanduser().resolve())
+    if manifest.get("schema") != "ai22b-openclaw-config-import/v1":
+        raise ValueError("Unsupported OpenClaw import manifest schema")
+    selection = manifest.get("paideia_selection", {})
+    detected = manifest.get("detected", {})
+    channel_models = _normalize_channel_model_map(selection.get("model_by_channel") or detected.get("model_by_channel") or {})
+    bindings: list[dict[str, Any]] = []
+    for binding in selection.get("bindings") or detected.get("bindings") or []:
+        if isinstance(binding, dict):
+            normalized = _binding_to_openclaw(binding, default_agent_id)
+            if normalized is not None:
+                bindings.append(normalized)
+    return channel_models, bindings
+
+
+def _channels_from_channel_models(model_by_channel: dict[str, dict[str, str]]) -> list[str]:
+    return sorted(model_by_channel.keys())
+
+
+def _channels_from_bindings(bindings: list[dict[str, Any]]) -> list[str]:
+    channels: list[str] = []
+    for binding in bindings:
+        match = binding.get("match", {})
+        if isinstance(match, dict) and match.get("channel"):
+            channels.append(str(match["channel"]))
+    return _dedupe(channels)
+
+
+def _default_bindings_for_channels(channels: list[str], *, agent_id: str) -> list[dict[str, Any]]:
+    return [
+        {
+            "match": {"channel": channel_id, "accountId": "*"},
+            "agentId": agent_id,
+            "source": "paideia_runtime_default_channel_binding",
+            "secretValuesStored": False,
+        }
+        for channel_id in channels
+    ]
+
+
 def _channel_env_vars(channel_doctor: dict[str, Any]) -> list[str]:
     env_vars: list[str] = []
     for result in channel_doctor.get("results", []):
@@ -275,10 +437,13 @@ def _build_config_patch(
     port: int,
     provider_env_vars: list[str],
     channel_doctor: dict[str, Any],
+    channel_model_map: dict[str, dict[str, str]],
+    bindings: list[dict[str, Any]],
 ) -> dict[str, Any]:
     agent_key = _safe_agent_key(employment)
     gateway_url = f"http://{bind_host}:{port}/openclaw/channel-message"
     channel_connectors = {item["channel_id"]: item for item in channel_doctor.get("results", [])}
+    agent_workspace = str(employment_record_path.parent)
     return {
         "schema": OPENCLAW_CONFIG_PATCH_SCHEMA,
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -295,9 +460,19 @@ def _build_config_patch(
                 "defaults": {
                     "model": {"primary": model_selector},
                 },
+                "list": [
+                    {
+                        "id": agent_key,
+                        "name": employment["agent"]["name"],
+                        "workspace": agent_workspace,
+                        "model": {"primary": model_selector},
+                        "default": True,
+                    }
+                ],
                 agent_key: {
                     "name": employment["agent"]["name"],
                     "role": employment["agent"].get("role"),
+                    "workspace": agent_workspace,
                     "model": {"primary": model_selector},
                     "channels": channels,
                     "gateway": {
@@ -324,14 +499,18 @@ def _build_config_patch(
                 },
             },
             "channels": {
-                channel_id: {
-                    "enabled": True,
-                    "gatewayURL": gateway_url,
-                    "connectorStatus": channel_connectors.get(channel_id, {}).get("connector_status"),
-                    "nextStep": channel_connectors.get(channel_id, {}).get("next_step"),
-                }
-                for channel_id in channels
+                **{
+                    channel_id: {
+                        "enabled": True,
+                        "gatewayURL": gateway_url,
+                        "connectorStatus": channel_connectors.get(channel_id, {}).get("connector_status"),
+                        "nextStep": channel_connectors.get(channel_id, {}).get("next_step"),
+                    }
+                    for channel_id in channels
+                },
+                "modelByChannel": channel_model_map,
             },
+            "bindings": bindings,
         },
         "operator_policy": {
             "existing_openclaw_config": "merge_or_review; do_not_reset_without_user_choice",
@@ -467,6 +646,9 @@ def build_openclaw_runtime_bundle(
     employment_record_path: Path,
     *,
     channels: list[str] | None = None,
+    channel_models: list[str] | None = None,
+    bindings: list[str] | None = None,
+    import_manifest_path: Path | None = None,
     output_dir: Path | None = None,
     bind_host: str = "127.0.0.1",
     port: int = 8722,
@@ -475,12 +657,33 @@ def build_openclaw_runtime_bundle(
 ) -> dict[str, Any]:
     employment_record_path = employment_record_path.resolve()
     employment = _load_employment(employment_record_path)
-    selected_channels = _normalize_channels(employment, channels)
+    agent_key = _safe_agent_key(employment)
+    imported_channel_models, imported_bindings = _load_openclaw_import_hints(
+        import_manifest_path,
+        default_agent_id=agent_key,
+    )
+    explicit_channel_models = _parse_channel_model_specs(channel_models)
+    channel_model_overrides = _merge_channel_model_maps(imported_channel_models, explicit_channel_models)
+    explicit_bindings = _parse_binding_specs(bindings, default_agent_id=agent_key)
+    imported_and_explicit_bindings = [*imported_bindings, *explicit_bindings]
+    extra_channels = [
+        *_channels_from_channel_models(channel_model_overrides),
+        *_channels_from_bindings(imported_and_explicit_bindings),
+    ]
+    selected_channels = _normalize_channels(employment, _dedupe(list(channels or []) + extra_channels))
     provider_id = _infer_provider_id(employment)
     provider = find_openclaw_provider(provider_id)
     if provider is None:
         raise ValueError(f"Unsupported OpenClaw provider: {provider_id}")
     model = _model_selector(employment, provider_id)
+    channel_model_map = _merge_channel_model_maps(
+        {channel_id: {"*": model} for channel_id in selected_channels},
+        channel_model_overrides,
+    )
+    openclaw_bindings = imported_and_explicit_bindings or _default_bindings_for_channels(
+        selected_channels,
+        agent_id=agent_key,
+    )
 
     output_dir = (output_dir or employment_record_path.parent / "openclaw_runtime_bundle").resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -543,6 +746,8 @@ def build_openclaw_runtime_bundle(
         port=port,
         provider_env_vars=provider_envs,
         channel_doctor=channel_doctor,
+        channel_model_map=channel_model_map,
+        bindings=openclaw_bindings,
     )
     _write_json(config_patch_path, config_patch)
     _write_text(
@@ -599,11 +804,14 @@ def build_openclaw_runtime_bundle(
             "provider_id": provider_id,
             "model": model,
             "channels": selected_channels,
+            "channel_model_map": channel_model_map,
+            "bindings": openclaw_bindings,
             "chat_surface": employment.get("chat_surface", {}),
             "bind_host": bind_host,
             "port": port,
             "config_action": config_action,
             "existing_openclaw_config_path": str(selected_existing_config_path),
+            "import_manifest_path": str(import_manifest_path.expanduser().resolve()) if import_manifest_path else None,
         },
         "readiness": {
             "llm_service_health": llm_health,
@@ -649,6 +857,12 @@ def build_openclaw_runtime_bundle(
                 "Review "
                 f"{_relative_or_name(Path(artifacts['openclaw_config_patch']), output_dir)} and "
                 f"{_relative_or_name(Path(artifacts['existing_openclaw_config_review']), output_dir)} before applying to OpenClaw."
+            ),
+            "rebuild_with_channel_model": (
+                "ai22b-talent-foundry build-openclaw-runtime-bundle "
+                f"--employment-record {employment_record_path} --channel <channel> "
+                "--channel-model <channel>:<conversation>=<provider/model> "
+                f"--output-dir {output_dir}"
             ),
         },
         "openclaw_reference": {

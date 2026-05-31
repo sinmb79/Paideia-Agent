@@ -575,6 +575,8 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             bundle = build_openclaw_runtime_bundle(
                 hiring["employment_record"],
                 channels=["bluebubbles", "webchat"],
+                channel_models=["webchat=openrouter/meta-llama/llama-3.1-8b"],
+                bindings=["webchat=paideia-runtime-junior"],
                 output_dir=output_dir,
                 port=9123,
                 existing_openclaw_config_path=existing_config_path,
@@ -598,6 +600,10 @@ class GrahamTalentFoundryTests(unittest.TestCase):
                     str(hiring["employment_record"]),
                     "--channel",
                     "webchat",
+                    "--channel-model",
+                    "webchat=arcee/trinity-large-thinking",
+                    "--binding",
+                    "webchat=paideia-runtime-junior",
                     "--existing-openclaw-config",
                     str(existing_config_path),
                     "--config-action",
@@ -623,6 +629,17 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertEqual(bundle["selection"]["provider_id"], "arcee")
         self.assertEqual(bundle["selection"]["model"], "arcee/trinity-large-thinking")
         self.assertEqual(bundle["selection"]["channels"], ["bluebubbles", "webchat"])
+        self.assertEqual(
+            bundle["selection"]["channel_model_map"]["webchat"]["*"],
+            "openrouter/meta-llama/llama-3.1-8b",
+        )
+        self.assertEqual(
+            config_patch["openclaw_json_patch"]["channels"]["modelByChannel"]["webchat"]["*"],
+            "openrouter/meta-llama/llama-3.1-8b",
+        )
+        self.assertEqual(config_patch["openclaw_json_patch"]["bindings"][0]["match"]["channel"], "webchat")
+        self.assertEqual(config_patch["openclaw_json_patch"]["bindings"][0]["agentId"], "paideia-runtime-junior")
+        self.assertEqual(config_patch["openclaw_json_patch"]["agents"]["list"][0]["default"], True)
         self.assertEqual(bundle["selection"]["config_action"], "modify")
         self.assertEqual(config_review["status"], "modify_preview_written")
         self.assertEqual(config_patch["openclaw_json_patch"]["models"]["arcee"]["model"], "arcee/trinity-large-thinking")
@@ -747,10 +764,15 @@ class GrahamTalentFoundryTests(unittest.TestCase):
                             "telegram": {"botToken": "source-telegram-token"},
                             "googlechat": {"webhookUrl": "source-google-chat-webhook"},
                             "discord": {"token": "source-discord-token"},
+                            "modelByChannel": {
+                                "telegram": {"boss-thread": "openrouter/meta-llama/llama-3.1-8b"},
+                                "whatsapp": {"family": "arcee/trinity-large-thinking"},
+                            },
                             "defaults": {"model": "anthropic/claude-sonnet-4.5"},
                         },
                         "bindings": [
-                            {"match": {"channel": "whatsapp", "conversation": "family"}, "agentId": "researcher"}
+                            {"match": {"channel": "whatsapp", "conversation": "family"}, "agentId": "researcher"},
+                            {"match": {"channel": "telegram", "peer": {"kind": "user", "id": "boss"}}, "agentId": "researcher"},
                         ],
                     },
                     ensure_ascii=False,
@@ -783,6 +805,12 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             imported["detected"]["channel_ids"],
             ["telegram", "google-chat", "discord", "whatsapp"],
         )
+        self.assertEqual(
+            imported["detected"]["model_by_channel"]["telegram"]["boss-thread"],
+            "openrouter/meta-llama/llama-3.1-8b",
+        )
+        self.assertEqual(imported["detected"]["bindings"][0]["match"]["conversation"], "family")
+        self.assertEqual(imported["paideia_selection"]["bindings"][1]["match"]["peer"]["id"], "boss")
         self.assertIsNotNone(find_openclaw_channel("googlechat"))
         self.assertTrue(imported["paideia_selection"]["provider_supported"])
         self.assertTrue(imported["paideia_selection"]["all_detected_channels_supported"])
@@ -793,7 +821,15 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertEqual(setup_plan["schema"], "ai22b-openclaw-config-import-setup-plan/v1")
         self.assertIn("anthropic", {item["provider_id"] for item in setup_plan["provider_setup"]})
         self.assertIn("whatsapp", {item["channel_id"] for item in setup_plan["channel_setup"]})
+        self.assertEqual(
+            setup_plan["selection"]["model_by_channel"]["whatsapp"]["family"],
+            "arcee/trinity-large-thinking",
+        )
         self.assertEqual(suggested_answers["chat_surface"], "openclaw-channel-telegram")
+        self.assertEqual(
+            suggested_answers["openclaw_model_by_channel"]["telegram"]["boss-thread"],
+            "openrouter/meta-llama/llama-3.1-8b",
+        )
         self.assertEqual(cli_result, 0)
         self.assertTrue(cli_manifest_exists)
 

@@ -140,6 +140,12 @@ def _extract_model_provider_ids(config: dict[str, Any], primary_provider: str | 
     ids.extend(str(key) for key in providers.keys())
     model_providers = _as_dict(config.get("modelProviders"))
     ids.extend(str(key) for key in model_providers.keys())
+    model_by_channel, _diagnostics = _extract_model_by_channel(config)
+    for target_map in model_by_channel.values():
+        for model_selector in target_map.values():
+            provider_id = _provider_from_model(model_selector)
+            if provider_id:
+                ids.append(provider_id)
     return _dedupe(ids)
 
 
@@ -174,7 +180,138 @@ def _extract_channels(config: dict[str, Any]) -> tuple[list[str], list[dict[str,
                 )
                 if channel_id:
                     supported.append(channel_id)
+    model_by_channel, _model_diagnostics = _extract_model_by_channel(config)
+    supported.extend(model_by_channel.keys())
     return _dedupe(supported), diagnostics
+
+
+def _model_selector_from_value(value: Any) -> str | None:
+    if isinstance(value, str):
+        return value.strip() or None
+    if isinstance(value, dict):
+        candidate = value.get("model") or value.get("primary") or value.get("default")
+        if candidate:
+            return str(candidate).strip() or None
+    return None
+
+
+def _extract_model_by_channel(config: dict[str, Any]) -> tuple[dict[str, dict[str, str]], list[dict[str, Any]]]:
+    model_by_channel: dict[str, dict[str, str]] = {}
+    diagnostics: list[dict[str, Any]] = []
+    channels = _as_dict(config.get("channels"))
+    candidate_sources = [
+        ("channels.modelByChannel", channels.get("modelByChannel")),
+        ("channels.model-by-channel", channels.get("model-by-channel")),
+        ("channels.models", channels.get("models")),
+        ("modelByChannel", config.get("modelByChannel")),
+    ]
+    for source, mapping in candidate_sources:
+        if not isinstance(mapping, dict):
+            continue
+        for raw_channel, targets in mapping.items():
+            channel_id, status = _channel_from_key(str(raw_channel))
+            diagnostic = {"source": f"{source}.{raw_channel}", "channel_id": channel_id, "status": status}
+            if not channel_id:
+                diagnostics.append(diagnostic)
+                continue
+
+            target_map: dict[str, str] = {}
+            direct_model = _model_selector_from_value(targets)
+            if direct_model:
+                target_map["*"] = direct_model
+            elif isinstance(targets, dict):
+                for raw_target, raw_model in targets.items():
+                    model_selector = _model_selector_from_value(raw_model)
+                    if model_selector:
+                        target_map[str(raw_target)] = model_selector
+
+            diagnostic["target_count"] = len(target_map)
+            diagnostics.append(diagnostic)
+            if target_map:
+                model_by_channel.setdefault(channel_id, {}).update(target_map)
+    return model_by_channel, diagnostics
+
+
+def _sanitize_match(match: dict[str, Any]) -> dict[str, Any]:
+    safe: dict[str, Any] = {}
+    allowed_keys = {
+        "accountId",
+        "channel",
+        "channelId",
+        "conversation",
+        "guildId",
+        "peer",
+        "provider",
+        "roles",
+        "roomId",
+        "teamId",
+        "threadId",
+        "topicId",
+    }
+    for key, value in match.items():
+        if str(key) not in allowed_keys:
+            continue
+        if _secret_like_key(str(key)):
+            continue
+        if str(key) in {"channel", "provider"}:
+            channel_id, status = _channel_from_key(str(value))
+            if status == "supported" and channel_id:
+                safe["channel"] = channel_id
+            continue
+        if isinstance(value, dict):
+            nested = {
+                str(nested_key): str(nested_value)
+                for nested_key, nested_value in value.items()
+                if str(nested_key) in {"id", "kind", "name", "type"} and not _secret_like_key(str(nested_key))
+            }
+            if nested:
+                safe[str(key)] = nested
+        elif isinstance(value, list):
+            safe[str(key)] = [str(item) for item in value if str(item).strip()]
+        elif value is not None:
+            safe[str(key)] = str(value)
+    return safe
+
+
+def _extract_bindings(config: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    bindings = config.get("bindings")
+    if not isinstance(bindings, list):
+        return [], []
+
+    normalized: list[dict[str, Any]] = []
+    diagnostics: list[dict[str, Any]] = []
+    for index, raw_binding in enumerate(bindings):
+        binding = _as_dict(raw_binding)
+        match = _as_dict(binding.get("match"))
+        raw_channel = match.get("channel") or match.get("provider") or binding.get("channel")
+        channel_id = None
+        status = "missing_channel"
+        if raw_channel:
+            channel_id, status = _channel_from_key(str(raw_channel))
+        diagnostics.append(
+            {
+                "source": f"bindings[{index}]",
+                "channel_id": channel_id,
+                "status": status,
+                "secret_values_stored": False,
+            }
+        )
+        if not channel_id:
+            continue
+        safe_match = _sanitize_match({**match, "channel": channel_id})
+        agent_id = binding.get("agentId") or binding.get("agent_id") or binding.get("agent")
+        if not agent_id:
+            agent_id = "main"
+        normalized.append(
+            {
+                "source": f"bindings[{index}]",
+                "match": safe_match,
+                "channel_id": channel_id,
+                "agent_id": str(agent_id),
+                "secret_values_stored": False,
+            }
+        )
+    return normalized, diagnostics
 
 
 def _dedupe(items: list[str]) -> list[str]:
@@ -198,6 +335,8 @@ def _build_setup_plan(
     primary_provider: str | None,
     provider_ids: list[str],
     channel_ids: list[str],
+    model_by_channel: dict[str, dict[str, str]],
+    bindings: list[dict[str, Any]],
     output_dir: Path,
 ) -> dict[str, Any]:
     provider_doctor = doctor_openclaw_provider_connectors(providers=provider_ids or None)
@@ -211,6 +350,8 @@ def _build_setup_plan(
             "primary_provider_id": primary_provider,
             "provider_ids": provider_ids,
             "channel_ids": channel_ids,
+            "model_by_channel": model_by_channel,
+            "binding_count": len(bindings),
         },
         "provider_setup": [
             {
@@ -243,6 +384,12 @@ def _build_setup_plan(
                 "ai22b-talent-foundry build-openclaw-runtime-bundle "
                 "--employment-record <employment_record.json> "
                 + " ".join(f"--channel {channel}" for channel in (channel_ids or ["webchat"]))
+                + " "
+                + " ".join(
+                    f"--channel-model {channel}:{target}={model}"
+                    for channel, targets in model_by_channel.items()
+                    for target, model in targets.items()
+                )
                 + f" --existing-openclaw-config {config_path} --config-action modify "
                 + f"--output-dir {output_dir / 'runtime_bundle'}"
             ),
@@ -303,12 +450,16 @@ def import_openclaw_config(
     supported_providers = [provider_id for provider_id in provider_ids if find_openclaw_provider(provider_id)]
     unsupported_providers = [provider_id for provider_id in provider_ids if not find_openclaw_provider(provider_id)]
     channel_ids, channel_diagnostics = _extract_channels(config)
+    model_by_channel, model_by_channel_diagnostics = _extract_model_by_channel(config)
+    bindings, binding_diagnostics = _extract_bindings(config)
     setup_plan = _build_setup_plan(
         config_path=config_path,
         primary_model=primary_model,
         primary_provider=primary_provider,
         provider_ids=supported_providers or ([primary_provider] if primary_provider else []),
         channel_ids=channel_ids,
+        model_by_channel=model_by_channel,
+        bindings=bindings,
         output_dir=output_dir,
     )
     _write_json(setup_plan_path, setup_plan)
@@ -319,6 +470,8 @@ def import_openclaw_config(
         "llm_service": primary_model or primary_provider,
         "chat_surface": f"openclaw-channel-{channel_ids[0]}" if channel_ids else "openclaw-channel-webchat",
         "channels": [f"openclaw-channel-{channel_id}" for channel_id in channel_ids],
+        "openclaw_model_by_channel": model_by_channel,
+        "openclaw_bindings": bindings,
         "secret_values_stored": False,
     }
     _write_json(suggested_answers_path, suggested_answers)
@@ -335,12 +488,18 @@ def import_openclaw_config(
             "unsupported_provider_ids": unsupported_providers,
             "channel_ids": channel_ids,
             "channel_diagnostics": channel_diagnostics,
+            "model_by_channel": model_by_channel,
+            "model_by_channel_diagnostics": model_by_channel_diagnostics,
+            "bindings": bindings,
+            "binding_diagnostics": binding_diagnostics,
             "secret_references": _walk_secret_refs(config),
         },
         "paideia_selection": {
             "llm_service": primary_model or primary_provider,
             "chat_surface": suggested_answers["chat_surface"],
             "channels": suggested_answers["channels"],
+            "model_by_channel": model_by_channel,
+            "bindings": bindings,
             "provider_supported": bool(primary_provider and find_openclaw_provider(primary_provider)),
             "all_detected_channels_supported": all(item["status"] != "unsupported_or_unknown_channel" for item in channel_diagnostics),
         },

@@ -317,7 +317,7 @@ The provider catalog follows OpenClaw's canonical `provider/model` IDs where pos
 
 For OpenClaw-style key resolution, Paideia checks `OPENCLAW_LIVE_<PROVIDER>_KEY`, `<PROVIDER>_API_KEYS`, `<PROVIDER>_API_KEY`, and provider-specific env vars such as `ARCEEAI_API_KEY`, `VOLCANO_ENGINE_API_KEY`, `DASHSCOPE_API_KEY`, or `XIAOMI_TOKEN_PLAN_API_KEY`. Comma or semicolon key lists use the first non-empty key for live smoke tests.
 
-If you already have an OpenClaw config, import it first. Paideia reads the selected `provider/model`, configured channel keys, and `bindings[]`, then writes Paideia-safe selections and setup steps without storing provider keys or bot tokens.
+If you already have an OpenClaw config, import it first. Paideia reads the selected `provider/model`, configured channel keys, `channels.modelByChannel`, and `bindings[]`, then writes Paideia-safe selections and setup steps without storing provider keys or bot tokens.
 
 ```powershell
 ai22b-talent-foundry import-openclaw-config `
@@ -343,6 +343,8 @@ ai22b-talent-foundry build-openclaw-runtime-bundle `
   --employment-record "<employment_record.json>" `
   --channel webchat `
   --channel telegram `
+  --channel-model "telegram:boss-thread=openrouter/meta-llama/llama-3.1-8b" `
+  --binding "telegram:boss-thread=paideia-graham-junior" `
   --existing-openclaw-config "$env:USERPROFILE\.openclaw\openclaw.json" `
   --config-action modify `
   --output-dir "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_runtime_bundle"
@@ -350,7 +352,7 @@ ai22b-talent-foundry build-openclaw-runtime-bundle `
 
 The bundle writes:
 
-- `openclaw_config_patch.json`: a review-first `openclaw.json` patch with the selected `provider/model`, agent identity boundary, gateway URL, and enabled channels.
+- `openclaw_config_patch.json`: a review-first `openclaw.json` patch with the selected `provider/model`, `agents.list`, gateway URL, enabled channels, `channels.modelByChannel`, and `bindings[]`.
 - `openclaw.env.example.ps1`: a local PowerShell environment template. It lists secret variable names but never writes secret values.
 - `openclaw_provider_doctor.json`, `openclaw_channel_doctor.json`, and `llm_service_health.json`: readiness checks for model auth, channel bridge requirements, and local/remote runtime status.
 - `openclaw_gateway_config.json` and `openclaw_channel_access_config.json`: loopback gateway and deny-by-default channel access setup.

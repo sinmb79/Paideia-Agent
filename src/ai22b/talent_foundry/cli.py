@@ -182,6 +182,19 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     build_runtime_bundle.add_argument("--employment-record", required=True)
     build_runtime_bundle.add_argument("--channel", action="append", default=[])
+    build_runtime_bundle.add_argument(
+        "--channel-model",
+        action="append",
+        default=[],
+        help="Pin a channel or chat target to a model: CHANNEL[:TARGET]=PROVIDER/MODEL.",
+    )
+    build_runtime_bundle.add_argument(
+        "--binding",
+        action="append",
+        default=[],
+        help="Bind an inbound channel or conversation to an agent id: CHANNEL[:CONVERSATION]=AGENT_ID.",
+    )
+    build_runtime_bundle.add_argument("--import-manifest", help="Paideia OpenClaw import manifest to reuse.")
     build_runtime_bundle.add_argument("--bind-host", default="127.0.0.1")
     build_runtime_bundle.add_argument("--port", type=int, default=8722)
     build_runtime_bundle.add_argument("--existing-openclaw-config")
@@ -819,6 +832,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         bundle = build_openclaw_runtime_bundle(
             Path(args.employment_record),
             channels=args.channel or None,
+            channel_models=args.channel_model or None,
+            bindings=args.binding or None,
+            import_manifest_path=Path(args.import_manifest) if args.import_manifest else None,
             bind_host=args.bind_host,
             port=args.port,
             output_dir=Path(args.output_dir),

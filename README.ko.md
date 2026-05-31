@@ -139,6 +139,20 @@ ai22b-talent-foundry translate-openclaw-platform-event `
   --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\telegram_translation.json"
 ```
 
+고용된 인재를 OpenClaw식 실행 환경으로 넘기려면 runtime bundle을 생성합니다. 이 번들은 선택된 `provider/model`, `agents.list`, gateway URL, enabled channels, `channels.modelByChannel`, `bindings[]`를 담은 검토용 `openclaw_config_patch.json`을 만듭니다.
+
+```powershell
+ai22b-talent-foundry build-openclaw-runtime-bundle `
+  --employment-record "<employment_record.json>" `
+  --channel webchat `
+  --channel telegram `
+  --channel-model "telegram:boss-thread=openrouter/meta-llama/llama-3.1-8b" `
+  --binding "telegram:boss-thread=paideia-graham-junior" `
+  --existing-openclaw-config "$env:USERPROFILE\.openclaw\openclaw.json" `
+  --config-action modify `
+  --output-dir "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_runtime_bundle"
+```
+
 gateway 서버를 `--access-config`와 함께 실행하면 `/openclaw/platform-event/telegram`, `/discord`, `/slack` 경로로 들어온 raw event도 처리합니다. 허용목록에 없는 sender/conversation은 403으로 차단됩니다.
 
 import나 runtime bundle 이후 실제 연결 준비를 한 번에 점검하려면 bridge setup kit를 생성합니다. 이 명령은 provider 환경변수 템플릿, OpenClaw provider plugin/OAuth 계획, channel bridge 계획, 기본 차단 접근제어, smoke test payload를 함께 만듭니다.
