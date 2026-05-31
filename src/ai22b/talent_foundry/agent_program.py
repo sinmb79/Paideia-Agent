@@ -33,6 +33,7 @@ DEFAULT_OPENCLAW_MENU_FILE = "openclaw_onboarding_menu.json"
 DEFAULT_OPENCLAW_MENU_MARKDOWN = "OPENCLAW_ONBOARDING_MENU.md"
 DEFAULT_OPENCLAW_RUNTIME_SCRIPT = "build_openclaw_runtime_bundle.ps1"
 DEFAULT_OPENCLAW_SMOKE_PLAN_SCRIPT = "build_openclaw_live_smoke_plan.ps1"
+DEFAULT_OPENCLAW_SMOKE_SEQUENCE_SCRIPT = "run_openclaw_smoke_sequence.ps1"
 DEFAULT_OPENCLAW_WEBCHAT_SCRIPT = "start_openclaw_webchat.ps1"
 DEFAULT_ONBOARDING_TEMPLATE = "paideia_onboarding.template.json"
 DEFAULT_INSTALL_MANIFEST = "paideia_agent_install_manifest.json"
@@ -496,6 +497,201 @@ Write-Host "Markdown guide: $MarkdownOutput"
 """
 
 
+def _openclaw_smoke_sequence_script() -> str:
+    return """param(
+    [string]$EmploymentRecord = ".\\employment_record.json",
+    [string]$RuntimeBundle = ".\\openclaw_runtime_bundle\\openclaw_runtime_bundle.json",
+    [string[]]$Channel = @("webchat"),
+    [string]$OutputDir = ".\\openclaw_smoke_runs",
+    [switch]$IncludeLive,
+    [switch]$RefreshDocs
+)
+
+$ErrorActionPreference = "Stop"
+[Console]::InputEncoding = [System.Text.UTF8Encoding]::new()
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
+$env:PYTHONIOENCODING = "utf-8"
+
+$RuntimeHelper = Join-Path $PSScriptRoot "paideia_runtime.ps1"
+if (Test-Path -LiteralPath $RuntimeHelper) {
+    . $RuntimeHelper
+    $PaideiaPython = Resolve-PaideiaPython
+} else {
+    $PaideiaPython = "python"
+}
+
+$OutputRoot = New-Item -ItemType Directory -Force -Path $OutputDir
+$ReportPath = Join-Path $OutputRoot.FullName "openclaw_smoke_sequence_report.json"
+$PlanPath = Join-Path $OutputRoot.FullName "openclaw_live_smoke_plan.json"
+$PlanMarkdownPath = Join-Path $OutputRoot.FullName "OPENCLAW_LIVE_SMOKE_PLAN.md"
+$PreflightPath = Join-Path $OutputRoot.FullName "openclaw_runtime_preflight.static.json"
+$GatewayProbePath = Join-Path $OutputRoot.FullName "openclaw_gateway_llm.live.json"
+$ChatOfflinePath = Join-Path $OutputRoot.FullName "chat_offline_smoke.json"
+$ChatLivePath = Join-Path $OutputRoot.FullName "chat_live_smoke.json"
+$ChannelOfflinePath = Join-Path $OutputRoot.FullName "channel_offline_smoke.json"
+$ChannelLivePath = Join-Path $OutputRoot.FullName "channel_live_smoke.json"
+$FirstChannel = ($Channel | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -First 1)
+if ([string]::IsNullOrWhiteSpace($FirstChannel)) { $FirstChannel = "webchat" }
+
+$Steps = New-Object System.Collections.Generic.List[object]
+$Failure = $null
+
+function Add-ChannelArgs {
+    param([object[]]$BaseArgs)
+    $ArgsList = @($BaseArgs)
+    foreach ($Item in $Channel) {
+        if (-not [string]::IsNullOrWhiteSpace($Item)) {
+            $ArgsList += @("--channel", $Item)
+        }
+    }
+    return $ArgsList
+}
+
+function Add-StepRecord {
+    param(
+        [string]$Id,
+        [string]$Status,
+        [bool]$Live,
+        [int]$ExitCode,
+        [string]$Output,
+        [string]$Command
+    )
+    $Steps.Add([ordered]@{
+        id = $Id
+        status = $Status
+        live = $Live
+        exit_code = $ExitCode
+        output = $Output
+        command = $Command
+    }) | Out-Null
+}
+
+function Invoke-PaideiaStep {
+    param(
+        [string]$Id,
+        [object[]]$ArgsList,
+        [string]$Output,
+        [switch]$Live
+    )
+    $CommandText = "$PaideiaPython " + (($ArgsList | ForEach-Object { [string]$_ }) -join " ")
+    if ($Live -and -not $IncludeLive) {
+        Add-StepRecord -Id $Id -Status "skipped_live_not_requested" -Live $true -ExitCode 0 -Output $Output -Command $CommandText
+        Write-Host "[skip live] $Id"
+        return
+    }
+    Write-Host "[run] $Id"
+    & $PaideiaPython @ArgsList
+    $ExitCode = $LASTEXITCODE
+    if ($ExitCode -eq 0) {
+        Add-StepRecord -Id $Id -Status "passed" -Live ([bool]$Live) -ExitCode $ExitCode -Output $Output -Command $CommandText
+        return
+    }
+    Add-StepRecord -Id $Id -Status "failed" -Live ([bool]$Live) -ExitCode $ExitCode -Output $Output -Command $CommandText
+    throw "$Id failed with exit code $ExitCode"
+}
+
+try {
+    $RuntimeBundleDir = Split-Path -Parent $RuntimeBundle
+    if ([string]::IsNullOrWhiteSpace($RuntimeBundleDir)) { $RuntimeBundleDir = "." }
+    Invoke-PaideiaStep -Id "build_runtime_bundle_if_missing" -Output $RuntimeBundle -ArgsList (Add-ChannelArgs @(
+        "-m", "ai22b.talent_foundry.cli",
+        "build-openclaw-runtime-bundle",
+        "--employment-record", $EmploymentRecord,
+        "--output-dir", $RuntimeBundleDir
+    ))
+
+    $SmokePlanArgs = Add-ChannelArgs @(
+        "-m", "ai22b.talent_foundry.cli",
+        "build-openclaw-live-smoke-plan",
+        "--employment-record", $EmploymentRecord,
+        "--runtime-bundle", $RuntimeBundle,
+        "--output", $PlanPath,
+        "--markdown-output", $PlanMarkdownPath
+    )
+    if ($RefreshDocs) { $SmokePlanArgs += "--refresh-docs" }
+    Invoke-PaideiaStep -Id "build_live_smoke_plan" -Output $PlanPath -ArgsList $SmokePlanArgs
+
+    Invoke-PaideiaStep -Id "offline_context_smoke" -Output $ChatOfflinePath -ArgsList @(
+        "-m", "ai22b.talent_foundry.cli",
+        "chat-hired-agent",
+        "--employment-record", $EmploymentRecord,
+        "--message", "OpenClaw offline context smoke test.",
+        "--llm-mode", "offline",
+        "--output", $ChatOfflinePath
+    )
+
+    Invoke-PaideiaStep -Id "static_preflight" -Output $PreflightPath -ArgsList @(
+        "-m", "ai22b.talent_foundry.cli",
+        "doctor-openclaw-runtime-preflight",
+        "--runtime-bundle", $RuntimeBundle,
+        "--run-channel-flow",
+        "--output", $PreflightPath
+    )
+
+    Invoke-PaideiaStep -Id "offline_channel_message_smoke" -Output $ChannelOfflinePath -ArgsList @(
+        "-m", "ai22b.talent_foundry.cli",
+        "run-openclaw-channel-message",
+        "--employment-record", $EmploymentRecord,
+        "--channel", $FirstChannel,
+        "--message", "OpenClaw channel offline smoke test.",
+        "--llm-mode", "offline",
+        "--output", $ChannelOfflinePath
+    )
+
+    Invoke-PaideiaStep -Id "gateway_live_probe" -Live -Output $GatewayProbePath -ArgsList @(
+        "-m", "ai22b.talent_foundry.cli",
+        "doctor-openclaw-gateway-llm",
+        "--employment-record", $EmploymentRecord,
+        "--runtime-bundle", $RuntimeBundle,
+        "--probe-gateway",
+        "--probe-chat",
+        "--output", $GatewayProbePath
+    )
+
+    Invoke-PaideiaStep -Id "live_llm_chat_smoke" -Live -Output $ChatLivePath -ArgsList @(
+        "-m", "ai22b.talent_foundry.cli",
+        "chat-hired-agent",
+        "--employment-record", $EmploymentRecord,
+        "--message", "OpenClaw live LLM chat smoke test.",
+        "--llm-mode", "live",
+        "--output", $ChatLivePath
+    )
+
+    Invoke-PaideiaStep -Id "live_channel_message_smoke" -Live -Output $ChannelLivePath -ArgsList @(
+        "-m", "ai22b.talent_foundry.cli",
+        "run-openclaw-channel-message",
+        "--employment-record", $EmploymentRecord,
+        "--channel", $FirstChannel,
+        "--message", "OpenClaw live channel message smoke test.",
+        "--llm-mode", "live",
+        "--output", $ChannelLivePath
+    )
+} catch {
+    $Failure = $_.Exception.Message
+} finally {
+    $Report = [ordered]@{
+        schema = "ai22b-paideia-openclaw-smoke-sequence-run/v1"
+        created_at_utc = (Get-Date).ToUniversalTime().ToString("o")
+        include_live = [bool]$IncludeLive
+        status = if ($Failure) { "failed" } else { "passed" }
+        failure = $Failure
+        employment_record = $EmploymentRecord
+        runtime_bundle = $RuntimeBundle
+        output_dir = $OutputRoot.FullName
+        first_channel = $FirstChannel
+        secret_values_stored = $false
+        external_network_requested = [bool]$IncludeLive
+        steps = $Steps
+        next_live_command = "powershell -ExecutionPolicy Bypass -File .\\run_openclaw_smoke_sequence.ps1 -IncludeLive"
+    }
+    $Report | ConvertTo-Json -Depth 8 | Set-Content -Path $ReportPath -Encoding UTF8
+    Write-Host "OpenClaw smoke sequence report: $ReportPath"
+}
+
+if ($Failure) { throw $Failure }
+"""
+
+
 def _openclaw_webchat_script() -> str:
     return """param(
     [string]$EmploymentRecord = ".\\employment_record.json",
@@ -714,6 +910,13 @@ Create the no-secret live smoke-test sequence before using a real Gateway, provi
 powershell -ExecutionPolicy Bypass -File .\\build_openclaw_live_smoke_plan.ps1 -Channel webchat
 ```
 
+Run the safe installed-kit smoke sequence. By default this stays offline: it builds the runtime bundle, writes the smoke plan, checks local context, runs runtime preflight with channel-flow dry run, and sends one offline channel envelope. Live Gateway/LLM/channel probes run only when `-IncludeLive` is explicit.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\\run_openclaw_smoke_sequence.ps1 -Channel webchat
+powershell -ExecutionPolicy Bypass -File .\\run_openclaw_smoke_sequence.ps1 -Channel webchat -IncludeLive
+```
+
 Start a local browser chat surface without any external channel token:
 
 ```powershell
@@ -874,6 +1077,10 @@ def build_agent_program(
         _openclaw_live_smoke_plan_script(),
         encoding="utf-8",
     )
+    (output_path.parent / DEFAULT_OPENCLAW_SMOKE_SEQUENCE_SCRIPT).write_text(
+        _openclaw_smoke_sequence_script(),
+        encoding="utf-8",
+    )
     (output_path.parent / DEFAULT_OPENCLAW_WEBCHAT_SCRIPT).write_text(
         _openclaw_webchat_script(),
         encoding="utf-8",
@@ -1022,6 +1229,7 @@ def build_agent_program(
             "openclaw_onboarding_menu_script": DEFAULT_OPENCLAW_MENU_SCRIPT,
             "openclaw_runtime_bundle_script": DEFAULT_OPENCLAW_RUNTIME_SCRIPT,
             "openclaw_live_smoke_plan_script": DEFAULT_OPENCLAW_SMOKE_PLAN_SCRIPT,
+            "openclaw_smoke_sequence_script": DEFAULT_OPENCLAW_SMOKE_SEQUENCE_SCRIPT,
             "openclaw_webchat_script": DEFAULT_OPENCLAW_WEBCHAT_SCRIPT,
             "chat_command": (
                 "ai22b-talent-foundry run-agent-program-chat "
@@ -1041,6 +1249,10 @@ def build_agent_program(
                 "--runtime-bundle openclaw_runtime_bundle/openclaw_runtime_bundle.json "
                 "--channel webchat --output openclaw_live_smoke_plan.json "
                 "--markdown-output OPENCLAW_LIVE_SMOKE_PLAN.md"
+            ),
+            "openclaw_smoke_sequence_command": (
+                "powershell -ExecutionPolicy Bypass -File "
+                f".\\{DEFAULT_OPENCLAW_SMOKE_SEQUENCE_SCRIPT} -Channel webchat"
             ),
             "openclaw_webchat_command": (
                 "ai22b-talent-foundry run-openclaw-webchat-server "
@@ -1073,6 +1285,7 @@ def build_agent_program(
             "openclaw_onboarding_menu_script": DEFAULT_OPENCLAW_MENU_SCRIPT,
             "openclaw_runtime_bundle_script": DEFAULT_OPENCLAW_RUNTIME_SCRIPT,
             "openclaw_live_smoke_plan_script": DEFAULT_OPENCLAW_SMOKE_PLAN_SCRIPT,
+            "openclaw_smoke_sequence_script": DEFAULT_OPENCLAW_SMOKE_SEQUENCE_SCRIPT,
             "openclaw_webchat_script": DEFAULT_OPENCLAW_WEBCHAT_SCRIPT,
             "hermes_openclaw_benchmark": {
                 "use": [
@@ -1208,6 +1421,7 @@ def build_paideia_agent_install_kit(
             "refresh_openclaw_onboarding_menu": DEFAULT_OPENCLAW_MENU_SCRIPT,
             "build_openclaw_runtime_bundle": DEFAULT_OPENCLAW_RUNTIME_SCRIPT,
             "build_openclaw_live_smoke_plan": DEFAULT_OPENCLAW_SMOKE_PLAN_SCRIPT,
+            "run_openclaw_smoke_sequence": DEFAULT_OPENCLAW_SMOKE_SEQUENCE_SCRIPT,
             "start_openclaw_webchat": DEFAULT_OPENCLAW_WEBCHAT_SCRIPT,
             "program": program_path.name,
             "onboarding_template": DEFAULT_ONBOARDING_TEMPLATE,
@@ -1252,6 +1466,7 @@ def build_paideia_agent_install_kit(
             "local_config": DEFAULT_RUNTIME_CONFIG_FILE,
             "source_repo_mode": "writes a local source path only when the user runs install_paideia_runtime.ps1 -SourceRepo",
             "git_install_mode": "runs pip install from the configured Git URL only when the user passes -InstallFromGit",
+            "safe_openclaw_smoke_runner": DEFAULT_OPENCLAW_SMOKE_SEQUENCE_SCRIPT,
             "secret_values_stored": False,
         },
         "status": "ready",
@@ -1278,6 +1493,7 @@ def doctor_agent_program(program_path: Path, *, output_path: Path | None = None)
         "openclaw_onboarding_menu_script",
         "openclaw_runtime_bundle_script",
         "openclaw_live_smoke_plan_script",
+        "openclaw_smoke_sequence_script",
         "openclaw_webchat_script",
     ]
     missing_entrypoints = [

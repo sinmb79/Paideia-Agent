@@ -1716,6 +1716,7 @@ class TalentFoundryTests(unittest.TestCase):
             menu_script_exists = (program_path.parent / "refresh_openclaw_onboarding_menu.ps1").exists()
             runtime_script_exists = (program_path.parent / "build_openclaw_runtime_bundle.ps1").exists()
             smoke_plan_script_exists = (program_path.parent / "build_openclaw_live_smoke_plan.ps1").exists()
+            smoke_sequence_script_exists = (program_path.parent / "run_openclaw_smoke_sequence.ps1").exists()
             webchat_script_exists = (program_path.parent / "start_openclaw_webchat.ps1").exists()
 
         self.assertEqual(program["schema"], "ai22b-paideia-agent-program/v1")
@@ -1731,12 +1732,14 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertTrue(menu_script_exists)
         self.assertTrue(runtime_script_exists)
         self.assertTrue(smoke_plan_script_exists)
+        self.assertTrue(smoke_sequence_script_exists)
         self.assertTrue(webchat_script_exists)
         self.assertEqual(program["entrypoints"]["runtime_helper_script"], "paideia_runtime.ps1")
         self.assertEqual(program["entrypoints"]["install_runtime_script"], "install_paideia_runtime.ps1")
         self.assertEqual(program["entrypoints"]["openclaw_onboarding_menu_script"], "refresh_openclaw_onboarding_menu.ps1")
         self.assertEqual(program["entrypoints"]["openclaw_runtime_bundle_script"], "build_openclaw_runtime_bundle.ps1")
         self.assertEqual(program["entrypoints"]["openclaw_live_smoke_plan_script"], "build_openclaw_live_smoke_plan.ps1")
+        self.assertEqual(program["entrypoints"]["openclaw_smoke_sequence_script"], "run_openclaw_smoke_sequence.ps1")
         self.assertEqual(program["entrypoints"]["openclaw_webchat_script"], "start_openclaw_webchat.ps1")
 
     def test_paideia_agent_install_kit_is_self_contained_and_doctored(self) -> None:
@@ -1772,6 +1775,7 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("refresh_openclaw_onboarding_menu.ps1", manifest["files"])
         self.assertIn("build_openclaw_runtime_bundle.ps1", manifest["files"])
         self.assertIn("build_openclaw_live_smoke_plan.ps1", manifest["files"])
+        self.assertIn("run_openclaw_smoke_sequence.ps1", manifest["files"])
         self.assertIn("start_openclaw_webchat.ps1", manifest["files"])
         self.assertIn("adapter_manifests", manifest["directories"])
         self.assertEqual(manifest["entrypoints"]["runtime_helper"], "paideia_runtime.ps1")
@@ -1781,7 +1785,9 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(manifest["entrypoints"]["openclaw_onboarding_menu_markdown"], "OPENCLAW_ONBOARDING_MENU.md")
         self.assertEqual(manifest["entrypoints"]["build_openclaw_runtime_bundle"], "build_openclaw_runtime_bundle.ps1")
         self.assertEqual(manifest["entrypoints"]["build_openclaw_live_smoke_plan"], "build_openclaw_live_smoke_plan.ps1")
+        self.assertEqual(manifest["entrypoints"]["run_openclaw_smoke_sequence"], "run_openclaw_smoke_sequence.ps1")
         self.assertEqual(manifest["entrypoints"]["start_openclaw_webchat"], "start_openclaw_webchat.ps1")
+        self.assertIn("run_openclaw_smoke_sequence.ps1", install_readme)
         self.assertIn("start_openclaw_webchat.ps1", install_readme)
         self.assertIn("/api/runtime", install_readme)
         self.assertEqual(openclaw_menu["schema"], "ai22b-openclaw-onboarding-menu/v1")
@@ -1791,6 +1797,7 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(manifest["openclaw_onboarding_menu"]["channel_count"], openclaw_menu["chat_selection"]["counts"]["total"])
         self.assertEqual(manifest["runtime_bootstrap"]["helper"], "paideia_runtime.ps1")
         self.assertEqual(manifest["runtime_bootstrap"]["installer"], "install_paideia_runtime.ps1")
+        self.assertEqual(manifest["runtime_bootstrap"]["safe_openclaw_smoke_runner"], "run_openclaw_smoke_sequence.ps1")
         self.assertFalse(manifest["runtime_bootstrap"]["secret_values_stored"])
         self.assertIn("All OpenClaw Providers", openclaw_menu_markdown)
         self.assertTrue(hermes_adapter_exists)
@@ -1868,19 +1875,56 @@ class TalentFoundryTests(unittest.TestCase):
                 text=True,
                 check=True,
             )
+            smoke_sequence = subprocess.run(
+                [
+                    "powershell",
+                    "-NoLogo",
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(kit_dir / "run_openclaw_smoke_sequence.ps1"),
+                    "-Channel",
+                    "webchat",
+                    "-OutputDir",
+                    str(kit_dir / "openclaw_smoke_runs"),
+                ],
+                cwd=kit_dir,
+                env=env,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
             config = json.loads((kit_dir / "paideia_runtime.local.json").read_text(encoding="utf-8-sig"))
             menu = json.loads((kit_dir / "openclaw_onboarding_menu.json").read_text(encoding="utf-8"))
             doctor_report = json.loads((kit_dir / "paideia_doctor_report.json").read_text(encoding="utf-8"))
+            smoke_report = json.loads(
+                (kit_dir / "openclaw_smoke_runs" / "openclaw_smoke_sequence_report.json").read_text(
+                    encoding="utf-8-sig"
+                )
+            )
 
         self.assertIn("Paideia runtime registered from source repo", install.stdout)
         self.assertIn("OpenClaw onboarding menu", refresh.stdout)
         self.assertIn("paideia_doctor_report.json", doctor.stdout)
+        self.assertIn("OpenClaw smoke sequence report", smoke_sequence.stdout)
         self.assertEqual(config["schema"], "ai22b-paideia-runtime-local-config/v1")
         self.assertEqual(config["mode"], "source_repo")
         self.assertFalse(config["secret_values_stored"])
         self.assertEqual(menu["schema"], "ai22b-openclaw-onboarding-menu/v1")
         self.assertTrue(menu["llm_selection"]["accepts_freeform_provider_model"])
         self.assertTrue(doctor_report["passed"])
+        self.assertEqual(smoke_report["schema"], "ai22b-paideia-openclaw-smoke-sequence-run/v1")
+        self.assertEqual(smoke_report["status"], "passed")
+        self.assertFalse(smoke_report["include_live"])
+        self.assertFalse(smoke_report["secret_values_stored"])
+        step_status = {step["id"]: step["status"] for step in smoke_report["steps"]}
+        self.assertEqual(step_status["offline_context_smoke"], "passed")
+        self.assertEqual(step_status["static_preflight"], "passed")
+        self.assertEqual(step_status["offline_channel_message_smoke"], "passed")
+        self.assertEqual(step_status["gateway_live_probe"], "skipped_live_not_requested")
+        self.assertEqual(step_status["live_llm_chat_smoke"], "skipped_live_not_requested")
+        self.assertEqual(step_status["live_channel_message_smoke"], "skipped_live_not_requested")
 
     def test_cli_build_paideia_agent_kit_and_doctor_agent_program(self) -> None:
         from ai22b.talent_foundry.cli import main as cli_main

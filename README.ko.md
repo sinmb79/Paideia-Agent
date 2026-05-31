@@ -442,6 +442,7 @@ powershell -ExecutionPolicy Bypass -File .\start_paideia_chat.ps1
 powershell -ExecutionPolicy Bypass -File .\refresh_openclaw_onboarding_menu.ps1
 powershell -ExecutionPolicy Bypass -File .\build_openclaw_runtime_bundle.ps1 -Channel webchat
 powershell -ExecutionPolicy Bypass -File .\build_openclaw_live_smoke_plan.ps1 -Channel webchat
+powershell -ExecutionPolicy Bypass -File .\run_openclaw_smoke_sequence.ps1 -Channel webchat
 powershell -ExecutionPolicy Bypass -File .\start_openclaw_webchat.ps1 -Port 8722
 ```
 
@@ -449,6 +450,7 @@ powershell -ExecutionPolicy Bypass -File .\start_openclaw_webchat.ps1 -Port 8722
 - `install_paideia_runtime.ps1`: `PYTHONPATH`를 직접 다루지 않아도 되도록 로컬 Paideia 소스 경로나 Git 설치 경로를 kit에 등록합니다. 생성되는 `paideia_runtime.local.json`은 로컬 경로를 담을 수 있으므로 공개 저장소에 올리지 않습니다.
 - `build_openclaw_runtime_bundle.ps1`: 고용 기록을 기준으로 OpenClaw provider/model/channel 선택과 gateway 설정 파일을 생성합니다.
 - `build_openclaw_live_smoke_plan.ps1`: 실제 API 키나 외부 채널을 쓰기 전에 실행 순서, 필요한 준비물, live probe 명령을 no-secret 문서로 뽑습니다.
+- `run_openclaw_smoke_sequence.ps1`: 설치 kit 안에서 안전한 순서대로 runtime bundle, smoke plan, offline context chat, static preflight/channel-flow dry run, offline channel message를 실행합니다. `-IncludeLive`를 붙인 경우에만 Gateway/live LLM/live channel probe를 실행합니다.
 - `start_openclaw_webchat.ps1`: 외부 봇 토큰 없이 `127.0.0.1`에서 브라우저 채팅창을 열어 설치된 인재를 테스트합니다.
 
 WebChat은 `/api/runtime`과 `/api/smoke-plan`을 함께 제공하므로, 사용자는 현재 선택된 LLM 서비스, 모델, 채널 경로, smoke-test 순서를 확인한 뒤 실제 Gateway나 외부 채널 연결을 진행할 수 있습니다.
