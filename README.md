@@ -358,6 +358,7 @@ ai22b-talent-foundry build-openclaw-runtime-bundle `
 The bundle writes:
 
 - `openclaw_config_patch.json`: a review-first `openclaw.json` patch with the selected `provider/model`, `models.providers`, `agents.list`, gateway URL, enabled channels, `channels.modelByChannel`, and `bindings[]`.
+- `openclaw_native_handoff.json`: a native OpenClaw handoff plan with `openclaw setup --workspace`, `openclaw doctor`, `openclaw channels add --channel <id> --help`, and `openclaw gateway run` commands for owners who want OpenClaw itself to own provider auth, channel plugins, gateway sessions, and platform delivery.
 - `openclaw.env.example.ps1`: a local PowerShell environment template. It lists secret variable names but never writes secret values.
 - `openclaw_provider_doctor.json`, `openclaw_channel_doctor.json`, and `llm_service_health.json`: readiness checks for model auth, channel bridge requirements, and local/remote runtime status.
 - `openclaw_gateway_config.json` and `openclaw_channel_access_config.json`: loopback gateway and deny-by-default channel access setup.

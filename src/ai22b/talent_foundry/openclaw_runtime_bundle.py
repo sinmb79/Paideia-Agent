@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -31,6 +32,7 @@ OPENCLAW_CONFIG_PATCH_SCHEMA = "ai22b-openclaw-config-patch/v1"
 OPENCLAW_EXISTING_CONFIG_REVIEW_SCHEMA = "ai22b-openclaw-existing-config-review/v1"
 OPENCLAW_CONFIG_MERGE_PREVIEW_SCHEMA = "ai22b-openclaw-config-merge-preview/v1"
 OPENCLAW_CONFIG_RESET_PLAN_SCHEMA = "ai22b-openclaw-config-reset-plan/v1"
+OPENCLAW_NATIVE_HANDOFF_SCHEMA = "ai22b-openclaw-native-handoff/v1"
 
 OPENCLAW_REFERENCE_URLS = [
     "https://docs.openclaw.ai/start/wizard-cli-flow",
@@ -39,7 +41,12 @@ OPENCLAW_REFERENCE_URLS = [
     "https://docs.openclaw.ai/concepts/model-providers",
     "https://docs.openclaw.ai/channels",
     "https://docs.openclaw.ai/channels/channel-routing",
+    "https://docs.openclaw.ai/gateway/config-agents",
     "https://docs.openclaw.ai/gateway/config-channels",
+    "https://docs.openclaw.ai/cli/gateway",
+    "https://docs.openclaw.ai/cli/channels",
+    "https://docs.openclaw.ai/concepts/agent-runtimes",
+    "https://docs.openclaw.ai/agent-workspace",
     "https://docs.openclaw.ai/announcements/bluebubbles-imessage",
     "https://docs.openclaw.ai/channels/bluebubbles",
 ]
@@ -469,6 +476,7 @@ def _build_config_patch(
             "agents": {
                 "defaults": {
                     "model": {"primary": model_selector},
+                    "workspace": agent_workspace,
                 },
                 "list": [
                     {
@@ -501,6 +509,9 @@ def _build_config_patch(
                     provider_id: provider_config,
                 },
             },
+            "gateway": {
+                "mode": "local",
+            },
             "channels": {
                 **{
                     channel_id: {
@@ -523,6 +534,104 @@ def _build_config_patch(
             "live_channel_send": "explicit_plugin_or_send_command_required",
         },
     }
+
+
+def _build_native_handoff(
+    *,
+    employment_record_path: Path,
+    employment: dict[str, Any],
+    provider_id: str,
+    model_selector: str,
+    channels: list[str],
+    bind_host: str,
+    port: int,
+    config_patch_path: Path,
+    existing_config_path: Path,
+    output_path: Path,
+) -> dict[str, Any]:
+    agent_key = _safe_agent_key(employment)
+    workspace = employment_record_path.parent
+    openclaw_bin = shutil.which("openclaw")
+    channel_add_help = {
+        channel_id: f"openclaw channels add --channel {channel_id} --help"
+        for channel_id in channels
+        if channel_id != "webchat"
+    }
+    handoff = {
+        "schema": OPENCLAW_NATIVE_HANDOFF_SCHEMA,
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "status": "ready_for_owner_review",
+        "claim_boundary": (
+            "This handoff lets a reviewed Paideia talent be mounted into an installed OpenClaw runtime. "
+            "OpenClaw owns native provider auth, channel plugins, gateway sessions, and final platform delivery."
+        ),
+        "openclaw_cli": {
+            "binary": openclaw_bin or "openclaw",
+            "detected_on_path": bool(openclaw_bin),
+            "setup_required_if_missing": True,
+        },
+        "paideia_agent": {
+            "employment_id": employment["employment_id"],
+            "agent_id": agent_key,
+            "agent_name": employment["agent"]["name"],
+            "employment_record": str(employment_record_path),
+            "workspace": str(workspace),
+            "identity_boundary": "Paideia local education records and Reasoning Ledger remain the agent memory substrate.",
+        },
+        "native_openclaw_selection": {
+            "provider_id": provider_id,
+            "model": model_selector,
+            "channels": channels,
+            "gateway_mode": "local",
+            "bindings_expected": True,
+            "channel_model_overrides_expected": True,
+        },
+        "config_files": {
+            "existing_openclaw_config": str(existing_config_path),
+            "review_first_patch": str(config_patch_path),
+            "patch_contains": [
+                "gateway.mode",
+                "models.providers",
+                "agents.defaults.workspace",
+                "agents.list",
+                "channels.modelByChannel",
+                "bindings",
+            ],
+            "direct_write_performed": False,
+        },
+        "operator_commands": {
+            "setup_workspace": f'openclaw setup --workspace "{workspace}"',
+            "review_model_auth": "openclaw models auth list",
+            "configure_model_interactive": "openclaw config --section model",
+            "set_gateway_local_dry_run": "openclaw config set gateway.mode local --dry-run",
+            "doctor_before_merge": "openclaw doctor",
+            "list_channels": "openclaw channels list --all",
+            "channel_add_help": channel_add_help,
+            "channel_status_probe": "openclaw channels status --probe --json",
+            "run_gateway": "openclaw gateway run",
+            "paideia_loopback_gateway": (
+                "ai22b-talent-foundry run-openclaw-channel-gateway-server "
+                f"--employment-record {employment_record_path} "
+                + " ".join(f"--channel {channel}" for channel in channels)
+                + f" --bind-host {bind_host} --port {port}"
+            ),
+        },
+        "native_runtime_notes": [
+            "Use OpenClaw's provider/model auth and plugin setup for providers Paideia marks as provider_plugin_required.",
+            "Use `openclaw channels add --channel <id> --help` to see the current native flags for each channel.",
+            "OpenClaw routes replies back to the origin channel; the selected model should not choose the outbound channel.",
+            "Review and merge the patch manually or through an owner-approved OpenClaw config workflow.",
+        ],
+        "security": {
+            "secret_values_stored": False,
+            "private_training_files_exported": False,
+            "existing_config_overwritten": False,
+            "channel_tokens_managed_by": "OpenClaw native CLI or user environment, not Paideia public artifacts",
+        },
+        "source_docs_checked": OPENCLAW_REFERENCE_URLS,
+    }
+    _write_json(output_path, handoff)
+    return handoff
 
 
 def _review_existing_openclaw_config(
@@ -698,6 +807,7 @@ def build_openclaw_runtime_bundle(
     channel_doctor_path = output_dir / "openclaw_channel_doctor.json"
     llm_health_path = output_dir / "llm_service_health.json"
     config_patch_path = output_dir / "openclaw_config_patch.json"
+    native_handoff_path = output_dir / "openclaw_native_handoff.json"
     env_template_path = output_dir / "openclaw.env.example.ps1"
     manifest_path = output_dir / "openclaw_runtime_bundle.json"
 
@@ -775,10 +885,23 @@ def build_openclaw_runtime_bundle(
         config_patch=config_patch,
         output_dir=output_dir,
     )
+    native_handoff = _build_native_handoff(
+        employment_record_path=employment_record_path,
+        employment=employment,
+        provider_id=provider_id,
+        model_selector=model,
+        channels=selected_channels,
+        bind_host=bind_host,
+        port=port,
+        config_patch_path=config_patch_path,
+        existing_config_path=selected_existing_config_path,
+        output_path=native_handoff_path,
+    )
 
     artifacts = {
         "manifest": str(manifest_path),
         "openclaw_config_patch": str(config_patch_path),
+        "openclaw_native_handoff": str(native_handoff_path),
         "openclaw_env_template": str(env_template_path),
         "existing_openclaw_config_review": existing_config_review["artifacts"]["review"],
         "gateway_config": str(gateway_config_path),
@@ -861,6 +984,8 @@ def build_openclaw_runtime_bundle(
                 f"{_relative_or_name(Path(artifacts['openclaw_config_patch']), output_dir)} and "
                 f"{_relative_or_name(Path(artifacts['existing_openclaw_config_review']), output_dir)} before applying to OpenClaw."
             ),
+            "openclaw_native_setup": native_handoff["operator_commands"]["setup_workspace"],
+            "openclaw_native_gateway": native_handoff["operator_commands"]["run_gateway"],
             "rebuild_with_channel_model": (
                 "ai22b-talent-foundry build-openclaw-runtime-bundle "
                 f"--employment-record {employment_record_path} --channel <channel> "
@@ -875,11 +1000,13 @@ def build_openclaw_runtime_bundle(
         },
         "notes": [
             "Review openclaw_config_patch.json before merging into an existing OpenClaw config.",
+            "Review openclaw_native_handoff.json when you want OpenClaw itself to own provider auth, channel plugins, gateway sessions, and platform delivery.",
             "Existing OpenClaw config review follows Keep/Modify/Reset semantics and never overwrites the config.",
             "Set secrets in the local shell using openclaw.env.example.ps1; real values are never written.",
             "Channel access config starts deny-by-default and needs allowlisted senders or conversations before raw platform events are routed.",
         ],
         "existing_openclaw_config_review": existing_config_review,
+        "openclaw_native_handoff": native_handoff,
         "generated_gateway_config": gateway_config,
     }
     _write_json(manifest_path, bundle)

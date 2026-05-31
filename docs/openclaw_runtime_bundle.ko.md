@@ -107,6 +107,7 @@ ai22b-talent-foundry audit-openclaw-parity `
 
 - `openclaw_runtime_bundle.json`: 전체 실행 준비 manifest입니다.
 - `openclaw_config_patch.json`: OpenClaw식 agent, `models.providers`, channel, `channels.modelByChannel`, `bindings[]` 설정 patch입니다.
+- `openclaw_native_handoff.json`: OpenClaw 자체가 provider auth, channel plugin, gateway session, platform delivery를 맡게 할 때 검토할 native handoff 계획입니다. `openclaw setup --workspace`, `openclaw doctor`, `openclaw channels add --channel <id> --help`, `openclaw gateway run` 명령을 포함합니다.
 - `openclaw.env.example.ps1`: 로컬 환경변수 템플릿입니다. 실제 secret 값은 들어가지 않습니다.
 - `openclaw_provider_doctor.json`: 선택 provider의 live adapter, secret, plugin 필요 상태입니다.
 - `openclaw_channel_doctor.json`: 선택 channel의 gateway, delivery, bridge/plugin 필요 상태입니다.

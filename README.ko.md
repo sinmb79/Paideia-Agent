@@ -139,7 +139,7 @@ ai22b-talent-foundry translate-openclaw-platform-event `
   --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\telegram_translation.json"
 ```
 
-고용된 인재를 OpenClaw식 실행 환경으로 넘기려면 runtime bundle을 생성합니다. 이 번들은 선택된 `provider/model`, `models.providers`, `agents.list`, gateway URL, enabled channels, `channels.modelByChannel`, `bindings[]`를 담은 검토용 `openclaw_config_patch.json`을 만듭니다.
+고용된 인재를 OpenClaw식 실행 환경으로 넘기려면 runtime bundle을 생성합니다. 이 번들은 선택된 `provider/model`, `models.providers`, `agents.list`, gateway URL, enabled channels, `channels.modelByChannel`, `bindings[]`를 담은 검토용 `openclaw_config_patch.json`과, 실제 OpenClaw CLI/gateway로 넘길 때 볼 수 있는 `openclaw_native_handoff.json`을 만듭니다.
 
 ```powershell
 ai22b-talent-foundry build-openclaw-runtime-bundle `
