@@ -167,6 +167,8 @@ def _build_parser() -> argparse.ArgumentParser:
     build_runtime_bundle.add_argument("--channel", action="append", default=[])
     build_runtime_bundle.add_argument("--bind-host", default="127.0.0.1")
     build_runtime_bundle.add_argument("--port", type=int, default=8722)
+    build_runtime_bundle.add_argument("--existing-openclaw-config")
+    build_runtime_bundle.add_argument("--config-action", choices=["keep", "modify", "reset"], default="modify")
     build_runtime_bundle.add_argument("--output-dir", required=True)
 
     build_gateway_config = subparsers.add_parser(
@@ -772,6 +774,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             bind_host=args.bind_host,
             port=args.port,
             output_dir=Path(args.output_dir),
+            existing_openclaw_config_path=Path(args.existing_openclaw_config) if args.existing_openclaw_config else None,
+            config_action=args.config_action,
         )
         print(str(Path(bundle["artifacts"]["manifest"])))
         return 0

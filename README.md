@@ -320,6 +320,8 @@ ai22b-talent-foundry build-openclaw-runtime-bundle `
   --employment-record "<employment_record.json>" `
   --channel webchat `
   --channel telegram `
+  --existing-openclaw-config "$env:USERPROFILE\.openclaw\openclaw.json" `
+  --config-action modify `
   --output-dir "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_runtime_bundle"
 ```
 
@@ -329,6 +331,7 @@ The bundle writes:
 - `openclaw.env.example.ps1`: a local PowerShell environment template. It lists secret variable names but never writes secret values.
 - `openclaw_provider_doctor.json`, `openclaw_channel_doctor.json`, and `llm_service_health.json`: readiness checks for model auth, channel bridge requirements, and local/remote runtime status.
 - `openclaw_gateway_config.json` and `openclaw_channel_access_config.json`: loopback gateway and deny-by-default channel access setup.
+- `openclaw_existing_config_review.json`: OpenClaw-style existing config detection with `keep`, `modify`, or `reset` semantics. `modify` writes a redacted merge preview; `reset` writes a plan only and never deletes or overwrites the config.
 
 OpenClaw-style channels can now be routed through a local Paideia gateway envelope. The core returns a sendable outbound envelope; actual platform plugins remain responsible for bot tokens, pairing, and final delivery.
 

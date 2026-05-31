@@ -16,10 +16,14 @@ ai22b-talent-foundry build-openclaw-runtime-bundle `
   --employment-record "<employment_record.json>" `
   --channel webchat `
   --channel telegram `
+  --existing-openclaw-config "$env:USERPROFILE\.openclaw\openclaw.json" `
+  --config-action modify `
   --output-dir "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_runtime_bundle"
 ```
 
 `--channel`을 생략하면 고용 기록의 chat surface에서 OpenClaw channel을 추론하고, 추론할 수 없으면 로컬 `webchat`을 기본값으로 사용합니다.
+
+`--config-action`은 OpenClaw wizard의 기존 설정 처리 방식에 맞춰 `keep`, `modify`, `reset` 중 하나를 사용합니다. Paideia는 어떤 경우에도 기존 `openclaw.json`을 직접 삭제하거나 덮어쓰지 않습니다.
 
 ## 산출물
 
@@ -31,6 +35,10 @@ ai22b-talent-foundry build-openclaw-runtime-bundle `
 - `llm_service_health.json`: Paideia LLM runtime 상태입니다.
 - `openclaw_gateway_config.json`: 로컬 loopback gateway 설정입니다.
 - `openclaw_channel_access_config.json`: deny-by-default 접근 제어 설정입니다.
+- `openclaw_existing_config_review.json`: 기존 OpenClaw 설정 감지 결과입니다.
+- `openclaw_existing_config.redacted.json`: 기존 설정의 secret 값을 제거한 검토용 snapshot입니다.
+- `openclaw_config_merge.preview.json`: `modify` 선택 시 생성되는 redacted 병합 preview입니다.
+- `openclaw_config_reset_plan.json`: `reset` 선택 시 생성되는 계획 파일입니다. 실제 reset은 수행하지 않습니다.
 
 ## 남은 개발 방향
 

@@ -526,12 +526,28 @@ class GrahamTalentFoundryTests(unittest.TestCase):
                 chat_surface="openclaw-channel-bluebubbles",
                 record_name="employment_record_runtime.json",
             )
+            existing_config_path = Path(tmp) / ".openclaw" / "openclaw.json"
+            existing_config_path.parent.mkdir(parents=True, exist_ok=True)
+            existing_config_path.write_text(
+                json.dumps(
+                    {
+                        "agents": {"list": [{"id": "support", "name": "Support"}]},
+                        "models": {"default": {"provider": "openai", "apiKey": "do-not-store-this-key"}},
+                        "channels": {"telegram": {"botToken": "do-not-store-this-token"}},
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
             output_dir = Path(tmp) / "runtime_bundle"
             bundle = build_openclaw_runtime_bundle(
                 hiring["employment_record"],
                 channels=["bluebubbles", "webchat"],
                 output_dir=output_dir,
                 port=9123,
+                existing_openclaw_config_path=existing_config_path,
+                config_action="modify",
             )
             manifest_path = Path(bundle["artifacts"]["manifest"])
             manifest_exists = manifest_path.exists()
@@ -539,6 +555,10 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             env_template = Path(bundle["artifacts"]["openclaw_env_template"]).read_text(encoding="utf-8")
             provider_doctor = json.loads(Path(bundle["artifacts"]["provider_doctor"]).read_text(encoding="utf-8"))
             channel_doctor = json.loads(Path(bundle["artifacts"]["channel_doctor"]).read_text(encoding="utf-8"))
+            config_review = json.loads(
+                Path(bundle["artifacts"]["existing_openclaw_config_review"]).read_text(encoding="utf-8")
+            )
+            merge_preview = Path(bundle["artifacts"]["existing_openclaw_config_merge_preview"]).read_text(encoding="utf-8")
             cli_output_dir = Path(tmp) / "runtime_bundle_cli"
             cli_result = cli_main(
                 [
@@ -547,11 +567,24 @@ class GrahamTalentFoundryTests(unittest.TestCase):
                     str(hiring["employment_record"]),
                     "--channel",
                     "webchat",
+                    "--existing-openclaw-config",
+                    str(existing_config_path),
+                    "--config-action",
+                    "keep",
                     "--output-dir",
                     str(cli_output_dir),
                 ]
             )
             cli_manifest_exists = (cli_output_dir / "openclaw_runtime_bundle.json").exists()
+            reset_output_dir = Path(tmp) / "runtime_bundle_reset"
+            reset_bundle = build_openclaw_runtime_bundle(
+                hiring["employment_record"],
+                channels=["webchat"],
+                output_dir=reset_output_dir,
+                existing_openclaw_config_path=existing_config_path,
+                config_action="reset",
+            )
+            reset_plan = Path(reset_bundle["artifacts"]["existing_openclaw_config_reset_plan"]).read_text(encoding="utf-8")
 
         self.assertEqual(bundle["schema"], "ai22b-openclaw-runtime-bundle/v1")
         self.assertTrue(manifest_exists)
@@ -559,16 +592,26 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertEqual(bundle["selection"]["provider_id"], "arcee")
         self.assertEqual(bundle["selection"]["model"], "arcee/trinity-large-thinking")
         self.assertEqual(bundle["selection"]["channels"], ["bluebubbles", "webchat"])
+        self.assertEqual(bundle["selection"]["config_action"], "modify")
+        self.assertEqual(config_review["status"], "modify_preview_written")
         self.assertEqual(config_patch["openclaw_json_patch"]["models"]["arcee"]["model"], "arcee/trinity-large-thinking")
         self.assertIn("bluebubbles", config_patch["openclaw_json_patch"]["channels"])
         self.assertIn("OPENCLAW_LIVE_ARCEE_KEY", env_template)
         self.assertIn("BLUEBUBBLES_SERVER_URL", env_template)
         self.assertNotIn("test-arcee-key", env_template)
+        self.assertIn("<redacted>", merge_preview)
+        self.assertNotIn("do-not-store-this-key", merge_preview)
+        self.assertNotIn("do-not-store-this-token", merge_preview)
         self.assertFalse(provider_doctor["secret_values_stored"])
         self.assertFalse(channel_doctor["secret_values_stored"])
+        self.assertFalse(config_review["secret_values_stored"])
+        self.assertFalse(config_review["destructive_reset_performed"])
         self.assertIn("run-openclaw-channel-gateway-server", bundle["next_commands"]["run_channel_gateway"])
         self.assertEqual(cli_result, 0)
         self.assertTrue(cli_manifest_exists)
+        self.assertEqual(reset_bundle["readiness"]["existing_openclaw_config"]["status"], "reset_plan_written")
+        self.assertIn("destructive_reset_performed", reset_plan)
+        self.assertNotIn("do-not-store-this-key", reset_plan)
 
     def test_openclaw_channel_gateway_routes_message_to_paideia_chat(self) -> None:
         from ai22b.talent_foundry.blueprint import create_agent_training_blueprint

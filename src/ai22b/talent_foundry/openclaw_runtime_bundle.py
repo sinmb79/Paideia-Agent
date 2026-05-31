@@ -28,14 +28,37 @@ from ai22b.talent_foundry.provider_connectors import doctor_openclaw_provider_co
 
 OPENCLAW_RUNTIME_BUNDLE_SCHEMA = "ai22b-openclaw-runtime-bundle/v1"
 OPENCLAW_CONFIG_PATCH_SCHEMA = "ai22b-openclaw-config-patch/v1"
+OPENCLAW_EXISTING_CONFIG_REVIEW_SCHEMA = "ai22b-openclaw-existing-config-review/v1"
+OPENCLAW_CONFIG_MERGE_PREVIEW_SCHEMA = "ai22b-openclaw-config-merge-preview/v1"
+OPENCLAW_CONFIG_RESET_PLAN_SCHEMA = "ai22b-openclaw-config-reset-plan/v1"
 
 OPENCLAW_REFERENCE_URLS = [
-    "https://docs.openclaw.ai/reference/wizard",
+    "https://docs.openclaw.ai/start/wizard-cli-flow",
+    "https://docs.openclaw.ai/configuration",
     "https://docs.openclaw.ai/providers",
     "https://docs.openclaw.ai/concepts/model-providers",
     "https://docs.openclaw.ai/channels",
     "https://docs.openclaw.ai/channels/channel-routing",
+    "https://docs.openclaw.ai/gateway/config-channels",
 ]
+
+CONFIG_ACTIONS = {"keep", "modify", "reset"}
+SECRET_KEY_PATTERNS = (
+    "api_key",
+    "apikey",
+    "authorization",
+    "bearer",
+    "client_secret",
+    "cookie",
+    "credential",
+    "key",
+    "password",
+    "private",
+    "secret",
+    "session",
+    "token",
+    "webhook",
+)
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -50,6 +73,45 @@ def _write_json(path: Path, data: dict[str, Any]) -> None:
 def _write_text(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
+
+
+def _default_openclaw_config_path() -> Path:
+    return Path.home() / ".openclaw" / "openclaw.json"
+
+
+def _secret_like_key(key: str) -> bool:
+    normalized = re.sub(r"[^a-z0-9]+", "_", key.casefold())
+    return any(pattern in normalized for pattern in SECRET_KEY_PATTERNS)
+
+
+def _redact_config(value: Any, *, parent_key: str = "") -> Any:
+    if isinstance(value, dict):
+        return {
+            key: "<redacted>" if _secret_like_key(str(key)) else _redact_config(item, parent_key=str(key))
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_redact_config(item, parent_key=parent_key) for item in value]
+    if parent_key and _secret_like_key(parent_key):
+        return "<redacted>"
+    return value
+
+
+def _deep_merge(base: dict[str, Any], patch: dict[str, Any]) -> dict[str, Any]:
+    merged = dict(base)
+    for key, value in patch.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _deep_merge(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+
+def _relative_or_name(path: Path, root: Path) -> str:
+    try:
+        return path.relative_to(root).as_posix()
+    except ValueError:
+        return path.name
 
 
 def _load_employment(employment_record_path: Path) -> dict[str, Any]:
@@ -279,6 +341,126 @@ def _build_config_patch(
     }
 
 
+def _review_existing_openclaw_config(
+    *,
+    existing_config_path: Path,
+    config_action: str,
+    config_patch: dict[str, Any],
+    output_dir: Path,
+) -> dict[str, Any]:
+    if config_action not in CONFIG_ACTIONS:
+        raise ValueError(f"config_action must be one of: {', '.join(sorted(CONFIG_ACTIONS))}")
+
+    review_path = output_dir / "openclaw_existing_config_review.json"
+    redacted_snapshot_path = output_dir / "openclaw_existing_config.redacted.json"
+    merge_preview_path = output_dir / "openclaw_config_merge.preview.json"
+    reset_plan_path = output_dir / "openclaw_config_reset_plan.json"
+    base = {
+        "schema": OPENCLAW_EXISTING_CONFIG_REVIEW_SCHEMA,
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "source_docs_checked": [
+            "https://docs.openclaw.ai/start/wizard-cli-flow",
+            "https://docs.openclaw.ai/configuration",
+        ],
+        "path": str(existing_config_path),
+        "exists": existing_config_path.exists(),
+        "requested_action": config_action,
+        "destructive_reset_performed": False,
+        "secret_values_stored": False,
+        "artifacts": {"review": str(review_path)},
+    }
+    if not existing_config_path.exists():
+        review = {
+            **base,
+            "status": "not_found",
+            "recommended_action": "create_or_review_patch",
+            "operator_message": "No existing OpenClaw config was found at the selected path.",
+        }
+        _write_json(review_path, review)
+        return review
+
+    try:
+        existing = _read_json(existing_config_path)
+    except Exception as exc:
+        review = {
+            **base,
+            "status": "invalid_json",
+            "error_type": type(exc).__name__,
+            "error": str(exc)[:500],
+            "recommended_action": "run_openclaw_doctor_before_paideia_merge",
+            "operator_message": "OpenClaw wizard behavior stops on invalid config; Paideia only wrote this review file.",
+        }
+        _write_json(review_path, review)
+        return review
+
+    redacted_existing = _redact_config(existing)
+    _write_json(redacted_snapshot_path, redacted_existing)
+    top_level_keys = sorted(str(key) for key in existing.keys())
+    legacy_key_candidates = sorted(
+        key for key in top_level_keys if key in {"provider", "providers", "modelProvider", "chatProvider"}
+    )
+
+    artifacts = {
+        "review": str(review_path),
+        "redacted_snapshot": str(redacted_snapshot_path),
+    }
+    status = "kept_for_manual_review"
+    operator_message = "Existing config was detected and left untouched."
+
+    if config_action == "modify":
+        merged_preview = _deep_merge(redacted_existing, config_patch["openclaw_json_patch"])
+        preview = {
+            "schema": OPENCLAW_CONFIG_MERGE_PREVIEW_SCHEMA,
+            "created_at_utc": datetime.now(timezone.utc).isoformat(),
+            "action": "modify_preview_only",
+            "source_config": str(existing_config_path),
+            "base_config_is_redacted": True,
+            "secret_values_stored": False,
+            "merge_strategy": "deep_merge_paideia_patch_into_redacted_existing_config",
+            "not_directly_applyable_if_existing_config_had_secrets": True,
+            "base_top_level_keys": top_level_keys,
+            "paideia_patch": config_patch["openclaw_json_patch"],
+            "preview_config_redacted": merged_preview,
+        }
+        _write_json(merge_preview_path, preview)
+        artifacts["merge_preview"] = str(merge_preview_path)
+        status = "modify_preview_written"
+        operator_message = "A redacted merge preview was written; review before manually applying to OpenClaw."
+    elif config_action == "reset":
+        reset_plan = {
+            "schema": OPENCLAW_CONFIG_RESET_PLAN_SCHEMA,
+            "created_at_utc": datetime.now(timezone.utc).isoformat(),
+            "action": "reset_plan_only",
+            "source_config": str(existing_config_path),
+            "backup_recommendation": str(existing_config_path.with_suffix(".json.bak")),
+            "destructive_reset_performed": False,
+            "secret_values_stored": False,
+            "replacement_patch": config_patch["openclaw_json_patch"],
+            "operator_steps": [
+                "Back up the existing OpenClaw config.",
+                "Run OpenClaw doctor or config schema validation.",
+                "Apply only the reviewed replacement patch if reset is still intended.",
+            ],
+        }
+        _write_json(reset_plan_path, reset_plan)
+        artifacts["reset_plan"] = str(reset_plan_path)
+        status = "reset_plan_written"
+        operator_message = "Reset was requested, but Paideia wrote a plan only and did not delete or overwrite the config."
+
+    review = {
+        **base,
+        "status": status,
+        "valid_json": True,
+        "top_level_keys": top_level_keys,
+        "legacy_key_candidates": legacy_key_candidates,
+        "recommended_action": "review_then_apply_manually",
+        "operator_message": operator_message,
+        "artifacts": artifacts,
+    }
+    _write_json(review_path, review)
+    return review
+
+
 def build_openclaw_runtime_bundle(
     employment_record_path: Path,
     *,
@@ -286,6 +468,8 @@ def build_openclaw_runtime_bundle(
     output_dir: Path | None = None,
     bind_host: str = "127.0.0.1",
     port: int = 8722,
+    existing_openclaw_config_path: Path | None = None,
+    config_action: str = "modify",
 ) -> dict[str, Any]:
     employment_record_path = employment_record_path.resolve()
     employment = _load_employment(employment_record_path)
@@ -370,11 +554,23 @@ def build_openclaw_runtime_bundle(
             port=port,
         ),
     )
+    selected_existing_config_path = (
+        existing_openclaw_config_path.expanduser().resolve()
+        if existing_openclaw_config_path is not None
+        else _default_openclaw_config_path().expanduser()
+    )
+    existing_config_review = _review_existing_openclaw_config(
+        existing_config_path=selected_existing_config_path,
+        config_action=config_action,
+        config_patch=config_patch,
+        output_dir=output_dir,
+    )
 
     artifacts = {
         "manifest": str(manifest_path),
         "openclaw_config_patch": str(config_patch_path),
         "openclaw_env_template": str(env_template_path),
+        "existing_openclaw_config_review": existing_config_review["artifacts"]["review"],
         "gateway_config": str(gateway_config_path),
         "channel_access_config": str(access_config_path),
         "provider_doctor": str(provider_doctor_path),
@@ -382,6 +578,9 @@ def build_openclaw_runtime_bundle(
         "channel_doctor": str(channel_doctor_path),
         "llm_service_health": str(llm_health_path),
     }
+    for key, value in existing_config_review.get("artifacts", {}).items():
+        if key != "review":
+            artifacts[f"existing_openclaw_config_{key}"] = value
     if delivery_config_path is not None:
         artifacts["channel_delivery_config"] = str(delivery_config_path)
 
@@ -401,12 +600,20 @@ def build_openclaw_runtime_bundle(
             "chat_surface": employment.get("chat_surface", {}),
             "bind_host": bind_host,
             "port": port,
+            "config_action": config_action,
+            "existing_openclaw_config_path": str(selected_existing_config_path),
         },
         "readiness": {
             "llm_service_health": llm_health,
             "provider_doctor_summary": provider_doctor["summary"],
             "channel_connector_summary": channel_connector_catalog["summary"],
             "channel_doctor_summary": channel_doctor["summary"],
+            "existing_openclaw_config": {
+                "status": existing_config_review["status"],
+                "exists": existing_config_review["exists"],
+                "requested_action": existing_config_review["requested_action"],
+                "destructive_reset_performed": existing_config_review["destructive_reset_performed"],
+            },
             "secret_values_stored": False,
         },
         "artifacts": artifacts,
@@ -436,6 +643,11 @@ def build_openclaw_runtime_bundle(
                 f"--llm-model {employment.get('llm_service', {}).get('selected_model') or ''} "
                 f"--output {llm_health_path}"
             ),
+            "review_openclaw_merge": (
+                "Review "
+                f"{_relative_or_name(Path(artifacts['openclaw_config_patch']), output_dir)} and "
+                f"{_relative_or_name(Path(artifacts['existing_openclaw_config_review']), output_dir)} before applying to OpenClaw."
+            ),
         },
         "openclaw_reference": {
             "provider_catalog": openclaw_provider_manifest(),
@@ -444,9 +656,11 @@ def build_openclaw_runtime_bundle(
         },
         "notes": [
             "Review openclaw_config_patch.json before merging into an existing OpenClaw config.",
+            "Existing OpenClaw config review follows Keep/Modify/Reset semantics and never overwrites the config.",
             "Set secrets in the local shell using openclaw.env.example.ps1; real values are never written.",
             "Channel access config starts deny-by-default and needs allowlisted senders or conversations before raw platform events are routed.",
         ],
+        "existing_openclaw_config_review": existing_config_review,
         "generated_gateway_config": gateway_config,
     }
     _write_json(manifest_path, bundle)
