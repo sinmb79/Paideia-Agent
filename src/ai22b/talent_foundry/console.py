@@ -440,15 +440,20 @@ def _questions_for_mode(mode: str | None) -> list[dict[str, Any]]:
     ]
 
 
-def collect_console_answers(input_func: Callable[[str], str] = input) -> dict[str, str]:
+def collect_console_answers(
+    input_func: Callable[[str], str] = input,
+    *,
+    prefill: dict[str, Any] | None = None,
+) -> dict[str, str]:
     answers: dict[str, str] = {}
+    prefill = prefill or {}
     mode: str | None = None
     print("Paideia Agent onboarding wizard")
     print("OpenClaw-style flow: config -> model/auth -> workspace -> gateway/channels -> skills -> education -> health -> finish")
     for question in questions_with_choices():
         if question.get("advanced_only") and mode != "advanced":
             continue
-        default = question.get("default")
+        default = prefill.get(question["id"], question.get("default"))
         suffix = f" [{default}]" if default else ""
         choices = question.get("choices", [])
         step = question.get("step", "setup")
@@ -568,6 +573,8 @@ def run_console_session(
     output_dir: Path,
     output_path: Path | None = None,
     mode: str = "answers_file",
+    prefill_metadata: dict[str, Any] | None = None,
+    prefill_artifacts: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_path or output_dir / "console_session.json"
@@ -606,6 +613,8 @@ def run_console_session(
         "first_goal_cycle": onboarding["artifacts"]["first_goal_cycle"],
         "llm_service_health": onboarding["artifacts"]["llm_service_health"],
     }
+    for key, value in (prefill_artifacts or {}).items():
+        artifacts[key] = str(value)
     status = onboarding["status"]
     post_hire_extensions["llm_service_health"] = {
         "schema": onboarding["llm_service_health"]["schema"],
@@ -792,6 +801,7 @@ def run_console_session(
         "llm_service_catalog": LLM_SERVICE_CATALOG,
         "chat_surface_catalog": CHAT_SURFACE_CATALOG,
         "role_model_catalog": _role_model_summaries(),
+        "prefill": prefill_metadata or {"source": "none"},
         "answers": normalized,
         "onboarding_summary": {
             "schema": onboarding["schema"],

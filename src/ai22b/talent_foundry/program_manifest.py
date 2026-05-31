@@ -253,6 +253,7 @@ def build_public_program_manifest(run_dir: Path, *, output_path: Path | None = N
         "guided_console": {
             "entrypoint": "ai22b-talent-foundry start-console",
             "onboarding_order": [
+                "optional_import_openclaw_config",
                 "choose_llm_service",
                 "choose_chat_surface",
                 "capture_owner_request",
@@ -263,6 +264,7 @@ def build_public_program_manifest(run_dir: Path, *, output_path: Path | None = N
             "chat_surface_catalog": CHAT_SURFACE_CATALOG,
             "role_model_catalog": [summarize_role_model(item) for item in list_role_models()],
             "bundled_sample_answers": "examples/graham_junior_onboarding.answers.json",
+            "openclaw_config_prefill_supported": True,
             "post_hire_modes": ["single", "projection_swarm", "specialist_team"],
             "answers_file_supported": True,
             "interactive_prompt_supported": True,

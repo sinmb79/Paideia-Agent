@@ -323,6 +323,15 @@ ai22b-talent-foundry import-openclaw-config `
 
 This writes `paideia_openclaw_config_import.json`, `openclaw_config.redacted.json`, `openclaw_import_setup_plan.json`, and `paideia_onboarding.answers.suggested.json`.
 
+You can also use the OpenClaw config as onboarding defaults. Values from `--answers` override the imported defaults, so a user can keep their role-model request while reusing OpenClaw's selected LLM and first chat channel:
+
+```powershell
+ai22b-talent-foundry start-console `
+  --answers examples\graham_junior_onboarding.answers.json `
+  --openclaw-config "$env:USERPROFILE\.openclaw\openclaw.json" `
+  --output-dir "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_prefilled_onboarding"
+```
+
 After an agent is hired, build a reviewable OpenClaw-style runtime setup bundle. This is the practical handoff point between Paideia's education records and OpenClaw-like execution:
 
 ```powershell

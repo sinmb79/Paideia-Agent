@@ -688,6 +688,76 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertEqual(cli_result, 0)
         self.assertTrue(cli_manifest_exists)
 
+    def test_start_console_prefills_llm_and_chat_from_openclaw_config(self) -> None:
+        from ai22b.talent_foundry.cli import main as cli_main
+
+        with tempfile.TemporaryDirectory() as tmp:
+            config_path = Path(tmp) / ".openclaw" / "openclaw.json"
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "agents": {"defaults": {"model": {"primary": "arcee/trinity-large-thinking"}}},
+                        "models": {"providers": {"arcee": {"apiKey": "source-arcee-key"}}},
+                        "channels": {"telegram": {"botToken": "source-telegram-token"}},
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            answers_path = Path(tmp) / "answers.json"
+            answers_path.write_text(
+                json.dumps(
+                    {
+                        "owner": "Boss",
+                        "request": "Raise an OpenClaw-prefilled Paideia securities research talent.",
+                        "talent_name": "prefill-junior",
+                        "gender": "male",
+                        "domain": "securities_research",
+                        "role_model_id": "graham_value_investing",
+                        "initial_goal": "Run a first imported OpenClaw configuration smoke test.",
+                        "cycle_note": "Check that imported provider and chat channel choices are used.",
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            output_dir = Path(tmp) / "console_prefill"
+            session_path = output_dir / "console_session.json"
+            self.assertEqual(
+                cli_main(
+                    [
+                        "start-console",
+                        "--answers",
+                        str(answers_path),
+                        "--openclaw-config",
+                        str(config_path),
+                        "--output-dir",
+                        str(output_dir),
+                        "--output",
+                        str(session_path),
+                    ]
+                ),
+                0,
+            )
+            session = json.loads(session_path.read_text(encoding="utf-8"))
+            health = json.loads(Path(session["artifacts"]["llm_service_health"]).read_text(encoding="utf-8"))
+            import_manifest = json.loads(Path(session["artifacts"]["openclaw_import_manifest"]).read_text(encoding="utf-8"))
+            redacted = Path(session["artifacts"]["openclaw_import_redacted_snapshot"]).read_text(encoding="utf-8")
+
+        self.assertEqual(session["prefill"]["schema"], "ai22b-paideia-openclaw-config-prefill/v1")
+        self.assertEqual(session["prefill"]["import_status"], "import_ready")
+        self.assertEqual(session["answers"]["llm_service"], "arcee/trinity-large-thinking")
+        self.assertEqual(session["answers"]["chat_surface"], "openclaw-channel-telegram")
+        self.assertEqual(health["openclaw_provider_id"], "arcee")
+        self.assertEqual(health["openclaw_model"], "arcee/trinity-large-thinking")
+        self.assertEqual(import_manifest["detected"]["channel_ids"], ["telegram"])
+        self.assertIn("<redacted>", redacted)
+        self.assertNotIn("source-arcee-key", redacted)
+        self.assertNotIn("source-telegram-token", redacted)
+
     def test_openclaw_channel_gateway_routes_message_to_paideia_chat(self) -> None:
         from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
         from ai22b.talent_foundry.channel_gateway import (

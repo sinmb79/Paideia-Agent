@@ -21,6 +21,15 @@ ai22b-talent-foundry import-openclaw-config `
 
 생성 파일은 `paideia_openclaw_config_import.json`, `openclaw_config.redacted.json`, `openclaw_import_setup_plan.json`, `paideia_onboarding.answers.suggested.json`입니다.
 
+기존 OpenClaw 설정을 온보딩 기본값으로 바로 사용할 수도 있습니다. `--answers` 파일에 적힌 값이 import 기본값보다 우선하므로, 사용자는 원하는 인재/롤모델 요청은 유지하면서 OpenClaw의 LLM과 첫 chat channel 선택만 가져올 수 있습니다.
+
+```powershell
+ai22b-talent-foundry start-console `
+  --answers examples\graham_junior_onboarding.answers.json `
+  --openclaw-config "$env:USERPROFILE\.openclaw\openclaw.json" `
+  --output-dir "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_prefilled_onboarding"
+```
+
 고용된 Paideia 인재를 실행 bundle로 연결할 때는 다음 명령을 사용합니다.
 
 ```powershell

@@ -295,6 +295,8 @@ def _build_parser() -> argparse.ArgumentParser:
     start_console.add_argument("--answers", help="JSON file with console answers for non-interactive runs.")
     start_console.add_argument("--output-dir", default=str(DEFAULT_RUN_DIR / "console_onboarding"))
     start_console.add_argument("--output")
+    start_console.add_argument("--openclaw-config", help="Existing OpenClaw openclaw.json to prefill model/channel choices.")
+    start_console.add_argument("--openclaw-import-dir", help="Directory for redacted OpenClaw import artifacts.")
 
     onboard_wizard = subparsers.add_parser(
         "onboard",
@@ -303,6 +305,8 @@ def _build_parser() -> argparse.ArgumentParser:
     onboard_wizard.add_argument("--answers", help="JSON file with console answers for non-interactive runs.")
     onboard_wizard.add_argument("--output-dir", default=str(DEFAULT_RUN_DIR / "console_onboarding"))
     onboard_wizard.add_argument("--output")
+    onboard_wizard.add_argument("--openclaw-config", help="Existing OpenClaw openclaw.json to prefill model/channel choices.")
+    onboard_wizard.add_argument("--openclaw-import-dir", help="Directory for redacted OpenClaw import artifacts.")
 
     llm_health = subparsers.add_parser(
         "check-llm-service",
@@ -933,17 +937,47 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command in {"start-console", "onboard"}:
         output_dir = Path(args.output_dir)
         output_path = Path(args.output) if args.output else output_dir / "console_session.json"
+        prefill_answers: dict[str, Any] = {}
+        prefill_metadata: dict[str, Any] | None = None
+        prefill_artifacts: dict[str, str] = {}
+        if args.openclaw_config:
+            import_dir = Path(args.openclaw_import_dir) if args.openclaw_import_dir else output_dir / "openclaw_import"
+            imported = import_openclaw_config(Path(args.openclaw_config), output_dir=import_dir)
+            suggested_answers_path = imported.get("artifacts", {}).get("suggested_answers")
+            if suggested_answers_path and Path(suggested_answers_path).exists():
+                suggested = json.loads(Path(suggested_answers_path).read_text(encoding="utf-8"))
+                prefill_answers = {
+                    key: value
+                    for key, value in suggested.items()
+                    if key in {"llm_service", "chat_surface"} and value
+                }
+            prefill_artifacts = {
+                f"openclaw_import_{key}": value
+                for key, value in imported.get("artifacts", {}).items()
+            }
+            prefill_metadata = {
+                "schema": "ai22b-paideia-openclaw-config-prefill/v1",
+                "source": "openclaw_config_import",
+                "source_openclaw_config": str(Path(args.openclaw_config)),
+                "import_status": imported.get("status"),
+                "applied_answer_keys": sorted(prefill_answers),
+                "detected": imported.get("detected", {}),
+                "paideia_selection": imported.get("paideia_selection", {}),
+                "secret_values_stored": False,
+            }
         if args.answers:
-            answers = json.loads(Path(args.answers).read_text(encoding="utf-8"))
+            answers = {**prefill_answers, **json.loads(Path(args.answers).read_text(encoding="utf-8"))}
             mode = "answers_file"
         else:
-            answers = collect_console_answers()
+            answers = collect_console_answers(prefill=prefill_answers)
             mode = "interactive_prompt"
         run_console_session(
             answers=answers,
             output_dir=output_dir,
             output_path=output_path,
             mode=mode,
+            prefill_metadata=prefill_metadata,
+            prefill_artifacts=prefill_artifacts,
         )
         print(str(output_path))
         return 0
