@@ -286,6 +286,7 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             channel_doctor = json.loads(Path(session["artifacts"]["openclaw_channel_doctor"]).read_text(encoding="utf-8"))
             support_matrix = json.loads(Path(session["artifacts"]["openclaw_support_matrix"]).read_text(encoding="utf-8"))
             selection_doctor = json.loads(Path(session["artifacts"]["openclaw_selection_doctor"]).read_text(encoding="utf-8"))
+            selection_summary = Path(session["artifacts"]["openclaw_selection_summary"]).read_text(encoding="utf-8")
 
         self.assertEqual(session["wizard"]["schema"], "ai22b-paideia-openclaw-style-onboarding/v1")
         self.assertEqual(config["schema"], "ai22b-paideia-openclaw-style-config/v1")
@@ -309,6 +310,8 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertEqual(selection_doctor["status"], "ready_for_onboarding")
         self.assertEqual(session["openclaw_selection_doctor"]["status"], "ready_for_onboarding")
         self.assertFalse(selection_doctor["claim_boundary"]["external_network_call_performed"])
+        self.assertIn("# OpenClaw Selection Summary", selection_summary)
+        self.assertIn("Status: `ready_for_onboarding`", selection_summary)
         self.assertEqual(session["openclaw_runtime"]["selected_support"]["matrix_status"], "pass")
         self.assertFalse(llm_health["network_probe_performed"])
 
@@ -661,6 +664,7 @@ class GrahamTalentFoundryTests(unittest.TestCase):
                 output_path=output,
             )
             cli_output = Path(tmp) / "openclaw_selection_doctor_cli.json"
+            cli_summary = Path(tmp) / "OPENCLAW_SELECTION_SUMMARY.md"
             cli_result = cli_main(
                 [
                     "doctor-openclaw-selection",
@@ -674,9 +678,12 @@ class GrahamTalentFoundryTests(unittest.TestCase):
                     "telegram",
                     "--output",
                     str(cli_output),
+                    "--summary-output",
+                    str(cli_summary),
                 ]
             )
             cli_doctor = json.loads(cli_output.read_text(encoding="utf-8"))
+            cli_summary_text = cli_summary.read_text(encoding="utf-8")
 
         channel_support = {item["channel_id"]: item["support"] for item in doctor["openclaw_selection"]["channels"]}
         self.assertEqual(doctor["schema"], "ai22b-openclaw-selection-doctor/v1")
@@ -695,6 +702,8 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertEqual(cli_result, 0)
         self.assertEqual(cli_doctor["schema"], "ai22b-openclaw-selection-doctor/v1")
         self.assertEqual(cli_doctor["openclaw_selection"]["provider_id"], "openrouter")
+        self.assertIn("OpenClaw Selection Summary", cli_summary_text)
+        self.assertIn("paideia_direct_or_openclaw_gateway_ready", cli_summary_text)
 
     def test_channel_connector_catalog_covers_every_openclaw_channel(self) -> None:
         from ai22b.talent_foundry.channel_connectors import (

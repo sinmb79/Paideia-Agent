@@ -71,7 +71,7 @@ from ai22b.talent_foundry.openclaw_native_handoff import (
 )
 from ai22b.talent_foundry.openclaw_parity import audit_openclaw_parity
 from ai22b.talent_foundry.openclaw_runtime_bundle import build_openclaw_runtime_bundle
-from ai22b.talent_foundry.openclaw_selection_doctor import doctor_openclaw_selection
+from ai22b.talent_foundry.openclaw_selection_doctor import doctor_openclaw_selection, render_openclaw_selection_summary
 from ai22b.talent_foundry.openclaw_support_matrix import build_openclaw_support_matrix
 from ai22b.talent_foundry.program import create_talent_plan
 from ai22b.talent_foundry.program_manifest import build_public_program_manifest
@@ -223,6 +223,7 @@ def _build_parser() -> argparse.ArgumentParser:
     selection_doctor.add_argument("--chat-surface")
     selection_doctor.add_argument("--channel", action="append", default=[])
     selection_doctor.add_argument("--output", required=True)
+    selection_doctor.add_argument("--summary-output")
     selection_doctor.add_argument("--refresh-docs", action="store_true")
     selection_doctor.add_argument("--docs-timeout", type=int, default=15)
 
@@ -997,7 +998,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if args.command == "doctor-openclaw-selection":
-        doctor_openclaw_selection(
+        result = doctor_openclaw_selection(
             llm_service=args.llm_service,
             llm_engine=args.llm_engine,
             llm_model=args.llm_model,
@@ -1008,6 +1009,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             refresh_docs=args.refresh_docs,
             docs_timeout=args.docs_timeout,
         )
+        if args.summary_output:
+            render_openclaw_selection_summary(result, output_path=Path(args.summary_output))
         print(str(Path(args.output)))
         return 0
 

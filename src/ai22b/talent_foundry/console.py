@@ -13,7 +13,10 @@ from ai22b.talent_foundry.onboarding_choices import (
     DEFAULT_LLM_SERVICE_ID,
     LLM_SERVICE_CATALOG,
 )
-from ai22b.talent_foundry.openclaw_selection_doctor import doctor_openclaw_selection
+from ai22b.talent_foundry.openclaw_selection_doctor import (
+    doctor_openclaw_selection,
+    render_openclaw_selection_summary,
+)
 from ai22b.talent_foundry.role_models import list_role_models, summarize_role_model
 from ai22b.talent_foundry.registry import (
     assemble_hired_agent_team,
@@ -593,6 +596,8 @@ def run_console_session(
         chat_surface=normalized.get("chat_surface") or None,
         output_path=selection_doctor_path,
     )
+    selection_summary_path = output_dir / "OPENCLAW_SELECTION_SUMMARY.md"
+    render_openclaw_selection_summary(selection_doctor, output_path=selection_summary_path)
 
     onboarding_dir = output_dir / "onboarding"
     onboarding_output = onboarding_dir / "onboarding_session.json"
@@ -620,6 +625,7 @@ def run_console_session(
         "console_session": str(output_path),
         "answers": str(answers_path),
         "openclaw_selection_doctor": str(selection_doctor_path),
+        "openclaw_selection_summary": str(selection_summary_path),
         "onboarding_session": onboarding["artifacts"]["onboarding_session"],
         "employment_record": onboarding["artifacts"]["employment_record"],
         "employment_goal": onboarding["artifacts"]["employment_goal"],

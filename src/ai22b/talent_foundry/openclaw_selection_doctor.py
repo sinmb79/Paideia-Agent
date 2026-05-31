@@ -22,6 +22,11 @@ def _write_json(path: Path, data: dict[str, Any]) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def _write_text(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+
+
 def _provider_id_from_selection(selected_llm_service: dict[str, Any]) -> str | None:
     openclaw_model = selected_llm_service.get("openclaw_model")
     if isinstance(openclaw_model, str) and "/" in openclaw_model:
@@ -153,6 +158,84 @@ def doctor_openclaw_selection(
     if output_path is not None:
         _write_json(output_path, doctor)
     return doctor
+
+
+def render_openclaw_selection_summary(
+    doctor: dict[str, Any],
+    *,
+    output_path: Path | None = None,
+) -> str:
+    selected_llm = doctor.get("selected_llm_service", {})
+    selected_chat = doctor.get("selected_chat_surface", {})
+    selection = doctor.get("openclaw_selection", {})
+    provider_support = selection.get("provider_support") or {}
+    channels = selection.get("channels") or []
+    llm_health = doctor.get("llm_service_health", {})
+    claim_boundary = doctor.get("claim_boundary", {})
+    next_commands = doctor.get("next_commands", {})
+
+    lines = [
+        "# OpenClaw Selection Summary",
+        "",
+        f"- Status: `{doctor.get('status')}`",
+        f"- LLM service: `{selected_llm.get('service_id') or selected_llm.get('id')}`",
+        f"- LLM engine: `{selected_llm.get('engine')}`",
+        f"- OpenClaw model: `{selected_llm.get('openclaw_model') or selected_llm.get('selected_model') or 'not specified'}`",
+        f"- LLM health: `{llm_health.get('status')}`",
+        f"- Chat surface: `{selected_chat.get('id')}`",
+        "",
+        "## Provider",
+        "",
+        f"- Provider id: `{selection.get('provider_id') or 'not resolved'}`",
+        f"- Support level: `{provider_support.get('support_level') or 'not available'}`",
+        f"- Recommended path: {provider_support.get('recommended_path') or 'Review provider configuration.'}",
+        f"- Required env vars: `{', '.join(provider_support.get('secret_env_vars') or []) or 'none'}`",
+        "",
+        "## Channels",
+        "",
+    ]
+    if channels:
+        for item in channels:
+            support = item.get("support") or {}
+            lines.extend(
+                [
+                    f"- `{item.get('channel_id')}`",
+                    f"  - Support level: `{support.get('support_level') or 'not available'}`",
+                    f"  - Recommended path: {support.get('recommended_path') or 'Review channel configuration.'}",
+                    f"  - Required env vars: `{', '.join(support.get('required_env_vars') or []) or 'none'}`",
+                ]
+            )
+    else:
+        lines.append("- No OpenClaw chat channel was selected. Local console/chat surfaces can still run.")
+    lines.extend(
+        [
+            "",
+            "## Safety Boundary",
+            "",
+            f"- Secret values stored: `{claim_boundary.get('secret_values_stored')}`",
+            f"- External network call performed: `{claim_boundary.get('external_network_call_performed')}`",
+            f"- Scope: {claim_boundary.get('what_this_checks')}",
+            f"- Not checked: {claim_boundary.get('what_this_does_not_check')}",
+            "",
+            "## Next Commands",
+            "",
+        ]
+    )
+    for key, command in next_commands.items():
+        lines.extend(
+            [
+                f"### {key}",
+                "",
+                "```powershell",
+                str(command),
+                "```",
+                "",
+            ]
+        )
+    summary = "\n".join(lines).rstrip() + "\n"
+    if output_path is not None:
+        _write_text(output_path, summary)
+    return summary
 
 
 def _next_commands(
