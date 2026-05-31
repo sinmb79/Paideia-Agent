@@ -24,6 +24,9 @@ PROGRAM_DOCTOR_SCHEMA = "ai22b-paideia-agent-program-doctor/v1"
 DEFAULT_AGENT_PROGRAM_NAME = "Paideia Agent"
 DEFAULT_AGENT_PROGRAM_NAME_KO = "Paideia Agent"
 DEFAULT_AGENT_PROGRAM_FILE = "22b_paideia_agent_program.json"
+DEFAULT_RUNTIME_HELPER_SCRIPT = "paideia_runtime.ps1"
+DEFAULT_INSTALL_RUNTIME_SCRIPT = "install_paideia_runtime.ps1"
+DEFAULT_RUNTIME_CONFIG_FILE = "paideia_runtime.local.json"
 DEFAULT_CHAT_SCRIPT = "start_paideia_chat.ps1"
 DEFAULT_OPENCLAW_MENU_SCRIPT = "refresh_openclaw_onboarding_menu.ps1"
 DEFAULT_OPENCLAW_MENU_FILE = "openclaw_onboarding_menu.json"
@@ -65,6 +68,165 @@ def _first_matching_name(root: Path, pattern: str) -> str | None:
     return matches[0].name if matches else None
 
 
+def _runtime_helper_script() -> str:
+    return """$ErrorActionPreference = "Stop"
+
+function Add-PaideiaSourcePath {
+    param([string]$SourceRepo)
+    if ([string]::IsNullOrWhiteSpace($SourceRepo)) { return $false }
+    $Repo = Resolve-Path -LiteralPath $SourceRepo -ErrorAction SilentlyContinue
+    if ($null -eq $Repo) { return $false }
+    $Src = Join-Path $Repo.Path "src"
+    $Cli = Join-Path $Src "ai22b\\talent_foundry\\cli.py"
+    if (-not (Test-Path -LiteralPath $Cli)) { return $false }
+    $Parts = @($Src)
+    if (-not [string]::IsNullOrWhiteSpace($env:PYTHONPATH)) { $Parts += $env:PYTHONPATH }
+    $env:PYTHONPATH = ($Parts -join [System.IO.Path]::PathSeparator)
+    return $true
+}
+
+function Test-PaideiaImport {
+    param([string]$PythonExe = "python")
+    $PreviousPreference = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        & $PythonExe -c "import ai22b.talent_foundry.cli" 1>$null 2>$null
+        $ExitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $PreviousPreference
+    }
+    return ($ExitCode -eq 0)
+}
+
+function Resolve-PaideiaPython {
+    param(
+        [string]$PythonExe = "",
+        [switch]$Quiet
+    )
+    if ([string]::IsNullOrWhiteSpace($PythonExe)) {
+        $PythonExe = if (-not [string]::IsNullOrWhiteSpace($env:PAIDEIA_AGENT_PYTHON)) { $env:PAIDEIA_AGENT_PYTHON } else { "python" }
+    }
+    if (Test-PaideiaImport -PythonExe $PythonExe) { return $PythonExe }
+
+    $BundleRoot = $PSScriptRoot
+    $ConfigPath = Join-Path $BundleRoot "paideia_runtime.local.json"
+    if (Test-Path -LiteralPath $ConfigPath) {
+        $Config = Get-Content -Path $ConfigPath -Encoding UTF8 -Raw | ConvertFrom-Json
+        if (-not [string]::IsNullOrWhiteSpace($Config.python)) { $PythonExe = [string]$Config.python }
+        if (-not [string]::IsNullOrWhiteSpace($Config.source_repo)) {
+            [void](Add-PaideiaSourcePath -SourceRepo ([string]$Config.source_repo))
+            if (Test-PaideiaImport -PythonExe $PythonExe) { return $PythonExe }
+        }
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($env:PAIDEIA_AGENT_SOURCE)) {
+        [void](Add-PaideiaSourcePath -SourceRepo $env:PAIDEIA_AGENT_SOURCE)
+        if (Test-PaideiaImport -PythonExe $PythonExe) { return $PythonExe }
+    }
+
+    $Candidates = @(
+        (Join-Path $BundleRoot "Paideia-Agent"),
+        (Join-Path $BundleRoot "..\\Paideia-Agent"),
+        (Join-Path $BundleRoot "..\\..\\Paideia-Agent"),
+        (Join-Path $BundleRoot ".."),
+        (Join-Path $BundleRoot "..\\..")
+    )
+    foreach ($Candidate in $Candidates) {
+        if (Add-PaideiaSourcePath -SourceRepo $Candidate) {
+            if (Test-PaideiaImport -PythonExe $PythonExe) { return $PythonExe }
+        }
+    }
+
+    $Message = @"
+Paideia Agent Python runtime was not found.
+
+Run one of these once from this kit folder:
+  powershell -ExecutionPolicy Bypass -File .\\install_paideia_runtime.ps1 -SourceRepo "C:\\path\\to\\Paideia-Agent"
+  powershell -ExecutionPolicy Bypass -File .\\install_paideia_runtime.ps1 -InstallFromGit
+
+No provider keys, bot tokens, chat logs, or private training data are written by the installer.
+"@
+    throw $Message
+}
+"""
+
+
+def _install_runtime_script() -> str:
+    return """param(
+    [string]$SourceRepo = "",
+    [string]$Python = "python",
+    [switch]$InstallFromGit,
+    [string]$GitUrl = "https://github.com/OWNER/Paideia-Agent.git"
+)
+
+$ErrorActionPreference = "Stop"
+[Console]::InputEncoding = [System.Text.UTF8Encoding]::new()
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
+$env:PYTHONIOENCODING = "utf-8"
+
+$BundleRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$RuntimeHelper = Join-Path $BundleRoot "paideia_runtime.ps1"
+if (-not (Test-Path -LiteralPath $RuntimeHelper)) {
+    throw "paideia_runtime.ps1 is missing from this kit."
+}
+. $RuntimeHelper
+
+$ConfigPath = Join-Path $BundleRoot "paideia_runtime.local.json"
+if (-not [string]::IsNullOrWhiteSpace($SourceRepo)) {
+    $Repo = Resolve-Path -LiteralPath $SourceRepo -ErrorAction Stop
+    if (-not (Add-PaideiaSourcePath -SourceRepo $Repo.Path)) {
+        throw "SourceRepo must point to a Paideia-Agent repository with src\\ai22b\\talent_foundry\\cli.py."
+    }
+    $Config = [ordered]@{
+        schema = "ai22b-paideia-runtime-local-config/v1"
+        mode = "source_repo"
+        python = $Python
+        source_repo = $Repo.Path
+        secret_values_stored = $false
+        note = "Local path only. Do not publish this generated file."
+    }
+    $Config | ConvertTo-Json -Depth 4 | Set-Content -Path $ConfigPath -Encoding UTF8
+    [void](Resolve-PaideiaPython -PythonExe $Python)
+    Write-Host "Paideia runtime registered from source repo: $($Repo.Path)"
+    Write-Host $ConfigPath
+    exit 0
+}
+
+if ($InstallFromGit) {
+    if ($GitUrl -match "/OWNER/") {
+        throw "Pass -GitUrl with the public Paideia-Agent repository URL before using -InstallFromGit."
+    }
+    & $Python -m pip install --upgrade "git+$GitUrl"
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    $Config = [ordered]@{
+        schema = "ai22b-paideia-runtime-local-config/v1"
+        mode = "python_package"
+        python = $Python
+        source_repo = $null
+        package_source = $GitUrl
+        secret_values_stored = $false
+    }
+    $Config | ConvertTo-Json -Depth 4 | Set-Content -Path $ConfigPath -Encoding UTF8
+    [void](Resolve-PaideiaPython -PythonExe $Python)
+    Write-Host "Paideia runtime installed from Git: $GitUrl"
+    Write-Host $ConfigPath
+    exit 0
+}
+
+[void](Resolve-PaideiaPython -PythonExe $Python)
+$Config = [ordered]@{
+    schema = "ai22b-paideia-runtime-local-config/v1"
+    mode = "existing_python_environment"
+    python = $Python
+    source_repo = $null
+    secret_values_stored = $false
+}
+$Config | ConvertTo-Json -Depth 4 | Set-Content -Path $ConfigPath -Encoding UTF8
+Write-Host "Paideia runtime already available in Python environment."
+Write-Host $ConfigPath
+"""
+
+
 def _legacy_chat_script_mojibake() -> str:
     return """param(
     [string]$Program = ".\\22b_paideia_agent_program.json",
@@ -79,6 +241,14 @@ $ErrorActionPreference = "Stop"
 [Console]::InputEncoding = [System.Text.UTF8Encoding]::new()
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
 $env:PYTHONIOENCODING = "utf-8"
+
+$RuntimeHelper = Join-Path $PSScriptRoot "paideia_runtime.ps1"
+if (Test-Path -LiteralPath $RuntimeHelper) {
+    . $RuntimeHelper
+    $PaideiaPython = Resolve-PaideiaPython
+} else {
+    $PaideiaPython = "python"
+}
 
 Write-Host "Paideia Agent - Codex bridge chat"
 Write-Host "종료하려면 exit 또는 quit 를 입력하세요."
@@ -105,7 +275,7 @@ while ($true) {
     if (-not [string]::IsNullOrWhiteSpace($LlmModel)) { $ArgsList += @("--llm-model", $LlmModel) }
     if ($LearnFromChat) { $ArgsList += "--learn-from-chat" }
 
-    python @ArgsList | Out-Null
+    & $PaideiaPython @ArgsList | Out-Null
     if ($LASTEXITCODE -ne 0) {
         Write-Host "실행 중 오류가 발생했습니다." -ForegroundColor Red
         continue
@@ -138,6 +308,14 @@ $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
 $env:PYTHONIOENCODING = "utf-8"
 
+$RuntimeHelper = Join-Path $PSScriptRoot "paideia_runtime.ps1"
+if (Test-Path -LiteralPath $RuntimeHelper) {
+    . $RuntimeHelper
+    $PaideiaPython = Resolve-PaideiaPython
+} else {
+    $PaideiaPython = "python"
+}
+
 Write-Host "Paideia Agent - Codex bridge chat"
 Write-Host "Type exit or quit to stop."
 Write-Host "Codex reads the local education record, Reasoning Ledger (Ariadne Thread), and memory substrate."
@@ -164,7 +342,7 @@ while ($true) {
     if (-not [string]::IsNullOrWhiteSpace($LlmModel)) { $ArgsList += @("--llm-model", $LlmModel) }
     if ($LearnFromChat) { $ArgsList += "--learn-from-chat" }
 
-    python @ArgsList | Out-Null
+    & $PaideiaPython @ArgsList | Out-Null
     if ($LASTEXITCODE -ne 0) {
         Write-Host "An execution error occurred." -ForegroundColor Red
         continue
@@ -194,6 +372,14 @@ $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
 $env:PYTHONIOENCODING = "utf-8"
 
+$RuntimeHelper = Join-Path $PSScriptRoot "paideia_runtime.ps1"
+if (Test-Path -LiteralPath $RuntimeHelper) {
+    . $RuntimeHelper
+    $PaideiaPython = Resolve-PaideiaPython
+} else {
+    $PaideiaPython = "python"
+}
+
 $ArgsList = @(
     "-m", "ai22b.talent_foundry.cli",
     "build-openclaw-runtime-bundle",
@@ -206,7 +392,7 @@ foreach ($Item in $Channel) {
     }
 }
 
-python @ArgsList
+& $PaideiaPython @ArgsList
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 Write-Host "OpenClaw runtime bundle: $OutputDir\\openclaw_runtime_bundle.json"
 """
@@ -224,6 +410,14 @@ $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
 $env:PYTHONIOENCODING = "utf-8"
 
+$RuntimeHelper = Join-Path $PSScriptRoot "paideia_runtime.ps1"
+if (Test-Path -LiteralPath $RuntimeHelper) {
+    . $RuntimeHelper
+    $PaideiaPython = Resolve-PaideiaPython
+} else {
+    $PaideiaPython = "python"
+}
+
 $ArgsList = @(
     "-m", "ai22b.talent_foundry.cli",
     "build-openclaw-onboarding-menu",
@@ -232,7 +426,7 @@ $ArgsList = @(
 )
 if ($RefreshDocs) { $ArgsList += "--refresh-docs" }
 
-python @ArgsList
+& $PaideiaPython @ArgsList
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 Write-Host "OpenClaw onboarding menu: $Output"
 Write-Host "Markdown guide: $MarkdownOutput"
@@ -254,6 +448,14 @@ $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
 $env:PYTHONIOENCODING = "utf-8"
 
+$RuntimeHelper = Join-Path $PSScriptRoot "paideia_runtime.ps1"
+if (Test-Path -LiteralPath $RuntimeHelper) {
+    . $RuntimeHelper
+    $PaideiaPython = Resolve-PaideiaPython
+} else {
+    $PaideiaPython = "python"
+}
+
 if (-not (Test-Path -LiteralPath $RuntimeBundle)) {
     $BundleDir = Split-Path -Parent $RuntimeBundle
     if ([string]::IsNullOrWhiteSpace($BundleDir)) { $BundleDir = "." }
@@ -268,7 +470,7 @@ if (-not (Test-Path -LiteralPath $RuntimeBundle)) {
             $RuntimeArgs += @("--channel", $Item)
         }
     }
-    python @RuntimeArgs
+    & $PaideiaPython @RuntimeArgs
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 
@@ -287,7 +489,7 @@ foreach ($Item in $Channel) {
 }
 if ($RefreshDocs) { $PlanArgs += "--refresh-docs" }
 
-python @PlanArgs
+& $PaideiaPython @PlanArgs
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 Write-Host "OpenClaw live smoke plan: $Output"
 Write-Host "Markdown guide: $MarkdownOutput"
@@ -312,6 +514,14 @@ $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
 $env:PYTHONIOENCODING = "utf-8"
 
+$RuntimeHelper = Join-Path $PSScriptRoot "paideia_runtime.ps1"
+if (Test-Path -LiteralPath $RuntimeHelper) {
+    . $RuntimeHelper
+    $PaideiaPython = Resolve-PaideiaPython
+} else {
+    $PaideiaPython = "python"
+}
+
 if ($LiveLlm) { $LlmMode = "live" }
 
 $ArgsList = @(
@@ -326,7 +536,7 @@ $ArgsList = @(
 if (-not [string]::IsNullOrWhiteSpace($LlmModel)) { $ArgsList += @("--llm-model", $LlmModel) }
 if ($LearnFromChat) { $ArgsList += "--learn-from-chat" }
 
-python @ArgsList
+& $PaideiaPython @ArgsList
 """
 
 
@@ -337,7 +547,15 @@ def _doctor_script() -> str:
 )
 
 $ErrorActionPreference = "Stop"
-python -m ai22b.talent_foundry.cli doctor-agent-program --program $Program --output $Output
+$RuntimeHelper = Join-Path $PSScriptRoot "paideia_runtime.ps1"
+if (Test-Path -LiteralPath $RuntimeHelper) {
+    . $RuntimeHelper
+    $PaideiaPython = Resolve-PaideiaPython
+} else {
+    $PaideiaPython = "python"
+}
+& $PaideiaPython -m ai22b.talent_foundry.cli doctor-agent-program --program $Program --output $Output
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 Write-Host $Output
 """
 
@@ -439,7 +657,23 @@ The connected LLM is only the language and reasoning engine. Identity and learne
 
 ## First Run
 
-These scripts call `python -m ai22b.talent_foundry.cli`. Run them from an environment where Paideia Agent is installed, or set `PYTHONPATH` to the repository `src` folder while developing from source.
+These scripts use `paideia_runtime.ps1` to find Paideia Agent in the current Python environment, a registered local source checkout, or a nearby source tree.
+
+If the scripts cannot find the runtime, register it once:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\\install_paideia_runtime.ps1 -SourceRepo "C:\\path\\to\\Paideia-Agent"
+```
+
+Or install the public GitHub package route:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\\install_paideia_runtime.ps1 -InstallFromGit
+```
+
+Pass `-GitUrl` if your public repository URL differs from the placeholder in the script.
+
+The generated `paideia_runtime.local.json` can contain a local source path. Keep it local and do not publish it.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\\doctor_paideia.ps1
@@ -624,6 +858,8 @@ def build_agent_program(
     agent_manifest_path = target_root / entrypoints.get("agent_manifest", "agent_manifest.json")
     agent_manifest = _read_json(agent_manifest_path)
     agent = employment.get("agent", {})
+    (output_path.parent / DEFAULT_RUNTIME_HELPER_SCRIPT).write_text(_runtime_helper_script(), encoding="utf-8")
+    (output_path.parent / DEFAULT_INSTALL_RUNTIME_SCRIPT).write_text(_install_runtime_script(), encoding="utf-8")
     script_path = output_path.parent / DEFAULT_CHAT_SCRIPT
     script_path.write_text(_chat_script(), encoding="utf-8")
     (output_path.parent / DEFAULT_OPENCLAW_MENU_SCRIPT).write_text(
@@ -780,6 +1016,8 @@ def build_agent_program(
         "entrypoints": {
             "employment_record": _rel(employment_record_path, output_path.parent),
             "agent_manifest": _rel(agent_manifest_path, output_path.parent),
+            "runtime_helper_script": DEFAULT_RUNTIME_HELPER_SCRIPT,
+            "install_runtime_script": DEFAULT_INSTALL_RUNTIME_SCRIPT,
             "chat_script": DEFAULT_CHAT_SCRIPT,
             "openclaw_onboarding_menu_script": DEFAULT_OPENCLAW_MENU_SCRIPT,
             "openclaw_runtime_bundle_script": DEFAULT_OPENCLAW_RUNTIME_SCRIPT,
@@ -828,6 +1066,8 @@ def build_agent_program(
         "installable_runtime": {
             "default_install_kit_manifest": DEFAULT_INSTALL_MANIFEST,
             "doctor_script": DEFAULT_DOCTOR_SCRIPT,
+            "runtime_helper_script": DEFAULT_RUNTIME_HELPER_SCRIPT,
+            "install_runtime_script": DEFAULT_INSTALL_RUNTIME_SCRIPT,
             "onboarding_template": DEFAULT_ONBOARDING_TEMPLATE,
             "start_chat_script": DEFAULT_CHAT_SCRIPT,
             "openclaw_onboarding_menu_script": DEFAULT_OPENCLAW_MENU_SCRIPT,
@@ -962,6 +1202,8 @@ def build_paideia_agent_install_kit(
         "copied_artifacts": copied,
         "entrypoints": {
             "doctor": DEFAULT_DOCTOR_SCRIPT,
+            "runtime_helper": DEFAULT_RUNTIME_HELPER_SCRIPT,
+            "install_runtime": DEFAULT_INSTALL_RUNTIME_SCRIPT,
             "start_chat": DEFAULT_CHAT_SCRIPT,
             "refresh_openclaw_onboarding_menu": DEFAULT_OPENCLAW_MENU_SCRIPT,
             "build_openclaw_runtime_bundle": DEFAULT_OPENCLAW_RUNTIME_SCRIPT,
@@ -1004,6 +1246,14 @@ def build_paideia_agent_install_kit(
             "memory": "bounded_selected_summaries",
             "api_failures": "fallback_and_quarantine",
         },
+        "runtime_bootstrap": {
+            "helper": DEFAULT_RUNTIME_HELPER_SCRIPT,
+            "installer": DEFAULT_INSTALL_RUNTIME_SCRIPT,
+            "local_config": DEFAULT_RUNTIME_CONFIG_FILE,
+            "source_repo_mode": "writes a local source path only when the user runs install_paideia_runtime.ps1 -SourceRepo",
+            "git_install_mode": "runs pip install from the configured Git URL only when the user passes -InstallFromGit",
+            "secret_values_stored": False,
+        },
         "status": "ready",
     }
     _write_json(output_dir / DEFAULT_INSTALL_MANIFEST, manifest)
@@ -1022,6 +1272,8 @@ def doctor_agent_program(program_path: Path, *, output_path: Path | None = None)
     required_entrypoints = [
         "employment_record",
         "agent_manifest",
+        "runtime_helper_script",
+        "install_runtime_script",
         "chat_script",
         "openclaw_onboarding_menu_script",
         "openclaw_runtime_bundle_script",

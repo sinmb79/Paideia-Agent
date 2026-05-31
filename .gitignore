@@ -12,6 +12,8 @@ venv/
 .env.*
 *.key
 *.pem
+paideia_runtime.local.json
+**/paideia_runtime.local.json
 AGENTS.md
 docs/log.md
 docs/superpowers/

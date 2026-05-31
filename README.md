@@ -206,7 +206,21 @@ ai22b-talent-foundry build-paideia-agent-kit `
   --output-dir "$env:AI22B_STORAGE_ROOT\paideia-agent-kits\grham_junior_paideia_agent"
 ```
 
-The kit scripts call `python -m ai22b.talent_foundry.cli`, so run them from an installed Paideia environment or set `PYTHONPATH` to this repository's `src` folder during source development.
+The kit scripts include a small runtime resolver. If Paideia is not already installed in Python, register the local source checkout once:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install_paideia_runtime.ps1 -SourceRepo "C:\path\to\Paideia-Agent"
+```
+
+Or install from the public GitHub repository:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install_paideia_runtime.ps1 -InstallFromGit
+```
+
+Pass `-GitUrl` with the public Paideia Agent repository URL before using the Git install path.
+
+The generated `paideia_runtime.local.json` may contain a local source path. Keep it local and do not publish it.
 
 Each generated kit includes an OpenClaw provider/channel menu snapshot:
 
@@ -278,6 +292,8 @@ A Paideia Agent kit can include:
 - `paideia_onboarding.template.json`
 - `openclaw_onboarding_menu.json`
 - `OPENCLAW_ONBOARDING_MENU.md`
+- `paideia_runtime.ps1`
+- `install_paideia_runtime.ps1`
 - `doctor_paideia.ps1`
 - `start_paideia_chat.ps1`
 - `refresh_openclaw_onboarding_menu.ps1`

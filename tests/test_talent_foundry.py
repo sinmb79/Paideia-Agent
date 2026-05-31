@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -1708,6 +1710,8 @@ class TalentFoundryTests(unittest.TestCase):
                 outputs["local_employment_record"],
                 output_path=program_path,
             )
+            helper_script_exists = (program_path.parent / "paideia_runtime.ps1").exists()
+            install_script_exists = (program_path.parent / "install_paideia_runtime.ps1").exists()
             chat_script_exists = (program_path.parent / "start_paideia_chat.ps1").exists()
             menu_script_exists = (program_path.parent / "refresh_openclaw_onboarding_menu.ps1").exists()
             runtime_script_exists = (program_path.parent / "build_openclaw_runtime_bundle.ps1").exists()
@@ -1721,11 +1725,15 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("reasoning_kibo", {axis["id"] for axis in program["programmable_education_axes"]})
         self.assertIn("language_pragmatics", {axis["id"] for axis in program["programmable_education_axes"]})
         self.assertIn("simulation_rollouts", {axis["id"] for axis in program["programmable_education_axes"]})
+        self.assertTrue(helper_script_exists)
+        self.assertTrue(install_script_exists)
         self.assertTrue(chat_script_exists)
         self.assertTrue(menu_script_exists)
         self.assertTrue(runtime_script_exists)
         self.assertTrue(smoke_plan_script_exists)
         self.assertTrue(webchat_script_exists)
+        self.assertEqual(program["entrypoints"]["runtime_helper_script"], "paideia_runtime.ps1")
+        self.assertEqual(program["entrypoints"]["install_runtime_script"], "install_paideia_runtime.ps1")
         self.assertEqual(program["entrypoints"]["openclaw_onboarding_menu_script"], "refresh_openclaw_onboarding_menu.ps1")
         self.assertEqual(program["entrypoints"]["openclaw_runtime_bundle_script"], "build_openclaw_runtime_bundle.ps1")
         self.assertEqual(program["entrypoints"]["openclaw_live_smoke_plan_script"], "build_openclaw_live_smoke_plan.ps1")
@@ -1758,12 +1766,16 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("paideia_onboarding.template.json", manifest["files"])
         self.assertIn("openclaw_onboarding_menu.json", manifest["files"])
         self.assertIn("OPENCLAW_ONBOARDING_MENU.md", manifest["files"])
+        self.assertIn("paideia_runtime.ps1", manifest["files"])
+        self.assertIn("install_paideia_runtime.ps1", manifest["files"])
         self.assertIn("doctor_paideia.ps1", manifest["files"])
         self.assertIn("refresh_openclaw_onboarding_menu.ps1", manifest["files"])
         self.assertIn("build_openclaw_runtime_bundle.ps1", manifest["files"])
         self.assertIn("build_openclaw_live_smoke_plan.ps1", manifest["files"])
         self.assertIn("start_openclaw_webchat.ps1", manifest["files"])
         self.assertIn("adapter_manifests", manifest["directories"])
+        self.assertEqual(manifest["entrypoints"]["runtime_helper"], "paideia_runtime.ps1")
+        self.assertEqual(manifest["entrypoints"]["install_runtime"], "install_paideia_runtime.ps1")
         self.assertEqual(manifest["entrypoints"]["refresh_openclaw_onboarding_menu"], "refresh_openclaw_onboarding_menu.ps1")
         self.assertEqual(manifest["entrypoints"]["openclaw_onboarding_menu"], "openclaw_onboarding_menu.json")
         self.assertEqual(manifest["entrypoints"]["openclaw_onboarding_menu_markdown"], "OPENCLAW_ONBOARDING_MENU.md")
@@ -1777,6 +1789,9 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertTrue(openclaw_menu["chat_selection"]["accepts_freeform_openclaw_channel"])
         self.assertEqual(manifest["openclaw_onboarding_menu"]["provider_count"], openclaw_menu["llm_selection"]["counts"]["total"])
         self.assertEqual(manifest["openclaw_onboarding_menu"]["channel_count"], openclaw_menu["chat_selection"]["counts"]["total"])
+        self.assertEqual(manifest["runtime_bootstrap"]["helper"], "paideia_runtime.ps1")
+        self.assertEqual(manifest["runtime_bootstrap"]["installer"], "install_paideia_runtime.ps1")
+        self.assertFalse(manifest["runtime_bootstrap"]["secret_values_stored"])
         self.assertIn("All OpenClaw Providers", openclaw_menu_markdown)
         self.assertTrue(hermes_adapter_exists)
         self.assertTrue(openclaw_adapter_exists)
@@ -1788,6 +1803,84 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("openai_chatgpt_codex", {item["id"] for item in onboarding["llm_service_catalog"]})
         self.assertIn("codex-bridge-chat", {item["id"] for item in onboarding["chat_surface_catalog"]})
         self.assertEqual(manifest["default_safety_posture"]["external_channels"], "disabled")
+
+    def test_paideia_agent_install_kit_runtime_bootstrap_avoids_manual_pythonpath(self) -> None:
+        from ai22b.talent_foundry.agent_program import build_paideia_agent_install_kit
+        from ai22b.talent_foundry.demo import run_demo
+
+        repo_root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as tmp:
+            outputs = run_demo(output_dir=Path(tmp) / "runs")
+            kit_dir = Path(tmp) / "paideia_agent_kit"
+            build_paideia_agent_install_kit(
+                outputs["local_employment_record"],
+                output_dir=kit_dir,
+            )
+            env = os.environ.copy()
+            env.pop("PYTHONPATH", None)
+            install = subprocess.run(
+                [
+                    "powershell",
+                    "-NoLogo",
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(kit_dir / "install_paideia_runtime.ps1"),
+                    "-SourceRepo",
+                    str(repo_root),
+                ],
+                cwd=kit_dir,
+                env=env,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            refresh = subprocess.run(
+                [
+                    "powershell",
+                    "-NoLogo",
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(kit_dir / "refresh_openclaw_onboarding_menu.ps1"),
+                ],
+                cwd=kit_dir,
+                env=env,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            doctor = subprocess.run(
+                [
+                    "powershell",
+                    "-NoLogo",
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(kit_dir / "doctor_paideia.ps1"),
+                ],
+                cwd=kit_dir,
+                env=env,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            config = json.loads((kit_dir / "paideia_runtime.local.json").read_text(encoding="utf-8-sig"))
+            menu = json.loads((kit_dir / "openclaw_onboarding_menu.json").read_text(encoding="utf-8"))
+            doctor_report = json.loads((kit_dir / "paideia_doctor_report.json").read_text(encoding="utf-8"))
+
+        self.assertIn("Paideia runtime registered from source repo", install.stdout)
+        self.assertIn("OpenClaw onboarding menu", refresh.stdout)
+        self.assertIn("paideia_doctor_report.json", doctor.stdout)
+        self.assertEqual(config["schema"], "ai22b-paideia-runtime-local-config/v1")
+        self.assertEqual(config["mode"], "source_repo")
+        self.assertFalse(config["secret_values_stored"])
+        self.assertEqual(menu["schema"], "ai22b-openclaw-onboarding-menu/v1")
+        self.assertTrue(menu["llm_selection"]["accepts_freeform_provider_model"])
+        self.assertTrue(doctor_report["passed"])
 
     def test_cli_build_paideia_agent_kit_and_doctor_agent_program(self) -> None:
         from ai22b.talent_foundry.cli import main as cli_main
