@@ -65,6 +65,10 @@ from ai22b.talent_foundry.openclaw_compat import openclaw_channel_manifest, open
 from ai22b.talent_foundry.openclaw_bridge_setup import build_openclaw_bridge_setup_kit
 from ai22b.talent_foundry.openclaw_channel_pairing import doctor_openclaw_channel_pairing
 from ai22b.talent_foundry.openclaw_channel_flow import doctor_openclaw_channel_flow
+from ai22b.talent_foundry.openclaw_employment_runtime import (
+    build_openclaw_employment_runtime_doctor,
+    render_openclaw_employment_runtime_summary,
+)
 from ai22b.talent_foundry.openclaw_gateway_llm import doctor_openclaw_gateway_llm
 from ai22b.talent_foundry.openclaw_native_handoff import (
     doctor_openclaw_native_handoff,
@@ -290,6 +294,17 @@ def _build_parser() -> argparse.ArgumentParser:
     build_runtime_bundle.add_argument("--existing-openclaw-config")
     build_runtime_bundle.add_argument("--config-action", choices=["keep", "modify", "reset"], default="modify")
     build_runtime_bundle.add_argument("--output-dir", required=True)
+
+    employment_runtime_doctor = subparsers.add_parser(
+        "doctor-openclaw-employment-runtime",
+        help="Doctor a hired talent's selected OpenClaw provider/model and chat channel runtime path.",
+    )
+    employment_runtime_doctor.add_argument("--employment-record", required=True)
+    employment_runtime_doctor.add_argument("--channel", action="append", default=[])
+    employment_runtime_doctor.add_argument("--output", required=True)
+    employment_runtime_doctor.add_argument("--summary-output")
+    employment_runtime_doctor.add_argument("--refresh-docs", action="store_true")
+    employment_runtime_doctor.add_argument("--docs-timeout", type=int, default=15)
 
     doctor_runtime_preflight = subparsers.add_parser(
         "doctor-openclaw-runtime-preflight",
@@ -1140,6 +1155,19 @@ def main(argv: Sequence[str] | None = None) -> int:
             config_action=args.config_action,
         )
         print(str(Path(bundle["artifacts"]["manifest"])))
+        return 0
+
+    if args.command == "doctor-openclaw-employment-runtime":
+        doctor = build_openclaw_employment_runtime_doctor(
+            Path(args.employment_record),
+            channels=args.channel or None,
+            output_path=Path(args.output),
+            refresh_docs=args.refresh_docs,
+            docs_timeout=args.docs_timeout,
+        )
+        if args.summary_output:
+            render_openclaw_employment_runtime_summary(doctor, output_path=Path(args.summary_output))
+        print(str(Path(args.output)))
         return 0
 
     if args.command == "doctor-openclaw-runtime-preflight":

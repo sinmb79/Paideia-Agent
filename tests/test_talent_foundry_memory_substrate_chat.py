@@ -477,6 +477,12 @@ class TalentFoundryMemorySubstrateChatTests(unittest.TestCase):
 
         runtime_config = captured["runtime_config"]
         self.assertEqual(captured["model"], "meta-llama/llama-3.1-8b")
+        self.assertEqual(captured["context"]["llm_contract"]["provider"], "openrouter_api")
+        self.assertEqual(captured["context"]["llm_contract"]["openclaw_provider_id"], "openrouter")
+        self.assertEqual(
+            captured["context"]["runtime_selection"]["llm"]["openclaw_model"],
+            "openrouter/meta-llama/llama-3.1-8b",
+        )
         self.assertEqual(runtime_config["openclaw_provider_id"], "openrouter")
         self.assertEqual(runtime_config["openclaw_model"], "openrouter/meta-llama/llama-3.1-8b")
         self.assertEqual(runtime_config["api_protocol"], "openai_chat_completions")

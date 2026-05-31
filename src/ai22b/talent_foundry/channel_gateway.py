@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from ai22b.talent_foundry.memory_substrate import run_chat_turn_from_employment
+from ai22b.talent_foundry.openclaw_employment_runtime import build_runtime_selection_snapshot
 from ai22b.talent_foundry.openclaw_compat import (
     find_openclaw_channel,
     openclaw_channel_manifest,
@@ -209,6 +210,7 @@ def run_openclaw_channel_message(
             "employment_id": employment["employment_id"],
             "agent": employment["agent"],
         },
+        "runtime_selection": build_runtime_selection_snapshot(employment, channels=[channel_id]),
         "inbound": inbound,
         "paideia_chat_turn": {
             "path": str(chat_turn_path),

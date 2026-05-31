@@ -16,6 +16,7 @@ from ai22b.talent_foundry.learning_loop import (
 )
 from ai22b.talent_foundry.llm_runtime import build_llm_runtime_config, invoke_llm_application_engine
 from ai22b.talent_foundry.onboarding_choices import resolve_chat_surface, resolve_llm_service
+from ai22b.talent_foundry.openclaw_employment_runtime import build_runtime_selection_snapshot
 from ai22b.talent_foundry.team import DEFAULT_TEAM_ROLES
 from ai22b.talent_foundry.workspace_agent import run_workspace_agent_from_manifest, run_workspace_agent_job_from_manifest
 
@@ -173,6 +174,7 @@ def hire_installed_agent(
         "llm_policy": agent_manifest.get("llm_policy", {}),
         "status": "active",
     }
+    employment_record["runtime_selection"] = build_runtime_selection_snapshot(employment_record)
     employment_record_path = target_root / record_name
     _write_json(employment_record_path, employment_record)
 
@@ -507,6 +509,7 @@ def run_hired_agent(
     )
     result["llm_mode"] = llm_mode
     result["employment_context"] = _employment_context(employment_record)
+    result["runtime_selection"] = build_runtime_selection_snapshot(employment_record)
     result["active_memory_route"] = _route_active_memory_for_employment(
         employment_record,
         target_root,
@@ -913,6 +916,7 @@ def run_hired_workspace_agent(
     )
     result["llm_mode"] = llm_mode
     result["employment_context"] = _employment_context(employment_record)
+    result["runtime_selection"] = build_runtime_selection_snapshot(employment_record)
     result["active_memory_route"] = _route_active_memory_for_employment(
         employment_record,
         target_root,
@@ -956,6 +960,7 @@ def run_hired_agent_job(
     )
     result["llm_mode"] = llm_mode
     result["employment_context"] = _employment_context(employment_record)
+    result["runtime_selection"] = build_runtime_selection_snapshot(employment_record)
     result["active_memory_route"] = _route_active_memory_for_employment(
         employment_record,
         target_root,
@@ -1002,6 +1007,7 @@ def run_hired_dataflow_job(
         review_label=review_label,
     )
     result["employment_context"] = _employment_context(employment_record)
+    result["runtime_selection"] = build_runtime_selection_snapshot(employment_record)
     result["llm_runtime_result"] = invoke_llm_application_engine(
         employment_record["llm_runtime"],
         manifest=agent_manifest,

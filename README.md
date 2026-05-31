@@ -435,6 +435,16 @@ ai22b-talent-foundry build-openclaw-runtime-bundle `
   --output-dir "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_runtime_bundle"
 ```
 
+To verify the exact hired-agent runtime selection before building or handing off a bundle, run the employment runtime doctor. It summarizes the selected provider/model, Gateway route, chat surface, channel support path, and next commands without storing provider keys, bot tokens, QR sessions, or private training files:
+
+```powershell
+ai22b-talent-foundry doctor-openclaw-employment-runtime `
+  --employment-record "<employment_record.json>" `
+  --channel webchat `
+  --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_employment_runtime_doctor.json" `
+  --summary-output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\OPENCLAW_EMPLOYMENT_RUNTIME.md"
+```
+
 The bundle writes:
 
 - `openclaw_config_patch.json`: a review-first `openclaw.json` patch with the selected `provider/model`, `models.providers`, `agents.list`, gateway URL, enabled channels, `channels.modelByChannel`, `bindings[]`, and `gateway.http.endpoints.chatCompletions.enabled=true` for OpenAI-compatible Gateway clients.

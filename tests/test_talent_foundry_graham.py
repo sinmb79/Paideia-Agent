@@ -1259,6 +1259,10 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             doctor_openclaw_native_handoff,
             prepare_openclaw_native_config,
         )
+        from ai22b.talent_foundry.openclaw_employment_runtime import (
+            build_openclaw_employment_runtime_doctor,
+            render_openclaw_employment_runtime_summary,
+        )
         from ai22b.talent_foundry.openclaw_runtime_bundle import build_openclaw_runtime_bundle
         from ai22b.talent_foundry.openclaw_runtime_preflight import doctor_openclaw_runtime_preflight
         from ai22b.talent_foundry.registry import hire_installed_agent
@@ -1429,6 +1433,34 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             preflight_channel_pairing_exists = Path(preflight["artifacts"]["channel_pairing_doctor"]).exists()
             preflight_native_handoff_exists = Path(preflight["artifacts"]["native_handoff_doctor"]).exists()
             preflight_channel_flow_exists = Path(preflight["artifacts"]["channel_flow_doctor"]).exists()
+            employment_runtime_path = Path(tmp) / "openclaw_employment_runtime_doctor.json"
+            employment_runtime_summary_path = Path(tmp) / "OPENCLAW_EMPLOYMENT_RUNTIME.md"
+            employment_runtime_doctor = build_openclaw_employment_runtime_doctor(
+                hiring["employment_record"],
+                channels=["bluebubbles", "webchat"],
+                output_path=employment_runtime_path,
+            )
+            render_openclaw_employment_runtime_summary(
+                employment_runtime_doctor,
+                output_path=employment_runtime_summary_path,
+            )
+            employment_runtime_summary_text = employment_runtime_summary_path.read_text(encoding="utf-8")
+            cli_employment_runtime_path = Path(tmp) / "openclaw_employment_runtime_doctor_cli.json"
+            cli_employment_runtime_summary_path = Path(tmp) / "OPENCLAW_EMPLOYMENT_RUNTIME_CLI.md"
+            cli_employment_runtime_result = cli_main(
+                [
+                    "doctor-openclaw-employment-runtime",
+                    "--employment-record",
+                    str(hiring["employment_record"]),
+                    "--channel",
+                    "webchat",
+                    "--output",
+                    str(cli_employment_runtime_path),
+                    "--summary-output",
+                    str(cli_employment_runtime_summary_path),
+                ]
+            )
+            cli_employment_runtime = json.loads(cli_employment_runtime_path.read_text(encoding="utf-8"))
             cli_preflight_path = Path(tmp) / "openclaw_runtime_preflight_cli.json"
             cli_preflight_result = cli_main(
                 [
@@ -1551,6 +1583,26 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertFalse(preflight["policy"]["secret_values_stored"])
         self.assertNotIn("do-not-store-this-key", preflight_text)
         self.assertNotIn("do-not-store-this-token", preflight_text)
+        self.assertEqual(employment_runtime_doctor["schema"], "ai22b-openclaw-employment-runtime-doctor/v1")
+        self.assertIn(
+            employment_runtime_doctor["status"],
+            {
+                "needs_llm_configuration",
+                "ready_for_paideia_or_openclaw_runtime",
+                "ready_after_channel_plugin_or_bridge",
+            },
+        )
+        self.assertEqual(employment_runtime_doctor["runtime_selection"]["llm"]["openclaw_provider_id"], "arcee")
+        self.assertEqual(employment_runtime_doctor["runtime_selection"]["llm"]["openclaw_model"], "arcee/trinity-large-thinking")
+        self.assertIn(
+            "bluebubbles",
+            {item["channel_id"] for item in employment_runtime_doctor["runtime_selection"]["chat"]["openclaw_channels"]},
+        )
+        self.assertFalse(employment_runtime_doctor["claim_boundary"]["secret_values_stored"])
+        self.assertIn("OpenClaw Employment Runtime Summary", employment_runtime_summary_text)
+        self.assertIn("doctor-openclaw-runtime-preflight", employment_runtime_summary_text)
+        self.assertEqual(cli_employment_runtime_result, 0)
+        self.assertEqual(cli_employment_runtime["schema"], "ai22b-openclaw-employment-runtime-doctor/v1")
         self.assertEqual(cli_preflight_result, 0)
         self.assertTrue(cli_preflight_exists)
         self.assertEqual(reset_bundle["readiness"]["existing_openclaw_config"]["status"], "reset_plan_written")

@@ -14,6 +14,7 @@ from ai22b.talent_foundry.language_development import (
 )
 from ai22b.talent_foundry.learning_loop import build_reasoning_kernel, record_learning_experience
 from ai22b.talent_foundry.llm_runtime import invoke_llm_application_engine
+from ai22b.talent_foundry.openclaw_employment_runtime import build_runtime_selection_snapshot
 
 
 MEMORY_SUBSTRATE_SCHEMA = "ai-talent-memory-substrate/v1"
@@ -767,9 +768,12 @@ def build_chat_context(
 ) -> dict[str, Any]:
     agent = employment_record["agent"]
     active_route = memory_substrate.get("active_route") or activate_memory_route(memory_substrate, objective=message)
+    runtime_selection = build_runtime_selection_snapshot(employment_record)
+    selected_llm = runtime_selection["llm"]
+    selected_llm_name = selected_llm.get("label") or selected_llm.get("service_id") or selected_llm.get("engine")
     system_prompt = (
         f"You are {agent['name']}, a Korean-first local AI talent hired by the Boss. "
-        "OpenAI ChatGPT Codex is only the language and tool reasoning engine. "
+        f"The selected application LLM engine is {selected_llm_name}; it is only the language and tool reasoning engine. "
         "Identity, learned data, and reasoning habits must come from the local agent manifest, "
         "learning ledger, and memory substrate. Do not impersonate Benjamin Graham; follow the "
         "learning-path emulation artifacts and produce reviewable reasoning summaries, not hidden chain-of-thought."
@@ -782,7 +786,14 @@ def build_chat_context(
         "language": "ko-KR",
         "system_prompt": system_prompt,
         "llm_contract": {
-            "provider": "openai_chatgpt_codex",
+            "provider": selected_llm.get("service_id"),
+            "engine": selected_llm.get("engine"),
+            "selected_model": selected_llm.get("selected_model"),
+            "openclaw_provider_id": selected_llm.get("openclaw_provider_id"),
+            "openclaw_model": selected_llm.get("openclaw_model"),
+            "openclaw_agent_target": selected_llm.get("openclaw_agent_target"),
+            "api_protocol": selected_llm.get("api_protocol"),
+            "network_access": selected_llm.get("network_access"),
             "role": "application_language_engine_only",
             "identity_source": [
                 "employment_record",
@@ -794,6 +805,7 @@ def build_chat_context(
             "hidden_chain_of_thought": "forbidden",
             "data_minimization": "send only selected route summaries unless Boss approves broader context",
         },
+        "runtime_selection": runtime_selection,
         "identity_brief": {
             "name": agent.get("name"),
             "role": agent.get("role"),
@@ -868,7 +880,7 @@ def _live_chat_instructions(agent_name: str) -> str:
     return (
         f"너는 {agent_name}입니다. 보스와 한국어 존댓말로 자연스럽게 대화합니다. "
         "너의 정체성, 학습 데이터, 추론 습관은 입력으로 제공된 로컬 talent context에서만 옵니다. "
-        "OpenAI 모델은 언어 생성 엔진일 뿐이며, Benjamin Graham을 흉내 내거나 신용이의 기록을 섞지 않습니다. "
+        "선택된 LLM은 언어 생성 엔진일 뿐이며, 특정 롤모델을 흉내 내거나 다른 AI 인재의 기록을 섞지 않습니다. "
         "숨은 chain-of-thought를 출력하거나 저장하지 말고, 필요한 경우 검토 가능한 짧은 판단 요약만 제공합니다. "
         "일상 대화는 일상 대화답게 답하고, 전문 업무는 근거, 반례, 다음 확인 자료를 분리해 답합니다. "
         "응답은 반드시 JSON 객체 하나만 반환하세요. 형식은 "
@@ -887,6 +899,7 @@ def _compact_chat_context_for_live_llm(chat_context: dict[str, Any]) -> dict[str
         "message": chat_context.get("message"),
         "identity_record": chat_context.get("identity_record"),
         "learning_profile": chat_context.get("learning_profile"),
+        "runtime_selection": chat_context.get("runtime_selection"),
         "active_memory_route": chat_context.get("active_memory_route"),
         "conversation_method_training": chat_context.get("conversation_method_training"),
         "language_development_program": chat_context.get("language_development_program"),
@@ -2242,6 +2255,7 @@ def run_chat_turn_from_employment(
         },
         "message": message,
         "chat_context": chat_context,
+        "runtime_selection": chat_context["runtime_selection"],
         "llm_runtime_result": llm_runtime_result,
         "llm_mode": llm_mode,
         "reply_generation_mode": reply_generation_mode,
