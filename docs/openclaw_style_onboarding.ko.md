@@ -56,6 +56,24 @@ ai22b-talent-foundry list-openclaw-compat --output openclaw_compat.json
 
 채팅 표면도 OpenClaw channel 이름을 노출합니다. `openclaw-channel-telegram`, `openclaw-channel-discord`, `openclaw-channel-slack`, `openclaw-channel-whatsapp`, `openclaw-channel-signal`, `openclaw-channel-matrix`, `openclaw-channel-webchat` 같은 항목은 Gateway/페어링/허용목록 검토 전까지 manifest-only 상태입니다.
 
+채널 메시지는 로컬 gateway envelope로 실행할 수 있습니다. Paideia core는 실제 Telegram/Discord 토큰을 저장하거나 외부 전송을 직접 수행하지 않고, 채널 플러그인이 보낼 수 있는 outbound envelope를 반환합니다.
+
+```powershell
+ai22b-talent-foundry build-openclaw-gateway-config `
+  --employment-record "<employment_record.json>" `
+  --channel telegram `
+  --channel webchat `
+  --output openclaw_gateway_config.json
+
+ai22b-talent-foundry run-openclaw-channel-message `
+  --employment-record "<employment_record.json>" `
+  --channel telegram `
+  --conversation-id "telegram-test" `
+  --sender-id "boss" `
+  --message "채널 gateway로 대답해줘" `
+  --output telegram_channel_run.json
+```
+
 ## 산출물
 
 - `console_session.json`: 전체 온보딩 세션과 health 요약

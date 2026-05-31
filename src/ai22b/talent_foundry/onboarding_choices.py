@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from ai22b.talent_foundry.openclaw_compat import (
+    find_openclaw_channel,
     find_openclaw_provider,
     openclaw_channel_manifest,
     openclaw_chat_surface_entries,
@@ -320,6 +321,10 @@ def resolve_llm_service(
 def resolve_chat_surface(chat_surface: str | None = None) -> dict[str, Any]:
     requested = (chat_surface or DEFAULT_CHAT_SURFACE_ID).strip()
     by_id = _catalog_by_id(CHAT_SURFACE_CATALOG)
+    if requested not in by_id:
+        channel = find_openclaw_channel(requested)
+        if channel is not None:
+            requested = f"openclaw-channel-{channel['channel_id']}"
     if requested not in by_id:
         raise ValueError(f"Unsupported chat surface: {requested}")
     return deepcopy(by_id[requested])

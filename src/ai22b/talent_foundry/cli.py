@@ -18,6 +18,10 @@ from ai22b.talent_foundry.agent_runner import run_agent_from_manifest
 from ai22b.talent_foundry.assessment import evaluate_assessment
 from ai22b.talent_foundry.audit import audit_foundry_release
 from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
+from ai22b.talent_foundry.channel_gateway import (
+    build_openclaw_gateway_config,
+    run_openclaw_channel_message,
+)
 from ai22b.talent_foundry.cohort import create_specialist_cohort
 from ai22b.talent_foundry.console import collect_console_answers, run_console_session
 from ai22b.talent_foundry.distribution import (
@@ -40,7 +44,6 @@ from ai22b.talent_foundry.onboarding import run_agent_onboarding
 from ai22b.talent_foundry.onboarding_choices import (
     DEFAULT_CHAT_SURFACE_ID,
     build_llm_service_health,
-    chat_surface_ids,
     resolve_llm_service,
 )
 from ai22b.talent_foundry.openclaw_compat import openclaw_channel_manifest, openclaw_provider_manifest
@@ -108,6 +111,31 @@ def _build_parser() -> argparse.ArgumentParser:
         help="List OpenClaw-compatible LLM providers and chat channels supported by Paideia onboarding.",
     )
     list_openclaw_compat.add_argument("--output")
+
+    build_gateway_config = subparsers.add_parser(
+        "build-openclaw-gateway-config",
+        help="Build a local OpenClaw-style channel gateway config for a hired Paideia agent.",
+    )
+    build_gateway_config.add_argument("--employment-record", required=True)
+    build_gateway_config.add_argument("--channel", action="append", default=[])
+    build_gateway_config.add_argument("--bind-host", default="127.0.0.1")
+    build_gateway_config.add_argument("--port", type=int, default=8722)
+    build_gateway_config.add_argument("--output", required=True)
+
+    run_channel_message = subparsers.add_parser(
+        "run-openclaw-channel-message",
+        help="Route one OpenClaw-style channel message envelope through the Paideia chat runtime.",
+    )
+    run_channel_message.add_argument("--employment-record", required=True)
+    run_channel_message.add_argument("--channel", required=True)
+    run_channel_message.add_argument("--message", required=True)
+    run_channel_message.add_argument("--sender-id", default="local-user")
+    run_channel_message.add_argument("--conversation-id", default="local-conversation")
+    run_channel_message.add_argument("--output", required=True)
+    run_channel_message.add_argument("--llm-mode", choices=["offline", "auto", "live"], default="offline")
+    run_channel_message.add_argument("--live-llm", action="store_true")
+    run_channel_message.add_argument("--llm-model")
+    run_channel_message.add_argument("--learn-from-chat", action="store_true")
 
     create = subparsers.add_parser("create", help="Create an AI talent plan and hiring packet.")
     create.add_argument("--name", default="신용")
@@ -178,7 +206,7 @@ def _build_parser() -> argparse.ArgumentParser:
     onboard.add_argument("--llm-engine")
     onboard.add_argument("--llm-model")
     onboard.add_argument("--llm-model-path")
-    onboard.add_argument("--chat-surface", default=DEFAULT_CHAT_SURFACE_ID, choices=chat_surface_ids())
+    onboard.add_argument("--chat-surface", default=DEFAULT_CHAT_SURFACE_ID)
     onboard.add_argument("--initial-goal")
     onboard.add_argument("--cycle-note")
     onboard.add_argument("--cadence", default="weekly")
@@ -304,7 +332,7 @@ def _build_parser() -> argparse.ArgumentParser:
     hire_installed.add_argument("--llm-engine", default="deterministic_local")
     hire_installed.add_argument("--llm-model")
     hire_installed.add_argument("--llm-model-path")
-    hire_installed.add_argument("--chat-surface", choices=chat_surface_ids())
+    hire_installed.add_argument("--chat-surface")
 
     run_hired_agent_command = subparsers.add_parser(
         "run-hired-agent",
@@ -574,6 +602,33 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(str(output_path))
         else:
             print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.command == "build-openclaw-gateway-config":
+        build_openclaw_gateway_config(
+            Path(args.employment_record),
+            channels=args.channel or None,
+            bind_host=args.bind_host,
+            port=args.port,
+            output_path=Path(args.output),
+        )
+        print(str(Path(args.output)))
+        return 0
+
+    if args.command == "run-openclaw-channel-message":
+        llm_mode = "live" if args.live_llm else args.llm_mode
+        run_openclaw_channel_message(
+            Path(args.employment_record),
+            channel_id=args.channel,
+            message=args.message,
+            sender_id=args.sender_id,
+            conversation_id=args.conversation_id,
+            output_path=Path(args.output),
+            llm_mode=llm_mode,
+            llm_model=args.llm_model,
+            learn_from_chat=args.learn_from_chat,
+        )
+        print(str(Path(args.output)))
         return 0
 
     if args.command == "create":

@@ -187,6 +187,7 @@ class GrahamTalentFoundryTests(unittest.TestCase):
 
     def test_openclaw_style_onboarding_questions_are_step_based(self) -> None:
         from ai22b.talent_foundry.console import WIZARD_STEPS, questions_with_choices
+        from ai22b.talent_foundry.onboarding_choices import resolve_chat_surface
 
         questions = questions_with_choices()
         by_id = {item["id"]: item for item in questions}
@@ -202,6 +203,7 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertEqual(by_id["onboarding_mode"]["default"], "quickstart")
         self.assertIn("quickstart", {item["id"] for item in by_id["onboarding_mode"]["choices"]})
         self.assertIn("owner_self_extension", {item["id"] for item in by_id["talent_source"]["choices"]})
+        self.assertEqual(resolve_chat_surface("telegram")["id"], "openclaw-channel-telegram")
 
     def test_guided_console_writes_openclaw_style_config_identity_payload_and_rollouts(self) -> None:
         from ai22b.talent_foundry.console import run_console_session
@@ -322,6 +324,62 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertIn("discord", channel_ids)
         self.assertIn("telegram", channel_ids)
         self.assertIn("whatsapp", channel_ids)
+
+    def test_openclaw_channel_gateway_routes_message_to_paideia_chat(self) -> None:
+        from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
+        from ai22b.talent_foundry.channel_gateway import (
+            build_openclaw_gateway_config,
+            run_openclaw_channel_message,
+        )
+        from ai22b.talent_foundry.registry import hire_installed_agent
+        from ai22b.talent_foundry.training_run import materialize_training_blueprint
+
+        blueprint = create_agent_training_blueprint(
+            owner="보스",
+            request="OpenClaw 채널 메시지를 Paideia 채팅으로 라우팅한다.",
+            talent_name="channel-junior",
+            gender="male",
+            domain="securities_research",
+            role_model_id="graham_value_investing",
+            agent_surface="cli-console",
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            run = materialize_training_blueprint(blueprint, output_dir=Path(tmp) / "channel_junior")
+            artifacts = {key: Path(value) for key, value in run["artifacts"].items()}
+            hiring = hire_installed_agent(
+                artifacts["installed_agent_manifest"],
+                employer="보스",
+                role="OpenClaw 채널 테스트 에이전트",
+                chat_surface="telegram",
+                record_name="employment_record_channel.json",
+            )
+            config_path = Path(tmp) / "gateway_config.json"
+            run_path = Path(tmp) / "telegram_channel_run.json"
+            config = build_openclaw_gateway_config(
+                hiring["employment_record"],
+                channels=["telegram", "webchat"],
+                output_path=config_path,
+            )
+            channel_run = run_openclaw_channel_message(
+                hiring["employment_record"],
+                channel_id="openclaw-channel-telegram",
+                message="안녕, 지금 대화 채널이 연결됐는지 확인해줘",
+                sender_id="boss-telegram",
+                conversation_id="telegram-test",
+                output_path=run_path,
+            )
+            chat_turn_exists = Path(channel_run["paideia_chat_turn"]["path"]).exists()
+
+        self.assertEqual(config["schema"], "ai22b-openclaw-channel-gateway-config/v1")
+        self.assertEqual(config["allowed_channels"][0]["channel_id"], "telegram")
+        self.assertEqual(channel_run["schema"], "ai22b-openclaw-channel-run/v1")
+        self.assertEqual(channel_run["status"], "reply_ready")
+        self.assertEqual(channel_run["inbound"]["channel"]["channel_id"], "telegram")
+        self.assertEqual(channel_run["outbound"]["send_policy"], "return_to_gateway_plugin_not_sent_by_paideia_core")
+        self.assertFalse(channel_run["security"]["external_send_performed_by_core"])
+        self.assertTrue(chat_turn_exists)
+        self.assertGreater(len(channel_run["outbound"]["text"]), 5)
 
     def test_owner_self_extension_blueprint_uses_private_local_track_without_role_model(self) -> None:
         from ai22b.talent_foundry.blueprint import create_agent_training_blueprint

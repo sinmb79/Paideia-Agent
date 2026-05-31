@@ -302,6 +302,24 @@ ai22b-talent-foundry list-openclaw-compat `
 
 External API adapters require the user's own keys before live use. Local model adapters prefer localhost or local files. Chat surfaces include `codex-bridge-chat`, `cli-console`, `dataflow-job`, a disabled `openclaw-style-gateway`, and OpenClaw channel manifests such as `openclaw-channel-telegram`, `openclaw-channel-discord`, `openclaw-channel-slack`, `openclaw-channel-whatsapp`, `openclaw-channel-signal`, `openclaw-channel-microsoft-teams`, `openclaw-channel-google-chat`, `openclaw-channel-imessage`, `openclaw-channel-matrix`, `openclaw-channel-mattermost`, and `openclaw-channel-webchat`.
 
+OpenClaw-style channels can now be routed through a local Paideia gateway envelope. The core returns a sendable outbound envelope; actual platform plugins remain responsible for bot tokens, pairing, and final delivery.
+
+```powershell
+ai22b-talent-foundry build-openclaw-gateway-config `
+  --employment-record "<employment_record.json>" `
+  --channel telegram `
+  --channel webchat `
+  --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_gateway_config.json"
+
+ai22b-talent-foundry run-openclaw-channel-message `
+  --employment-record "<employment_record.json>" `
+  --channel telegram `
+  --conversation-id "telegram-test" `
+  --sender-id "boss" `
+  --message "Can you answer through the channel gateway?" `
+  --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\telegram_channel_run.json"
+```
+
 Every onboarding run now writes `llm_service_health.json`. This file records whether the chosen provider is ready for bridge mode, needs an API key, needs a local model path, or is only a manifest until the local server is running. It never stores secret values and does not perform a network probe.
 
 You can run the same check directly:

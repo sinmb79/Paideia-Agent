@@ -435,6 +435,26 @@ def openclaw_chat_surface_entries() -> list[dict[str, Any]]:
     ]
 
 
+def normalize_openclaw_channel_id(identifier: str) -> str:
+    value = identifier.strip()
+    if value.startswith("openclaw-channel-"):
+        value = value.removeprefix("openclaw-channel-")
+    return value.casefold().replace("_", "-")
+
+
+def find_openclaw_channel(identifier: str) -> dict[str, Any] | None:
+    value = normalize_openclaw_channel_id(identifier)
+    for channel in OPENCLAW_CHANNELS:
+        ids = {
+            channel["channel_id"].casefold(),
+            channel["channel_id"].replace("-", "_").casefold(),
+            f"openclaw-channel-{channel['channel_id']}".casefold(),
+        }
+        if value in ids:
+            return deepcopy(channel)
+    return None
+
+
 def find_openclaw_provider(identifier: str) -> dict[str, Any] | None:
     value = identifier.strip().casefold()
     if not value:
