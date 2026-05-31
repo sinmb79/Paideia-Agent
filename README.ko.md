@@ -430,3 +430,21 @@ ai22b-talent-foundry build-openclaw-live-smoke-plan `
 ## WebChat 런타임 패널
 
 WebChat 화면과 `/api/runtime`, `/api/smoke-plan`은 선택된 OpenClaw provider/model, 채팅 surface, 채널 경로, live smoke-test 순서를 함께 보여줍니다. API 키, 봇 토큰, OAuth refresh token, QR 세션, 비공개 학습 파일은 읽거나 저장하지 않습니다.
+
+## 설치 Kit에서 바로 쓰는 OpenClaw식 실행 흐름
+
+`build-paideia-agent-kit`으로 만든 설치 폴더에는 이제 저장소 CLI를 다시 찾아가지 않아도 되는 PowerShell 진입점이 함께 들어갑니다.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\doctor_paideia.ps1
+powershell -ExecutionPolicy Bypass -File .\start_paideia_chat.ps1
+powershell -ExecutionPolicy Bypass -File .\build_openclaw_runtime_bundle.ps1 -Channel webchat
+powershell -ExecutionPolicy Bypass -File .\build_openclaw_live_smoke_plan.ps1 -Channel webchat
+powershell -ExecutionPolicy Bypass -File .\start_openclaw_webchat.ps1 -Port 8722
+```
+
+- `build_openclaw_runtime_bundle.ps1`: 고용 기록을 기준으로 OpenClaw provider/model/channel 선택과 gateway 설정 파일을 생성합니다.
+- `build_openclaw_live_smoke_plan.ps1`: 실제 API 키나 외부 채널을 쓰기 전에 실행 순서, 필요한 준비물, live probe 명령을 no-secret 문서로 뽑습니다.
+- `start_openclaw_webchat.ps1`: 외부 봇 토큰 없이 `127.0.0.1`에서 브라우저 채팅창을 열어 설치된 인재를 테스트합니다.
+
+WebChat은 `/api/runtime`과 `/api/smoke-plan`을 함께 제공하므로, 사용자는 현재 선택된 LLM 서비스, 모델, 채널 경로, smoke-test 순서를 확인한 뒤 실제 Gateway나 외부 채널 연결을 진행할 수 있습니다.

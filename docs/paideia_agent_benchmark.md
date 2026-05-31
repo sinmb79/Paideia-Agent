@@ -37,7 +37,8 @@
 
 1. 설치 키트
    - `build-paideia-agent-kit`은 고용된 인재의 필수 기록을 별도 폴더로 복사합니다.
-   - `README.md`, `start_paideia_chat.ps1`, `doctor_paideia.ps1`, `paideia_onboarding.template.json`을 포함합니다.
+   - `README.md`, `start_paideia_chat.ps1`, `doctor_paideia.ps1`, `build_openclaw_runtime_bundle.ps1`, `build_openclaw_live_smoke_plan.ps1`, `start_openclaw_webchat.ps1`, `paideia_onboarding.template.json`을 포함합니다.
+   - 설치 폴더 안에서 OpenClaw runtime bundle, live smoke plan, 로컬 WebChat을 바로 실행할 수 있어 저장소 내부 CLI를 다시 찾아갈 필요가 줄어듭니다.
 
 2. Doctor 우선
    - `doctor-agent-program`은 프로그램 스키마, 진입점, 기억 파일, 교육축, 보안 기본값, 어댑터 매니페스트를 검사합니다.
@@ -79,6 +80,9 @@
   - `paideia_onboarding.template.json`
   - `doctor_paideia.ps1`
   - `start_paideia_chat.ps1`
+  - `build_openclaw_runtime_bundle.ps1`
+  - `build_openclaw_live_smoke_plan.ps1`
+  - `start_openclaw_webchat.ps1`
   - `adapter_manifests/codex_native.json`
   - `adapter_manifests/hermes_style.json`
   - `adapter_manifests/openclaw_style.json`

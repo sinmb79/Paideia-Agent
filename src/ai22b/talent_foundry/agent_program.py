@@ -24,6 +24,9 @@ DEFAULT_AGENT_PROGRAM_NAME = "Paideia Agent"
 DEFAULT_AGENT_PROGRAM_NAME_KO = "Paideia Agent"
 DEFAULT_AGENT_PROGRAM_FILE = "22b_paideia_agent_program.json"
 DEFAULT_CHAT_SCRIPT = "start_paideia_chat.ps1"
+DEFAULT_OPENCLAW_RUNTIME_SCRIPT = "build_openclaw_runtime_bundle.ps1"
+DEFAULT_OPENCLAW_SMOKE_PLAN_SCRIPT = "build_openclaw_live_smoke_plan.ps1"
+DEFAULT_OPENCLAW_WEBCHAT_SCRIPT = "start_openclaw_webchat.ps1"
 DEFAULT_ONBOARDING_TEMPLATE = "paideia_onboarding.template.json"
 DEFAULT_INSTALL_MANIFEST = "paideia_agent_install_manifest.json"
 DEFAULT_DOCTOR_SCRIPT = "doctor_paideia.ps1"
@@ -58,7 +61,7 @@ def _first_matching_name(root: Path, pattern: str) -> str | None:
     return matches[0].name if matches else None
 
 
-def _chat_script() -> str:
+def _legacy_chat_script_mojibake() -> str:
     return """param(
     [string]$Program = ".\\22b_paideia_agent_program.json",
     [ValidateSet("offline", "auto", "live")]
@@ -113,6 +116,186 @@ while ($true) {
     Write-Host "[saved] $Output"
     Write-Host ""
 }
+"""
+
+
+def _chat_script() -> str:
+    return """param(
+    [string]$Program = ".\\22b_paideia_agent_program.json",
+    [ValidateSet("offline", "auto", "live")]
+    [string]$LlmMode = "offline",
+    [string]$LlmModel = "",
+    [switch]$LiveLlm,
+    [switch]$LearnFromChat
+)
+
+$ErrorActionPreference = "Stop"
+[Console]::InputEncoding = [System.Text.UTF8Encoding]::new()
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
+$env:PYTHONIOENCODING = "utf-8"
+
+Write-Host "Paideia Agent - Codex bridge chat"
+Write-Host "Type exit or quit to stop."
+Write-Host "Codex reads the local education record, Reasoning Ledger (Ariadne Thread), and memory substrate."
+Write-Host "The connected LLM is used as the language/reasoning engine only."
+Write-Host ""
+
+while ($true) {
+    $Message = Read-Host "Boss"
+    if ($null -eq $Message) { continue }
+    $Trimmed = $Message.Trim()
+    if ($Trimmed -in @("exit", "quit")) { break }
+    if ([string]::IsNullOrWhiteSpace($Trimmed)) { continue }
+    $Stamp = Get-Date -Format "yyyyMMdd_HHmmss"
+    $Output = "paideia_chat_$Stamp.json"
+    $ArgsList = @(
+        "-m", "ai22b.talent_foundry.cli",
+        "run-agent-program-chat",
+        "--program", $Program,
+        "--message", $Trimmed,
+        "--output", $Output,
+        "--llm-mode", $LlmMode
+    )
+    if ($LiveLlm) { $ArgsList += "--live-llm" }
+    if (-not [string]::IsNullOrWhiteSpace($LlmModel)) { $ArgsList += @("--llm-model", $LlmModel) }
+    if ($LearnFromChat) { $ArgsList += "--learn-from-chat" }
+
+    python @ArgsList | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "An execution error occurred." -ForegroundColor Red
+        continue
+    }
+    $Chat = Get-Content -Path $Output -Encoding UTF8 -Raw | ConvertFrom-Json
+    Write-Host ""
+    Write-Host $Chat.assistant_reply
+    Write-Host ""
+    Write-Host "[program] $($Chat.agent_program.name)"
+    Write-Host "[mode] $($Chat.reply_generation_mode)"
+    Write-Host "[operator] $($Chat.active_operator)"
+    Write-Host "[saved] $Output"
+    Write-Host ""
+}
+"""
+
+
+def _openclaw_runtime_bundle_script() -> str:
+    return """param(
+    [string]$EmploymentRecord = ".\\employment_record.json",
+    [string]$OutputDir = ".\\openclaw_runtime_bundle",
+    [string[]]$Channel = @("webchat")
+)
+
+$ErrorActionPreference = "Stop"
+[Console]::InputEncoding = [System.Text.UTF8Encoding]::new()
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
+$env:PYTHONIOENCODING = "utf-8"
+
+$ArgsList = @(
+    "-m", "ai22b.talent_foundry.cli",
+    "build-openclaw-runtime-bundle",
+    "--employment-record", $EmploymentRecord,
+    "--output-dir", $OutputDir
+)
+foreach ($Item in $Channel) {
+    if (-not [string]::IsNullOrWhiteSpace($Item)) {
+        $ArgsList += @("--channel", $Item)
+    }
+}
+
+python @ArgsList
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+Write-Host "OpenClaw runtime bundle: $OutputDir\\openclaw_runtime_bundle.json"
+"""
+
+
+def _openclaw_live_smoke_plan_script() -> str:
+    return """param(
+    [string]$EmploymentRecord = ".\\employment_record.json",
+    [string]$RuntimeBundle = ".\\openclaw_runtime_bundle\\openclaw_runtime_bundle.json",
+    [string[]]$Channel = @("webchat"),
+    [string]$Output = ".\\openclaw_live_smoke_plan.json",
+    [string]$MarkdownOutput = ".\\OPENCLAW_LIVE_SMOKE_PLAN.md",
+    [switch]$RefreshDocs
+)
+
+$ErrorActionPreference = "Stop"
+[Console]::InputEncoding = [System.Text.UTF8Encoding]::new()
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
+$env:PYTHONIOENCODING = "utf-8"
+
+if (-not (Test-Path -LiteralPath $RuntimeBundle)) {
+    $BundleDir = Split-Path -Parent $RuntimeBundle
+    if ([string]::IsNullOrWhiteSpace($BundleDir)) { $BundleDir = "." }
+    $RuntimeArgs = @(
+        "-m", "ai22b.talent_foundry.cli",
+        "build-openclaw-runtime-bundle",
+        "--employment-record", $EmploymentRecord,
+        "--output-dir", $BundleDir
+    )
+    foreach ($Item in $Channel) {
+        if (-not [string]::IsNullOrWhiteSpace($Item)) {
+            $RuntimeArgs += @("--channel", $Item)
+        }
+    }
+    python @RuntimeArgs
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+}
+
+$PlanArgs = @(
+    "-m", "ai22b.talent_foundry.cli",
+    "build-openclaw-live-smoke-plan",
+    "--employment-record", $EmploymentRecord,
+    "--runtime-bundle", $RuntimeBundle,
+    "--output", $Output,
+    "--markdown-output", $MarkdownOutput
+)
+foreach ($Item in $Channel) {
+    if (-not [string]::IsNullOrWhiteSpace($Item)) {
+        $PlanArgs += @("--channel", $Item)
+    }
+}
+if ($RefreshDocs) { $PlanArgs += "--refresh-docs" }
+
+python @PlanArgs
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+Write-Host "OpenClaw live smoke plan: $Output"
+Write-Host "Markdown guide: $MarkdownOutput"
+"""
+
+
+def _openclaw_webchat_script() -> str:
+    return """param(
+    [string]$EmploymentRecord = ".\\employment_record.json",
+    [string]$BindHost = "127.0.0.1",
+    [int]$Port = 8722,
+    [string]$OutputDir = ".\\openclaw_webchat_runs",
+    [ValidateSet("offline", "auto", "live")]
+    [string]$LlmMode = "offline",
+    [string]$LlmModel = "",
+    [switch]$LiveLlm,
+    [switch]$LearnFromChat
+)
+
+$ErrorActionPreference = "Stop"
+[Console]::InputEncoding = [System.Text.UTF8Encoding]::new()
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
+$env:PYTHONIOENCODING = "utf-8"
+
+if ($LiveLlm) { $LlmMode = "live" }
+
+$ArgsList = @(
+    "-m", "ai22b.talent_foundry.cli",
+    "run-openclaw-webchat-server",
+    "--employment-record", $EmploymentRecord,
+    "--bind-host", $BindHost,
+    "--port", [string]$Port,
+    "--output-dir", $OutputDir,
+    "--llm-mode", $LlmMode
+)
+if (-not [string]::IsNullOrWhiteSpace($LlmModel)) { $ArgsList += @("--llm-model", $LlmModel) }
+if ($LearnFromChat) { $ArgsList += "--learn-from-chat" }
+
+python @ArgsList
 """
 
 
@@ -225,6 +408,8 @@ The connected LLM is only the language and reasoning engine. Identity and learne
 
 ## First Run
 
+These scripts call `python -m ai22b.talent_foundry.cli`. Run them from an environment where Paideia Agent is installed, or set `PYTHONPATH` to the repository `src` folder while developing from source.
+
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\\doctor_paideia.ps1
 powershell -ExecutionPolicy Bypass -File .\\start_paideia_chat.ps1
@@ -241,6 +426,28 @@ Use live LLM mode only after API quota and privacy expectations are clear:
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\\start_paideia_chat.ps1 -LiveLlm -LearnFromChat
 ```
+
+## OpenClaw-Style Runtime Tests
+
+Build a reviewable OpenClaw runtime bundle from the installed employment record:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\\build_openclaw_runtime_bundle.ps1 -Channel webchat
+```
+
+Create the no-secret live smoke-test sequence before using a real Gateway, provider key, or external channel:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\\build_openclaw_live_smoke_plan.ps1 -Channel webchat
+```
+
+Start a local browser chat surface without any external channel token:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\\start_openclaw_webchat.ps1 -Port 8722
+```
+
+Open the printed `http://127.0.0.1:8722/` URL. The WebChat page exposes `/api/runtime` and `/api/smoke-plan` so the selected provider, model, channel route, and live smoke sequence are visible without storing provider keys, bot tokens, OAuth refresh tokens, or QR session material.
 
 ## Onboarding Choices
 
@@ -380,6 +587,18 @@ def build_agent_program(
     agent = employment.get("agent", {})
     script_path = output_path.parent / DEFAULT_CHAT_SCRIPT
     script_path.write_text(_chat_script(), encoding="utf-8")
+    (output_path.parent / DEFAULT_OPENCLAW_RUNTIME_SCRIPT).write_text(
+        _openclaw_runtime_bundle_script(),
+        encoding="utf-8",
+    )
+    (output_path.parent / DEFAULT_OPENCLAW_SMOKE_PLAN_SCRIPT).write_text(
+        _openclaw_live_smoke_plan_script(),
+        encoding="utf-8",
+    )
+    (output_path.parent / DEFAULT_OPENCLAW_WEBCHAT_SCRIPT).write_text(
+        _openclaw_webchat_script(),
+        encoding="utf-8",
+    )
 
     program = {
         "schema": AGENT_PROGRAM_SCHEMA,
@@ -519,9 +738,27 @@ def build_agent_program(
             "employment_record": _rel(employment_record_path, output_path.parent),
             "agent_manifest": _rel(agent_manifest_path, output_path.parent),
             "chat_script": DEFAULT_CHAT_SCRIPT,
+            "openclaw_runtime_bundle_script": DEFAULT_OPENCLAW_RUNTIME_SCRIPT,
+            "openclaw_live_smoke_plan_script": DEFAULT_OPENCLAW_SMOKE_PLAN_SCRIPT,
+            "openclaw_webchat_script": DEFAULT_OPENCLAW_WEBCHAT_SCRIPT,
             "chat_command": (
                 "ai22b-talent-foundry run-agent-program-chat "
                 f"--program {output_path.name} --message <message> --learn-from-chat"
+            ),
+            "openclaw_runtime_bundle_command": (
+                "ai22b-talent-foundry build-openclaw-runtime-bundle "
+                "--employment-record employment_record.json --channel webchat --output-dir openclaw_runtime_bundle"
+            ),
+            "openclaw_live_smoke_plan_command": (
+                "ai22b-talent-foundry build-openclaw-live-smoke-plan "
+                "--employment-record employment_record.json "
+                "--runtime-bundle openclaw_runtime_bundle/openclaw_runtime_bundle.json "
+                "--channel webchat --output openclaw_live_smoke_plan.json "
+                "--markdown-output OPENCLAW_LIVE_SMOKE_PLAN.md"
+            ),
+            "openclaw_webchat_command": (
+                "ai22b-talent-foundry run-openclaw-webchat-server "
+                "--employment-record employment_record.json --port 8722 --output-dir openclaw_webchat_runs"
             ),
             "offline_chat": "run-agent-program-chat --llm-mode offline",
             "live_llm_chat": "run-agent-program-chat --llm-mode live --learn-from-chat",
@@ -545,6 +782,9 @@ def build_agent_program(
             "doctor_script": DEFAULT_DOCTOR_SCRIPT,
             "onboarding_template": DEFAULT_ONBOARDING_TEMPLATE,
             "start_chat_script": DEFAULT_CHAT_SCRIPT,
+            "openclaw_runtime_bundle_script": DEFAULT_OPENCLAW_RUNTIME_SCRIPT,
+            "openclaw_live_smoke_plan_script": DEFAULT_OPENCLAW_SMOKE_PLAN_SCRIPT,
+            "openclaw_webchat_script": DEFAULT_OPENCLAW_WEBCHAT_SCRIPT,
             "hermes_openclaw_benchmark": {
                 "use": [
                     "simple install folder",
@@ -670,6 +910,9 @@ def build_paideia_agent_install_kit(
         "entrypoints": {
             "doctor": DEFAULT_DOCTOR_SCRIPT,
             "start_chat": DEFAULT_CHAT_SCRIPT,
+            "build_openclaw_runtime_bundle": DEFAULT_OPENCLAW_RUNTIME_SCRIPT,
+            "build_openclaw_live_smoke_plan": DEFAULT_OPENCLAW_SMOKE_PLAN_SCRIPT,
+            "start_openclaw_webchat": DEFAULT_OPENCLAW_WEBCHAT_SCRIPT,
             "program": program_path.name,
             "onboarding_template": DEFAULT_ONBOARDING_TEMPLATE,
             "adapter_manifests": "adapter_manifests",
@@ -710,7 +953,14 @@ def doctor_agent_program(program_path: Path, *, output_path: Path | None = None)
         "passed": program.get("schema") == AGENT_PROGRAM_SCHEMA,
         "details": {"schema": program.get("schema")},
     }
-    required_entrypoints = ["employment_record", "agent_manifest", "chat_script"]
+    required_entrypoints = [
+        "employment_record",
+        "agent_manifest",
+        "chat_script",
+        "openclaw_runtime_bundle_script",
+        "openclaw_live_smoke_plan_script",
+        "openclaw_webchat_script",
+    ]
     missing_entrypoints = [
         key
         for key in required_entrypoints

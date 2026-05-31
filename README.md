@@ -206,6 +206,8 @@ ai22b-talent-foundry build-paideia-agent-kit `
   --output-dir "$env:AI22B_STORAGE_ROOT\paideia-agent-kits\grham_junior_paideia_agent"
 ```
 
+The kit scripts call `python -m ai22b.talent_foundry.cli`, so run them from an installed Paideia environment or set `PYTHONPATH` to this repository's `src` folder during source development.
+
 Doctor the kit before first use:
 
 ```powershell
@@ -220,6 +222,16 @@ ai22b-talent-foundry run-agent-program-chat `
   --program "$env:AI22B_STORAGE_ROOT\paideia-agent-kits\grham_junior_paideia_agent\22b_paideia_agent_program.json" `
   --message "Explain how you would begin a valuation memo."
 ```
+
+The generated kit also includes OpenClaw-style runtime entrypoints that can be run from inside the kit folder:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\build_openclaw_runtime_bundle.ps1 -Channel webchat
+powershell -ExecutionPolicy Bypass -File .\build_openclaw_live_smoke_plan.ps1 -Channel webchat
+powershell -ExecutionPolicy Bypass -File .\start_openclaw_webchat.ps1 -Port 8722
+```
+
+`build_openclaw_live_smoke_plan.ps1` writes a no-secret operator sequence before any real provider key, Gateway, or external channel is used. `start_openclaw_webchat.ps1` starts the local browser chat surface on `127.0.0.1` by default and exposes `/api/runtime` plus `/api/smoke-plan` for quick inspection.
 
 ## Hermes/OpenClaw-Style Skill Migration
 
@@ -257,6 +269,9 @@ A Paideia Agent kit can include:
 - `paideia_onboarding.template.json`
 - `doctor_paideia.ps1`
 - `start_paideia_chat.ps1`
+- `build_openclaw_runtime_bundle.ps1`
+- `build_openclaw_live_smoke_plan.ps1`
+- `start_openclaw_webchat.ps1`
 - `adapter_manifests/codex_native.json`
 - `adapter_manifests/hermes_style.json`
 - `adapter_manifests/openclaw_style.json`
