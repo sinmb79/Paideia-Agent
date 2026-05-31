@@ -119,6 +119,14 @@ ai22b-talent-foundry audit-openclaw-parity `
 - `openclaw_config_merge.preview.json`: `modify` 선택 시 생성되는 redacted 병합 preview입니다.
 - `openclaw_config_reset_plan.json`: `reset` 선택 시 생성되는 계획 파일입니다. 실제 reset은 수행하지 않습니다.
 
+native handoff를 실제 OpenClaw 설치본에 넘기기 전에는 다음 doctor를 먼저 실행합니다. 기본값은 비파괴 점검이며 OpenClaw 명령을 실행하지 않습니다. 설치된 OpenClaw CLI의 읽기성 상태까지 확인하려면 `--probe-openclaw`를 추가합니다.
+
+```powershell
+ai22b-talent-foundry doctor-openclaw-native-handoff `
+  --handoff "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_runtime_bundle\openclaw_native_handoff.json" `
+  --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_runtime_bundle\openclaw_native_handoff_doctor.json"
+```
+
 ## 다음 개발 방향
 
 1. 실제 OpenClaw provider plugin/OAuth 흐름과의 연결을 더 직접화합니다.

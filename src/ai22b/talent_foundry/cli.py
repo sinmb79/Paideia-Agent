@@ -62,6 +62,7 @@ from ai22b.talent_foundry.onboarding_choices import (
 from ai22b.talent_foundry.openclaw_config_import import import_openclaw_config
 from ai22b.talent_foundry.openclaw_compat import openclaw_channel_manifest, openclaw_provider_manifest
 from ai22b.talent_foundry.openclaw_bridge_setup import build_openclaw_bridge_setup_kit
+from ai22b.talent_foundry.openclaw_native_handoff import doctor_openclaw_native_handoff
 from ai22b.talent_foundry.openclaw_parity import audit_openclaw_parity
 from ai22b.talent_foundry.openclaw_runtime_bundle import build_openclaw_runtime_bundle
 from ai22b.talent_foundry.program import create_talent_plan
@@ -206,6 +207,19 @@ def _build_parser() -> argparse.ArgumentParser:
     build_runtime_bundle.add_argument("--existing-openclaw-config")
     build_runtime_bundle.add_argument("--config-action", choices=["keep", "modify", "reset"], default="modify")
     build_runtime_bundle.add_argument("--output-dir", required=True)
+
+    doctor_native_handoff = subparsers.add_parser(
+        "doctor-openclaw-native-handoff",
+        help="Doctor a Paideia OpenClaw native handoff plan without writing OpenClaw config or secrets.",
+    )
+    doctor_native_handoff.add_argument("--handoff", required=True)
+    doctor_native_handoff.add_argument("--output", required=True)
+    doctor_native_handoff.add_argument(
+        "--probe-openclaw",
+        action="store_true",
+        help="Run read-only OpenClaw CLI probes when the openclaw binary is on PATH.",
+    )
+    doctor_native_handoff.add_argument("--timeout-seconds", type=int, default=20)
 
     build_bridge_setup_kit = subparsers.add_parser(
         "build-openclaw-bridge-setup-kit",
@@ -852,6 +866,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             config_action=args.config_action,
         )
         print(str(Path(bundle["artifacts"]["manifest"])))
+        return 0
+
+    if args.command == "doctor-openclaw-native-handoff":
+        doctor_openclaw_native_handoff(
+            Path(args.handoff),
+            output_path=Path(args.output),
+            probe_openclaw=args.probe_openclaw,
+            timeout_seconds=args.timeout_seconds,
+        )
+        print(str(Path(args.output)))
         return 0
 
     if args.command == "build-openclaw-bridge-setup-kit":

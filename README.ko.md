@@ -153,6 +153,14 @@ ai22b-talent-foundry build-openclaw-runtime-bundle `
   --output-dir "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_runtime_bundle"
 ```
 
+OpenClaw 설치본에 넘기기 전에는 native handoff doctor를 먼저 실행합니다. 기본값은 비파괴 점검이며 OpenClaw 명령을 실행하지 않습니다. 설치된 OpenClaw CLI의 읽기성 상태까지 확인하려면 `--probe-openclaw`를 추가합니다.
+
+```powershell
+ai22b-talent-foundry doctor-openclaw-native-handoff `
+  --handoff "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_runtime_bundle\openclaw_native_handoff.json" `
+  --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_runtime_bundle\openclaw_native_handoff_doctor.json"
+```
+
 gateway 서버를 `--access-config`와 함께 실행하면 `/openclaw/platform-event/telegram`, `/discord`, `/slack` 경로로 들어온 raw event도 처리합니다. 허용목록에 없는 sender/conversation은 403으로 차단됩니다.
 
 import나 runtime bundle 이후 실제 연결 준비를 한 번에 점검하려면 bridge setup kit를 생성합니다. 이 명령은 provider 환경변수 템플릿, OpenClaw provider plugin/OAuth 계획, channel bridge 계획, 기본 차단 접근제어, smoke test payload를 함께 만듭니다.

@@ -562,6 +562,7 @@ class GrahamTalentFoundryTests(unittest.TestCase):
     def test_openclaw_runtime_bundle_exports_config_patch_env_template_and_doctors(self) -> None:
         from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
         from ai22b.talent_foundry.cli import main as cli_main
+        from ai22b.talent_foundry.openclaw_native_handoff import doctor_openclaw_native_handoff
         from ai22b.talent_foundry.openclaw_runtime_bundle import build_openclaw_runtime_bundle
         from ai22b.talent_foundry.registry import hire_installed_agent
         from ai22b.talent_foundry.training_run import materialize_training_blueprint
@@ -653,6 +654,22 @@ class GrahamTalentFoundryTests(unittest.TestCase):
                 config_action="reset",
             )
             reset_plan = Path(reset_bundle["artifacts"]["existing_openclaw_config_reset_plan"]).read_text(encoding="utf-8")
+            handoff_doctor_path = Path(tmp) / "native_handoff_doctor.json"
+            handoff_doctor = doctor_openclaw_native_handoff(
+                Path(bundle["artifacts"]["openclaw_native_handoff"]),
+                output_path=handoff_doctor_path,
+            )
+            cli_handoff_doctor_path = Path(tmp) / "native_handoff_doctor_cli.json"
+            cli_handoff_doctor_result = cli_main(
+                [
+                    "doctor-openclaw-native-handoff",
+                    "--handoff",
+                    str(bundle["artifacts"]["openclaw_native_handoff"]),
+                    "--output",
+                    str(cli_handoff_doctor_path),
+                ]
+            )
+            cli_handoff_doctor_exists = cli_handoff_doctor_path.exists()
 
         self.assertEqual(bundle["schema"], "ai22b-openclaw-runtime-bundle/v1")
         self.assertTrue(manifest_exists)
@@ -679,6 +696,13 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertIn("openclaw gateway run", native_handoff["operator_commands"]["run_gateway"])
         self.assertIn("openclaw channels add --channel bluebubbles --help", native_handoff["operator_commands"]["channel_add_help"]["bluebubbles"])
         self.assertFalse(native_handoff["security"]["secret_values_stored"])
+        self.assertEqual(handoff_doctor["schema"], "ai22b-openclaw-native-handoff-doctor/v1")
+        self.assertIn(handoff_doctor["status"], {"pass", "ready_for_openclaw_install"})
+        self.assertTrue(next(item for item in handoff_doctor["static_checks"] if item["id"] == "patch:models.providers")["passed"])
+        self.assertTrue(next(item for item in handoff_doctor["static_checks"] if item["id"] == "patch:bindings")["passed"])
+        self.assertFalse(handoff_doctor["secret_values_stored"])
+        self.assertEqual(cli_handoff_doctor_result, 0)
+        self.assertTrue(cli_handoff_doctor_exists)
         self.assertEqual(bundle["selection"]["config_action"], "modify")
         self.assertEqual(config_review["status"], "modify_preview_written")
         self.assertEqual(

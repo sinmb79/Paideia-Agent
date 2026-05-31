@@ -364,6 +364,14 @@ The bundle writes:
 - `openclaw_gateway_config.json` and `openclaw_channel_access_config.json`: loopback gateway and deny-by-default channel access setup.
 - `openclaw_existing_config_review.json`: OpenClaw-style existing config detection with `keep`, `modify`, or `reset` semantics. `modify` writes a redacted merge preview; `reset` writes a plan only and never deletes or overwrites the config.
 
+Before handing the bundle to an installed OpenClaw runtime, doctor the native handoff. By default this is non-mutating and does not execute OpenClaw; add `--probe-openclaw` only when you want read-only CLI probes such as gateway/channel status:
+
+```powershell
+ai22b-talent-foundry doctor-openclaw-native-handoff `
+  --handoff "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_runtime_bundle\openclaw_native_handoff.json" `
+  --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_runtime_bundle\openclaw_native_handoff_doctor.json"
+```
+
 If the owner wants the next step after import or runtime bundling, build the bridge setup kit. It turns selected providers and channels into a practical checklist: env template, provider plugin/OAuth plan, channel bridge plan, deny-by-default access config, and local smoke-test payloads.
 
 ```powershell
