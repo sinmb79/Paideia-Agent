@@ -11,6 +11,7 @@ from ai22b.talent_foundry.openclaw_compat import (
     find_openclaw_channel,
     find_openclaw_provider,
     normalize_openclaw_channel_id,
+    normalize_openclaw_provider_id,
 )
 from ai22b.talent_foundry.openclaw_runtime_bundle import OPENCLAW_REFERENCE_URLS
 from ai22b.talent_foundry.provider_connectors import doctor_openclaw_provider_connectors
@@ -127,7 +128,7 @@ def _extract_primary_model(config: dict[str, Any]) -> str | None:
 
 def _provider_from_model(model: str | None) -> str | None:
     if model and "/" in model:
-        return model.split("/", 1)[0].strip()
+        return normalize_openclaw_provider_id(model.split("/", 1)[0])
     return None
 
 
@@ -155,7 +156,7 @@ def _channel_from_key(key: str) -> tuple[str | None, str]:
         return None, "ignored_config_key"
     channel = find_openclaw_channel(normalized)
     if channel is None:
-        return None, "unsupported_or_unknown_channel"
+        return normalized, "openclaw_gateway_external_channel_unverified"
     return str(channel["channel_id"]), "supported"
 
 
@@ -339,8 +340,20 @@ def _build_setup_plan(
     bindings: list[dict[str, Any]],
     output_dir: Path,
 ) -> dict[str, Any]:
-    provider_doctor = doctor_openclaw_provider_connectors(providers=provider_ids or None)
-    channel_doctor = doctor_openclaw_channel_connectors(channels=channel_ids or None)
+    supported_provider_ids = [provider_id for provider_id in provider_ids if find_openclaw_provider(provider_id)]
+    external_provider_ids = [provider_id for provider_id in provider_ids if not find_openclaw_provider(provider_id)]
+    supported_channel_ids = [channel_id for channel_id in channel_ids if find_openclaw_channel(channel_id)]
+    external_channel_ids = [channel_id for channel_id in channel_ids if not find_openclaw_channel(channel_id)]
+    provider_doctor = (
+        doctor_openclaw_provider_connectors(providers=supported_provider_ids)
+        if supported_provider_ids
+        else {"results": []}
+    )
+    channel_doctor = (
+        doctor_openclaw_channel_connectors(channels=supported_channel_ids)
+        if supported_channel_ids
+        else {"results": []}
+    )
     return {
         "schema": OPENCLAW_CONFIG_IMPORT_SETUP_PLAN_SCHEMA,
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -362,6 +375,16 @@ def _build_setup_plan(
                 "checks": item["checks"],
             }
             for item in provider_doctor["results"]
+        ]
+        + [
+            {
+                "provider_id": provider_id,
+                "runtime_status": "openclaw_gateway_external_provider_unverified",
+                "ready_for_live_llm": False,
+                "next_step": "Let OpenClaw Gateway own this provider/model selector, then run OpenClaw's own provider doctor.",
+                "checks": [],
+            }
+            for provider_id in external_provider_ids
         ],
         "channel_setup": [
             {
@@ -373,6 +396,17 @@ def _build_setup_plan(
                 "checks": item["checks"],
             }
             for item in channel_doctor["results"]
+        ]
+        + [
+            {
+                "channel_id": channel_id,
+                "connector_status": "openclaw_gateway_external_channel_unverified",
+                "ready_for_live_delivery": False,
+                "generic_normalized_gateway_ready": True,
+                "next_step": "Let the installed OpenClaw channel plugin own pairing and delivery; Paideia will preserve normalized envelopes.",
+                "checks": [],
+            }
+            for channel_id in external_channel_ids
         ],
         "recommended_paideia_commands": {
             "hire_with_imported_model": (
@@ -456,7 +490,7 @@ def import_openclaw_config(
         config_path=config_path,
         primary_model=primary_model,
         primary_provider=primary_provider,
-        provider_ids=supported_providers or ([primary_provider] if primary_provider else []),
+        provider_ids=provider_ids or ([primary_provider] if primary_provider else []),
         channel_ids=channel_ids,
         model_by_channel=model_by_channel,
         bindings=bindings,
@@ -487,6 +521,11 @@ def import_openclaw_config(
             "supported_provider_ids": supported_providers,
             "unsupported_provider_ids": unsupported_providers,
             "channel_ids": channel_ids,
+            "external_or_unverified_channel_ids": [
+                item["channel_id"]
+                for item in channel_diagnostics
+                if item["status"] == "openclaw_gateway_external_channel_unverified" and item.get("channel_id")
+            ],
             "channel_diagnostics": channel_diagnostics,
             "model_by_channel": model_by_channel,
             "model_by_channel_diagnostics": model_by_channel_diagnostics,
@@ -501,7 +540,13 @@ def import_openclaw_config(
             "model_by_channel": model_by_channel,
             "bindings": bindings,
             "provider_supported": bool(primary_provider and find_openclaw_provider(primary_provider)),
-            "all_detected_channels_supported": all(item["status"] != "unsupported_or_unknown_channel" for item in channel_diagnostics),
+            "provider_preserved_for_gateway": bool(primary_model or primary_provider),
+            "all_detected_channels_supported": all(
+                item["status"] in {"supported", "ignored_config_key"} for item in channel_diagnostics
+            ),
+            "all_detected_channels_preserved_for_gateway": all(
+                item["status"] != "unsupported_or_unknown_channel" for item in channel_diagnostics
+            ),
         },
         "artifacts": {
             "manifest": str(manifest_path),

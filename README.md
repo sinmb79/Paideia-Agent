@@ -400,6 +400,8 @@ The provider catalog follows OpenClaw's canonical `provider/model` IDs where pos
 
 When a user enters an OpenClaw `provider/model` that Paideia cannot call directly because it needs an OpenClaw provider plugin, OAuth profile, media tool, or custom runner, Paideia now auto-routes that selector through `openclaw_gateway_http`. The original selector is preserved as `openclaw_model`, so OpenClaw can own the provider auth and backend call while Paideia contributes the local talent context and Reasoning Ledger.
 
+If OpenClaw adds a provider or channel before Paideia's static catalog is updated, Paideia still preserves OpenClaw-style selections instead of rejecting them. Unknown `provider/model` values are treated as Gateway-owned external providers, and unknown `openclaw-channel-*` surfaces are kept as Gateway-owned external channels. The doctors mark those paths as unverified by Paideia and point the owner back to OpenClaw's own provider/channel setup, but the local talent identity and memory context can still be handed to the Gateway.
+
 For OpenClaw-style key resolution, Paideia checks `OPENCLAW_LIVE_<PROVIDER>_KEY`, `<PROVIDER>_API_KEYS`, `<PROVIDER>_API_KEY`, and provider-specific env vars such as `ARCEEAI_API_KEY`, `VOLCANO_ENGINE_API_KEY`, `DASHSCOPE_API_KEY`, or `XIAOMI_TOKEN_PLAN_API_KEY`. Comma or semicolon key lists use the first non-empty key for live smoke tests.
 
 If you already have an OpenClaw config, import it first. Paideia reads the selected `provider/model`, configured channel keys, `channels.modelByChannel`, and `bindings[]`, then writes Paideia-safe selections and setup steps without storing provider keys or bot tokens.

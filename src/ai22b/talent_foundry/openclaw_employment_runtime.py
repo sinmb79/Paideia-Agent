@@ -6,7 +6,12 @@ from pathlib import Path
 from typing import Any
 
 from ai22b.talent_foundry.onboarding_choices import build_llm_service_health
-from ai22b.talent_foundry.openclaw_compat import find_openclaw_channel, find_openclaw_provider
+from ai22b.talent_foundry.openclaw_compat import (
+    external_openclaw_channel_descriptor,
+    find_openclaw_channel,
+    find_openclaw_provider,
+    normalize_openclaw_channel_id,
+)
 from ai22b.talent_foundry.openclaw_support_matrix import build_openclaw_support_matrix
 
 
@@ -41,8 +46,10 @@ def _provider_id_from_runtime(employment_record: dict[str, Any]) -> str | None:
         provider_id = openclaw_model.split("/", 1)[0]
         if find_openclaw_provider(provider_id):
             return provider_id
+        if llm_service.get("openclaw_provider_unverified"):
+            return provider_id
     provider_id = llm_service.get("openclaw_provider_id") or llm_runtime.get("openclaw_provider_id")
-    if provider_id and find_openclaw_provider(str(provider_id)):
+    if provider_id and (find_openclaw_provider(str(provider_id)) or llm_service.get("openclaw_provider_unverified")):
         return str(provider_id)
     service_id = str(llm_service.get("service_id") or llm_runtime.get("service") or "")
     provider = find_openclaw_provider(service_id)
@@ -55,12 +62,16 @@ def _channel_ids_from_runtime(employment_record: dict[str, Any], channels: list[
         channel = find_openclaw_channel(channel_id)
         if channel:
             selected.append(str(channel["channel_id"]))
+        else:
+            selected.append(normalize_openclaw_channel_id(channel_id))
     chat_surface = employment_record.get("chat_surface", {}) or {}
     surface_channel = chat_surface.get("openclaw_channel_id")
     if surface_channel:
         channel = find_openclaw_channel(str(surface_channel))
         if channel:
             selected.append(str(channel["channel_id"]))
+        elif chat_surface.get("external_openclaw_channel"):
+            selected.append(normalize_openclaw_channel_id(str(surface_channel)))
     surface_id = str(chat_surface.get("id") or "")
     if surface_id.startswith("openclaw-channel-"):
         channel = find_openclaw_channel(surface_id)
@@ -73,6 +84,10 @@ def _channel_ids_from_runtime(employment_record: dict[str, Any], channels: list[
             seen.add(channel_id)
             deduped.append(channel_id)
     return deduped
+
+
+def _channel_descriptor(channel_id: str) -> dict[str, Any]:
+    return find_openclaw_channel(channel_id) or external_openclaw_channel_descriptor(channel_id)
 
 
 def _safe_secret_env_vars(llm_service: dict[str, Any], llm_runtime: dict[str, Any]) -> list[str]:
@@ -102,7 +117,7 @@ def build_runtime_selection_snapshot(
     provider_id = _provider_id_from_runtime(employment_record)
     channel_ids = _channel_ids_from_runtime(employment_record, channels)
     provider = find_openclaw_provider(provider_id) if provider_id else None
-    channel_entries = [find_openclaw_channel(channel_id) for channel_id in channel_ids]
+    channel_entries = [_channel_descriptor(channel_id) for channel_id in channel_ids]
     return {
         "schema": OPENCLAW_RUNTIME_SELECTION_SNAPSHOT_SCHEMA,
         "employment_id": employment_record.get("employment_id"),
@@ -153,6 +168,7 @@ def build_runtime_selection_snapshot(
 def _runtime_status(
     *,
     matrix_status: str,
+    provider_id: str | None,
     llm_health_status: str,
     provider_support: dict[str, Any] | None,
     channel_support: list[dict[str, Any]],
@@ -160,7 +176,9 @@ def _runtime_status(
     if matrix_status != "pass":
         return "needs_openclaw_catalog_update"
     if not provider_support:
-        return "non_openclaw_or_unresolved_provider"
+        if not provider_id:
+            return "non_openclaw_or_unresolved_provider"
+        return "ready_for_openclaw_gateway_unverified_provider"
     if llm_health_status.startswith("needs_"):
         return "needs_llm_configuration"
     if provider_support.get("support_level") == "openclaw_plugin_or_oauth_required":
@@ -201,6 +219,7 @@ def build_openclaw_employment_runtime_doctor(
     ]
     status = _runtime_status(
         matrix_status=str(support_matrix.get("status")),
+        provider_id=provider_id,
         llm_health_status=str(llm_health.get("status")),
         provider_support=provider_support,
         channel_support=channel_support,

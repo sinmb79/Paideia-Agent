@@ -10,7 +10,11 @@ from ai22b.talent_foundry.onboarding_choices import (
     resolve_chat_surface,
     resolve_llm_service,
 )
-from ai22b.talent_foundry.openclaw_compat import find_openclaw_channel, find_openclaw_provider
+from ai22b.talent_foundry.openclaw_compat import (
+    find_openclaw_channel,
+    find_openclaw_provider,
+    normalize_openclaw_channel_id,
+)
 from ai22b.talent_foundry.openclaw_support_matrix import build_openclaw_support_matrix
 
 
@@ -34,11 +38,15 @@ def _provider_id_from_selection(selected_llm_service: dict[str, Any]) -> str | N
         provider = find_openclaw_provider(provider_id)
         if provider:
             return str(provider["provider_id"])
+        if selected_llm_service.get("openclaw_provider_unverified"):
+            return str(provider_id)
     provider_id = selected_llm_service.get("openclaw_provider_id")
     if provider_id:
         provider = find_openclaw_provider(str(provider_id))
         if provider:
             return str(provider["provider_id"])
+        if selected_llm_service.get("openclaw_provider_unverified"):
+            return str(provider_id)
     return None
 
 
@@ -53,6 +61,8 @@ def _channel_ids_from_selection(chat_surface: dict[str, Any], channels: list[str
         channel = find_openclaw_channel(str(surface_channel))
         if channel is not None:
             selected.append(str(channel["channel_id"]))
+        elif chat_surface.get("external_openclaw_channel"):
+            selected.append(normalize_openclaw_channel_id(str(surface_channel)))
     deduped: list[str] = []
     seen: set[str] = set()
     for channel_id in selected:
@@ -65,6 +75,7 @@ def _channel_ids_from_selection(chat_surface: dict[str, Any], channels: list[str
 def _selection_status(
     *,
     matrix_status: str,
+    provider_id: str | None,
     provider_support: dict[str, Any] | None,
     channel_support: list[dict[str, Any]],
     llm_health: dict[str, Any],
@@ -72,7 +83,9 @@ def _selection_status(
     if matrix_status != "pass":
         return "needs_catalog_update"
     if provider_support is None:
-        return "needs_supported_openclaw_provider"
+        if not provider_id:
+            return "needs_supported_openclaw_provider"
+        return "ready_for_openclaw_gateway_unverified_provider"
     health_status = str(llm_health.get("status") or "")
     if health_status.startswith("needs_"):
         return "needs_llm_configuration"
@@ -120,6 +133,7 @@ def doctor_openclaw_selection(
     ]
     status = _selection_status(
         matrix_status=str(support_matrix.get("status")),
+        provider_id=provider_id,
         provider_support=provider_support,
         channel_support=channel_support,
         llm_health=llm_health,

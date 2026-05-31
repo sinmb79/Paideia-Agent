@@ -515,6 +515,30 @@ def openclaw_secret_env_candidates(provider_id: str, explicit: list[str] | None 
     return deduped
 
 
+def normalize_openclaw_provider_id(identifier: str) -> str:
+    return identifier.strip().casefold().replace("_", "-")
+
+
+def external_openclaw_provider_descriptor(provider_id: str) -> dict[str, Any]:
+    normalized = normalize_openclaw_provider_id(provider_id)
+    return {
+        "provider_id": normalized,
+        "service_id": "openclaw_gateway_http",
+        "label": f"External OpenClaw provider ({normalized})",
+        "engine": "openclaw_gateway_http",
+        "api_protocol": "openclaw_gateway_openai_chat_completions",
+        "base_url": None,
+        "secret_env_vars": [],
+        "aliases": [normalized, normalized.replace("-", "_")],
+        "status": "openclaw_gateway_owned_unverified_provider",
+        "external_openclaw_provider": True,
+        "claim_boundary": (
+            "Paideia does not claim a direct adapter for this provider; it preserves the provider/model selector "
+            "so an installed OpenClaw Gateway can own provider authentication and execution."
+        ),
+    }
+
+
 OPENCLAW_CHANNELS: list[dict[str, Any]] = [
     {"channel_id": "bluebubbles", "label": "BlueBubbles migration", "transport": "legacy config migration to imessage/imsg"},
     {"channel_id": "clickclack", "label": "ClickClack", "transport": "bot-token channel"},
@@ -696,6 +720,21 @@ def normalize_openclaw_channel_id(identifier: str) -> str:
         value = value.removeprefix("openclaw-channel-")
     normalized = value.casefold().replace("_", "-")
     return OPENCLAW_CHANNEL_ALIASES.get(normalized, normalized)
+
+
+def external_openclaw_channel_descriptor(identifier: str) -> dict[str, Any]:
+    channel_id = normalize_openclaw_channel_id(identifier)
+    return {
+        "channel_id": channel_id,
+        "label": f"External OpenClaw channel ({channel_id})",
+        "transport": "OpenClaw Gateway external channel",
+        "external_openclaw_channel": True,
+        "status": "openclaw_gateway_owned_unverified_channel",
+        "claim_boundary": (
+            "Paideia can preserve and route a normalized channel envelope for this id, but the installed "
+            "OpenClaw channel plugin remains responsible for platform auth, pairing, and delivery."
+        ),
+    }
 
 
 def find_openclaw_channel(identifier: str) -> dict[str, Any] | None:

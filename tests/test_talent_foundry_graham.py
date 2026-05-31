@@ -916,6 +916,99 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         )
         self.assertEqual(manifest_provider_doctor["openclaw_selection"]["provider_id"], "qwen-oauth")
 
+    def test_unknown_openclaw_provider_and_channel_are_preserved_for_gateway(self) -> None:
+        from ai22b.talent_foundry.channel_gateway import run_openclaw_channel_message
+        from ai22b.talent_foundry.openclaw_employment_runtime import build_openclaw_employment_runtime_doctor
+        from ai22b.talent_foundry.openclaw_selection_doctor import doctor_openclaw_selection
+        from ai22b.talent_foundry.onboarding_choices import resolve_chat_surface, resolve_llm_service
+
+        llm = resolve_llm_service(llm_service="future-openclaw/next-model")
+        chat = resolve_chat_surface("openclaw-channel-future-chat")
+        selection = doctor_openclaw_selection(
+            llm_service="future-openclaw/next-model",
+            chat_surface="openclaw-channel-future-chat",
+        )
+
+        self.assertEqual(llm["service_id"], "openclaw_gateway_http")
+        self.assertEqual(llm["openclaw_model"], "future-openclaw/next-model")
+        self.assertTrue(llm["openclaw_provider_unverified"])
+        self.assertEqual(llm["openclaw_gateway_route_reason"], "unknown_provider_model_deferred_to_openclaw_gateway")
+        self.assertEqual(chat["openclaw_channel_id"], "future-chat")
+        self.assertTrue(chat["external_openclaw_channel"])
+        self.assertEqual(selection["status"], "ready_for_openclaw_gateway_unverified_provider")
+        self.assertEqual(selection["openclaw_selection"]["provider_id"], "future-openclaw")
+        self.assertEqual(selection["openclaw_selection"]["channels"][0]["channel_id"], "future-chat")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            employment_record = {
+                "schema": "ai-talent-local-employment/v1",
+                "employment_id": "employment-future",
+                "employer": "Boss",
+                "relationship": "installed_ai_talent_hired_as_local_agent",
+                "install_id": "future-install",
+                "agent": {"name": "future-junior", "role": "Gateway test agent", "major_goal": "test"},
+                "entrypoints": {
+                    "agent_manifest": "agent_manifest.json",
+                    "learning_ledger": "learning_ledger.json",
+                    "memory_substrate": "memory_substrate.json",
+                    "chat_log": "employment_chat_log.jsonl",
+                    "last_chat": "last_hired_agent_chat.json",
+                },
+                "guardrails": [],
+                "llm_service": llm,
+                "chat_surface": chat,
+                "llm_runtime": {
+                    "schema": "ai-talent-llm-runtime/v1",
+                    "service": "openclaw_gateway_http",
+                    "engine": "openclaw_gateway_http",
+                    "model": "future-openclaw/next-model",
+                    "model_path": None,
+                    "network_access": "localhost_only",
+                    "openclaw_provider_id": "future-openclaw",
+                    "openclaw_model": "future-openclaw/next-model",
+                    "openclaw_agent_target": "openclaw/default",
+                    "api_protocol": "openclaw_gateway_openai_chat_completions",
+                    "base_url": "http://127.0.0.1:18789/v1",
+                    "secret_env_vars": [],
+                    "identity_policy": "application_engine_not_identity",
+                },
+                "growth_after_hire": {"continues": True},
+                "status": "active",
+            }
+            (root / "employment_record.json").write_text(json.dumps(employment_record, ensure_ascii=False), encoding="utf-8")
+            (root / "agent_manifest.json").write_text(
+                json.dumps(
+                    {
+                        "schema": "ai-talent-agent-manifest/v1",
+                        "agent": {"name": "future-junior", "role": "Gateway test agent", "major_goal": "test"},
+                        "memory_profile": {"procedural_principles": []},
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            (root / "learning_ledger.json").write_text(
+                json.dumps({"schema": "ai-talent-learning-ledger/v1", "promoted_experiences": []}, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            runtime_doctor = build_openclaw_employment_runtime_doctor(
+                root / "employment_record.json",
+                channels=["future-chat"],
+            )
+            channel_run = run_openclaw_channel_message(
+                root / "employment_record.json",
+                channel_id="future-chat",
+                message="hello",
+                output_path=root / "future_channel_run.json",
+            )
+
+        self.assertEqual(runtime_doctor["status"], "ready_for_openclaw_gateway_unverified_provider")
+        self.assertEqual(runtime_doctor["runtime_selection"]["llm"]["openclaw_provider_id"], "future-openclaw")
+        self.assertEqual(runtime_doctor["runtime_selection"]["chat"]["openclaw_channels"][0]["channel_id"], "future-chat")
+        self.assertEqual(channel_run["inbound"]["channel"]["channel_id"], "future-chat")
+        self.assertEqual(channel_run["runtime_selection"]["chat"]["openclaw_channels"][0]["channel_id"], "future-chat")
+
     def test_channel_connector_catalog_covers_every_openclaw_channel(self) -> None:
         from ai22b.talent_foundry.channel_connectors import (
             build_openclaw_channel_connector_catalog,
@@ -1789,6 +1882,48 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         )
         self.assertEqual(cli_result, 0)
         self.assertTrue(cli_manifest_exists)
+
+    def test_import_openclaw_config_preserves_new_provider_and_channel_for_gateway(self) -> None:
+        from ai22b.talent_foundry.openclaw_config_import import import_openclaw_config
+
+        with tempfile.TemporaryDirectory() as tmp:
+            config_path = Path(tmp) / ".openclaw" / "openclaw.json"
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "agents": {"defaults": {"model": {"primary": "future-openclaw/next-model"}}},
+                        "models": {"providers": {"future-openclaw": {"token": "source-future-token"}}},
+                        "channels": {
+                            "futurechat": {"botToken": "source-future-channel-token"},
+                            "modelByChannel": {"futurechat": {"boss": "future-openclaw/next-model"}},
+                        },
+                        "bindings": [{"match": {"channel": "futurechat", "conversation": "boss"}, "agentId": "main"}],
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            output_dir = Path(tmp) / "imported"
+            imported = import_openclaw_config(config_path, output_dir=output_dir)
+            setup_plan = json.loads(Path(imported["artifacts"]["setup_plan"]).read_text(encoding="utf-8"))
+            suggested_answers = json.loads(Path(imported["artifacts"]["suggested_answers"]).read_text(encoding="utf-8"))
+            redacted_snapshot = Path(imported["artifacts"]["redacted_snapshot"]).read_text(encoding="utf-8")
+
+        self.assertEqual(imported["paideia_selection"]["llm_service"], "future-openclaw/next-model")
+        self.assertFalse(imported["paideia_selection"]["provider_supported"])
+        self.assertTrue(imported["paideia_selection"]["provider_preserved_for_gateway"])
+        self.assertFalse(imported["paideia_selection"]["all_detected_channels_supported"])
+        self.assertTrue(imported["paideia_selection"]["all_detected_channels_preserved_for_gateway"])
+        self.assertIn("futurechat", imported["detected"]["channel_ids"])
+        self.assertIn("futurechat", imported["detected"]["external_or_unverified_channel_ids"])
+        self.assertIn("future-openclaw", imported["detected"]["unsupported_provider_ids"])
+        self.assertIn("future-openclaw", {item["provider_id"] for item in setup_plan["provider_setup"]})
+        self.assertIn("futurechat", {item["channel_id"] for item in setup_plan["channel_setup"]})
+        self.assertEqual(suggested_answers["chat_surface"], "openclaw-channel-futurechat")
+        self.assertNotIn("source-future-token", redacted_snapshot)
+        self.assertNotIn("source-future-channel-token", redacted_snapshot)
 
     def test_start_console_prefills_llm_and_chat_from_openclaw_config(self) -> None:
         from ai22b.talent_foundry.cli import main as cli_main

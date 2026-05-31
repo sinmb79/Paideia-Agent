@@ -6,8 +6,12 @@ from pathlib import Path
 from typing import Any
 
 from ai22b.talent_foundry.openclaw_compat import (
+    external_openclaw_channel_descriptor,
+    external_openclaw_provider_descriptor,
     find_openclaw_channel,
     find_openclaw_provider,
+    normalize_openclaw_channel_id,
+    normalize_openclaw_provider_id,
     openclaw_secret_env_candidates,
     openclaw_channel_manifest,
     openclaw_chat_surface_entries,
@@ -309,6 +313,13 @@ def resolve_llm_service(
             else:
                 requested = provider_from_model["service_id"]
                 llm_model = llm_model or model_id
+        elif provider_id.strip() and model_id.strip():
+            provider_model = f"{normalize_openclaw_provider_id(provider_id)}/{model_id.strip()}"
+            provider_from_model = external_openclaw_provider_descriptor(provider_id)
+            requested = "openclaw_gateway_http"
+            llm_model = llm_model or provider_model
+            gateway_agent_target = gateway_agent_target or "openclaw/default"
+            auto_routed_manifest_provider = True
     by_id = _catalog_by_id(LLM_SERVICE_CATALOG)
     service = by_id.get(requested)
     if service is None:
@@ -357,9 +368,16 @@ def resolve_llm_service(
         resolved["openclaw_model"] = f"{resolved['openclaw_provider_id']}/{llm_model}"
     if provider_from_model:
         resolved["openclaw_provider"] = provider_from_model
+        if provider_from_model.get("external_openclaw_provider"):
+            resolved["openclaw_provider_id"] = provider_from_model["provider_id"]
+            resolved["openclaw_provider_unverified"] = True
     if auto_routed_manifest_provider:
         resolved["openclaw_gateway_auto_routed"] = True
-        resolved["openclaw_gateway_route_reason"] = "manifest_only_provider_requires_openclaw_plugin_or_oauth"
+        resolved["openclaw_gateway_route_reason"] = (
+            "unknown_provider_model_deferred_to_openclaw_gateway"
+            if provider_from_model and provider_from_model.get("external_openclaw_provider")
+            else "manifest_only_provider_requires_openclaw_plugin_or_oauth"
+        )
     if resolved.get("openclaw_provider_id") and resolved.get("engine") != "openclaw_gateway_http":
         resolved["secret_env_vars"] = openclaw_secret_env_candidates(
             str(resolved["openclaw_provider_id"]),
@@ -397,6 +415,20 @@ def resolve_chat_surface(chat_surface: str | None = None) -> dict[str, Any]:
         if channel is not None:
             requested = f"openclaw-channel-{channel['channel_id']}"
     if requested not in by_id:
+        if requested.startswith("openclaw-channel-"):
+            channel = external_openclaw_channel_descriptor(requested)
+            channel_id = normalize_openclaw_channel_id(requested)
+            return {
+                "id": f"openclaw-channel-{channel_id}",
+                "label": f"OpenClaw {channel['label']}",
+                "status": "openclaw_gateway_owned_unverified_channel",
+                "entrypoint": "adapter_manifests/openclaw_style.json",
+                "best_for": "OpenClaw Gateway-owned external channel route",
+                "channel_policy": "external_openclaw_channel_disabled_until_gateway_plugin_review",
+                "openclaw_channel_id": channel_id,
+                "transport": channel["transport"],
+                "external_openclaw_channel": True,
+            }
         raise ValueError(f"Unsupported chat surface: {requested}")
     return deepcopy(by_id[requested])
 

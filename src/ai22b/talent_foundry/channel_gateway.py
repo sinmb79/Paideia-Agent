@@ -9,6 +9,7 @@ from typing import Any
 from ai22b.talent_foundry.memory_substrate import run_chat_turn_from_employment
 from ai22b.talent_foundry.openclaw_employment_runtime import build_runtime_selection_snapshot
 from ai22b.talent_foundry.openclaw_compat import (
+    external_openclaw_channel_descriptor,
     find_openclaw_channel,
     openclaw_channel_manifest,
 )
@@ -46,6 +47,8 @@ def _load_employment(employment_record_path: Path) -> dict[str, Any]:
 def _channel_or_error(channel_id: str) -> dict[str, Any]:
     channel = find_openclaw_channel(channel_id)
     if channel is None:
+        if channel_id.strip():
+            return external_openclaw_channel_descriptor(channel_id)
         raise ValueError(f"Unsupported OpenClaw channel: {channel_id}")
     return channel
 
