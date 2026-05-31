@@ -11,6 +11,7 @@ This document maps reference programs, papers, and reports to concrete Paideia A
 | OpenClaw agent runtime docs | OpenAI/Codex can be a runtime surface without making the model provider equal to the agent identity. | Paideia records `llm_identity_policy: application_engine_not_identity` and stores talent identity in local education artifacts. |
 | Hermes Agent repository | Modern agents expose setup, model switching, CLI chat, tools, skills, memory, gateways, and migration. | Paideia adds install kits, doctor checks, skill migration wrappers, adapter manifests, and the `Reasoning Ledger` as a growth record. |
 | OpenHands | Workspace agents should leave inspectable files, plans, traces, and runnable evidence. | Hired-agent workspace/dataflow runs write local plans, results, traces, and learning promotion records. |
+| Agent ID Card | Agent identity should bind display name, owner, role, scope, credentials, and verification status. | Planned integration: export an Agent ID Card payload from the hiring dossier and installed manifest, with registration disabled unless the owner explicitly runs it. |
 
 ## Hardware And Dataflow Benchmarks
 
@@ -55,6 +56,7 @@ Detailed note: [Tesla-style dataflow board benchmark](tesla_board_benchmark.md).
 - `Reasoning kibo` remains an internal file name for compatibility, but the public term is **Reasoning Ledger / Ariadne Thread**.
 - The LLM is a researcher and dialogue engine; the trained talent identity comes from local records.
 - The hiring dossier is a first-class product artifact, not an afterthought.
+- External identity is planned as a dossier/install-manifest export path, not as automatic upload.
 - External gateway channels and migrated skills stay disabled until owner review and doctor checks pass.
 - The earlier Shinyong growth system is not discarded; it is a legacy life-development foundation for future Paideia talents. See [Legacy 22B-AI system integration](legacy_system_integration.md).
 - Boss's Tesla board analogy is reflected as Memory Board Architecture, not as a claim that Paideia implements Tesla hardware.
@@ -67,6 +69,7 @@ Detailed note: [Tesla-style dataflow board benchmark](tesla_board_benchmark.md).
 - OpenClaw onboarding reference: https://docs.openclaw.ai/reference/wizard
 - OpenClaw model providers: https://docs.openclaw.ai/providers/models
 - OpenClaw agent runtimes: https://docs.openclaw.ai/concepts/agent-runtimes
+- Agent ID Card: https://www.agentidcard.org/
 - Hermes Agent repository: https://github.com/NousResearch/hermes-agent
 - OpenHands overview: https://docs.openhands.dev/overview/introduction
 - Grace Hopper public biography: https://president.yale.edu/biography-grace-murray-hopper

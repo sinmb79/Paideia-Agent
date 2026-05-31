@@ -8,6 +8,17 @@ The project takes inspiration from modern agent systems such as [Hermes Agent](h
 
 > Research preview: this repository contains program code, public metadata, test fixtures, and documentation. Private training outputs, local memories, personal data, model checkpoints, and generated run artifacts stay outside the source tree.
 
+## Origin
+
+Paideia Agent starts from a simple question: what if an AI agent could extend you, or what if a field role model's learning path could become the curriculum for a local AI talent that helps you work?
+
+The project does not claim to clone real people. It reconstructs sourced growth conditions, curricula, tests, stress, failure, feedback, and work practice so each talent can form a reviewable Reasoning Ledger before it is hired as an agent.
+
+Read the longer manifesto:
+
+- [Project Manifesto](docs/project_manifesto.md)
+- [프로젝트 선언문](docs/project_manifesto.ko.md)
+
 ## What Makes It Different
 
 Most agent runtimes begin with an assistant and add tools, memory, channels, and skills. Paideia begins with a curriculum:
@@ -16,6 +27,7 @@ Most agent runtimes begin with an assistant and add tools, memory, channels, and
 - **Memory substrate, not full transcript replay**: the runtime selects bounded summaries, learning records, and procedural cues instead of injecting every old conversation.
 - **Reasoning Ledger / Ariadne Thread**: a reviewable ledger of hypotheses, evidence, mistakes, corrected principles, study habits, and work patterns. It is not hidden chain-of-thought. The internal compatibility artifact is still named `reasoning_kibo.jsonl`.
 - **Role-model process replication**: a role model contributes sourced learning conditions and curriculum pressure, not a preloaded personality or worldview.
+- **Parent-controlled projection swarm**: one hired talent can split work into task projections, synthesize their findings, and promote only reviewed learning back into the parent record.
 - **Local-first ownership**: the owner keeps private data, generated memories, voice assets, local curricula, and installed agent bundles on their own machine.
 - **Safe skill migration**: Hermes/OpenClaw/generic skills can be imported, but they are quarantined and disabled until reviewed.
 
@@ -322,6 +334,9 @@ Securities-research talents may help organize evidence, compare sources, draft r
 ## Documentation
 
 - [Paideia Agent overview](docs/paideia_center.md)
+- [Project Manifesto](docs/project_manifesto.md)
+- [프로젝트 선언문](docs/project_manifesto.ko.md)
+- [Manifesto alignment review and roadmap](docs/manifesto_alignment_review.ko.md)
 - [Hermes/OpenClaw benchmark notes](docs/paideia_agent_benchmark.md)
 - [English benchmark summary](docs/paideia_agent_benchmark.en.md)
 - [Research basis](docs/research_basis.md)
@@ -337,6 +352,7 @@ Paideia borrows useful operational patterns from agent runtimes while keeping a 
 - Hermes Agent foregrounds a learning loop, skills, persistent memory, MCP integration, and migration from OpenClaw.
 - OpenClaw foregrounds workspace files, skills, multi-channel routing, and configurable local agent workspaces.
 - Paideia keeps the education record as the source of identity and treats the LLM as an application engine, not the agent's self.
+- Agent identity systems such as [Agent ID Card](https://www.agentidcard.org/) are a planned external identity integration path. Registration and external upload must remain explicit user actions.
 
 Primary references:
 
