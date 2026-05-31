@@ -419,8 +419,12 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertIn("qwen-oauth", all_provider_ids)
         self.assertIn("pixverse", all_provider_ids)
         self.assertIn("ds4", all_provider_ids)
+        self.assertIn("google-gemini-cli", all_provider_ids)
+        self.assertIn("claude-max-api-proxy", all_provider_ids)
         self.assertIn("discord", channel_ids)
         self.assertIn("bluebubbles", channel_ids)
+        self.assertIn("clickclack", channel_ids)
+        self.assertIn("qa-channel", channel_ids)
         self.assertIn("telegram", channel_ids)
         self.assertIn("whatsapp", channel_ids)
         self.assertIn("webchat", channel_ids)
@@ -436,6 +440,30 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertGreaterEqual(connectors["summary"]["channel_count"], 26)
         self.assertEqual(channel_doctor["schema"], "ai22b-openclaw-channel-connector-doctor/v1")
         self.assertEqual(channel_doctor["results"][0]["channel_id"], "telegram")
+
+    def test_openclaw_parity_audit_covers_current_docs_snapshot(self) -> None:
+        from ai22b.talent_foundry.cli import main as cli_main
+        from ai22b.talent_foundry.openclaw_compat import find_openclaw_channel, find_openclaw_provider
+        from ai22b.talent_foundry.openclaw_parity import audit_openclaw_parity
+
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "openclaw_parity.json"
+            audit = audit_openclaw_parity(output_path=output)
+            cli_output = Path(tmp) / "openclaw_parity_cli.json"
+            cli_result = cli_main(["audit-openclaw-parity", "--output", str(cli_output), "--fail-on-missing"])
+            cli_audit = json.loads(cli_output.read_text(encoding="utf-8"))
+
+        self.assertEqual(audit["schema"], "ai22b-openclaw-parity-audit/v1")
+        self.assertEqual(audit["status"], "pass")
+        self.assertEqual(audit["coverage"]["providers"]["missing_ids"], [])
+        self.assertEqual(audit["coverage"]["channels"]["missing_ids"], [])
+        self.assertIn("https://docs.openclaw.ai/providers", audit["source_snapshots"]["providers"]["source_urls"])
+        self.assertIn("https://docs.openclaw.ai/llms.txt", audit["source_snapshots"]["channels"]["source_urls"])
+        self.assertEqual(find_openclaw_provider("google-gemini-cli")["provider_id"], "google-gemini-cli")
+        self.assertEqual(find_openclaw_channel("click-clack")["channel_id"], "clickclack")
+        self.assertEqual(find_openclaw_channel("qa_channel")["channel_id"], "qa-channel")
+        self.assertEqual(cli_result, 0)
+        self.assertEqual(cli_audit["status"], "pass")
 
     def test_channel_connector_catalog_covers_every_openclaw_channel(self) -> None:
         from ai22b.talent_foundry.channel_connectors import (
@@ -457,6 +485,8 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertEqual(catalog["summary"]["generic_normalized_gateway_ready_count"], len(manifest_ids))
         self.assertEqual(by_id["bluebubbles"]["connector_status"], "legacy_openclaw_config_migration_required")
         self.assertEqual(by_id["imessage"]["connector_status"], "openclaw_bundled_imsg_bridge_required")
+        self.assertEqual(by_id["clickclack"]["connector_status"], "external_plugin_required")
+        self.assertEqual(by_id["qa-channel"]["connector_status"], "openclaw_synthetic_qa_plugin_required")
         self.assertTrue(by_id["telegram"]["direct_raw_ingress_ready"])
         self.assertTrue(by_id["telegram"]["direct_delivery_ready"])
         self.assertEqual(by_id["whatsapp"]["connector_status"], "external_plugin_required_qr_pairing")

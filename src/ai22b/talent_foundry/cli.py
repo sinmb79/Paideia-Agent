@@ -62,6 +62,7 @@ from ai22b.talent_foundry.onboarding_choices import (
 from ai22b.talent_foundry.openclaw_config_import import import_openclaw_config
 from ai22b.talent_foundry.openclaw_compat import openclaw_channel_manifest, openclaw_provider_manifest
 from ai22b.talent_foundry.openclaw_bridge_setup import build_openclaw_bridge_setup_kit
+from ai22b.talent_foundry.openclaw_parity import audit_openclaw_parity
 from ai22b.talent_foundry.openclaw_runtime_bundle import build_openclaw_runtime_bundle
 from ai22b.talent_foundry.program import create_talent_plan
 from ai22b.talent_foundry.program_manifest import build_public_program_manifest
@@ -160,6 +161,13 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     doctor_channel_connectors.add_argument("--channel", action="append", default=[])
     doctor_channel_connectors.add_argument("--output", required=True)
+
+    audit_openclaw_parity_command = subparsers.add_parser(
+        "audit-openclaw-parity",
+        help="Audit Paideia's OpenClaw provider/channel catalog against the checked official docs snapshot.",
+    )
+    audit_openclaw_parity_command.add_argument("--output", required=True)
+    audit_openclaw_parity_command.add_argument("--fail-on-missing", action="store_true")
 
     import_openclaw_config_command = subparsers.add_parser(
         "import-openclaw-config",
@@ -790,6 +798,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             output_path=Path(args.output),
         )
         print(str(Path(args.output)))
+        return 0
+
+    if args.command == "audit-openclaw-parity":
+        result = audit_openclaw_parity(output_path=Path(args.output))
+        print(str(Path(args.output)))
+        if args.fail_on_missing and result["status"] != "pass":
+            return 1
         return 0
 
     if args.command == "import-openclaw-config":

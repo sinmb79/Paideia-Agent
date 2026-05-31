@@ -21,6 +21,13 @@ CHANNEL_CONNECTOR_OVERRIDES: dict[str, dict[str, Any]] = {
         "required_env_vars": [],
         "setup": "Current OpenClaw removed BlueBubbles support. Migrate old channels.bluebubbles settings to channels.imessage, verify imsg on the Messages Mac, then use the imessage bridge.",
     },
+    "clickclack": {
+        "connector_status": "external_plugin_required",
+        "ingress": "clickclack_bot_event_to_normalized_gateway",
+        "delivery": "clickclack_bot_token_plugin",
+        "required_env_vars": ["CLICKCLACK_BOT_TOKEN"],
+        "setup": "Configure the ClickClack bot-token channel plugin, then bridge allowlisted conversations through the Paideia gateway.",
+    },
     "discord": {
         "connector_status": "paideia_direct_ingress_delivery_ready",
         "ingress": "raw_MESSAGE_CREATE_or_normalized_gateway",
@@ -125,6 +132,13 @@ CHANNEL_CONNECTOR_OVERRIDES: dict[str, dict[str, Any]] = {
         "delivery": "nostr_dm_plugin",
         "required_env_vars": ["NOSTR_PRIVATE_KEY", "NOSTR_RELAYS"],
         "setup": "Configure Nostr relay/private key handling outside Paideia artifacts.",
+    },
+    "qa-channel": {
+        "connector_status": "openclaw_synthetic_qa_plugin_required",
+        "ingress": "qa_channel_scenario_event_to_normalized_gateway",
+        "delivery": "qa_channel_scenario_capture",
+        "required_env_vars": [],
+        "setup": "Use OpenClaw's QA channel scenarios for deterministic channel behavior tests; no real external chat is contacted.",
     },
     "qq-bot": {
         "connector_status": "external_plugin_required",

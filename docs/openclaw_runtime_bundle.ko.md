@@ -72,6 +72,18 @@ ai22b-talent-foundry build-openclaw-bridge-setup-kit `
 - `openclaw_bridge_smoke_tests.json`: gateway 시작, normalized payload 전송, Telegram/Discord/Slack raw event 변환을 위한 smoke test 명령과 payload 경로입니다.
 - `smoke_test_payloads/*.json`: 실제 gateway에 넣어볼 수 있는 샘플 payload입니다.
 
+## OpenClaw parity 감사
+
+OpenClaw가 지원하는 provider와 channel 목록이 바뀌면 Paideia catalog도 같이 따라가야 합니다. 다음 명령은 확인된 OpenClaw 공식 문서 snapshot과 Paideia의 로컬 catalog를 비교해 누락된 provider/channel이 있는지 검사합니다.
+
+```powershell
+ai22b-talent-foundry audit-openclaw-parity `
+  --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_parity_audit.json" `
+  --fail-on-missing
+```
+
+현재 snapshot은 OpenClaw `providers`, `channels`, `llms.txt`, `gateway/config-channels` 문서를 기준으로 합니다. 이 감사는 catalog/selector parity를 증명하지만, 모든 외부 OAuth나 channel plugin이 이미 보스 컴퓨터에서 인증되었다는 뜻은 아닙니다. 실제 live 연결은 bridge setup kit와 doctor 명령으로 따로 확인합니다.
+
 ## iMessage/BlueBubbles 주의
 
 현재 OpenClaw 문서는 iMessage 지원을 `imessage`/`imsg` 경로로 안내합니다. `channels.bluebubbles`는 기존 설정을 `channels.imessage`로 옮기는 마이그레이션 대상으로만 남겨두었습니다. Paideia도 이 기준에 맞춰 `bluebubbles`는 legacy migration, `imessage`는 현재 OpenClaw식 imsg bridge로 표시합니다.

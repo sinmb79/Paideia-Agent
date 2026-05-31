@@ -517,6 +517,7 @@ def openclaw_secret_env_candidates(provider_id: str, explicit: list[str] | None 
 
 OPENCLAW_CHANNELS: list[dict[str, Any]] = [
     {"channel_id": "bluebubbles", "label": "BlueBubbles migration", "transport": "legacy config migration to imessage/imsg"},
+    {"channel_id": "clickclack", "label": "ClickClack", "transport": "bot-token channel"},
     {"channel_id": "discord", "label": "Discord", "transport": "Discord Bot API + Gateway"},
     {"channel_id": "slack", "label": "Slack", "transport": "Bolt SDK"},
     {"channel_id": "telegram", "label": "Telegram", "transport": "Bot API via grammY"},
@@ -531,6 +532,7 @@ OPENCLAW_CHANNELS: list[dict[str, Any]] = [
     {"channel_id": "mattermost", "label": "Mattermost", "transport": "Bot API + WebSocket"},
     {"channel_id": "nextcloud-talk", "label": "Nextcloud Talk", "transport": "Nextcloud Talk"},
     {"channel_id": "nostr", "label": "Nostr", "transport": "NIP-04 DM"},
+    {"channel_id": "qa-channel", "label": "QA Channel", "transport": "synthetic Slack-class QA plugin"},
     {"channel_id": "qq-bot", "label": "QQ Bot", "transport": "QQ Bot API"},
     {"channel_id": "sms", "label": "SMS", "transport": "Twilio-backed Gateway webhook"},
     {"channel_id": "synology-chat", "label": "Synology Chat", "transport": "webhooks"},
@@ -549,10 +551,16 @@ OPENCLAW_CHANNEL_ALIASES: dict[str, str] = {
     "googlechat": "google-chat",
     "google_chat": "google-chat",
     "gchat": "google-chat",
+    "click-clack": "clickclack",
+    "click_clack": "clickclack",
     "teams": "microsoft-teams",
     "microsoftteams": "microsoft-teams",
     "microsoft_teams": "microsoft-teams",
+    "msteams": "microsoft-teams",
     "ms-teams": "microsoft-teams",
+    "qa": "qa-channel",
+    "qachannel": "qa-channel",
+    "qa_channel": "qa-channel",
     "qq": "qq-bot",
     "qqbot": "qq-bot",
     "synology": "synology-chat",
@@ -563,6 +571,7 @@ OPENCLAW_CHANNEL_ALIASES: dict[str, str] = {
     "voicecall": "voice-call",
     "zalo_personal": "zalo-personal",
     "zalopersonal": "zalo-personal",
+    "zalouser": "zalo-personal",
 }
 
 
