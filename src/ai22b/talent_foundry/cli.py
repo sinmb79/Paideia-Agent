@@ -73,6 +73,7 @@ from ai22b.talent_foundry.openclaw_native_handoff import (
 from ai22b.talent_foundry.openclaw_parity import audit_openclaw_parity
 from ai22b.talent_foundry.openclaw_provider_auth import doctor_openclaw_provider_auth
 from ai22b.talent_foundry.openclaw_runtime_bundle import build_openclaw_runtime_bundle
+from ai22b.talent_foundry.openclaw_runtime_preflight import doctor_openclaw_runtime_preflight
 from ai22b.talent_foundry.openclaw_selection_doctor import doctor_openclaw_selection, render_openclaw_selection_summary
 from ai22b.talent_foundry.openclaw_support_matrix import build_openclaw_support_matrix
 from ai22b.talent_foundry.program import create_talent_plan
@@ -279,6 +280,35 @@ def _build_parser() -> argparse.ArgumentParser:
     build_runtime_bundle.add_argument("--existing-openclaw-config")
     build_runtime_bundle.add_argument("--config-action", choices=["keep", "modify", "reset"], default="modify")
     build_runtime_bundle.add_argument("--output-dir", required=True)
+
+    doctor_runtime_preflight = subparsers.add_parser(
+        "doctor-openclaw-runtime-preflight",
+        help="Doctor an OpenClaw runtime bundle across provider auth, channel pairing, native handoff, Gateway LLM, and channel flow.",
+    )
+    doctor_runtime_preflight.add_argument("--runtime-bundle", required=True)
+    doctor_runtime_preflight.add_argument("--output", required=True)
+    doctor_runtime_preflight.add_argument("--output-dir")
+    doctor_runtime_preflight.add_argument(
+        "--probe-openclaw",
+        action="store_true",
+        help="Run read-only OpenClaw CLI probes when the openclaw binary is on PATH.",
+    )
+    doctor_runtime_preflight.add_argument(
+        "--probe-gateway",
+        action="store_true",
+        help="Probe the OpenClaw Gateway /v1/models endpoint when Gateway is running.",
+    )
+    doctor_runtime_preflight.add_argument(
+        "--probe-chat",
+        action="store_true",
+        help="Probe the OpenClaw Gateway /v1/chat/completions endpoint with a short smoke message.",
+    )
+    doctor_runtime_preflight.add_argument(
+        "--run-channel-flow",
+        action="store_true",
+        help="Run an offline channel-flow dry run through the hired Paideia agent.",
+    )
+    doctor_runtime_preflight.add_argument("--timeout-seconds", type=int, default=20)
 
     doctor_gateway_llm = subparsers.add_parser(
         "doctor-openclaw-gateway-llm",
@@ -1090,6 +1120,20 @@ def main(argv: Sequence[str] | None = None) -> int:
             config_action=args.config_action,
         )
         print(str(Path(bundle["artifacts"]["manifest"])))
+        return 0
+
+    if args.command == "doctor-openclaw-runtime-preflight":
+        doctor_openclaw_runtime_preflight(
+            Path(args.runtime_bundle),
+            output_path=Path(args.output),
+            output_dir=Path(args.output_dir) if args.output_dir else None,
+            probe_openclaw=args.probe_openclaw,
+            probe_gateway=args.probe_gateway,
+            probe_chat=args.probe_chat,
+            run_channel_flow=args.run_channel_flow,
+            timeout_seconds=args.timeout_seconds,
+        )
+        print(str(Path(args.output)))
         return 0
 
     if args.command == "doctor-openclaw-gateway-llm":

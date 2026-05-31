@@ -206,6 +206,15 @@ ai22b-talent-foundry build-openclaw-runtime-bundle `
   --output-dir "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_runtime_bundle"
 ```
 
+실제 사용 전에 runtime preflight를 실행하면 현재 provider 인증, 채널 QR/session/local bridge 준비, native handoff 계획, Gateway LLM 계약, 선택적 channel-flow dry run을 한 번에 점검할 수 있습니다. 기본 실행은 네트워크를 호출하지 않고, `--probe-openclaw`, `--probe-gateway`, `--probe-chat`을 명시했을 때만 설치된 OpenClaw 또는 Gateway에 probe를 보냅니다.
+
+```powershell
+ai22b-talent-foundry doctor-openclaw-runtime-preflight `
+  --runtime-bundle "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_runtime_bundle\openclaw_runtime_bundle.json" `
+  --run-channel-flow `
+  --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_runtime_bundle\openclaw_runtime_preflight.json"
+```
+
 OpenClaw 설치본에 넘기기 전에는 native handoff doctor를 먼저 실행합니다. 기본값은 비파괴 점검이며 OpenClaw 명령을 실행하지 않습니다. 설치된 OpenClaw CLI의 읽기성 상태까지 확인하려면 `--probe-openclaw`를 추가합니다.
 
 ```powershell

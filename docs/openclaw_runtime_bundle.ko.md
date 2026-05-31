@@ -60,6 +60,19 @@ ai22b-talent-foundry build-openclaw-runtime-bundle `
 
 `--config-action`은 OpenClaw wizard의 기존 설정 처리 방식에 맞춰 `keep`, `modify`, `reset` 중 하나를 사용합니다. Paideia는 어떤 경우에도 기존 `openclaw.json`을 직접 삭제하거나 덮어쓰지 않습니다.
 
+## Runtime preflight
+
+runtime bundle을 만든 뒤 실제 사용 전에 다음 명령으로 전체 준비 상태를 한 번에 점검합니다. 기본 실행은 정적 점검과 offline channel-flow dry run만 수행하며, 네트워크나 OpenClaw CLI probe는 명시 옵션을 붙였을 때만 실행됩니다.
+
+```powershell
+ai22b-talent-foundry doctor-openclaw-runtime-preflight `
+  --runtime-bundle "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_runtime_bundle\openclaw_runtime_bundle.json" `
+  --run-channel-flow `
+  --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_runtime_bundle\openclaw_runtime_preflight.json"
+```
+
+preflight는 `openclaw_provider_auth_doctor.current.json`, `openclaw_channel_pairing_doctor.current.json`, `openclaw_native_handoff_doctor.json`, Gateway 선택 시 `openclaw_gateway_llm_doctor.preflight.json`, channel-flow 선택 시 `openclaw_channel_flow_doctor.preflight.json`을 함께 만듭니다. 결과 상태는 `pass`, `ready_with_owner_steps`, `needs_attention` 중 하나로 요약됩니다.
+
 ## Bridge setup kit 만들기
 
 runtime bundle이나 import manifest를 만든 뒤에는 다음 명령으로 실제 연결 준비물을 생성합니다.

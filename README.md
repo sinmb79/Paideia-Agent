@@ -441,6 +441,17 @@ The bundle writes:
 - `openclaw_bridge_setup/`: provider/channel plugin plans, deny-by-default access config, env template, and smoke-test payloads generated from the hired runtime selection.
 - `openclaw_existing_config_review.json`: OpenClaw-style existing config detection with `keep`, `modify`, or `reset` semantics. `modify` writes a redacted merge preview; `reset` writes a plan only and never deletes or overwrites the config.
 
+Before live use, run the runtime preflight. It re-checks the current provider auth state, channel QR/session/local-bridge readiness, native handoff plan, Gateway LLM contract when selected, and an optional offline channel-flow dry run from the installed Paideia talent:
+
+```powershell
+ai22b-talent-foundry doctor-openclaw-runtime-preflight `
+  --runtime-bundle "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_runtime_bundle\openclaw_runtime_bundle.json" `
+  --run-channel-flow `
+  --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_runtime_bundle\openclaw_runtime_preflight.json"
+```
+
+The preflight writes `openclaw_runtime_preflight.json` plus fresh `openclaw_provider_auth_doctor.current.json`, `openclaw_channel_pairing_doctor.current.json`, and, when applicable, native handoff, Gateway LLM, and channel-flow reports. It stores no secret values and only sends live probes when `--probe-openclaw`, `--probe-gateway`, or `--probe-chat` is explicitly passed.
+
 Before handing the bundle to an installed OpenClaw runtime, doctor the native handoff. By default this is non-mutating and does not execute OpenClaw; add `--probe-openclaw` only when you want read-only CLI probes such as gateway/channel status:
 
 ```powershell

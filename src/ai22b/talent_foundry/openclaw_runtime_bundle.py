@@ -1089,6 +1089,17 @@ def build_openclaw_runtime_bundle(
                 f"--runtime-bundle {manifest_path} "
                 f"--output-dir {bridge_setup_dir}"
             ),
+            "doctor_runtime_preflight": (
+                "ai22b-talent-foundry doctor-openclaw-runtime-preflight "
+                f"--runtime-bundle {manifest_path} "
+                f"--output {output_dir / 'openclaw_runtime_preflight.json'}"
+            ),
+            "doctor_runtime_preflight_with_channel_flow": (
+                "ai22b-talent-foundry doctor-openclaw-runtime-preflight "
+                f"--runtime-bundle {manifest_path} "
+                "--run-channel-flow "
+                f"--output {output_dir / 'openclaw_runtime_preflight.channel_flow.json'}"
+            ),
             "openclaw_native_setup": native_handoff["operator_commands"]["setup_workspace"],
             "openclaw_native_gateway": native_handoff["operator_commands"]["run_gateway"],
             "rebuild_with_channel_model": (
@@ -1107,6 +1118,7 @@ def build_openclaw_runtime_bundle(
             "Review openclaw_config_patch.json before merging into an existing OpenClaw config.",
             "Review openclaw_native_handoff.json when you want OpenClaw itself to own provider auth, channel plugins, gateway sessions, and platform delivery.",
             "Review openclaw_bridge_setup/openclaw_bridge_setup_kit.json when you want a single provider/channel setup checklist with smoke-test payloads.",
+            "Run doctor-openclaw-runtime-preflight before live use to check provider auth, channel pairing, native handoff, Gateway LLM readiness, and optional channel-flow dry runs together.",
             "Existing OpenClaw config review follows Keep/Modify/Reset semantics and never overwrites the config.",
             "Set secrets in the local shell using openclaw.env.example.ps1; real values are never written.",
             "Channel access config starts deny-by-default and needs allowlisted senders or conversations before raw platform events are routed.",

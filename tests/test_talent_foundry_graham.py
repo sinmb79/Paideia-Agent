@@ -1210,6 +1210,7 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             prepare_openclaw_native_config,
         )
         from ai22b.talent_foundry.openclaw_runtime_bundle import build_openclaw_runtime_bundle
+        from ai22b.talent_foundry.openclaw_runtime_preflight import doctor_openclaw_runtime_preflight
         from ai22b.talent_foundry.registry import hire_installed_agent
         from ai22b.talent_foundry.training_run import materialize_training_blueprint
 
@@ -1366,6 +1367,29 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             native_config_apply_report_text = json.dumps(native_config_apply, ensure_ascii=False)
             native_config_apply_backup_exists = Path(native_config_apply["target_config"]["backup_path"]).exists()
             applied_config = json.loads(apply_target_path.read_text(encoding="utf-8"))
+            preflight_path = Path(tmp) / "openclaw_runtime_preflight.json"
+            preflight = doctor_openclaw_runtime_preflight(
+                manifest_path,
+                output_path=preflight_path,
+                output_dir=Path(tmp) / "openclaw_runtime_preflight",
+                run_channel_flow=True,
+            )
+            preflight_text = preflight_path.read_text(encoding="utf-8")
+            preflight_provider_auth_exists = Path(preflight["artifacts"]["provider_auth_doctor"]).exists()
+            preflight_channel_pairing_exists = Path(preflight["artifacts"]["channel_pairing_doctor"]).exists()
+            preflight_native_handoff_exists = Path(preflight["artifacts"]["native_handoff_doctor"]).exists()
+            preflight_channel_flow_exists = Path(preflight["artifacts"]["channel_flow_doctor"]).exists()
+            cli_preflight_path = Path(tmp) / "openclaw_runtime_preflight_cli.json"
+            cli_preflight_result = cli_main(
+                [
+                    "doctor-openclaw-runtime-preflight",
+                    "--runtime-bundle",
+                    str(manifest_path),
+                    "--output",
+                    str(cli_preflight_path),
+                ]
+            )
+            cli_preflight_exists = cli_preflight_path.exists()
 
         self.assertEqual(bundle["schema"], "ai22b-openclaw-runtime-bundle/v1")
         self.assertTrue(manifest_exists)
@@ -1404,6 +1428,11 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertIn("build-openclaw-bridge-setup-kit", bundle["next_commands"]["build_bridge_setup_kit"])
         self.assertIn("doctor-openclaw-provider-auth", bundle["next_commands"]["doctor_provider_auth"])
         self.assertIn("doctor-openclaw-channel-pairing", bundle["next_commands"]["doctor_channel_pairing"])
+        self.assertIn("doctor-openclaw-runtime-preflight", bundle["next_commands"]["doctor_runtime_preflight"])
+        self.assertIn(
+            "--run-channel-flow",
+            bundle["next_commands"]["doctor_runtime_preflight_with_channel_flow"],
+        )
         self.assertEqual(native_handoff["schema"], "ai22b-openclaw-native-handoff/v1")
         self.assertEqual(native_handoff["native_openclaw_selection"]["model"], "arcee/trinity-large-thinking")
         self.assertIn("openclaw setup --workspace", native_handoff["operator_commands"]["setup_workspace"])
@@ -1461,6 +1490,19 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertIn("openclaw gateway run", bundle["next_commands"]["openclaw_native_gateway"])
         self.assertEqual(cli_result, 0)
         self.assertTrue(cli_manifest_exists)
+        self.assertEqual(preflight["schema"], "ai22b-openclaw-runtime-preflight/v1")
+        self.assertIn(preflight["status"], {"pass", "ready_with_owner_steps"})
+        self.assertTrue(preflight_provider_auth_exists)
+        self.assertTrue(preflight_channel_pairing_exists)
+        self.assertTrue(preflight_native_handoff_exists)
+        self.assertTrue(preflight_channel_flow_exists)
+        self.assertTrue(next(gate for gate in preflight["gates"] if gate["id"] == "provider_auth"))
+        self.assertTrue(next(gate for gate in preflight["gates"] if gate["id"] == "channel_flow_doctor")["passed"])
+        self.assertFalse(preflight["policy"]["secret_values_stored"])
+        self.assertNotIn("do-not-store-this-key", preflight_text)
+        self.assertNotIn("do-not-store-this-token", preflight_text)
+        self.assertEqual(cli_preflight_result, 0)
+        self.assertTrue(cli_preflight_exists)
         self.assertEqual(reset_bundle["readiness"]["existing_openclaw_config"]["status"], "reset_plan_written")
         self.assertIn("destructive_reset_performed", reset_plan)
         self.assertNotIn("do-not-store-this-key", reset_plan)
