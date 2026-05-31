@@ -545,6 +545,26 @@ OPENCLAW_CHANNELS: list[dict[str, Any]] = [
     {"channel_id": "feishu", "label": "Feishu/Lark", "transport": "WebSocket bot"},
 ]
 
+OPENCLAW_CHANNEL_ALIASES: dict[str, str] = {
+    "googlechat": "google-chat",
+    "google_chat": "google-chat",
+    "gchat": "google-chat",
+    "teams": "microsoft-teams",
+    "microsoftteams": "microsoft-teams",
+    "microsoft_teams": "microsoft-teams",
+    "ms-teams": "microsoft-teams",
+    "qq": "qq-bot",
+    "qqbot": "qq-bot",
+    "synology": "synology-chat",
+    "synologychat": "synology-chat",
+    "nextcloud": "nextcloud-talk",
+    "nextcloudtalk": "nextcloud-talk",
+    "voice": "voice-call",
+    "voicecall": "voice-call",
+    "zalo_personal": "zalo-personal",
+    "zalopersonal": "zalo-personal",
+}
+
 
 def openclaw_provider_manifest() -> dict[str, Any]:
     return {
@@ -660,7 +680,8 @@ def normalize_openclaw_channel_id(identifier: str) -> str:
     value = identifier.strip()
     if value.startswith("openclaw-channel-"):
         value = value.removeprefix("openclaw-channel-")
-    return value.casefold().replace("_", "-")
+    normalized = value.casefold().replace("_", "-")
+    return OPENCLAW_CHANNEL_ALIASES.get(normalized, normalized)
 
 
 def find_openclaw_channel(identifier: str) -> dict[str, Any] | None:

@@ -59,6 +59,7 @@ from ai22b.talent_foundry.onboarding_choices import (
     build_llm_service_health,
     resolve_llm_service,
 )
+from ai22b.talent_foundry.openclaw_config_import import import_openclaw_config
 from ai22b.talent_foundry.openclaw_compat import openclaw_channel_manifest, openclaw_provider_manifest
 from ai22b.talent_foundry.openclaw_runtime_bundle import build_openclaw_runtime_bundle
 from ai22b.talent_foundry.program import create_talent_plan
@@ -158,6 +159,13 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     doctor_channel_connectors.add_argument("--channel", action="append", default=[])
     doctor_channel_connectors.add_argument("--output", required=True)
+
+    import_openclaw_config_command = subparsers.add_parser(
+        "import-openclaw-config",
+        help="Import an existing OpenClaw config into Paideia-safe provider/channel selections.",
+    )
+    import_openclaw_config_command.add_argument("--config", required=True)
+    import_openclaw_config_command.add_argument("--output-dir", required=True)
 
     build_runtime_bundle = subparsers.add_parser(
         "build-openclaw-runtime-bundle",
@@ -765,6 +773,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             output_path=Path(args.output),
         )
         print(str(Path(args.output)))
+        return 0
+
+    if args.command == "import-openclaw-config":
+        result = import_openclaw_config(
+            Path(args.config),
+            output_dir=Path(args.output_dir),
+        )
+        print(str(Path(result["artifacts"]["manifest"])))
         return 0
 
     if args.command == "build-openclaw-runtime-bundle":

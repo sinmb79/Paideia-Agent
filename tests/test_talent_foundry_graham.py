@@ -613,6 +613,81 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertIn("destructive_reset_performed", reset_plan)
         self.assertNotIn("do-not-store-this-key", reset_plan)
 
+    def test_import_openclaw_config_maps_provider_model_channels_and_redacts_secrets(self) -> None:
+        from ai22b.talent_foundry.cli import main as cli_main
+        from ai22b.talent_foundry.openclaw_config_import import import_openclaw_config
+        from ai22b.talent_foundry.openclaw_compat import find_openclaw_channel
+
+        with tempfile.TemporaryDirectory() as tmp:
+            config_path = Path(tmp) / ".openclaw" / "openclaw.json"
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "agents": {
+                            "defaults": {"model": {"primary": "anthropic/claude-sonnet-4.5"}},
+                            "list": [{"id": "researcher", "name": "Researcher"}],
+                        },
+                        "models": {
+                            "providers": {
+                                "anthropic": {"apiKey": "source-anthropic-key"},
+                                "openrouter": {"apiKey": "source-openrouter-key"},
+                            }
+                        },
+                        "channels": {
+                            "telegram": {"botToken": "source-telegram-token"},
+                            "googlechat": {"webhookUrl": "source-google-chat-webhook"},
+                            "discord": {"token": "source-discord-token"},
+                            "defaults": {"model": "anthropic/claude-sonnet-4.5"},
+                        },
+                        "bindings": [
+                            {"match": {"channel": "whatsapp", "conversation": "family"}, "agentId": "researcher"}
+                        ],
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            output_dir = Path(tmp) / "imported"
+            imported = import_openclaw_config(config_path, output_dir=output_dir)
+            redacted_snapshot = Path(imported["artifacts"]["redacted_snapshot"]).read_text(encoding="utf-8")
+            setup_plan = json.loads(Path(imported["artifacts"]["setup_plan"]).read_text(encoding="utf-8"))
+            suggested_answers = json.loads(Path(imported["artifacts"]["suggested_answers"]).read_text(encoding="utf-8"))
+            cli_output_dir = Path(tmp) / "imported_cli"
+            cli_result = cli_main(
+                [
+                    "import-openclaw-config",
+                    "--config",
+                    str(config_path),
+                    "--output-dir",
+                    str(cli_output_dir),
+                ]
+            )
+            cli_manifest_exists = (cli_output_dir / "paideia_openclaw_config_import.json").exists()
+
+        self.assertEqual(imported["schema"], "ai22b-openclaw-config-import/v1")
+        self.assertEqual(imported["status"], "import_ready")
+        self.assertEqual(imported["detected"]["primary_provider_id"], "anthropic")
+        self.assertEqual(imported["paideia_selection"]["llm_service"], "anthropic/claude-sonnet-4.5")
+        self.assertEqual(
+            imported["detected"]["channel_ids"],
+            ["telegram", "google-chat", "discord", "whatsapp"],
+        )
+        self.assertIsNotNone(find_openclaw_channel("googlechat"))
+        self.assertTrue(imported["paideia_selection"]["provider_supported"])
+        self.assertTrue(imported["paideia_selection"]["all_detected_channels_supported"])
+        self.assertGreaterEqual(len(imported["detected"]["secret_references"]), 4)
+        self.assertIn("<redacted>", redacted_snapshot)
+        self.assertNotIn("source-anthropic-key", redacted_snapshot)
+        self.assertNotIn("source-telegram-token", redacted_snapshot)
+        self.assertEqual(setup_plan["schema"], "ai22b-openclaw-config-import-setup-plan/v1")
+        self.assertIn("anthropic", {item["provider_id"] for item in setup_plan["provider_setup"]})
+        self.assertIn("whatsapp", {item["channel_id"] for item in setup_plan["channel_setup"]})
+        self.assertEqual(suggested_answers["chat_surface"], "openclaw-channel-telegram")
+        self.assertEqual(cli_result, 0)
+        self.assertTrue(cli_manifest_exists)
+
     def test_openclaw_channel_gateway_routes_message_to_paideia_chat(self) -> None:
         from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
         from ai22b.talent_foundry.channel_gateway import (

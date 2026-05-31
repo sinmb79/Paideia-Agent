@@ -313,6 +313,16 @@ The provider catalog follows OpenClaw's canonical `provider/model` IDs where pos
 
 For OpenClaw-style key resolution, Paideia checks `OPENCLAW_LIVE_<PROVIDER>_KEY`, `<PROVIDER>_API_KEYS`, `<PROVIDER>_API_KEY`, and provider-specific env vars such as `ARCEEAI_API_KEY`, `VOLCANO_ENGINE_API_KEY`, `DASHSCOPE_API_KEY`, or `XIAOMI_TOKEN_PLAN_API_KEY`. Comma or semicolon key lists use the first non-empty key for live smoke tests.
 
+If you already have an OpenClaw config, import it first. Paideia reads the selected `provider/model`, configured channel keys, and `bindings[]`, then writes Paideia-safe selections and setup steps without storing provider keys or bot tokens.
+
+```powershell
+ai22b-talent-foundry import-openclaw-config `
+  --config "$env:USERPROFILE\.openclaw\openclaw.json" `
+  --output-dir "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_import"
+```
+
+This writes `paideia_openclaw_config_import.json`, `openclaw_config.redacted.json`, `openclaw_import_setup_plan.json`, and `paideia_onboarding.answers.suggested.json`.
+
 After an agent is hired, build a reviewable OpenClaw-style runtime setup bundle. This is the practical handoff point between Paideia's education records and OpenClaw-like execution:
 
 ```powershell
