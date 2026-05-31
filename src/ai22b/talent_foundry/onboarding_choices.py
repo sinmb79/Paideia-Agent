@@ -287,6 +287,7 @@ def resolve_llm_service(
     provider_model: str | None = None
     provider_from_model: dict[str, Any] | None = None
     gateway_agent_target: str | None = None
+    auto_routed_manifest_provider = False
     gateway_prefixes = {"openclaw-gateway", "openclaw_gateway", "openclaw_gateway_http"}
     if "/" in requested and requested.split("/", 1)[0].casefold() in gateway_prefixes:
         _prefix, remainder = requested.split("/", 1)
@@ -300,8 +301,14 @@ def resolve_llm_service(
         provider_from_model = find_openclaw_provider(provider_id)
         if provider_from_model:
             provider_model = requested
-            requested = provider_from_model["service_id"]
-            llm_model = llm_model or model_id
+            if provider_from_model.get("engine") == "openclaw_manifest_only":
+                requested = "openclaw_gateway_http"
+                llm_model = llm_model or provider_model
+                gateway_agent_target = gateway_agent_target or "openclaw/default"
+                auto_routed_manifest_provider = True
+            else:
+                requested = provider_from_model["service_id"]
+                llm_model = llm_model or model_id
     by_id = _catalog_by_id(LLM_SERVICE_CATALOG)
     service = by_id.get(requested)
     if service is None:
@@ -328,6 +335,14 @@ def resolve_llm_service(
     if service is None:
         raise ValueError(f"Unsupported LLM service: {requested}")
 
+    if service.get("engine") == "openclaw_manifest_only" and llm_model and service.get("openclaw_provider_id"):
+        provider_model = f"{service['openclaw_provider_id']}/{llm_model}"
+        provider_from_model = provider_from_model or find_openclaw_provider(str(service["openclaw_provider_id"]))
+        service = by_id["openclaw_gateway_http"]
+        llm_model = provider_model
+        gateway_agent_target = gateway_agent_target or "openclaw/default"
+        auto_routed_manifest_provider = True
+
     resolved = deepcopy(service)
     resolved["service_id"] = resolved["id"]
     resolved["selected_model"] = llm_model or None
@@ -342,6 +357,9 @@ def resolve_llm_service(
         resolved["openclaw_model"] = f"{resolved['openclaw_provider_id']}/{llm_model}"
     if provider_from_model:
         resolved["openclaw_provider"] = provider_from_model
+    if auto_routed_manifest_provider:
+        resolved["openclaw_gateway_auto_routed"] = True
+        resolved["openclaw_gateway_route_reason"] = "manifest_only_provider_requires_openclaw_plugin_or_oauth"
     if resolved.get("openclaw_provider_id") and resolved.get("engine") != "openclaw_gateway_http":
         resolved["secret_env_vars"] = openclaw_secret_env_candidates(
             str(resolved["openclaw_provider_id"]),

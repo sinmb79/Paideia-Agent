@@ -236,6 +236,19 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertEqual(stepfun_plan["service_id"], "stepfun_plan_api")
         self.assertEqual(stepfun_plan["api_protocol"], "openai_chat_completions")
 
+        qwen_oauth_gateway = resolve_llm_service(llm_service="qwen-oauth/qwen3-coder-plus")
+        self.assertEqual(qwen_oauth_gateway["service_id"], "openclaw_gateway_http")
+        self.assertEqual(qwen_oauth_gateway["api_protocol"], "openclaw_gateway_openai_chat_completions")
+        self.assertEqual(qwen_oauth_gateway["openclaw_model"], "qwen-oauth/qwen3-coder-plus")
+        self.assertEqual(qwen_oauth_gateway["openclaw_provider"]["provider_id"], "qwen-oauth")
+        self.assertTrue(qwen_oauth_gateway["openclaw_gateway_auto_routed"])
+        self.assertEqual(qwen_oauth_gateway["network_access"], "localhost_only")
+
+        copilot_gateway = resolve_llm_service(llm_service="openclaw_github_copilot", llm_model="gpt-5-copilot")
+        self.assertEqual(copilot_gateway["service_id"], "openclaw_gateway_http")
+        self.assertEqual(copilot_gateway["openclaw_model"], "github-copilot/gpt-5-copilot")
+        self.assertTrue(copilot_gateway["openclaw_gateway_auto_routed"])
+
     def test_openclaw_style_onboarding_questions_are_step_based(self) -> None:
         from ai22b.talent_foundry.console import WIZARD_STEPS, questions_with_choices
         from ai22b.talent_foundry.onboarding_choices import resolve_chat_surface
@@ -689,6 +702,10 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             )
             cli_doctor = json.loads(cli_output.read_text(encoding="utf-8"))
             cli_summary_text = cli_summary.read_text(encoding="utf-8")
+            manifest_provider_doctor = doctor_openclaw_selection(
+                llm_service="qwen-oauth/qwen3-coder-plus",
+                chat_surface="openclaw-channel-webchat",
+            )
 
         channel_support = {item["channel_id"]: item["support"] for item in doctor["openclaw_selection"]["channels"]}
         preview_lines = build_openclaw_selection_console_preview(doctor)
@@ -712,6 +729,14 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertEqual(cli_doctor["openclaw_selection"]["provider_id"], "openrouter")
         self.assertIn("OpenClaw Selection Summary", cli_summary_text)
         self.assertIn("paideia_direct_or_openclaw_gateway_ready", cli_summary_text)
+        self.assertEqual(manifest_provider_doctor["status"], "needs_openclaw_provider_plugin")
+        self.assertEqual(manifest_provider_doctor["selected_llm_service"]["service_id"], "openclaw_gateway_http")
+        self.assertEqual(manifest_provider_doctor["selected_llm_service"]["openclaw_model"], "qwen-oauth/qwen3-coder-plus")
+        self.assertEqual(
+            manifest_provider_doctor["selected_llm_service"]["openclaw_gateway_route_reason"],
+            "manifest_only_provider_requires_openclaw_plugin_or_oauth",
+        )
+        self.assertEqual(manifest_provider_doctor["openclaw_selection"]["provider_id"], "qwen-oauth")
 
     def test_channel_connector_catalog_covers_every_openclaw_channel(self) -> None:
         from ai22b.talent_foundry.channel_connectors import (

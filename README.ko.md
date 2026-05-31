@@ -252,6 +252,8 @@ ai22b-talent-foundry doctor-openclaw-channel-connectors `
 
 `audit-openclaw-parity`는 Paideia의 로컬 provider/channel catalog가 확인된 OpenClaw 공식 문서 snapshot을 빠짐없이 덮는지 검사합니다. `--refresh-docs`를 붙이면 현재 OpenClaw 공식 문서를 다시 가져와 drift를 계산합니다. provider doctor는 OpenClaw Provider directory의 `provider/model` 항목을 Paideia live adapter, 로컬 서버, OpenClaw 플러그인/OAuth/custom runner 필요 항목으로 나눕니다. API 키 값은 저장하지 않고 환경변수 이름과 준비 여부만 기록합니다.
 
+사용자가 `qwen-oauth/qwen3-coder-plus`, `github-copilot/<model>`, `opencode/<model>`처럼 Paideia가 직접 호출하지 않고 OpenClaw provider plugin/OAuth/custom runner가 필요한 `provider/model`을 입력하면, Paideia는 이를 `openclaw_gateway_http`로 자동 라우팅합니다. 원래 입력한 selector는 `openclaw_model`로 보존되므로 OpenClaw가 provider 인증과 실제 backend 호출을 맡고, Paideia는 로컬 인재 context와 Reasoning Ledger를 Gateway 요청에 붙이는 방식으로 동작합니다.
+
 OpenClaw식 key resolution도 반영합니다. Paideia는 `OPENCLAW_LIVE_<PROVIDER>_KEY`, `<PROVIDER>_API_KEYS`, `<PROVIDER>_API_KEY`, 그리고 `ARCEEAI_API_KEY`, `VOLCANO_ENGINE_API_KEY`, `DASHSCOPE_API_KEY`, `XIAOMI_TOKEN_PLAN_API_KEY` 같은 provider별 환경변수를 확인합니다. 쉼표/세미콜론 key list가 있으면 첫 번째 non-empty key를 live smoke test에 사용합니다.
 
 Telegram, Discord, Slack, WebChat은 Paideia 직접 adapter가 있습니다. 현재 OpenClaw iMessage 지원은 `imessage`/`imsg` 경로가 기준이며, `bluebubbles`는 기존 설정을 옮기기 위한 legacy migration 대상으로만 표시합니다. `clickclack`과 `qa-channel`도 catalog에 포함되어 각각 bot-token plugin, deterministic QA scenario plugin으로 표시됩니다. 나머지 OpenClaw 채널은 normalized gateway envelope를 사용할 수 있지만 WhatsApp QR pairing, signal-cli, Matrix bot, Bot Framework, 지역 플랫폼 토큰처럼 raw platform bridge가 필요한 항목은 doctor가 별도 준비 단계로 표시합니다.
