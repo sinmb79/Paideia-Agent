@@ -401,6 +401,8 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             selection_channel_plan = json.loads(
                 Path(session["artifacts"]["openclaw_selection_channel_plugin_plan"]).read_text(encoding="utf-8")
             )
+            live_smoke_plan = json.loads(Path(session["artifacts"]["openclaw_live_smoke_plan"]).read_text(encoding="utf-8"))
+            live_smoke_plan_markdown = Path(session["artifacts"]["openclaw_live_smoke_plan_markdown"]).read_text(encoding="utf-8")
 
         self.assertEqual(session["wizard"]["schema"], "ai22b-paideia-openclaw-style-onboarding/v1")
         self.assertEqual(config["schema"], "ai22b-paideia-openclaw-style-config/v1")
@@ -437,6 +439,16 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertEqual(selection_bridge_kit["schema"], "ai22b-openclaw-bridge-setup-kit/v1")
         self.assertIn("webchat", selection_bridge_kit["selection"]["channels"])
         self.assertEqual(selection_channel_plan["schema"], "ai22b-openclaw-channel-plugin-plan/v1")
+        self.assertEqual(live_smoke_plan["schema"], "ai22b-openclaw-live-smoke-plan/v1")
+        self.assertIn("offline_context_smoke", live_smoke_plan["operator_sequence"])
+        self.assertIn("gateway_live_probe", live_smoke_plan["operator_sequence"])
+        self.assertFalse(live_smoke_plan["policy"]["external_network_call_performed_by_plan"])
+        self.assertFalse(live_smoke_plan["policy"]["secret_values_stored"])
+        self.assertIn("OpenClaw Live Smoke Plan", live_smoke_plan_markdown)
+        self.assertEqual(
+            session["post_hire_extensions"]["openclaw_live_smoke_plan"]["schema"],
+            "ai22b-openclaw-live-smoke-plan/v1",
+        )
         self.assertEqual(session["openclaw_runtime"]["selected_support"]["matrix_status"], "pass")
         self.assertFalse(llm_health["network_probe_performed"])
 
@@ -1959,7 +1971,7 @@ class GrahamTalentFoundryTests(unittest.TestCase):
                     ensure_ascii=False,
                     indent=2,
                 ),
-                encoding="utf-8",
+                encoding="utf-8-sig",
             )
             output_dir = Path(tmp) / "console_prefill"
             session_path = output_dir / "console_session.json"

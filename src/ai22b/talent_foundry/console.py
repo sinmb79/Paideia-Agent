@@ -18,6 +18,7 @@ from ai22b.talent_foundry.openclaw_selection_doctor import (
     doctor_openclaw_selection,
     render_openclaw_selection_summary,
 )
+from ai22b.talent_foundry.openclaw_live_smoke_plan import build_openclaw_live_smoke_plan
 from ai22b.talent_foundry.openclaw_onboarding_menu import build_openclaw_onboarding_menu
 from ai22b.talent_foundry.role_models import list_role_models, summarize_role_model
 from ai22b.talent_foundry.registry import (
@@ -709,6 +710,25 @@ def run_console_session(
         artifacts[f"openclaw_selection_{key}"] = str(value)
     if onboarding["artifacts"].get("openclaw_gateway_llm_doctor"):
         artifacts["openclaw_gateway_llm_doctor"] = onboarding["artifacts"]["openclaw_gateway_llm_doctor"]
+    live_smoke_plan_path = output_dir / "openclaw_live_smoke_plan.json"
+    live_smoke_plan_markdown_path = output_dir / "OPENCLAW_LIVE_SMOKE_PLAN.md"
+    runtime_selection = (onboarding.get("openclaw_runtime") or {}).get("selection", {})
+    live_smoke_plan = build_openclaw_live_smoke_plan(
+        Path(onboarding["artifacts"]["employment_record"]),
+        runtime_bundle_path=Path(onboarding["artifacts"]["openclaw_runtime_bundle"]),
+        channels=[str(item) for item in runtime_selection.get("channels", [])] or None,
+        output_path=live_smoke_plan_path,
+        markdown_output_path=live_smoke_plan_markdown_path,
+    )
+    artifacts["openclaw_live_smoke_plan"] = str(live_smoke_plan_path)
+    artifacts["openclaw_live_smoke_plan_markdown"] = str(live_smoke_plan_markdown_path)
+    post_hire_extensions["openclaw_live_smoke_plan"] = {
+        "schema": live_smoke_plan["schema"],
+        "status": live_smoke_plan["status"],
+        "operator_sequence": live_smoke_plan["operator_sequence"],
+        "network_call_performed_by_plan": live_smoke_plan["policy"]["external_network_call_performed_by_plan"],
+        "secret_values_stored": live_smoke_plan["policy"]["secret_values_stored"],
+    }
     for key, value in (prefill_artifacts or {}).items():
         artifacts[key] = str(value)
     status = onboarding["status"]

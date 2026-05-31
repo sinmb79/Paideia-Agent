@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-from typing import Sequence
+from typing import Any, Sequence
 
 from ai22b.config import talent_foundry_storage_path
 from ai22b.talent_foundry.agent_identity_card import build_agent_id_card_payload
@@ -113,6 +113,10 @@ from ai22b.talent_foundry.team import run_clone_team_session
 from ai22b.talent_foundry.training_run import materialize_training_blueprint
 from ai22b.talent_foundry.webchat_server import run_openclaw_webchat_server
 from ai22b.talent_foundry.workspace_agent import run_workspace_agent_from_manifest
+
+
+def _read_json_cli(path: str | Path) -> dict[str, Any]:
+    return json.loads(Path(path).read_text(encoding="utf-8-sig"))
 
 
 DEFAULT_RUN_DIR = talent_foundry_storage_path("runs")
@@ -1414,7 +1418,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             imported = import_openclaw_config(Path(args.openclaw_config), output_dir=import_dir)
             suggested_answers_path = imported.get("artifacts", {}).get("suggested_answers")
             if suggested_answers_path and Path(suggested_answers_path).exists():
-                suggested = json.loads(Path(suggested_answers_path).read_text(encoding="utf-8"))
+                suggested = _read_json_cli(suggested_answers_path)
                 prefill_answers = {
                     key: value
                     for key, value in suggested.items()
@@ -1435,7 +1439,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "secret_values_stored": False,
             }
         if args.answers:
-            answers = {**prefill_answers, **json.loads(Path(args.answers).read_text(encoding="utf-8"))}
+            answers = {**prefill_answers, **_read_json_cli(args.answers)}
             mode = "answers_file"
         else:
             answers = collect_console_answers(prefill=prefill_answers)

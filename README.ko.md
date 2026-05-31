@@ -424,3 +424,5 @@ ai22b-talent-foundry build-openclaw-live-smoke-plan `
   --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_live_smoke_plan.json" `
   --markdown-output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\OPENCLAW_LIVE_SMOKE_PLAN.md"
 ```
+
+`start-console`과 `onboard`도 이제 고용이 끝난 직후 같은 smoke plan을 자동으로 생성합니다. 그래서 첫 실행 폴더 안에서 교육/고용 산출물과 OpenClaw 라이브 검증 순서를 함께 확인할 수 있습니다.

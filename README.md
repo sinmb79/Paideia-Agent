@@ -466,6 +466,8 @@ ai22b-talent-foundry build-openclaw-live-smoke-plan `
   --markdown-output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\OPENCLAW_LIVE_SMOKE_PLAN.md"
 ```
 
+`start-console` and `onboard` now generate the same smoke plan automatically after the talent is hired, so the first-run folder contains both the education/hiring artifacts and the next runnable OpenClaw live validation sequence.
+
 The bundle writes:
 
 - `openclaw_config_patch.json`: a review-first `openclaw.json` patch with the selected `provider/model`, `models.providers`, `agents.list`, gateway URL, enabled channels, `channels.modelByChannel`, `bindings[]`, and `gateway.http.endpoints.chatCompletions.enabled=true` for OpenAI-compatible Gateway clients.

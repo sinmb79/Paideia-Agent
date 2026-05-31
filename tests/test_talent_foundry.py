@@ -1976,7 +1976,15 @@ class TalentFoundryTests(unittest.TestCase):
             onboarding = json.loads(Path(session["artifacts"]["onboarding_session"]).read_text(encoding="utf-8"))
             artifact_exists = {
                 key: Path(session["artifacts"][key]).exists()
-                for key in ["console_session", "answers", "onboarding_session", "employment_record", "first_goal_cycle"]
+                for key in [
+                    "console_session",
+                    "answers",
+                    "onboarding_session",
+                    "employment_record",
+                    "first_goal_cycle",
+                    "openclaw_live_smoke_plan",
+                    "openclaw_live_smoke_plan_markdown",
+                ]
             }
 
         self.assertEqual(session["schema"], "ai-talent-guided-console-session/v1")
@@ -1993,6 +2001,10 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(session["answers"]["chat_surface"], "codex-bridge-chat")
         self.assertEqual(session["answers"]["talent_name"], "서윤")
         self.assertEqual(onboarding["status"], "hired_agent_first_goal_cycle_completed")
+        self.assertEqual(
+            session["post_hire_extensions"]["openclaw_live_smoke_plan"]["schema"],
+            "ai22b-openclaw-live-smoke-plan/v1",
+        )
         self.assertTrue(all(artifact_exists.values()))
 
     def test_guided_console_can_create_parent_controlled_projection_swarm(self) -> None:
