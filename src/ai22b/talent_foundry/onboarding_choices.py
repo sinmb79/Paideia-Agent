@@ -34,6 +34,31 @@ LLM_SERVICE_CATALOG: list[dict[str, Any]] = [
         "aliases": ["openai", "codex"],
     },
     {
+        "id": "openclaw_gateway_http",
+        "label": "OpenClaw Gateway HTTP bridge",
+        "engine": "openclaw_gateway_http",
+        "status": "ready_when_openclaw_gateway_chat_completions_enabled",
+        "default_chat_mode": "live_when_gateway_running",
+        "model_policy": (
+            "Use --llm-model as the OpenClaw backend provider/model override. "
+            "The OpenAI-compatible model target stays openclaw/default unless configured otherwise."
+        ),
+        "requires": [
+            "OpenClaw Gateway",
+            "gateway.http.endpoints.chatCompletions.enabled=true",
+            "OPENCLAW_GATEWAY_TOKEN or OPENCLAW_GATEWAY_PASSWORD when Gateway auth is enabled",
+        ],
+        "researcher_fit": "openclaw_native_full_provider_bridge",
+        "privacy_note": "Sends selected Paideia memory summaries to a trusted local/private OpenClaw Gateway.",
+        "openclaw_provider_id": "openclaw-gateway",
+        "openclaw_agent_target": "openclaw/default",
+        "api_protocol": "openclaw_gateway_openai_chat_completions",
+        "base_url": "http://127.0.0.1:18789/v1",
+        "secret_env_vars": ["OPENCLAW_GATEWAY_TOKEN", "OPENCLAW_GATEWAY_PASSWORD"],
+        "auth_optional_on_loopback": True,
+        "aliases": ["openclaw", "openclaw-gateway", "openclaw_gateway", "openclaw_gateway_http"],
+    },
+    {
         "id": "deterministic_local",
         "label": "Offline deterministic local engine",
         "engine": "deterministic_local",
@@ -220,6 +245,7 @@ EXTERNAL_API_ENGINES = {
     "openrouter_api",
     "openclaw_openai_compatible",
     "openclaw_anthropic_compatible",
+    "openclaw_gateway_http",
     "ollama_cloud_http",
     "openclaw_manifest_only",
 }
@@ -260,6 +286,15 @@ def resolve_llm_service(
     requested = (llm_service or llm_engine or DEFAULT_LLM_SERVICE_ID).strip()
     provider_model: str | None = None
     provider_from_model: dict[str, Any] | None = None
+    gateway_agent_target: str | None = None
+    gateway_prefixes = {"openclaw-gateway", "openclaw_gateway", "openclaw_gateway_http"}
+    if "/" in requested and requested.split("/", 1)[0].casefold() in gateway_prefixes:
+        _prefix, remainder = requested.split("/", 1)
+        requested = "openclaw_gateway_http"
+        llm_model = llm_model or remainder
+    elif requested.casefold() in {"openclaw", "openclaw/default"}:
+        requested = "openclaw_gateway_http"
+        gateway_agent_target = "openclaw/default"
     if "/" in requested and requested not in _catalog_by_id(LLM_SERVICE_CATALOG):
         provider_id, model_id = requested.split("/", 1)
         provider_from_model = find_openclaw_provider(provider_id)
@@ -297,13 +332,17 @@ def resolve_llm_service(
     resolved["service_id"] = resolved["id"]
     resolved["selected_model"] = llm_model or None
     resolved["selected_model_path"] = llm_model_path or None
+    if gateway_agent_target:
+        resolved["openclaw_agent_target"] = gateway_agent_target
     if provider_model:
         resolved["openclaw_model"] = provider_model
+    elif resolved.get("engine") == "openclaw_gateway_http" and llm_model:
+        resolved["openclaw_model"] = llm_model
     elif resolved.get("openclaw_provider_id") and llm_model:
         resolved["openclaw_model"] = f"{resolved['openclaw_provider_id']}/{llm_model}"
     if provider_from_model:
         resolved["openclaw_provider"] = provider_from_model
-    if resolved.get("openclaw_provider_id"):
+    if resolved.get("openclaw_provider_id") and resolved.get("engine") != "openclaw_gateway_http":
         resolved["secret_env_vars"] = openclaw_secret_env_candidates(
             str(resolved["openclaw_provider_id"]),
             list(resolved.get("secret_env_vars", [])),
@@ -318,6 +357,8 @@ def resolve_llm_service(
         network_access = "codex_or_openai_data_minimized"
     elif engine == "openclaw_manifest_only":
         network_access = "disabled_until_provider_plugin_configured"
+    elif engine == "openclaw_gateway_http" and base_url.startswith(("http://localhost", "http://127.0.0.1")):
+        network_access = "localhost_only"
     elif engine == "openclaw_openai_compatible" and base_url.startswith(("http://localhost", "http://127.0.0.1")):
         network_access = "localhost_only"
     elif engine in EXTERNAL_API_ENGINES:
@@ -352,26 +393,50 @@ def build_llm_service_health(llm_service: dict[str, Any]) -> dict[str, Any]:
     env_vars = llm_service.get("secret_env_vars") or SERVICE_SECRET_ENV_VARS.get(service_id, [])
     for env_var in env_vars:
         present = bool(os.environ.get(env_var))
+        optional_loopback_auth = bool(
+            llm_service.get("auth_optional_on_loopback")
+            and str(llm_service.get("selected_model_path") or llm_service.get("base_url") or "").startswith(
+                ("http://localhost", "http://127.0.0.1")
+            )
+        )
         checks.append(
             {
                 "id": f"env:{env_var}",
                 "kind": "environment_secret",
-                "passed": present,
+                "passed": present or optional_loopback_auth,
                 "secret_value_stored": False,
-                "message": "configured" if present else f"{env_var} is not set in this shell.",
+                "optional_on_loopback": optional_loopback_auth,
+                "message": (
+                    "configured"
+                    if present
+                    else (
+                        f"{env_var} is not set; allowed only if the local OpenClaw Gateway auth mode is none."
+                        if optional_loopback_auth
+                        else f"{env_var} is not set in this shell."
+                    )
+                ),
             }
         )
 
     if engine in LOCAL_HTTP_ENGINES or (
         engine == "openclaw_openai_compatible"
         and str(llm_service.get("base_url") or "").startswith(("http://localhost", "http://127.0.0.1"))
+    ) or (
+        engine == "openclaw_gateway_http"
+        and str(llm_service.get("selected_model_path") or llm_service.get("base_url") or "").startswith(
+            ("http://localhost", "http://127.0.0.1")
+        )
     ):
         checks.append(
             {
                 "id": "local_model_name",
                 "kind": "local_model_selection",
-                "passed": bool(selected_model),
-                "message": "model selected" if selected_model else "local model name was not provided",
+                "passed": True if engine == "openclaw_gateway_http" else bool(selected_model),
+                "message": (
+                    "OpenClaw Gateway can use the agent default model or x-openclaw-model override"
+                    if engine == "openclaw_gateway_http"
+                    else ("model selected" if selected_model else "local model name was not provided")
+                ),
             }
         )
         checks.append(
@@ -400,6 +465,8 @@ def build_llm_service_health(llm_service: dict[str, Any]) -> dict[str, Any]:
 
     if engine == "openclaw_manifest_only":
         status = "manifest_only_needs_provider_plugin"
+    elif engine == "openclaw_gateway_http":
+        status = "configured_gateway_manifest_only" if all(check["passed"] for check in checks) else "needs_gateway_auth_or_url"
     elif service_id == "openai_chatgpt_codex":
         # Codex bridge can still prepare local context without a live API key.
         live_secret = next((check for check in checks if check["id"] == "env:OPENAI_API_KEY"), None)
@@ -420,6 +487,7 @@ def build_llm_service_health(llm_service: dict[str, Any]) -> dict[str, Any]:
         "selected_model": selected_model,
         "openclaw_provider_id": llm_service.get("openclaw_provider_id"),
         "openclaw_model": llm_service.get("openclaw_model"),
+        "openclaw_agent_target": llm_service.get("openclaw_agent_target"),
         "api_protocol": llm_service.get("api_protocol"),
         "base_url_recorded": bool(llm_service.get("base_url") or selected_model_path),
         "selected_model_path_recorded": bool(selected_model_path),

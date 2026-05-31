@@ -33,6 +33,7 @@ SECRET_KEY_PATTERNS = (
 
 PATCH_REQUIRED_PATHS = (
     "gateway.mode",
+    "gateway.http.endpoints.chatCompletions.enabled",
     "models.providers",
     "agents.defaults.workspace",
     "agents.list",

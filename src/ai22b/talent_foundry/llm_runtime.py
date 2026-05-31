@@ -23,6 +23,7 @@ EXTERNAL_API_ENGINES = {
     "openrouter_api",
     "openclaw_openai_compatible",
     "openclaw_anthropic_compatible",
+    "openclaw_gateway_http",
     "ollama_cloud_http",
     "openclaw_manifest_only",
 }
@@ -50,6 +51,7 @@ def build_llm_runtime_config(
         "openrouter_api",
         "openclaw_openai_compatible",
         "openclaw_anthropic_compatible",
+        "openclaw_gateway_http",
         "openclaw_manifest_only",
         "ollama_cloud_http",
         "ollama_local_http",
@@ -63,8 +65,11 @@ def build_llm_runtime_config(
     openclaw_local_http = engine == "openclaw_openai_compatible" and str(configured_base_url or "").startswith(
         ("http://localhost", "http://127.0.0.1")
     )
+    openclaw_gateway_local_http = engine == "openclaw_gateway_http" and str(configured_base_url or "").startswith(
+        ("http://localhost", "http://127.0.0.1")
+    )
     codex_bridge = engine == "openai_chatgpt_codex"
-    local_http = engine in LOCAL_HTTP_ENGINES or openclaw_local_http
+    local_http = engine in LOCAL_HTTP_ENGINES or openclaw_local_http or openclaw_gateway_local_http
     external_api = engine in EXTERNAL_API_ENGINES and not local_http and not manifest_only
     if codex_bridge:
         network_access = "codex_host_managed_data_minimized"
@@ -86,6 +91,7 @@ def build_llm_runtime_config(
         "network_access": network_access,
         "openclaw_provider_id": (provider_config or {}).get("openclaw_provider_id"),
         "openclaw_model": (provider_config or {}).get("openclaw_model"),
+        "openclaw_agent_target": (provider_config or {}).get("openclaw_agent_target"),
         "api_protocol": (provider_config or {}).get("api_protocol"),
         "base_url": configured_base_url,
         "secret_env_vars": (provider_config or {}).get("secret_env_vars", []),
@@ -373,6 +379,7 @@ def _invoke_configured_adapter_manifest(
         "openclaw_model": runtime_config.get("openclaw_model"),
         "api_protocol": runtime_config.get("api_protocol"),
         "base_url_recorded": bool(runtime_config.get("base_url")),
+        "openclaw_agent_target": runtime_config.get("openclaw_agent_target"),
         "draft": (
             f"{agent['name']} is ready to use {engine} as the selected LLM adapter. "
             f"Paideia keeps identity and learned routes in local records; the adapter supplies language generation for: {task}"

@@ -156,6 +156,7 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         from ai22b.talent_foundry.onboarding_choices import chat_surface_ids, llm_service_ids, resolve_llm_service
 
         self.assertIn("ollama_local", llm_service_ids())
+        self.assertIn("openclaw_gateway_http", llm_service_ids())
         self.assertIn("openrouter_api", llm_service_ids())
         self.assertIn("deepseek_api", llm_service_ids())
         self.assertIn("groq_api", llm_service_ids())
@@ -198,6 +199,15 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertEqual(selected["openclaw_provider_id"], "openrouter")
         self.assertEqual(selected["openclaw_model"], "openrouter/meta-llama/llama-3.1-8b")
         self.assertEqual(selected["selected_model"], "meta-llama/llama-3.1-8b")
+
+        gateway = resolve_llm_service(
+            llm_service="openclaw-gateway/openrouter/meta-llama/llama-3.1-8b"
+        )
+        self.assertEqual(gateway["service_id"], "openclaw_gateway_http")
+        self.assertEqual(gateway["api_protocol"], "openclaw_gateway_openai_chat_completions")
+        self.assertEqual(gateway["openclaw_agent_target"], "openclaw/default")
+        self.assertEqual(gateway["openclaw_model"], "openrouter/meta-llama/llama-3.1-8b")
+        self.assertEqual(gateway["network_access"], "localhost_only")
 
         local_vllm = resolve_llm_service(llm_service="vllm/Qwen3-8B")
         self.assertEqual(local_vllm["service_id"], "vllm_local")
@@ -734,6 +744,9 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertEqual(config_patch["openclaw_json_patch"]["agents"]["list"][0]["default"], True)
         self.assertEqual(config_patch["openclaw_json_patch"]["agents"]["defaults"]["workspace"], str(hiring["employment_record"].parent))
         self.assertEqual(config_patch["openclaw_json_patch"]["gateway"]["mode"], "local")
+        self.assertTrue(
+            config_patch["openclaw_json_patch"]["gateway"]["http"]["endpoints"]["chatCompletions"]["enabled"]
+        )
         self.assertEqual(native_handoff["schema"], "ai22b-openclaw-native-handoff/v1")
         self.assertEqual(native_handoff["native_openclaw_selection"]["model"], "arcee/trinity-large-thinking")
         self.assertIn("openclaw setup --workspace", native_handoff["operator_commands"]["setup_workspace"])

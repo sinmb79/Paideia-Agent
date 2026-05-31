@@ -539,6 +539,74 @@ class TalentFoundryMemorySubstrateChatTests(unittest.TestCase):
         self.assertEqual(result["status"], "completed")
         self.assertEqual(result["response_metadata"]["provider"], "ollama-cloud")
 
+    def test_openclaw_gateway_http_uses_agent_target_and_backend_model_header(self) -> None:
+        from ai22b.talent_foundry.memory_substrate import _call_openclaw_gateway_chat
+
+        captured: dict[str, object] = {}
+
+        def fake_request_json(*, url: str, payload: dict, headers: dict, timeout: int = 60) -> dict:
+            captured["url"] = url
+            captured["payload"] = payload
+            captured["headers"] = headers
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {
+                                    "assistant_reply": "Boss, this reply came through the OpenClaw Gateway.",
+                                    "reviewable_reasoning_summary": [
+                                        {
+                                            "step": "gateway route",
+                                            "summary": "Paideia used openclaw/default as the agent target and x-openclaw-model for backend model routing.",
+                                        }
+                                    ],
+                                    "learning_candidate": {
+                                        "lesson": "OpenClaw Gateway can carry Paideia memory context while OpenClaw owns provider routing.",
+                                        "reusable_principle": "Use the Gateway as the universal provider bridge.",
+                                        "memory_tags": ["openclaw_gateway", "provider_model"],
+                                        "confidence": 0.9,
+                                    },
+                                },
+                                ensure_ascii=False,
+                            )
+                        }
+                    }
+                ],
+                "usage": {"total_tokens": 33},
+            }
+
+        runtime_config = {
+            "engine": "openclaw_gateway_http",
+            "api_protocol": "openclaw_gateway_openai_chat_completions",
+            "base_url": "http://127.0.0.1:18789/v1",
+            "network_access": "localhost_only",
+            "secret_env_vars": ["OPENCLAW_GATEWAY_TOKEN", "OPENCLAW_GATEWAY_PASSWORD"],
+            "openclaw_agent_target": "openclaw/default",
+        }
+        chat_context = {"agent": {"name": "gateway-junior"}, "language": "ko-KR"}
+
+        with patch.dict(os.environ, {"OPENCLAW_GATEWAY_TOKEN": "gateway-secret"}), patch(
+            "ai22b.talent_foundry.memory_substrate._request_json",
+            side_effect=fake_request_json,
+        ):
+            result = _call_openclaw_gateway_chat(
+                chat_context=chat_context,
+                runtime_config=runtime_config,
+                model="openrouter/meta-llama/llama-3.1-8b",
+            )
+
+        self.assertEqual(captured["url"], "http://127.0.0.1:18789/v1/chat/completions")
+        self.assertEqual(captured["payload"]["model"], "openclaw/default")
+        self.assertEqual(captured["headers"]["Authorization"], "Bearer gateway-secret")
+        self.assertEqual(captured["headers"]["x-openclaw-model"], "openrouter/meta-llama/llama-3.1-8b")
+        self.assertIn("x-openclaw-session-key", captured["headers"])
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["engine"], "openclaw_gateway_http")
+        self.assertEqual(result["response_metadata"]["agent_target"], "openclaw/default")
+        self.assertTrue(result["response_metadata"]["backend_model_header_used"])
+        self.assertNotIn("gateway-secret", json.dumps(result, ensure_ascii=False))
+
     def test_live_llm_failure_fallback_does_not_promote_bad_chat_learning(self) -> None:
         from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
         from ai22b.talent_foundry.memory_substrate import run_chat_turn_from_employment

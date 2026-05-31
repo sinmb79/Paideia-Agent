@@ -43,6 +43,7 @@ OPENCLAW_REFERENCE_URLS = [
     "https://docs.openclaw.ai/channels/channel-routing",
     "https://docs.openclaw.ai/gateway/config-agents",
     "https://docs.openclaw.ai/gateway/config-channels",
+    "https://docs.openclaw.ai/gateway/openai-http-api",
     "https://docs.openclaw.ai/cli/gateway",
     "https://docs.openclaw.ai/cli/channels",
     "https://docs.openclaw.ai/concepts/agent-runtimes",
@@ -511,6 +512,13 @@ def _build_config_patch(
             },
             "gateway": {
                 "mode": "local",
+                "http": {
+                    "endpoints": {
+                        "chatCompletions": {
+                            "enabled": True,
+                        },
+                    },
+                },
             },
             "channels": {
                 **{
@@ -591,6 +599,7 @@ def _build_native_handoff(
             "review_first_patch": str(config_patch_path),
             "patch_contains": [
                 "gateway.mode",
+                "gateway.http.endpoints.chatCompletions.enabled",
                 "models.providers",
                 "agents.defaults.workspace",
                 "agents.list",

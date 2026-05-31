@@ -1174,6 +1174,89 @@ def _call_openai_compatible_chat(
     )
 
 
+def _call_openclaw_gateway_chat(
+    *,
+    chat_context: dict[str, Any],
+    runtime_config: dict[str, Any],
+    model: str | None,
+    max_output_tokens: int = 900,
+) -> dict[str, Any]:
+    base_url = str(runtime_config.get("base_url") or runtime_config.get("model_path") or "http://127.0.0.1:18789/v1").rstrip("/")
+    if not base_url.endswith("/v1"):
+        base_url = f"{base_url}/v1"
+    local_endpoint = base_url.startswith(("http://localhost", "http://127.0.0.1"))
+    env_var, gateway_secret = _first_env_value(runtime_config.get("secret_env_vars", []))
+    if not gateway_secret and not local_endpoint:
+        return {
+            "schema": "ai-talent-live-llm-result/v1",
+            "engine": runtime_config.get("engine"),
+            "status": "unavailable",
+            "reason": "openclaw_gateway_auth_not_configured",
+            "required_env_vars": runtime_config.get("secret_env_vars", []),
+            "model": model,
+        }
+
+    headers: dict[str, str] = {}
+    if gateway_secret:
+        headers["Authorization"] = f"Bearer {gateway_secret}"
+    if model:
+        headers["x-openclaw-model"] = model
+    headers["x-openclaw-message-channel"] = str(
+        runtime_config.get("openclaw_message_channel") or "paideia-agent-chat"
+    )
+
+    agent_target = str(runtime_config.get("openclaw_agent_target") or "openclaw/default")
+    session_key = _stable_id("openclaw-session", chat_context.get("agent", {}).get("name"), chat_context.get("language"))
+    headers["x-openclaw-session-key"] = session_key
+    payload = {
+        "model": agent_target,
+        "user": session_key,
+        "messages": [
+            {"role": "system", "content": _live_chat_instructions(chat_context["agent"]["name"])},
+            {"role": "user", "content": json.dumps(_live_chat_payload(chat_context), ensure_ascii=False)},
+        ],
+        "temperature": 0.2,
+        "max_tokens": max_output_tokens,
+    }
+    try:
+        response = _request_json(
+            url=f"{base_url}/chat/completions",
+            payload=payload,
+            headers=headers,
+        )
+    except Exception as exc:
+        return {
+            "schema": "ai-talent-live-llm-result/v1",
+            "engine": runtime_config.get("engine"),
+            "status": "unavailable",
+            "reason": "openclaw_gateway_chat_call_failed",
+            "model": model,
+            "openclaw_agent_target": agent_target,
+            "error_type": type(exc).__name__,
+            "error": str(exc)[:800],
+        }
+
+    text = ""
+    choices = response.get("choices") or []
+    if choices:
+        message = choices[0].get("message", {}) if isinstance(choices[0], dict) else {}
+        text = str(message.get("content") or choices[0].get("text") or "")
+    return _parsed_live_text_result(
+        engine="openclaw_gateway_http",
+        model=model or agent_target,
+        output_text=text,
+        network_access=str(runtime_config.get("network_access")),
+        response_metadata={
+            "provider": "openclaw_gateway",
+            "base_url": base_url,
+            "agent_target": agent_target,
+            "backend_model_header_used": bool(model),
+            "auth_env": env_var,
+            "usage": response.get("usage"),
+        },
+    )
+
+
 def _call_anthropic_messages_chat(
     *,
     chat_context: dict[str, Any],
@@ -1346,23 +1429,33 @@ def _invoke_live_chat_llm(
     model: str | None,
 ) -> dict[str, Any]:
     engine = runtime_config.get("engine")
-    selected_model = (
-        model
-        or runtime_config.get("model")
-        or runtime_config.get("openclaw_model")
-        or os.environ.get("AI22B_OPENAI_MODEL")
-        or os.environ.get("OPENAI_MODEL")
-        or DEFAULT_OPENAI_CHAT_MODEL
-    )
+    api_protocol = runtime_config.get("api_protocol")
+    if api_protocol == "openclaw_gateway_openai_chat_completions":
+        selected_model = model or runtime_config.get("model") or runtime_config.get("openclaw_model")
+    else:
+        selected_model = (
+            model
+            or runtime_config.get("model")
+            or runtime_config.get("openclaw_model")
+            or os.environ.get("AI22B_OPENAI_MODEL")
+            or os.environ.get("OPENAI_MODEL")
+            or DEFAULT_OPENAI_CHAT_MODEL
+        )
     if (
         runtime_config.get("openclaw_model") == selected_model
         and runtime_config.get("openclaw_provider_id")
+        and runtime_config.get("api_protocol") != "openclaw_gateway_openai_chat_completions"
         and str(selected_model).startswith(f"{runtime_config['openclaw_provider_id']}/")
     ):
         selected_model = str(selected_model).split("/", 1)[1]
-    api_protocol = runtime_config.get("api_protocol")
     if engine == "openai_chatgpt_codex":
         return _call_openai_responses_chat(chat_context=chat_context, model=selected_model)
+    if api_protocol == "openclaw_gateway_openai_chat_completions":
+        return _call_openclaw_gateway_chat(
+            chat_context=chat_context,
+            runtime_config=runtime_config,
+            model=selected_model,
+        )
     if api_protocol == "openai_chat_completions":
         return _call_openai_compatible_chat(
             chat_context=chat_context,

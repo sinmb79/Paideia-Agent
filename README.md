@@ -275,6 +275,7 @@ Paideia now mirrors OpenClaw's `provider/model` selection style. Built-in direct
 - `google_gemini_api`
 - `mistral_api`
 - `openrouter_api`
+- `openclaw_gateway_http` for an installed OpenClaw Gateway's OpenAI-compatible `/v1/chat/completions` endpoint
 - `ollama_local`
 - `lm_studio_local`
 - OpenAI-compatible OpenClaw providers such as `deepseek_api`, `groq_api`, `gmi_api`, `novita_api`, `huggingface_api`, `kilocode_gateway`, `xai_api`, `perplexity_api`, `together_ai`, `fireworks_api`, `deepinfra_api`, `cerebras_api`, `moonshot_api`, `qwen_api`, `z_ai_api`, `venice_api`, `nvidia_api`, `arcee_api`, `chutes_api`, `qianfan_api`, `stepfun_api`, `stepfun_plan_api`, `volcengine_api`, `volcengine_plan_api`, `xiaomi_api`, `xiaomi_token_plan_api`, `vllm_local`, `sglang_local`, `litellm_gateway`, and `vercel_ai_gateway`
@@ -292,6 +293,18 @@ ai22b-talent-foundry hire-installed `
   --role "Research agent" `
   --llm-service "openrouter/meta-llama/llama-3.1-8b" `
   --chat-surface codex-bridge-chat
+```
+
+When OpenClaw itself should own all provider authentication and routing, use the Gateway bridge. Paideia sends the trained talent context to `openclaw/default` and passes the backend model as `x-openclaw-model`, matching OpenClaw's agent-first HTTP contract:
+
+```powershell
+ai22b-talent-foundry hire-installed `
+  --installed-manifest "<installed_agent_manifest.json>" `
+  --role "Research agent" `
+  --llm-service openclaw_gateway_http `
+  --llm-model "openrouter/meta-llama/llama-3.1-8b" `
+  --llm-model-path "http://127.0.0.1:18789/v1" `
+  --chat-surface openclaw-channel-webchat
 ```
 
 For OpenClaw parity discovery:
@@ -357,7 +370,7 @@ ai22b-talent-foundry build-openclaw-runtime-bundle `
 
 The bundle writes:
 
-- `openclaw_config_patch.json`: a review-first `openclaw.json` patch with the selected `provider/model`, `models.providers`, `agents.list`, gateway URL, enabled channels, `channels.modelByChannel`, and `bindings[]`.
+- `openclaw_config_patch.json`: a review-first `openclaw.json` patch with the selected `provider/model`, `models.providers`, `agents.list`, gateway URL, enabled channels, `channels.modelByChannel`, `bindings[]`, and `gateway.http.endpoints.chatCompletions.enabled=true` for OpenAI-compatible Gateway clients.
 - `openclaw_native_handoff.json`: a native OpenClaw handoff plan with `openclaw setup --workspace`, `openclaw doctor`, `openclaw channels add --channel <id> --help`, and `openclaw gateway run` commands for owners who want OpenClaw itself to own provider auth, channel plugins, gateway sessions, and platform delivery.
 - `openclaw.env.example.ps1`: a local PowerShell environment template. It lists secret variable names but never writes secret values.
 - `openclaw_provider_doctor.json`, `openclaw_channel_doctor.json`, and `llm_service_health.json`: readiness checks for model auth, channel bridge requirements, and local/remote runtime status.
@@ -598,6 +611,7 @@ Securities-research talents may help organize evidence, compare sources, draft r
 - [OpenClaw-style onboarding](docs/openclaw_style_onboarding.ko.md)
 - [OpenClaw-style runtime bundle](docs/openclaw_runtime_bundle.ko.md)
 - [OpenClaw native config merge](docs/openclaw_native_config_merge.ko.md)
+- [OpenClaw Gateway HTTP LLM bridge](docs/openclaw_gateway_http_bridge.ko.md)
 - [Tesla-style dataflow board benchmark](docs/tesla_board_benchmark.md)
 - [Legacy 22B-AI system integration](docs/legacy_system_integration.md)
 - [Public release hygiene policy](docs/40_public_release_hygiene_ko.md)
