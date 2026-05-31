@@ -136,6 +136,14 @@ ai22b-talent-foundry start-console `
   --answers examples\graham_junior_onboarding.answers.json
 ```
 
+The interactive first-run path also has an OpenClaw-style alias:
+
+```powershell
+ai22b-talent-foundry onboard
+```
+
+This wizard uses config detection, QuickStart/Advanced mode, Model/Auth, Workspace, Gateway/Channels, Skills, Education Path, Runtime, Agent Identity, Health Check, and Finish steps.
+
 This sample first selects the LLM service and chat surface, then lets that selected LLM act as the curriculum researcher for the Graham-inspired securities research track.
 
 List available role models:
@@ -340,6 +348,7 @@ Securities-research talents may help organize evidence, compare sources, draft r
 - [Hermes/OpenClaw benchmark notes](docs/paideia_agent_benchmark.md)
 - [English benchmark summary](docs/paideia_agent_benchmark.en.md)
 - [Research basis](docs/research_basis.md)
+- [OpenClaw-style onboarding](docs/openclaw_style_onboarding.ko.md)
 - [Tesla-style dataflow board benchmark](docs/tesla_board_benchmark.md)
 - [Legacy 22B-AI system integration](docs/legacy_system_integration.md)
 - [Public release hygiene policy](docs/40_public_release_hygiene_ko.md)

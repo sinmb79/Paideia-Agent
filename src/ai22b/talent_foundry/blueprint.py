@@ -39,6 +39,15 @@ TRACK_CATALOG: list[dict[str, Any]] = [
         "domains": ["요구사항 분석", "설계", "구현", "테스트", "보안", "배포"],
         "doctoral_project": "로컬 개발 에이전트의 검증 중심 작업 루프",
     },
+    {
+        "track_id": "owner_self_extension",
+        "name": "오너 자기 확장 트랙",
+        "specialty": "오너 업무 확장 AI 인재",
+        "target_role": "개인 업무 확장 에이전트",
+        "keywords": ["나 자신", "내 업무", "자기", "복제", "확장", "개인", "문서", "프로젝트"],
+        "domains": ["개인 문서", "업무 습관", "프로젝트 기억", "선호", "로컬 지식", "권한 경계"],
+        "doctoral_project": "오너 제공 로컬 자료를 근거로 업무 습관을 확장하는 안전한 개인 에이전트",
+    },
 ]
 
 FALLBACK_TRACK = {
@@ -272,6 +281,8 @@ def create_agent_training_blueprint(
     )
 
     track = dict(_track_from_role_model(role_model, curriculum)) if role_model and curriculum else dict(_select_track(request))
+    if domain == "owner_self_extension" and not role_model:
+        track = dict(next(item for item in TRACK_CATALOG if item["track_id"] == "owner_self_extension"))
     if domain == "securities_research" and not role_model:
         track = dict(
             _track_from_role_model(

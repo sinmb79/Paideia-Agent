@@ -86,6 +86,14 @@ ai22b-talent-foundry start-console `
   --answers examples\graham_junior_onboarding.answers.json
 ```
 
+대화형 첫 실행은 OpenClaw식 별칭을 사용할 수 있습니다.
+
+```powershell
+ai22b-talent-foundry onboard
+```
+
+이 wizard는 기존 설정 감지, QuickStart/Advanced, Model/Auth, Workspace, Gateway/Channels, Skills, Education Path, Runtime, Agent Identity, Health Check, Finish 순서로 진행합니다.
+
 Hopper Junior 예시:
 
 ```powershell
@@ -143,5 +151,6 @@ ai22b-talent-foundry onboard-agent `
 - [설명문 기준 구현 정합성 검토](docs/manifesto_alignment_review.ko.md)
 - [연구 근거](docs/research_basis.ko.md)
 - [Research Basis](docs/research_basis.md)
+- [OpenClaw식 온보딩](docs/openclaw_style_onboarding.ko.md)
 - [Tesla 기판 벤치마킹](docs/tesla_board_benchmark.ko.md)
 - [기존 22B-AI 시스템 통합](docs/legacy_system_integration.ko.md)

@@ -306,19 +306,38 @@ Write-Host $Output
 
 def _console_answers_template() -> dict[str, Any]:
     return {
+        "existing_config_action": "review_update",
+        "onboarding_mode": "quickstart",
         "owner": "보스",
+        "llm_service": "openai_chatgpt_codex",
+        "llm_model": "",
+        "llm_model_path": "",
+        "workspace_dir": "",
+        "chat_surface": "codex-bridge-chat",
+        "gateway_mode": "local_loopback",
+        "channel_mode": "local_only",
+        "web_search_provider": "skip_now",
+        "skills_mode": "quarantine_import_only",
+        "talent_source": "public_role_model",
         "request": "증권전문가 에이전트를 길러서 주간 리서치 루틴을 맡기고 싶다.",
+        "domain": "securities_research",
+        "role_model_id": "graham_value_investing",
+        "private_curriculum_dir": "",
+        "agent_surface": "cli-console",
         "talent_name": "다온",
         "gender": "남자",
         "initial_goal": "삼성전자 주간 리서치 루틴을 만든다.",
         "cycle_note": "첫 주: 거시경제 질문과 기업분석 질문을 분리한다.",
         "post_hire_mode": "projection_swarm",
+        "simulation_rollouts_enabled": "yes",
+        "agent_id_card_mode": "payload_only",
         "swarm_name": "다온 본체 제어 분신 군체",
         "swarm_domain": "증권 리서치",
         "swarm_objective": "분기 리서치 루틴을 본체 제어 분신 군체로 검토한다.",
         "team_name": "다온 증권 박사팀",
         "team_domain": "증권 리서치",
         "team_objective": "거시경제, 기업분석, 퀀트, 리스크 관점을 별도 전문팀으로 검토한다.",
+        "finish_action": "chat",
     }
 
 
