@@ -165,7 +165,15 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertIn("kilocode_gateway", llm_service_ids())
         self.assertIn("ollama_cloud", llm_service_ids())
         self.assertIn("synthetic_api", llm_service_ids())
+        self.assertIn("arcee_api", llm_service_ids())
+        self.assertIn("chutes_api", llm_service_ids())
+        self.assertIn("qianfan_api", llm_service_ids())
+        self.assertIn("inferrs_local", llm_service_ids())
+        self.assertIn("stepfun_api", llm_service_ids())
+        self.assertIn("volcengine_plan_api", llm_service_ids())
+        self.assertIn("xiaomi_api", llm_service_ids())
         self.assertIn("openclaw-channel-telegram", chat_surface_ids())
+        self.assertIn("openclaw-channel-bluebubbles", chat_surface_ids())
         self.assertIn("openclaw-channel-whatsapp", chat_surface_ids())
         questions = questions_with_choices()
         role_question = next(item for item in questions if item["id"] == "role_model_id")
@@ -205,6 +213,18 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertEqual(ollama_cloud["service_id"], "ollama_cloud")
         self.assertEqual(ollama_cloud["api_protocol"], "ollama_chat")
         self.assertEqual(ollama_cloud["network_access"], "external_api_selected_data_minimized")
+
+        arcee = resolve_llm_service(llm_service="arcee/trinity-large-thinking")
+        self.assertEqual(arcee["service_id"], "arcee_api")
+        self.assertEqual(arcee["api_protocol"], "openai_chat_completions")
+
+        minimax = resolve_llm_service(llm_service="minimax/MiniMax-M2.7")
+        self.assertEqual(minimax["service_id"], "minimax_api")
+        self.assertEqual(minimax["api_protocol"], "anthropic_messages")
+
+        stepfun_plan = resolve_llm_service(llm_service="stepfun-plan/step-3.5-flash")
+        self.assertEqual(stepfun_plan["service_id"], "stepfun_plan_api")
+        self.assertEqual(stepfun_plan["api_protocol"], "openai_chat_completions")
 
     def test_openclaw_style_onboarding_questions_are_step_based(self) -> None:
         from ai22b.talent_foundry.console import WIZARD_STEPS, questions_with_choices
@@ -336,6 +356,24 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             output = Path(tmp) / "openclaw_compat.json"
             self.assertEqual(cli_main(["list-openclaw-compat", "--output", str(output)]), 0)
             data = json.loads(output.read_text(encoding="utf-8"))
+            provider_connectors_output = Path(tmp) / "provider_connectors.json"
+            provider_doctor_output = Path(tmp) / "provider_doctor.json"
+            self.assertEqual(
+                cli_main(["list-openclaw-provider-connectors", "--output", str(provider_connectors_output)]),
+                0,
+            )
+            self.assertEqual(
+                cli_main(
+                    [
+                        "doctor-openclaw-provider-connectors",
+                        "--provider",
+                        "arcee",
+                        "--output",
+                        str(provider_doctor_output),
+                    ]
+                ),
+                0,
+            )
             connectors_output = Path(tmp) / "channel_connectors.json"
             doctor_output = Path(tmp) / "channel_doctor.json"
             self.assertEqual(
@@ -346,6 +384,8 @@ class GrahamTalentFoundryTests(unittest.TestCase):
                 cli_main(["doctor-openclaw-channel-connectors", "--channel", "telegram", "--output", str(doctor_output)]),
                 0,
             )
+            provider_connectors = json.loads(provider_connectors_output.read_text(encoding="utf-8"))
+            provider_doctor = json.loads(provider_doctor_output.read_text(encoding="utf-8"))
             connectors = json.loads(connectors_output.read_text(encoding="utf-8"))
             channel_doctor = json.loads(doctor_output.read_text(encoding="utf-8"))
 
@@ -362,6 +402,17 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertIn("huggingface", provider_ids)
         self.assertIn("kilocode", provider_ids)
         self.assertIn("ollama-cloud", provider_ids)
+        self.assertIn("arcee", provider_ids)
+        self.assertIn("chutes", provider_ids)
+        self.assertIn("qianfan", provider_ids)
+        self.assertIn("inferrs", provider_ids)
+        self.assertIn("minimax", provider_ids)
+        self.assertIn("stepfun", provider_ids)
+        self.assertIn("stepfun-plan", provider_ids)
+        self.assertIn("volcengine", provider_ids)
+        self.assertIn("volcengine-plan", provider_ids)
+        self.assertIn("xiaomi", provider_ids)
+        self.assertIn("xiaomi-token-plan", provider_ids)
         self.assertIn("volcengine", all_provider_ids)
         self.assertIn("volcengine-plan", all_provider_ids)
         self.assertIn("byteplus-plan", all_provider_ids)
@@ -369,11 +420,18 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertIn("pixverse", all_provider_ids)
         self.assertIn("ds4", all_provider_ids)
         self.assertIn("discord", channel_ids)
+        self.assertIn("bluebubbles", channel_ids)
         self.assertIn("telegram", channel_ids)
         self.assertIn("whatsapp", channel_ids)
         self.assertIn("webchat", channel_ids)
+        self.assertIn("https://docs.openclaw.ai/providers", data["model_providers"]["source_urls"])
         self.assertIn("https://docs.openclaw.ai/providers/index", data["model_providers"]["source_urls"])
         self.assertIn("https://docs.openclaw.ai/channels", data["chat_channels"]["source_urls"])
+        self.assertEqual(provider_connectors["schema"], "ai22b-openclaw-provider-connector-catalog/v1")
+        self.assertGreaterEqual(provider_connectors["summary"]["live_adapter_ready_count"], 35)
+        self.assertEqual(provider_doctor["schema"], "ai22b-openclaw-provider-connector-doctor/v1")
+        self.assertEqual(provider_doctor["results"][0]["provider_id"], "arcee")
+        self.assertFalse(provider_doctor["secret_values_stored"])
         self.assertEqual(connectors["schema"], "ai22b-openclaw-channel-connector-catalog/v1")
         self.assertGreaterEqual(connectors["summary"]["channel_count"], 26)
         self.assertEqual(channel_doctor["schema"], "ai22b-openclaw-channel-connector-doctor/v1")
@@ -397,6 +455,7 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertEqual(catalog["schema"], "ai22b-openclaw-channel-connector-catalog/v1")
         self.assertEqual(manifest_ids, catalog_ids)
         self.assertEqual(catalog["summary"]["generic_normalized_gateway_ready_count"], len(manifest_ids))
+        self.assertEqual(by_id["bluebubbles"]["connector_status"], "bundled_plugin_required_macos_server")
         self.assertTrue(by_id["telegram"]["direct_raw_ingress_ready"])
         self.assertTrue(by_id["telegram"]["direct_delivery_ready"])
         self.assertEqual(by_id["whatsapp"]["connector_status"], "external_plugin_required_qr_pairing")
@@ -406,6 +465,38 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertFalse(doctor_by_id["whatsapp"]["ready_for_live_delivery"])
         self.assertTrue(doctor_by_id["webchat"]["ready_for_live_delivery"])
         self.assertFalse(doctor["secret_values_stored"])
+
+    def test_provider_connector_catalog_covers_openclaw_provider_manifest(self) -> None:
+        from ai22b.talent_foundry.openclaw_compat import openclaw_provider_manifest
+        from ai22b.talent_foundry.provider_connectors import (
+            build_openclaw_provider_connector_catalog,
+            doctor_openclaw_provider_connectors,
+        )
+
+        catalog = build_openclaw_provider_connector_catalog()
+        doctor = doctor_openclaw_provider_connectors(providers=["arcee", "minimax", "inferrs", "alibaba"])
+
+        manifest = openclaw_provider_manifest()
+        manifest_ids = {item["provider_id"] for item in manifest["providers"]} | set(manifest["manifest_only_providers"])
+        catalog_ids = {item["provider_id"] for item in catalog["providers"]}
+        by_id = {item["provider_id"]: item for item in catalog["providers"]}
+        doctor_by_id = {item["provider_id"]: item for item in doctor["results"]}
+
+        self.assertEqual(catalog["schema"], "ai22b-openclaw-provider-connector-catalog/v1")
+        self.assertEqual(manifest_ids, catalog_ids)
+        self.assertTrue(by_id["arcee"]["live_adapter_ready"])
+        self.assertEqual(by_id["arcee"]["api_protocol"], "openai_chat_completions")
+        self.assertTrue(by_id["minimax"]["live_adapter_ready"])
+        self.assertEqual(by_id["minimax"]["api_protocol"], "anthropic_messages")
+        self.assertTrue(by_id["inferrs"]["local_endpoint"])
+        self.assertTrue(doctor_by_id["inferrs"]["ready_for_live_llm"])
+        self.assertEqual(by_id["alibaba"]["connector_status"], "provider_plugin_required")
+        self.assertFalse(doctor["secret_values_stored"])
+
+        with patch.dict(os.environ, {"OPENCLAW_LIVE_ARCEE_KEY": "test-arcee-key"}, clear=False):
+            arcee_ready = doctor_openclaw_provider_connectors(providers=["arcee"])
+        self.assertTrue(arcee_ready["results"][0]["ready_for_live_llm"])
+        self.assertEqual(arcee_ready["results"][0]["checks"][0]["id"], "env:OPENCLAW_LIVE_ARCEE_KEY")
 
     def test_openclaw_channel_gateway_routes_message_to_paideia_chat(self) -> None:
         from ai22b.talent_foundry.blueprint import create_agent_training_blueprint

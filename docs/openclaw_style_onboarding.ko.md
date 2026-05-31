@@ -52,11 +52,11 @@ Paideia는 OpenClaw처럼 `provider/model` 선택을 지원합니다. 예를 들
 ai22b-talent-foundry list-openclaw-compat --output openclaw_compat.json
 ```
 
-현재 직접 호출 가능한 계열은 OpenAI/Codex, Anthropic Messages, Gemini generateContent, OpenAI-compatible provider(OpenRouter, Mistral, DeepSeek, Groq, GMI, NovitaAI, Hugging Face Inference, Kilo Gateway, xAI, Perplexity, Together, Fireworks, DeepInfra, vLLM, SGLang 등), Ollama/Ollama Cloud, Synthetic입니다. Bedrock, Copilot Proxy, Gemini CLI, Vertex, ComfyUI, Volcengine/BytePlus plan, Qwen OAuth 등 provider별 플러그인이 필요한 항목은 온보딩 manifest에는 표시하지만 live 호출은 provider plugin 설정 전까지 비활성으로 둡니다.
+현재 직접 호출 가능한 계열은 OpenAI/Codex, Anthropic Messages, Gemini generateContent, OpenAI-compatible provider(OpenRouter, Mistral, DeepSeek, Groq, GMI, NovitaAI, Hugging Face Inference, Kilo Gateway, xAI, Perplexity, Together, Fireworks, DeepInfra, Arcee, Chutes, Qianfan, StepFun, Volcengine/Doubao, Xiaomi MiMo, vLLM, SGLang 등), Ollama/Ollama Cloud, Synthetic, MiniMax, Inferrs입니다. Bedrock, Copilot, Gemini CLI, Vertex, ComfyUI, Qwen OAuth, 미디어 생성 provider 등 provider별 플러그인/OAuth/custom runner가 필요한 항목은 온보딩 manifest에는 표시하지만 live 호출은 provider plugin 설정 전까지 비활성으로 둡니다.
 
-OpenClaw의 canonical provider ID를 우선 사용합니다. 예를 들어 LM Studio는 `lmstudio/*`, Z.AI는 `zai/*`, Kilo Gateway는 `kilocode/*`, Ollama Cloud는 `ollama-cloud/*` 형식을 사용합니다. 기존 사용자가 헷갈리지 않도록 `lm-studio`, `z-ai`, `kilo-gateway` 같은 별칭도 계속 해석합니다.
+OpenClaw의 canonical provider ID를 우선 사용합니다. 예를 들어 LM Studio는 `lmstudio/*`, Z.AI는 `zai/*`, Kilo Gateway는 `kilocode/*`, Ollama Cloud는 `ollama-cloud/*`, Arcee는 `arcee/*`, StepFun Plan은 `stepfun-plan/*`, Volcengine Plan은 `volcengine-plan/*` 형식을 사용합니다. 기존 사용자가 헷갈리지 않도록 `lm-studio`, `z-ai`, `kilo-gateway` 같은 별칭도 계속 해석합니다.
 
-채팅 표면도 OpenClaw channel 이름을 노출합니다. `openclaw-channel-telegram`, `openclaw-channel-discord`, `openclaw-channel-slack`, `openclaw-channel-whatsapp`, `openclaw-channel-signal`, `openclaw-channel-matrix`, `openclaw-channel-webchat` 같은 항목은 Gateway/페어링/허용목록 검토 전까지 manifest-only 상태입니다.
+채팅 표면도 OpenClaw channel 이름을 노출합니다. `openclaw-channel-telegram`, `openclaw-channel-discord`, `openclaw-channel-slack`, `openclaw-channel-whatsapp`, `openclaw-channel-signal`, `openclaw-channel-bluebubbles`, `openclaw-channel-matrix`, `openclaw-channel-webchat` 같은 항목은 Gateway/페어링/허용목록 검토 전까지 manifest-only 상태입니다.
 
 채널 메시지는 로컬 gateway envelope로 실행할 수 있습니다. Paideia core는 실제 Telegram/Discord 토큰을 저장하거나 외부 전송을 직접 수행하지 않고, 채널 플러그인이 보낼 수 있는 outbound envelope를 반환합니다.
 
@@ -110,11 +110,15 @@ ai22b-talent-foundry translate-openclaw-platform-event `
 전체 OpenClaw 채널 중 어떤 것은 직접 adapter가 있고, 어떤 것은 플러그인/브리지가 필요합니다. 이를 설치 전 확인하려면 다음 doctor를 실행합니다.
 
 ```powershell
+ai22b-talent-foundry list-openclaw-provider-connectors --output provider_connectors.json
+ai22b-talent-foundry doctor-openclaw-provider-connectors --output provider_connector_doctor.json
 ai22b-talent-foundry list-openclaw-channel-connectors --output channel_connectors.json
 ai22b-talent-foundry doctor-openclaw-channel-connectors --output channel_connector_doctor.json
 ```
 
-이 doctor는 26개 OpenClaw 채널을 모두 표시하고, Telegram/Discord/Slack/WebChat처럼 바로 연결 가능한 항목과 WhatsApp QR pairing, Signal signal-cli, Matrix bot, iMessage macOS bridge처럼 별도 준비가 필요한 항목을 분리합니다. 비밀값은 저장하지 않고 환경변수 존재 여부만 기록합니다.
+provider doctor는 OpenClaw provider directory의 모든 provider/model 선택지를 Paideia live adapter, 로컬 서버, OpenClaw provider plugin/OAuth/custom runner 필요 항목으로 분리합니다. channel doctor는 27개 채널을 표시하고, Telegram/Discord/Slack/WebChat처럼 바로 연결 가능한 항목과 BlueBubbles macOS server, WhatsApp QR pairing, Signal signal-cli, Matrix bot, legacy iMessage macOS bridge처럼 별도 준비가 필요한 항목을 분리합니다. 비밀값은 저장하지 않고 환경변수 존재 여부만 기록합니다.
+
+API key 후보도 OpenClaw 방식에 맞춥니다. Paideia는 `OPENCLAW_LIVE_<PROVIDER>_KEY`, `<PROVIDER>_API_KEYS`, `<PROVIDER>_API_KEY`, provider별 특수 환경변수를 순서대로 확인하고, key list에는 첫 번째 non-empty 값을 사용합니다.
 
 outbound envelope는 곧바로 외부로 보내기보다 먼저 dry-run delivery로 검토합니다.
 

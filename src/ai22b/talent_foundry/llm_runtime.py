@@ -22,6 +22,8 @@ EXTERNAL_API_ENGINES = {
     "mistral_api",
     "openrouter_api",
     "openclaw_openai_compatible",
+    "openclaw_anthropic_compatible",
+    "ollama_cloud_http",
     "openclaw_manifest_only",
 }
 LOCAL_HTTP_ENGINES = {"ollama_local_http", "lm_studio_local_http"}
@@ -47,7 +49,9 @@ def build_llm_runtime_config(
         "mistral_api",
         "openrouter_api",
         "openclaw_openai_compatible",
+        "openclaw_anthropic_compatible",
         "openclaw_manifest_only",
+        "ollama_cloud_http",
         "ollama_local_http",
         "lm_studio_local_http",
     ]

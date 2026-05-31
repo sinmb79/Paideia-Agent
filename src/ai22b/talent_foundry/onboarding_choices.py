@@ -8,6 +8,7 @@ from typing import Any
 from ai22b.talent_foundry.openclaw_compat import (
     find_openclaw_channel,
     find_openclaw_provider,
+    openclaw_secret_env_candidates,
     openclaw_channel_manifest,
     openclaw_chat_surface_entries,
     openclaw_llm_service_entries,
@@ -302,6 +303,15 @@ def resolve_llm_service(
         resolved["openclaw_model"] = f"{resolved['openclaw_provider_id']}/{llm_model}"
     if provider_from_model:
         resolved["openclaw_provider"] = provider_from_model
+    if resolved.get("openclaw_provider_id"):
+        resolved["secret_env_vars"] = openclaw_secret_env_candidates(
+            str(resolved["openclaw_provider_id"]),
+            list(resolved.get("secret_env_vars", [])),
+        )
+        resolved["requires"] = [
+            *resolved["secret_env_vars"],
+            *[item for item in resolved.get("requires", []) if "API_KEY" not in str(item) and "OPENCLAW_LIVE" not in str(item)],
+        ]
     engine = resolved["engine"]
     base_url = str(resolved.get("selected_model_path") or resolved.get("base_url") or "")
     if engine == "openai_chatgpt_codex":

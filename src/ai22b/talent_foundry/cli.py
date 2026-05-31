@@ -62,6 +62,10 @@ from ai22b.talent_foundry.onboarding_choices import (
 from ai22b.talent_foundry.openclaw_compat import openclaw_channel_manifest, openclaw_provider_manifest
 from ai22b.talent_foundry.program import create_talent_plan
 from ai22b.talent_foundry.program_manifest import build_public_program_manifest
+from ai22b.talent_foundry.provider_connectors import (
+    build_openclaw_provider_connector_catalog,
+    doctor_openclaw_provider_connectors,
+)
 from ai22b.talent_foundry.records import build_career_records
 from ai22b.talent_foundry.role_models import list_role_models, summarize_role_model
 from ai22b.talent_foundry.skill_migration import migrate_external_agent_assets
@@ -125,6 +129,20 @@ def _build_parser() -> argparse.ArgumentParser:
         help="List OpenClaw-compatible LLM providers and chat channels supported by Paideia onboarding.",
     )
     list_openclaw_compat.add_argument("--output")
+
+    list_provider_connectors = subparsers.add_parser(
+        "list-openclaw-provider-connectors",
+        help="List OpenClaw provider connector readiness across live adapters and plugin-required providers.",
+    )
+    list_provider_connectors.add_argument("--provider", action="append", default=[])
+    list_provider_connectors.add_argument("--output")
+
+    doctor_provider_connectors = subparsers.add_parser(
+        "doctor-openclaw-provider-connectors",
+        help="Doctor OpenClaw provider readiness without storing API keys.",
+    )
+    doctor_provider_connectors.add_argument("--provider", action="append", default=[])
+    doctor_provider_connectors.add_argument("--output", required=True)
 
     list_channel_connectors = subparsers.add_parser(
         "list-openclaw-channel-connectors",
@@ -696,6 +714,25 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(str(output_path))
         else:
             print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.command == "list-openclaw-provider-connectors":
+        result = build_openclaw_provider_connector_catalog(providers=args.provider or None)
+        if args.output:
+            output_path = Path(args.output)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+            print(str(output_path))
+        else:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.command == "doctor-openclaw-provider-connectors":
+        doctor_openclaw_provider_connectors(
+            providers=args.provider or None,
+            output_path=Path(args.output),
+        )
+        print(str(Path(args.output)))
         return 0
 
     if args.command == "list-openclaw-channel-connectors":

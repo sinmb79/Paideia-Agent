@@ -6,7 +6,7 @@ from typing import Any
 
 OPENCLAW_PROVIDER_CATALOG_SCHEMA = "ai22b-openclaw-provider-catalog/v1"
 OPENCLAW_CHANNEL_CATALOG_SCHEMA = "ai22b-openclaw-channel-catalog/v1"
-OPENCLAW_CATALOG_SOURCE_VERSION = "official_openclaw_docs_checked_2026-05-31"
+OPENCLAW_CATALOG_SOURCE_VERSION = "official_openclaw_docs_checked_2026-05-31_current_provider_directory"
 
 
 OPENCLAW_MODEL_PROVIDERS: list[dict[str, Any]] = [
@@ -86,6 +86,127 @@ OPENCLAW_MODEL_PROVIDERS: list[dict[str, Any]] = [
         "secret_env_vars": [],
         "aliases": ["lm-studio", "lm_studio", "lmstudio"],
         "status": "ready_when_local_server_running",
+    },
+    {
+        "provider_id": "arcee",
+        "service_id": "arcee_api",
+        "label": "Arcee AI",
+        "engine": "openclaw_openai_compatible",
+        "api_protocol": "openai_chat_completions",
+        "base_url": "https://api.arcee.ai/api/v1",
+        "secret_env_vars": ["OPENCLAW_LIVE_ARCEE_KEY", "ARCEEAI_API_KEY", "OPENROUTER_API_KEY"],
+        "aliases": ["arcee", "arcee-ai", "arcee_ai"],
+        "status": "ready_when_key_configured",
+    },
+    {
+        "provider_id": "chutes",
+        "service_id": "chutes_api",
+        "label": "Chutes",
+        "engine": "openclaw_openai_compatible",
+        "api_protocol": "openai_chat_completions",
+        "base_url": "https://llm.chutes.ai/v1",
+        "secret_env_vars": ["OPENCLAW_LIVE_CHUTES_KEY", "CHUTES_API_KEY", "CHUTES_OAUTH_TOKEN"],
+        "aliases": ["chutes", "chutes-ai", "chutes_ai"],
+        "status": "ready_when_key_configured",
+    },
+    {
+        "provider_id": "inferrs",
+        "service_id": "inferrs_local",
+        "label": "Inferrs local OpenAI-compatible server",
+        "engine": "openclaw_openai_compatible",
+        "api_protocol": "openai_chat_completions",
+        "base_url": "http://127.0.0.1:8080/v1",
+        "secret_env_vars": [],
+        "aliases": ["inferrs"],
+        "status": "ready_when_local_server_running",
+    },
+    {
+        "provider_id": "minimax",
+        "service_id": "minimax_api",
+        "label": "MiniMax",
+        "engine": "openclaw_anthropic_compatible",
+        "api_protocol": "anthropic_messages",
+        "base_url": "https://api.minimax.io/anthropic",
+        "secret_env_vars": ["OPENCLAW_LIVE_MINIMAX_KEY", "MINIMAX_API_KEY"],
+        "aliases": ["minimax"],
+        "status": "ready_when_key_configured",
+    },
+    {
+        "provider_id": "qianfan",
+        "service_id": "qianfan_api",
+        "label": "Qianfan",
+        "engine": "openclaw_openai_compatible",
+        "api_protocol": "openai_chat_completions",
+        "base_url": "https://qianfan.baidubce.com/v2",
+        "secret_env_vars": ["OPENCLAW_LIVE_QIANFAN_KEY", "QIANFAN_API_KEY"],
+        "aliases": ["qianfan", "baidu-qianfan"],
+        "status": "ready_when_key_configured",
+    },
+    {
+        "provider_id": "stepfun",
+        "service_id": "stepfun_api",
+        "label": "StepFun",
+        "engine": "openclaw_openai_compatible",
+        "api_protocol": "openai_chat_completions",
+        "base_url": "https://api.stepfun.ai/v1",
+        "secret_env_vars": ["OPENCLAW_LIVE_STEPFUN_KEY", "STEPFUN_API_KEY"],
+        "aliases": ["stepfun", "stepfun-standard"],
+        "status": "ready_when_key_configured",
+    },
+    {
+        "provider_id": "stepfun-plan",
+        "service_id": "stepfun_plan_api",
+        "label": "StepFun Plan",
+        "engine": "openclaw_openai_compatible",
+        "api_protocol": "openai_chat_completions",
+        "base_url": "https://api.stepfun.ai/step_plan/v1",
+        "secret_env_vars": ["OPENCLAW_LIVE_STEPFUN_KEY", "STEPFUN_API_KEY"],
+        "aliases": ["stepfun-plan", "stepfun_plan"],
+        "status": "ready_when_key_configured",
+    },
+    {
+        "provider_id": "volcengine",
+        "service_id": "volcengine_api",
+        "label": "Volcengine / Doubao",
+        "engine": "openclaw_openai_compatible",
+        "api_protocol": "openai_chat_completions",
+        "base_url": "https://ark.cn-beijing.volces.com/api/v3",
+        "secret_env_vars": ["OPENCLAW_LIVE_VOLCENGINE_KEY", "VOLCANO_ENGINE_API_KEY"],
+        "aliases": ["volcengine", "volcano-engine", "doubao"],
+        "status": "ready_when_key_configured",
+    },
+    {
+        "provider_id": "volcengine-plan",
+        "service_id": "volcengine_plan_api",
+        "label": "Volcengine Plan / Ark Coding",
+        "engine": "openclaw_openai_compatible",
+        "api_protocol": "openai_chat_completions",
+        "base_url": "https://ark.cn-beijing.volces.com/api/coding/v3",
+        "secret_env_vars": ["OPENCLAW_LIVE_VOLCENGINE_KEY", "VOLCANO_ENGINE_API_KEY"],
+        "aliases": ["volcengine-plan", "volcengine_plan", "ark-code"],
+        "status": "ready_when_key_configured",
+    },
+    {
+        "provider_id": "xiaomi",
+        "service_id": "xiaomi_api",
+        "label": "Xiaomi MiMo",
+        "engine": "openclaw_openai_compatible",
+        "api_protocol": "openai_chat_completions",
+        "base_url": "https://api.xiaomimimo.com/v1",
+        "secret_env_vars": ["OPENCLAW_LIVE_XIAOMI_KEY", "XIAOMI_API_KEY"],
+        "aliases": ["xiaomi", "xiaomi-mimo", "mimo"],
+        "status": "ready_when_key_configured",
+    },
+    {
+        "provider_id": "xiaomi-token-plan",
+        "service_id": "xiaomi_token_plan_api",
+        "label": "Xiaomi MiMo Token Plan",
+        "engine": "openclaw_openai_compatible",
+        "api_protocol": "openai_chat_completions",
+        "base_url": "https://token-plan-sgp.xiaomimimo.com/v1",
+        "secret_env_vars": ["OPENCLAW_LIVE_XIAOMI_KEY", "XIAOMI_TOKEN_PLAN_API_KEY"],
+        "aliases": ["xiaomi-token-plan", "xiaomi_token_plan"],
+        "status": "ready_when_key_configured",
     },
     {
         "provider_id": "gmi",
@@ -343,15 +464,13 @@ OPENCLAW_MODEL_PROVIDERS: list[dict[str, Any]] = [
 ]
 
 OPENCLAW_MANIFEST_ONLY_PROVIDERS = [
-    "alibaba-model-studio",
+    "alibaba",
     "amazon-bedrock",
     "amazon-bedrock-mantle",
     "anthropic-vertex",
-    "arcee-ai",
     "azure-speech",
     "byteplus-plan",
     "byteplus",
-    "chutes",
     "claude-max-api-proxy",
     "cloudflare-ai-gateway",
     "comfyui",
@@ -363,36 +482,41 @@ OPENCLAW_MANIFEST_ONLY_PROVIDERS = [
     "google-gemini-cli",
     "google-vertex",
     "gradium",
-    "inferrs",
     "inworld",
-    "kimi",
-    "minimax",
     "minimax-portal",
     "opencode",
     "opencode-go",
     "pixverse",
-    "qianfan",
     "qwen-oauth",
     "runway",
     "senseaudio",
-    "stepfun",
-    "stepfun-plan",
     "tencent-tokenhub",
-    "volcengine",
-    "volcengine-plan",
     "vydra",
-    "xiaomi",
-    "xiaomi-token-plan",
 ]
 
 OPENCLAW_MANIFEST_ONLY_PROVIDER_ALIASES: dict[str, list[str]] = {
+    "alibaba": ["alibaba-model-studio", "modelstudio"],
     "tencent-tokenhub": ["tencent-cloud-tokenhub"],
-    "volcengine": ["volcengine-doubao"],
-    "xiaomi": ["xiaomi-mimo"],
 }
 
 
+def openclaw_secret_env_candidates(provider_id: str, explicit: list[str] | None = None) -> list[str]:
+    prefix = provider_id.upper().replace("-", "_").replace(".", "_")
+    candidates = [
+        f"OPENCLAW_LIVE_{prefix}_KEY",
+        f"{prefix}_API_KEYS",
+        f"{prefix}_API_KEY",
+        *(explicit or []),
+    ]
+    deduped: list[str] = []
+    for candidate in candidates:
+        if candidate and candidate not in deduped:
+            deduped.append(candidate)
+    return deduped
+
+
 OPENCLAW_CHANNELS: list[dict[str, Any]] = [
+    {"channel_id": "bluebubbles", "label": "BlueBubbles", "transport": "BlueBubbles macOS server REST API"},
     {"channel_id": "discord", "label": "Discord", "transport": "Discord Bot API + Gateway"},
     {"channel_id": "slack", "label": "Slack", "transport": "Bolt SDK"},
     {"channel_id": "telegram", "label": "Telegram", "transport": "Bot API via grammY"},
@@ -400,7 +524,7 @@ OPENCLAW_CHANNELS: list[dict[str, Any]] = [
     {"channel_id": "signal", "label": "Signal", "transport": "signal-cli"},
     {"channel_id": "microsoft-teams", "label": "Microsoft Teams", "transport": "Bot Framework"},
     {"channel_id": "google-chat", "label": "Google Chat", "transport": "HTTP webhook"},
-    {"channel_id": "imessage", "label": "iMessage", "transport": "macOS imsg bridge"},
+    {"channel_id": "imessage", "label": "iMessage legacy", "transport": "legacy macOS imsg bridge"},
     {"channel_id": "irc", "label": "IRC", "transport": "IRC server"},
     {"channel_id": "line", "label": "LINE", "transport": "LINE Messaging API"},
     {"channel_id": "matrix", "label": "Matrix", "transport": "Matrix protocol"},
@@ -431,6 +555,7 @@ def openclaw_provider_manifest() -> dict[str, Any]:
         "manifest_only_providers": list(OPENCLAW_MANIFEST_ONLY_PROVIDERS),
         "manifest_only_provider_aliases": deepcopy(OPENCLAW_MANIFEST_ONLY_PROVIDER_ALIASES),
         "source_urls": [
+            "https://docs.openclaw.ai/providers",
             "https://docs.openclaw.ai/providers/index",
             "https://docs.openclaw.ai/concepts/model-providers",
         ],
@@ -476,13 +601,16 @@ def openclaw_llm_service_entries() -> list[dict[str, Any]]:
                 "status": provider["status"],
                 "default_chat_mode": "live_when_configured",
                 "model_policy": "Use OpenClaw-style provider/model names, e.g. provider/model.",
-                "requires": [*provider.get("secret_env_vars", []), "network access or local server"],
+                "requires": [
+                    *openclaw_secret_env_candidates(provider["provider_id"], provider.get("secret_env_vars", [])),
+                    "network access or local server",
+                ],
                 "researcher_fit": "openclaw_provider_choice",
                 "privacy_note": "Sends selected memory summaries only when live mode is explicitly used.",
                 "openclaw_provider_id": provider["provider_id"],
                 "api_protocol": provider["api_protocol"],
                 "base_url": provider["base_url"],
-                "secret_env_vars": provider.get("secret_env_vars", []),
+                "secret_env_vars": openclaw_secret_env_candidates(provider["provider_id"], provider.get("secret_env_vars", [])),
                 "aliases": provider.get("aliases", []),
             }
         )
@@ -559,7 +687,12 @@ def find_openclaw_provider(identifier: str) -> dict[str, Any] | None:
             *{str(alias).casefold() for alias in provider.get("aliases", [])},
         }
         if value in ids:
-            return deepcopy(provider)
+            resolved = deepcopy(provider)
+            resolved["secret_env_vars"] = openclaw_secret_env_candidates(
+                resolved["provider_id"],
+                resolved.get("secret_env_vars", []),
+            )
+            return resolved
     for provider_id in OPENCLAW_MANIFEST_ONLY_PROVIDERS:
         aliases = OPENCLAW_MANIFEST_ONLY_PROVIDER_ALIASES.get(provider_id, [])
         ids = {

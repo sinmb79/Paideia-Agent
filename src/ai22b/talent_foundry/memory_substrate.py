@@ -940,6 +940,10 @@ def _first_env_value(env_vars: list[str]) -> tuple[str | None, str | None]:
     for env_var in env_vars:
         value = os.environ.get(env_var)
         if value:
+            if env_var.endswith("_API_KEYS") and ("," in value or ";" in value):
+                for candidate in value.replace(";", ",").split(","):
+                    if candidate.strip():
+                        return env_var, candidate.strip()
             return env_var, value
     return None, None
 

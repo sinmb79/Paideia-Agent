@@ -277,8 +277,8 @@ Paideia now mirrors OpenClaw's `provider/model` selection style. Built-in direct
 - `openrouter_api`
 - `ollama_local`
 - `lm_studio_local`
-- OpenAI-compatible OpenClaw providers such as `deepseek_api`, `groq_api`, `gmi_api`, `novita_api`, `huggingface_api`, `kilocode_gateway`, `xai_api`, `perplexity_api`, `together_ai`, `fireworks_api`, `deepinfra_api`, `cerebras_api`, `moonshot_api`, `qwen_api`, `z_ai_api`, `venice_api`, `nvidia_api`, `vllm_local`, `sglang_local`, `litellm_gateway`, and `vercel_ai_gateway`
-- OpenClaw-compatible native/proxy providers such as `ollama_cloud` and `synthetic_api`
+- OpenAI-compatible OpenClaw providers such as `deepseek_api`, `groq_api`, `gmi_api`, `novita_api`, `huggingface_api`, `kilocode_gateway`, `xai_api`, `perplexity_api`, `together_ai`, `fireworks_api`, `deepinfra_api`, `cerebras_api`, `moonshot_api`, `qwen_api`, `z_ai_api`, `venice_api`, `nvidia_api`, `arcee_api`, `chutes_api`, `qianfan_api`, `stepfun_api`, `stepfun_plan_api`, `volcengine_api`, `volcengine_plan_api`, `xiaomi_api`, `xiaomi_token_plan_api`, `vllm_local`, `sglang_local`, `litellm_gateway`, and `vercel_ai_gateway`
+- OpenClaw-compatible native/proxy providers such as `ollama_cloud`, `synthetic_api`, `minimax_api`, and `inferrs_local`
 - `deterministic_local`
 - `bigram_local`
 - `transformers_local`
@@ -299,11 +299,19 @@ For OpenClaw parity discovery:
 ```powershell
 ai22b-talent-foundry list-openclaw-compat `
   --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_compat.json"
+
+ai22b-talent-foundry list-openclaw-provider-connectors `
+  --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\provider_connectors.json"
+
+ai22b-talent-foundry doctor-openclaw-provider-connectors `
+  --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\provider_connector_doctor.json"
 ```
 
 External API adapters require the user's own keys before live use. Local model adapters prefer localhost or local files. Chat surfaces include `codex-bridge-chat`, `cli-console`, `dataflow-job`, a disabled `openclaw-style-gateway`, and OpenClaw channel manifests such as `openclaw-channel-telegram`, `openclaw-channel-discord`, `openclaw-channel-slack`, `openclaw-channel-whatsapp`, `openclaw-channel-signal`, `openclaw-channel-microsoft-teams`, `openclaw-channel-google-chat`, `openclaw-channel-imessage`, `openclaw-channel-matrix`, `openclaw-channel-mattermost`, and `openclaw-channel-webchat`.
 
-The provider catalog follows OpenClaw's canonical `provider/model` IDs where possible, including `lmstudio/*`, `zai/*`, `kilocode/*`, `gmi/*`, `novita/*`, `huggingface/*`, and `ollama-cloud/*`. Provider-specific plugin-only surfaces such as `volcengine-plan`, `byteplus-plan`, `qwen-oauth`, `pixverse`, and `ds4` remain visible in onboarding as manifest-only entries until a concrete plugin is configured.
+The provider catalog follows OpenClaw's canonical `provider/model` IDs where possible, including `lmstudio/*`, `zai/*`, `kilocode/*`, `gmi/*`, `novita/*`, `huggingface/*`, `ollama-cloud/*`, `arcee/*`, `chutes/*`, `qianfan/*`, `stepfun/*`, `volcengine-plan/*`, and `xiaomi/*`. The provider connector doctor separates Paideia live adapters from OpenClaw provider-plugin surfaces such as Bedrock, Copilot, Qwen OAuth, media generation providers, and other OAuth/custom-runner integrations. Secret values are never serialized.
+
+For OpenClaw-style key resolution, Paideia checks `OPENCLAW_LIVE_<PROVIDER>_KEY`, `<PROVIDER>_API_KEYS`, `<PROVIDER>_API_KEY`, and provider-specific env vars such as `ARCEEAI_API_KEY`, `VOLCANO_ENGINE_API_KEY`, `DASHSCOPE_API_KEY`, or `XIAOMI_TOKEN_PLAN_API_KEY`. Comma or semicolon key lists use the first non-empty key for live smoke tests.
 
 OpenClaw-style channels can now be routed through a local Paideia gateway envelope. The core returns a sendable outbound envelope; actual platform plugins remain responsible for bot tokens, pairing, and final delivery.
 
@@ -364,7 +372,7 @@ ai22b-talent-foundry doctor-openclaw-channel-connectors `
   --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\channel_connector_doctor.json"
 ```
 
-Telegram, Discord, Slack, and WebChat have direct Paideia adapters. All other OpenClaw channels remain selectable and can use the normalized gateway envelope today, while raw platform integration is marked with the required bridge/plugin setup such as WhatsApp QR pairing, signal-cli, Matrix bot credentials, Bot Framework, or regional platform tokens.
+Telegram, Discord, Slack, and WebChat have direct Paideia adapters. BlueBubbles is represented as the recommended new iMessage path through its macOS server plugin, while legacy `imessage` remains a separate bridge requirement. All other OpenClaw channels remain selectable and can use the normalized gateway envelope today, while raw platform integration is marked with the required bridge/plugin setup such as WhatsApp QR pairing, signal-cli, Matrix bot credentials, Bot Framework, or regional platform tokens.
 
 To inspect or send the returned outbound envelope, use the dry-run-first delivery adapter:
 
