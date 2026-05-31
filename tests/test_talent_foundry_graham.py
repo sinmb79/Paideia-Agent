@@ -281,6 +281,9 @@ class GrahamTalentFoundryTests(unittest.TestCase):
                 Path(session["artifacts"]["simulation_rollout_execution"]).read_text(encoding="utf-8")
             )
             llm_health = json.loads(Path(session["artifacts"]["llm_service_health"]).read_text(encoding="utf-8"))
+            openclaw_runtime = json.loads(Path(session["artifacts"]["openclaw_runtime_bundle"]).read_text(encoding="utf-8"))
+            provider_doctor = json.loads(Path(session["artifacts"]["openclaw_provider_doctor"]).read_text(encoding="utf-8"))
+            channel_doctor = json.loads(Path(session["artifacts"]["openclaw_channel_doctor"]).read_text(encoding="utf-8"))
 
         self.assertEqual(session["wizard"]["schema"], "ai22b-paideia-openclaw-style-onboarding/v1")
         self.assertEqual(config["schema"], "ai22b-paideia-openclaw-style-config/v1")
@@ -294,7 +297,40 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertGreaterEqual(rollout_execution["summary"]["promoted_count"], 3)
         self.assertGreaterEqual(rollout_execution["summary"]["quarantined_count"], 1)
         self.assertEqual(llm_health["schema"], "ai22b-paideia-llm-service-health/v1")
+        self.assertEqual(openclaw_runtime["schema"], "ai22b-openclaw-runtime-bundle/v1")
+        self.assertEqual(provider_doctor["schema"], "ai22b-openclaw-provider-connector-doctor/v1")
+        self.assertEqual(channel_doctor["schema"], "ai22b-openclaw-channel-connector-doctor/v1")
         self.assertFalse(llm_health["network_probe_performed"])
+
+    def test_onboarding_with_openclaw_gateway_writes_runtime_and_gateway_llm_doctor(self) -> None:
+        from ai22b.talent_foundry.onboarding import run_agent_onboarding
+
+        with tempfile.TemporaryDirectory() as tmp:
+            output_dir = Path(tmp) / "gateway_onboarding"
+            session = run_agent_onboarding(
+                owner="Boss",
+                request="Raise a gateway-connected Paideia securities research agent.",
+                talent_name="gateway-onboarding-junior",
+                gender="male",
+                output_dir=output_dir,
+                domain="securities_research",
+                role_model_id="graham_value_investing",
+                llm_service="openclaw-gateway/openrouter/meta-llama/llama-3.1-8b",
+                llm_model_path="http://127.0.0.1:18789",
+                chat_surface="openclaw-channel-webchat",
+                initial_goal="Verify OpenClaw Gateway readiness.",
+                cycle_note="Check Gateway LLM and WebChat follow-up commands.",
+            )
+            runtime_bundle = json.loads(Path(session["artifacts"]["openclaw_runtime_bundle"]).read_text(encoding="utf-8"))
+            gateway_doctor = json.loads(Path(session["artifacts"]["openclaw_gateway_llm_doctor"]).read_text(encoding="utf-8"))
+
+        self.assertEqual(session["selected_llm_service"]["service_id"], "openclaw_gateway_http")
+        self.assertEqual(session["openclaw_runtime"]["selection"]["provider_id"], "openrouter")
+        self.assertEqual(session["openclaw_runtime"]["selection"]["channels"], ["webchat"])
+        self.assertEqual(runtime_bundle["readiness"]["gateway_llm_doctor"]["status"], "ready_for_gateway_start")
+        self.assertEqual(gateway_doctor["gateway_contract"]["agent_target"], "openclaw/default")
+        self.assertEqual(gateway_doctor["gateway_contract"]["backend_model_header"], "openrouter/meta-llama/llama-3.1-8b")
+        self.assertIn("doctor-openclaw-gateway-llm", "\n".join(session["next_commands"]))
 
     def test_owner_self_extension_manifest_redacts_paths_and_content_by_default(self) -> None:
         from ai22b.talent_foundry.self_extension import build_owner_self_extension_manifest

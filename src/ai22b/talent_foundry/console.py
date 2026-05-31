@@ -612,7 +612,17 @@ def run_console_session(
         "employment_goal": onboarding["artifacts"]["employment_goal"],
         "first_goal_cycle": onboarding["artifacts"]["first_goal_cycle"],
         "llm_service_health": onboarding["artifacts"]["llm_service_health"],
+        "openclaw_runtime_bundle": onboarding["artifacts"]["openclaw_runtime_bundle"],
+        "openclaw_config_patch": onboarding["artifacts"]["openclaw_config_patch"],
+        "openclaw_native_handoff": onboarding["artifacts"]["openclaw_native_handoff"],
+        "openclaw_provider_doctor": onboarding["artifacts"]["openclaw_provider_doctor"],
+        "openclaw_channel_doctor": onboarding["artifacts"]["openclaw_channel_doctor"],
+        "openclaw_channel_connectors": onboarding["artifacts"]["openclaw_channel_connectors"],
+        "openclaw_gateway_config": onboarding["artifacts"]["openclaw_gateway_config"],
+        "openclaw_channel_access_config": onboarding["artifacts"]["openclaw_channel_access_config"],
     }
+    if onboarding["artifacts"].get("openclaw_gateway_llm_doctor"):
+        artifacts["openclaw_gateway_llm_doctor"] = onboarding["artifacts"]["openclaw_gateway_llm_doctor"]
     for key, value in (prefill_artifacts or {}).items():
         artifacts[key] = str(value)
     status = onboarding["status"]
@@ -809,6 +819,7 @@ def run_console_session(
             "track": onboarding["track"],
             "employment": onboarding["employment"],
         },
+        "openclaw_runtime": onboarding.get("openclaw_runtime"),
         "local_policy": onboarding["local_policy"],
         "post_hire_extensions": post_hire_extensions,
         "artifacts": artifacts,

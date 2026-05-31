@@ -153,6 +153,7 @@ ai22b-talent-foundry run-openclaw-webchat-server `
 - `simulation_rollouts.json`: 병렬 episode rollout 계획
 - `simulation_rollout_execution.json`: rollout 에피소드 실행 결과와 Reasoning Ledger 승격/격리 결과
 - `llm_service_health.json`: 선택한 LLM 서비스의 키/모델/로컬 서버 준비 상태 점검 결과
+- `onboarding/openclaw_runtime_bundle/`: OpenClaw provider/channel doctor, gateway 설정, native handoff, config patch, Gateway LLM doctor를 포함한 실행 준비 묶음
 - `owner_self_extension_manifest.json`: owner self-extension 선택 시 로컬 비공개 자료의 해시/상대경로 manifest
 - `onboarding/onboarding_session.json`: 실제 육성, 설치, 고용, 첫 목표 사이클 기록
 

@@ -14,6 +14,7 @@ from ai22b.talent_foundry.onboarding_choices import (
     resolve_chat_surface,
     resolve_llm_service,
 )
+from ai22b.talent_foundry.openclaw_runtime_bundle import build_openclaw_runtime_bundle
 from ai22b.talent_foundry.registry import assign_hired_goal, run_hired_goal_cycle
 from ai22b.talent_foundry.training_run import materialize_training_blueprint
 
@@ -144,6 +145,12 @@ def run_agent_onboarding(
     )
     workspace_run_path = Path(first_goal_cycle["workspace_run"]["path"])
     learning_update_path = target_root / f"{goal['goal_id']}_learning_update.json"
+    openclaw_bundle_dir = output_dir / "openclaw_runtime_bundle"
+    openclaw_runtime_bundle = build_openclaw_runtime_bundle(
+        employment_record_path,
+        output_dir=openclaw_bundle_dir,
+        config_action="keep",
+    )
 
     artifacts = {
         "training_blueprint": training_run["artifacts"]["training_blueprint"],
@@ -168,8 +175,18 @@ def run_agent_onboarding(
         "first_goal_cycle": str(first_goal_cycle_path),
         "researcher_intake": str(researcher_intake_path),
         "llm_service_health": str(llm_health_path),
+        "openclaw_runtime_bundle": openclaw_runtime_bundle["artifacts"]["manifest"],
+        "openclaw_config_patch": openclaw_runtime_bundle["artifacts"]["openclaw_config_patch"],
+        "openclaw_native_handoff": openclaw_runtime_bundle["artifacts"]["openclaw_native_handoff"],
+        "openclaw_provider_doctor": openclaw_runtime_bundle["artifacts"]["provider_doctor"],
+        "openclaw_channel_doctor": openclaw_runtime_bundle["artifacts"]["channel_doctor"],
+        "openclaw_channel_connectors": openclaw_runtime_bundle["artifacts"]["channel_connector_catalog"],
+        "openclaw_gateway_config": openclaw_runtime_bundle["artifacts"]["gateway_config"],
+        "openclaw_channel_access_config": openclaw_runtime_bundle["artifacts"]["channel_access_config"],
         "onboarding_session": str(output_path),
     }
+    if openclaw_runtime_bundle["artifacts"].get("gateway_llm_doctor"):
+        artifacts["openclaw_gateway_llm_doctor"] = openclaw_runtime_bundle["artifacts"]["gateway_llm_doctor"]
     status = (
         "hired_agent_first_goal_cycle_completed"
         if first_goal_cycle.get("cycle_status") == "completed"
@@ -186,6 +203,12 @@ def run_agent_onboarding(
         "selected_llm_service": selected_llm_service,
         "selected_chat_surface": selected_chat_surface,
         "llm_service_health": llm_health,
+        "openclaw_runtime": {
+            "schema": openclaw_runtime_bundle["schema"],
+            "status": openclaw_runtime_bundle["status"],
+            "selection": openclaw_runtime_bundle["selection"],
+            "readiness": openclaw_runtime_bundle["readiness"],
+        },
         "researcher_mode": researcher_intake["researcher_contract"],
         "employment": {
             "relationship": "owner_raised_ai_talent_hired_as_local_agent",
@@ -206,6 +229,11 @@ def run_agent_onboarding(
             _stage("choose_llm_service", "completed"),
             _stage("llm_service_health", llm_health["status"], llm_health_path),
             _stage("choose_chat_surface", "completed"),
+            _stage(
+                "openclaw_runtime_bundle",
+                openclaw_runtime_bundle["status"],
+                Path(openclaw_runtime_bundle["artifacts"]["manifest"]),
+            ),
             _stage("researcher_intake", "completed", researcher_intake_path),
             _stage("blueprint", "completed", Path(training_run["artifacts"]["training_blueprint"])),
             _stage("raise", "completed", Path(training_run["artifacts"]["training_run"])),
@@ -218,6 +246,7 @@ def run_agent_onboarding(
         ],
         "artifacts": artifacts,
         "next_commands": [
+            *openclaw_runtime_bundle["next_commands"].values(),
             f"ai22b-talent-foundry run-hired-goal-cycle --employment-record \"{employment_record_path}\" --goal \"{goal_path}\" --cycle-note \"다음 주 업무를 진행한다.\" --workspace \"{target_root / 'next_goal_workspace'}\" --score {review_score} --reviewed-by \"{reviewed_by or owner}\"",
             f"ai22b-talent-foundry record-hired-learning --employment-record \"{employment_record_path}\" --run \"{workspace_run_path}\" --score {review_score} --reviewed-by \"{reviewed_by or owner}\"",
         ],

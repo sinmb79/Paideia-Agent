@@ -24,6 +24,7 @@ from ai22b.talent_foundry.openclaw_compat import (
     openclaw_channel_manifest,
     openclaw_provider_manifest,
 )
+from ai22b.talent_foundry.openclaw_gateway_llm import doctor_openclaw_gateway_llm
 from ai22b.talent_foundry.provider_connectors import doctor_openclaw_provider_connectors
 
 
@@ -160,10 +161,15 @@ def _env_alternatives(env_var: str) -> list[str]:
 def _infer_provider_id(employment: dict[str, Any]) -> str:
     llm_service = employment.get("llm_service", {})
     llm_runtime = employment.get("llm_runtime", {})
+    model_selector = str(llm_service.get("openclaw_model") or llm_runtime.get("openclaw_model") or "")
+    if (
+        llm_service.get("engine") == "openclaw_gateway_http"
+        or llm_runtime.get("engine") == "openclaw_gateway_http"
+    ) and "/" in model_selector:
+        return model_selector.split("/", 1)[0]
     provider_id = llm_service.get("openclaw_provider_id") or llm_runtime.get("openclaw_provider_id")
     if provider_id:
         return str(provider_id)
-    model_selector = str(llm_service.get("openclaw_model") or llm_runtime.get("openclaw_model") or "")
     if "/" in model_selector:
         return model_selector.split("/", 1)[0]
     service_id = str(llm_service.get("service_id") or llm_runtime.get("service") or "")
@@ -815,6 +821,7 @@ def build_openclaw_runtime_bundle(
     channel_connector_catalog_path = output_dir / "openclaw_channel_connectors.json"
     channel_doctor_path = output_dir / "openclaw_channel_doctor.json"
     llm_health_path = output_dir / "llm_service_health.json"
+    gateway_llm_doctor_path = output_dir / "openclaw_gateway_llm_doctor.json"
     config_patch_path = output_dir / "openclaw_config_patch.json"
     native_handoff_path = output_dir / "openclaw_native_handoff.json"
     env_template_path = output_dir / "openclaw.env.example.ps1"
@@ -872,6 +879,13 @@ def build_openclaw_runtime_bundle(
         bindings=openclaw_bindings,
     )
     _write_json(config_patch_path, config_patch)
+    gateway_llm_doctor: dict[str, Any] | None = None
+    if employment.get("llm_runtime", {}).get("engine") == "openclaw_gateway_http":
+        gateway_llm_doctor = doctor_openclaw_gateway_llm(
+            employment_record_path,
+            output_path=gateway_llm_doctor_path,
+            config_patch_path=config_patch_path,
+        )
     _write_text(
         env_template_path,
         _build_env_template(
@@ -920,6 +934,8 @@ def build_openclaw_runtime_bundle(
         "channel_doctor": str(channel_doctor_path),
         "llm_service_health": str(llm_health_path),
     }
+    if gateway_llm_doctor is not None:
+        artifacts["gateway_llm_doctor"] = str(gateway_llm_doctor_path)
     for key, value in existing_config_review.get("artifacts", {}).items():
         if key != "review":
             artifacts[f"existing_openclaw_config_{key}"] = value
@@ -953,6 +969,7 @@ def build_openclaw_runtime_bundle(
             "provider_doctor_summary": provider_doctor["summary"],
             "channel_connector_summary": channel_connector_catalog["summary"],
             "channel_doctor_summary": channel_doctor["summary"],
+            "gateway_llm_doctor": gateway_llm_doctor,
             "existing_openclaw_config": {
                 "status": existing_config_review["status"],
                 "exists": existing_config_review["exists"],
@@ -988,6 +1005,18 @@ def build_openclaw_runtime_bundle(
                 f"--llm-model {employment.get('llm_service', {}).get('selected_model') or ''} "
                 f"--output {llm_health_path}"
             ),
+            "doctor_gateway_llm": (
+                "ai22b-talent-foundry doctor-openclaw-gateway-llm "
+                f"--employment-record {employment_record_path} "
+                f"--config-patch {config_patch_path} "
+                f"--output {gateway_llm_doctor_path}"
+            ),
+            "probe_gateway_llm": (
+                "ai22b-talent-foundry doctor-openclaw-gateway-llm "
+                f"--employment-record {employment_record_path} "
+                "--probe-gateway --probe-chat "
+                f"--output {output_dir / 'openclaw_gateway_llm_doctor.live.json'}"
+            ),
             "review_openclaw_merge": (
                 "Review "
                 f"{_relative_or_name(Path(artifacts['openclaw_config_patch']), output_dir)} and "
@@ -1018,5 +1047,8 @@ def build_openclaw_runtime_bundle(
         "openclaw_native_handoff": native_handoff,
         "generated_gateway_config": gateway_config,
     }
+    if gateway_llm_doctor is None:
+        bundle["next_commands"].pop("doctor_gateway_llm", None)
+        bundle["next_commands"].pop("probe_gateway_llm", None)
     _write_json(manifest_path, bundle)
     return bundle
