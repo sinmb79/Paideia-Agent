@@ -618,6 +618,7 @@ def run_console_session(
         "openclaw_provider_doctor": onboarding["artifacts"]["openclaw_provider_doctor"],
         "openclaw_channel_doctor": onboarding["artifacts"]["openclaw_channel_doctor"],
         "openclaw_channel_connectors": onboarding["artifacts"]["openclaw_channel_connectors"],
+        "openclaw_support_matrix": onboarding["artifacts"]["openclaw_support_matrix"],
         "openclaw_gateway_config": onboarding["artifacts"]["openclaw_gateway_config"],
         "openclaw_channel_access_config": onboarding["artifacts"]["openclaw_channel_access_config"],
     }

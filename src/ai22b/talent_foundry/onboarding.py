@@ -15,6 +15,7 @@ from ai22b.talent_foundry.onboarding_choices import (
     resolve_llm_service,
 )
 from ai22b.talent_foundry.openclaw_runtime_bundle import build_openclaw_runtime_bundle
+from ai22b.talent_foundry.openclaw_support_matrix import build_openclaw_support_matrix
 from ai22b.talent_foundry.registry import assign_hired_goal, run_hired_goal_cycle
 from ai22b.talent_foundry.training_run import materialize_training_blueprint
 
@@ -51,6 +52,33 @@ def _stage(stage_id: str, status: str, artifact: Path | None = None) -> dict[str
     if artifact is not None:
         item["artifact"] = str(artifact)
     return item
+
+
+def _selected_openclaw_support(
+    support_matrix: dict[str, Any],
+    openclaw_runtime_bundle: dict[str, Any],
+    selected_llm_service: dict[str, Any],
+) -> dict[str, Any]:
+    provider_by_id = {item["provider_id"]: item for item in support_matrix.get("provider_support", [])}
+    channel_by_id = {item["channel_id"]: item for item in support_matrix.get("channel_support", [])}
+    selection = openclaw_runtime_bundle.get("selection", {})
+    provider_id = selection.get("provider_id") or selected_llm_service.get("openclaw_provider_id")
+    channel_ids = selection.get("channels") or []
+    return {
+        "matrix_schema": support_matrix.get("schema"),
+        "matrix_status": support_matrix.get("status"),
+        "provider_id": provider_id,
+        "provider_support": provider_by_id.get(provider_id) if provider_id else None,
+        "channels": [
+            {
+                "channel_id": channel_id,
+                "support": channel_by_id.get(channel_id),
+            }
+            for channel_id in channel_ids
+        ],
+        "coverage": support_matrix.get("coverage"),
+        "claim_boundary": support_matrix.get("claim_boundary"),
+    }
 
 
 def run_agent_onboarding(
@@ -151,6 +179,13 @@ def run_agent_onboarding(
         output_dir=openclaw_bundle_dir,
         config_action="keep",
     )
+    openclaw_support_matrix_path = output_dir / "openclaw_support_matrix.json"
+    openclaw_support_matrix = build_openclaw_support_matrix(output_path=openclaw_support_matrix_path)
+    selected_openclaw_support = _selected_openclaw_support(
+        openclaw_support_matrix,
+        openclaw_runtime_bundle,
+        selected_llm_service,
+    )
 
     artifacts = {
         "training_blueprint": training_run["artifacts"]["training_blueprint"],
@@ -181,6 +216,7 @@ def run_agent_onboarding(
         "openclaw_provider_doctor": openclaw_runtime_bundle["artifacts"]["provider_doctor"],
         "openclaw_channel_doctor": openclaw_runtime_bundle["artifacts"]["channel_doctor"],
         "openclaw_channel_connectors": openclaw_runtime_bundle["artifacts"]["channel_connector_catalog"],
+        "openclaw_support_matrix": str(openclaw_support_matrix_path),
         "openclaw_gateway_config": openclaw_runtime_bundle["artifacts"]["gateway_config"],
         "openclaw_channel_access_config": openclaw_runtime_bundle["artifacts"]["channel_access_config"],
         "onboarding_session": str(output_path),
@@ -208,6 +244,7 @@ def run_agent_onboarding(
             "status": openclaw_runtime_bundle["status"],
             "selection": openclaw_runtime_bundle["selection"],
             "readiness": openclaw_runtime_bundle["readiness"],
+            "selected_support": selected_openclaw_support,
         },
         "researcher_mode": researcher_intake["researcher_contract"],
         "employment": {
@@ -234,6 +271,7 @@ def run_agent_onboarding(
                 openclaw_runtime_bundle["status"],
                 Path(openclaw_runtime_bundle["artifacts"]["manifest"]),
             ),
+            _stage("openclaw_support_matrix", openclaw_support_matrix["status"], openclaw_support_matrix_path),
             _stage("researcher_intake", "completed", researcher_intake_path),
             _stage("blueprint", "completed", Path(training_run["artifacts"]["training_blueprint"])),
             _stage("raise", "completed", Path(training_run["artifacts"]["training_run"])),
@@ -246,6 +284,7 @@ def run_agent_onboarding(
         ],
         "artifacts": artifacts,
         "next_commands": [
+            f"ai22b-talent-foundry build-openclaw-support-matrix --output \"{openclaw_support_matrix_path}\"",
             *openclaw_runtime_bundle["next_commands"].values(),
             f"ai22b-talent-foundry run-hired-goal-cycle --employment-record \"{employment_record_path}\" --goal \"{goal_path}\" --cycle-note \"다음 주 업무를 진행한다.\" --workspace \"{target_root / 'next_goal_workspace'}\" --score {review_score} --reviewed-by \"{reviewed_by or owner}\"",
             f"ai22b-talent-foundry record-hired-learning --employment-record \"{employment_record_path}\" --run \"{workspace_run_path}\" --score {review_score} --reviewed-by \"{reviewed_by or owner}\"",

@@ -240,7 +240,7 @@ ai22b-talent-foundry doctor-openclaw-channel-connectors `
   --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\channel_connector_doctor.json"
 ```
 
-`build-openclaw-support-matrix`는 설치자가 보는 한 장짜리 지원범위 표입니다. OpenClaw provider와 channel을 Paideia 직접 지원, OpenClaw Gateway 준비, 로컬 서버 준비, 플러그인/OAuth/bridge 필요 항목으로 나누고 Graham Junior quickstart, provider doctor, channel flow doctor, Gateway LLM doctor, parity audit 명령을 함께 기록합니다.
+`build-openclaw-support-matrix`는 설치자가 보는 한 장짜리 지원범위 표입니다. OpenClaw provider와 channel을 Paideia 직접 지원, OpenClaw Gateway 준비, 로컬 서버 준비, 플러그인/OAuth/bridge 필요 항목으로 나누고 Graham Junior quickstart, provider doctor, channel flow doctor, Gateway LLM doctor, parity audit 명령을 함께 기록합니다. 이제 모든 온보딩 실행은 `openclaw_support_matrix.json`을 자동으로 만들고, 사용자가 고른 provider/channel 지원 등급을 `onboarding_session.json` 안에 함께 저장합니다.
 
 `audit-openclaw-parity`는 Paideia의 로컬 provider/channel catalog가 확인된 OpenClaw 공식 문서 snapshot을 빠짐없이 덮는지 검사합니다. `--refresh-docs`를 붙이면 현재 OpenClaw 공식 문서를 다시 가져와 drift를 계산합니다. provider doctor는 OpenClaw Provider directory의 `provider/model` 항목을 Paideia live adapter, 로컬 서버, OpenClaw 플러그인/OAuth/custom runner 필요 항목으로 나눕니다. API 키 값은 저장하지 않고 환경변수 이름과 준비 여부만 기록합니다.
 

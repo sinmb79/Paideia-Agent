@@ -284,6 +284,7 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             openclaw_runtime = json.loads(Path(session["artifacts"]["openclaw_runtime_bundle"]).read_text(encoding="utf-8"))
             provider_doctor = json.loads(Path(session["artifacts"]["openclaw_provider_doctor"]).read_text(encoding="utf-8"))
             channel_doctor = json.loads(Path(session["artifacts"]["openclaw_channel_doctor"]).read_text(encoding="utf-8"))
+            support_matrix = json.loads(Path(session["artifacts"]["openclaw_support_matrix"]).read_text(encoding="utf-8"))
 
         self.assertEqual(session["wizard"]["schema"], "ai22b-paideia-openclaw-style-onboarding/v1")
         self.assertEqual(config["schema"], "ai22b-paideia-openclaw-style-config/v1")
@@ -300,6 +301,9 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertEqual(openclaw_runtime["schema"], "ai22b-openclaw-runtime-bundle/v1")
         self.assertEqual(provider_doctor["schema"], "ai22b-openclaw-provider-connector-doctor/v1")
         self.assertEqual(channel_doctor["schema"], "ai22b-openclaw-channel-connector-doctor/v1")
+        self.assertEqual(support_matrix["schema"], "ai22b-openclaw-support-matrix/v1")
+        self.assertEqual(support_matrix["status"], "pass")
+        self.assertEqual(session["openclaw_runtime"]["selected_support"]["matrix_status"], "pass")
         self.assertFalse(llm_health["network_probe_performed"])
 
     def test_onboarding_with_openclaw_gateway_writes_runtime_and_gateway_llm_doctor(self) -> None:
@@ -323,14 +327,26 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             )
             runtime_bundle = json.loads(Path(session["artifacts"]["openclaw_runtime_bundle"]).read_text(encoding="utf-8"))
             gateway_doctor = json.loads(Path(session["artifacts"]["openclaw_gateway_llm_doctor"]).read_text(encoding="utf-8"))
+            support_matrix = json.loads(Path(session["artifacts"]["openclaw_support_matrix"]).read_text(encoding="utf-8"))
 
         self.assertEqual(session["selected_llm_service"]["service_id"], "openclaw_gateway_http")
         self.assertEqual(session["openclaw_runtime"]["selection"]["provider_id"], "openrouter")
         self.assertEqual(session["openclaw_runtime"]["selection"]["channels"], ["webchat"])
+        self.assertEqual(session["openclaw_runtime"]["selected_support"]["provider_id"], "openrouter")
+        self.assertEqual(
+            session["openclaw_runtime"]["selected_support"]["provider_support"]["support_level"],
+            "paideia_direct_or_openclaw_gateway_ready",
+        )
+        self.assertEqual(
+            session["openclaw_runtime"]["selected_support"]["channels"][0]["support"]["support_level"],
+            "loopback_chat_ready",
+        )
+        self.assertEqual(support_matrix["status"], "pass")
         self.assertEqual(runtime_bundle["readiness"]["gateway_llm_doctor"]["status"], "ready_for_gateway_start")
         self.assertEqual(gateway_doctor["gateway_contract"]["agent_target"], "openclaw/default")
         self.assertEqual(gateway_doctor["gateway_contract"]["backend_model_header"], "openrouter/meta-llama/llama-3.1-8b")
         self.assertIn("doctor-openclaw-gateway-llm", "\n".join(session["next_commands"]))
+        self.assertIn("build-openclaw-support-matrix", "\n".join(session["next_commands"]))
 
     def test_graham_junior_quickstart_links_chat_dossier_transcript_and_openclaw_doctors(self) -> None:
         from ai22b.config import PROJECT_ROOT
@@ -366,6 +382,7 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             dossier_exists = artifacts["hiring_dossier"].exists()
             dossier_markdown_exists = artifacts["hiring_dossier_markdown"].exists()
             runtime_bundle_exists = artifacts["openclaw_runtime_bundle"].exists()
+            support_matrix_exists = artifacts["openclaw_support_matrix"].exists()
 
         self.assertEqual(result, 0)
         self.assertEqual(report["schema"], "ai22b-graham-junior-quickstart/v1")
@@ -375,6 +392,9 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertTrue(dossier_exists)
         self.assertTrue(dossier_markdown_exists)
         self.assertTrue(runtime_bundle_exists)
+        self.assertTrue(support_matrix_exists)
+        self.assertEqual(report["openclaw_support"]["matrix_status"], "pass")
+        self.assertEqual(report["openclaw_support"]["selected_support"]["provider_id"], "openrouter")
         self.assertEqual(gateway_doctor["status"], "ready_for_gateway_start")
         self.assertEqual(report["openclaw_channel_flow"]["status"], "pass")
         self.assertEqual(first_chat["reply_generation_mode"], "deterministic_local_fallback")

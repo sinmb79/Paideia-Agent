@@ -93,6 +93,9 @@ def run_graham_junior_quickstart(
     hiring_dossier_markdown_path = release_bundle_path / "HIRING_DOSSIER.ko.md"
     assessment_transcript_path = Path(onboarding["artifacts"]["assessment_transcript"])
     runtime_bundle_path = Path(console_session["artifacts"]["openclaw_runtime_bundle"])
+    support_matrix_path = Path(onboarding["artifacts"]["openclaw_support_matrix"])
+    support_matrix = _read_json(support_matrix_path)
+    selected_support = onboarding.get("openclaw_runtime", {}).get("selected_support", {})
     gateway_llm_doctor_path = console_session["artifacts"].get("openclaw_gateway_llm_doctor")
 
     checks = [
@@ -125,6 +128,12 @@ def run_graham_junior_quickstart(
             "path": str(runtime_bundle_path),
         },
         {
+            "id": "openclaw_support_matrix_passed",
+            "passed": support_matrix_path.exists() and support_matrix.get("status") == "pass",
+            "path": str(support_matrix_path),
+            "provider_id": selected_support.get("provider_id"),
+        },
+        {
             "id": "openclaw_channel_flow_passed",
             "passed": channel_flow.get("status") == "pass",
             "path": str(channel_flow_path),
@@ -155,6 +164,7 @@ def run_graham_junior_quickstart(
             "hiring_dossier_markdown": str(hiring_dossier_markdown_path),
             "first_chat": str(first_chat_path),
             "openclaw_runtime_bundle": str(runtime_bundle_path),
+            "openclaw_support_matrix": str(support_matrix_path),
             "openclaw_channel_flow_doctor": str(channel_flow_path),
             "openclaw_gateway_llm_doctor": gateway_llm_doctor_path,
         },
@@ -168,6 +178,11 @@ def run_graham_junior_quickstart(
             "status": channel_flow.get("status"),
             "summary": channel_flow.get("summary"),
             "external_network_call_performed": channel_flow.get("mode", {}).get("external_network_call_performed"),
+        },
+        "openclaw_support": {
+            "matrix_status": support_matrix.get("status"),
+            "coverage": support_matrix.get("coverage"),
+            "selected_support": selected_support,
         },
         "checks": checks,
         "next_commands": {
