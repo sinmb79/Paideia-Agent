@@ -168,6 +168,12 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     audit_openclaw_parity_command.add_argument("--output", required=True)
     audit_openclaw_parity_command.add_argument("--fail-on-missing", action="store_true")
+    audit_openclaw_parity_command.add_argument(
+        "--refresh-docs",
+        action="store_true",
+        help="Fetch the current OpenClaw docs before comparing provider/channel coverage.",
+    )
+    audit_openclaw_parity_command.add_argument("--docs-timeout", type=int, default=15)
 
     import_openclaw_config_command = subparsers.add_parser(
         "import-openclaw-config",
@@ -814,7 +820,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if args.command == "audit-openclaw-parity":
-        result = audit_openclaw_parity(output_path=Path(args.output))
+        result = audit_openclaw_parity(
+            output_path=Path(args.output),
+            refresh_docs=args.refresh_docs,
+            docs_timeout=args.docs_timeout,
+        )
         print(str(Path(args.output)))
         if args.fail_on_missing and result["status"] != "pass":
             return 1

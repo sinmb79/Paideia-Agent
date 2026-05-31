@@ -139,7 +139,7 @@ ai22b-talent-foundry translate-openclaw-platform-event `
   --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\telegram_translation.json"
 ```
 
-고용된 인재를 OpenClaw식 실행 환경으로 넘기려면 runtime bundle을 생성합니다. 이 번들은 선택된 `provider/model`, `agents.list`, gateway URL, enabled channels, `channels.modelByChannel`, `bindings[]`를 담은 검토용 `openclaw_config_patch.json`을 만듭니다.
+고용된 인재를 OpenClaw식 실행 환경으로 넘기려면 runtime bundle을 생성합니다. 이 번들은 선택된 `provider/model`, `models.providers`, `agents.list`, gateway URL, enabled channels, `channels.modelByChannel`, `bindings[]`를 담은 검토용 `openclaw_config_patch.json`을 만듭니다.
 
 ```powershell
 ai22b-talent-foundry build-openclaw-runtime-bundle `
@@ -173,6 +173,11 @@ ai22b-talent-foundry audit-openclaw-parity `
   --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_parity_audit.json" `
   --fail-on-missing
 
+ai22b-talent-foundry audit-openclaw-parity `
+  --refresh-docs `
+  --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_parity_live_docs.json" `
+  --fail-on-missing
+
 ai22b-talent-foundry list-openclaw-provider-connectors `
   --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\provider_connectors.json"
 
@@ -186,7 +191,7 @@ ai22b-talent-foundry doctor-openclaw-channel-connectors `
   --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\channel_connector_doctor.json"
 ```
 
-`audit-openclaw-parity`는 Paideia의 로컬 provider/channel catalog가 확인된 OpenClaw 공식 문서 snapshot을 빠짐없이 덮는지 검사합니다. provider doctor는 OpenClaw Provider directory의 `provider/model` 항목을 Paideia live adapter, 로컬 서버, OpenClaw 플러그인/OAuth/custom runner 필요 항목으로 나눕니다. API 키 값은 저장하지 않고 환경변수 이름과 준비 여부만 기록합니다.
+`audit-openclaw-parity`는 Paideia의 로컬 provider/channel catalog가 확인된 OpenClaw 공식 문서 snapshot을 빠짐없이 덮는지 검사합니다. `--refresh-docs`를 붙이면 현재 OpenClaw 공식 문서를 다시 가져와 drift를 계산합니다. provider doctor는 OpenClaw Provider directory의 `provider/model` 항목을 Paideia live adapter, 로컬 서버, OpenClaw 플러그인/OAuth/custom runner 필요 항목으로 나눕니다. API 키 값은 저장하지 않고 환경변수 이름과 준비 여부만 기록합니다.
 
 OpenClaw식 key resolution도 반영합니다. Paideia는 `OPENCLAW_LIVE_<PROVIDER>_KEY`, `<PROVIDER>_API_KEYS`, `<PROVIDER>_API_KEY`, 그리고 `ARCEEAI_API_KEY`, `VOLCANO_ENGINE_API_KEY`, `DASHSCOPE_API_KEY`, `XIAOMI_TOKEN_PLAN_API_KEY` 같은 provider별 환경변수를 확인합니다. 쉼표/세미콜론 key list가 있으면 첫 번째 non-empty key를 live smoke test에 사용합니다.
 

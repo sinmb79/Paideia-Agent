@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.request import Request, urlopen
 
 from ai22b.talent_foundry.openclaw_compat import (
     OPENCLAW_MANIFEST_ONLY_PROVIDERS,
@@ -16,6 +18,117 @@ from ai22b.talent_foundry.openclaw_compat import (
 
 
 OPENCLAW_PARITY_AUDIT_SCHEMA = "ai22b-openclaw-parity-audit/v1"
+OPENCLAW_LIVE_DOCS_TIMEOUT_SECONDS = 15
+OPENCLAW_LIVE_DOC_URLS = [
+    "https://docs.openclaw.ai/providers",
+    "https://docs.openclaw.ai/channels",
+    "https://docs.openclaw.ai/llms.txt",
+]
+
+PROVIDER_DOC_SLUG_IDS: dict[str, list[str]] = {
+    "alibaba": ["alibaba"],
+    "amazon-bedrock": ["amazon-bedrock"],
+    "anthropic": ["anthropic"],
+    "anthropic-vertex": ["anthropic-vertex"],
+    "arcee": ["arcee"],
+    "azure-speech": ["azure-speech"],
+    "bedrock": ["amazon-bedrock"],
+    "bedrock-mantle": ["amazon-bedrock-mantle"],
+    "byteplus": ["byteplus", "byteplus-plan"],
+    "cerebras": ["cerebras"],
+    "chutes": ["chutes"],
+    "claude-max-api-proxy": ["claude-max-api-proxy"],
+    "cloudflare-ai-gateway": ["cloudflare-ai-gateway"],
+    "comfy": ["comfyui"],
+    "comfyui": ["comfyui"],
+    "deepgram": ["deepgram"],
+    "deepinfra": ["deepinfra"],
+    "deepseek": ["deepseek"],
+    "ds4": ["ds4"],
+    "elevenlabs": ["elevenlabs"],
+    "fal": ["fal"],
+    "fireworks": ["fireworks"],
+    "github-copilot": ["github-copilot"],
+    "gmi": ["gmi"],
+    "google": ["google", "google-gemini-cli", "google-vertex"],
+    "google-gemini-cli": ["google-gemini-cli"],
+    "google-vertex": ["google-vertex"],
+    "gradium": ["gradium"],
+    "groq": ["groq"],
+    "huggingface": ["huggingface"],
+    "inferrs": ["inferrs"],
+    "inworld": ["inworld"],
+    "kilocode": ["kilocode"],
+    "kimi": ["moonshot"],
+    "litellm": ["litellm"],
+    "lmstudio": ["lmstudio"],
+    "minimax": ["minimax", "minimax-portal"],
+    "mistral": ["mistral"],
+    "moonshot": ["moonshot"],
+    "novita": ["novita"],
+    "nvidia": ["nvidia"],
+    "ollama": ["ollama", "ollama-cloud"],
+    "ollama-cloud": ["ollama-cloud"],
+    "openai": ["openai"],
+    "opencode": ["opencode"],
+    "opencode-go": ["opencode-go"],
+    "openrouter": ["openrouter"],
+    "perplexity": ["perplexity"],
+    "perplexity-provider": ["perplexity"],
+    "pixverse": ["pixverse"],
+    "qianfan": ["qianfan"],
+    "qwen": ["qwen", "qwen-oauth"],
+    "qwen-oauth": ["qwen-oauth"],
+    "runway": ["runway"],
+    "senseaudio": ["senseaudio"],
+    "sglang": ["sglang"],
+    "stepfun": ["stepfun", "stepfun-plan"],
+    "synthetic": ["synthetic"],
+    "tencent": ["tencent-tokenhub"],
+    "tencent-tokenhub": ["tencent-tokenhub"],
+    "together": ["together"],
+    "venice": ["venice"],
+    "vercel-ai-gateway": ["vercel-ai-gateway"],
+    "vllm": ["vllm"],
+    "volcengine": ["volcengine", "volcengine-plan"],
+    "vydra": ["vydra"],
+    "xai": ["xai"],
+    "xiaomi": ["xiaomi", "xiaomi-token-plan"],
+    "zai": ["zai"],
+}
+
+CHANNEL_DOC_SLUG_IDS: dict[str, list[str]] = {
+    "bluebubbles": ["bluebubbles"],
+    "clickclack": ["clickclack"],
+    "discord": ["discord"],
+    "feishu": ["feishu"],
+    "googlechat": ["google-chat"],
+    "imessage": ["imessage"],
+    "imessage-from-bluebubbles": ["bluebubbles"],
+    "irc": ["irc"],
+    "line": ["line"],
+    "matrix": ["matrix"],
+    "mattermost": ["mattermost"],
+    "msteams": ["microsoft-teams"],
+    "nextcloud-talk": ["nextcloud-talk"],
+    "nostr": ["nostr"],
+    "qa-channel": ["qa-channel"],
+    "qqbot": ["qq-bot"],
+    "signal": ["signal"],
+    "slack": ["slack"],
+    "sms": ["sms"],
+    "synology-chat": ["synology-chat"],
+    "telegram": ["telegram"],
+    "tlon": ["tlon"],
+    "twitch": ["twitch"],
+    "voice-call": ["voice-call"],
+    "webchat": ["webchat"],
+    "wechat": ["wechat"],
+    "whatsapp": ["whatsapp"],
+    "yuanbao": ["yuanbao"],
+    "zalo": ["zalo"],
+    "zalouser": ["zalo-personal"],
+}
 
 OPENCLAW_OFFICIAL_PROVIDER_SNAPSHOT = {
     "source": "official_openclaw_docs_provider_directory_and_llms_index_checked_2026-05-31",
@@ -144,6 +257,76 @@ def _sorted_set(items: list[str]) -> list[str]:
     return sorted({str(item).strip() for item in items if str(item).strip()})
 
 
+def _ids_from_doc_slugs(
+    text: str,
+    *,
+    prefix: str,
+    slug_ids: dict[str, list[str]],
+) -> list[str]:
+    ids: list[str] = []
+    for raw_slug in re.findall(rf"https://docs\.openclaw\.ai/{re.escape(prefix)}/([a-z0-9-]+)", text):
+        ids.extend(slug_ids.get(raw_slug, []))
+    return _sorted_set(ids)
+
+
+def _provider_ids_from_doc_texts(texts: list[str]) -> list[str]:
+    joined = "\n".join(texts)
+    provider_ids = [
+        *_ids_from_doc_slugs(joined, prefix="providers", slug_ids=PROVIDER_DOC_SLUG_IDS),
+        *_ids_from_doc_slugs(joined, prefix="plugins/reference", slug_ids=PROVIDER_DOC_SLUG_IDS),
+    ]
+    return _sorted_set(provider_ids)
+
+
+def _channel_ids_from_doc_texts(texts: list[str]) -> list[str]:
+    joined = "\n".join(texts)
+    channel_ids = [
+        *_ids_from_doc_slugs(joined, prefix="channels", slug_ids=CHANNEL_DOC_SLUG_IDS),
+        *_ids_from_doc_slugs(joined, prefix="plugins/reference", slug_ids=CHANNEL_DOC_SLUG_IDS),
+        *_ids_from_doc_slugs(joined, prefix="web", slug_ids=CHANNEL_DOC_SLUG_IDS),
+        *_ids_from_doc_slugs(joined, prefix="platforms/mac", slug_ids=CHANNEL_DOC_SLUG_IDS),
+    ]
+    if re.search(r"\bWebChat\b", joined):
+        channel_ids.append("webchat")
+    if re.search(r"\bBlueBubbles\b", joined):
+        channel_ids.append("bluebubbles")
+    return _sorted_set(channel_ids)
+
+
+def _fetch_openclaw_doc_text(url: str, *, timeout: int = OPENCLAW_LIVE_DOCS_TIMEOUT_SECONDS) -> str:
+    request = Request(url, headers={"User-Agent": "Paideia-Agent-OpenClaw-Parity-Audit/1.0"})
+    with urlopen(request, timeout=timeout) as response:
+        content_type = response.headers.get_content_charset() or "utf-8"
+        return response.read().decode(content_type, errors="replace")
+
+
+def _live_official_snapshots(*, timeout: int = OPENCLAW_LIVE_DOCS_TIMEOUT_SECONDS) -> tuple[dict[str, Any], dict[str, Any], list[dict[str, str]]]:
+    texts: list[str] = []
+    fetch_errors: list[dict[str, str]] = []
+    fetched_urls: list[str] = []
+    for url in OPENCLAW_LIVE_DOC_URLS:
+        try:
+            texts.append(_fetch_openclaw_doc_text(url, timeout=timeout))
+            fetched_urls.append(url)
+        except Exception as exc:  # Network and docs hosts can fail independently of local parity.
+            fetch_errors.append({"url": url, "error_type": type(exc).__name__, "error": str(exc)[:300]})
+    if fetch_errors and not texts:
+        raise RuntimeError("Could not fetch any OpenClaw official docs for live parity audit")
+    provider_ids = _provider_ids_from_doc_texts(texts)
+    channel_ids = _channel_ids_from_doc_texts(texts)
+    providers = {
+        "source": "official_openclaw_docs_live_fetch",
+        "source_urls": fetched_urls,
+        "provider_ids": provider_ids,
+    }
+    channels = {
+        "source": "official_openclaw_docs_live_fetch",
+        "source_urls": fetched_urls,
+        "channel_ids": channel_ids,
+    }
+    return providers, channels, fetch_errors
+
+
 def _coverage(expected: list[str], actual: list[str]) -> dict[str, Any]:
     expected_ids = _sorted_set(expected)
     actual_ids = _sorted_set(actual)
@@ -200,20 +383,31 @@ def _selector_checks() -> dict[str, Any]:
     }
 
 
-def audit_openclaw_parity(*, output_path: Path | None = None) -> dict[str, Any]:
+def audit_openclaw_parity(
+    *,
+    output_path: Path | None = None,
+    refresh_docs: bool = False,
+    docs_timeout: int = OPENCLAW_LIVE_DOCS_TIMEOUT_SECONDS,
+) -> dict[str, Any]:
     provider_manifest = openclaw_provider_manifest()
     channel_manifest = openclaw_channel_manifest()
+    fetch_errors: list[dict[str, str]] = []
+    if refresh_docs:
+        provider_snapshot, channel_snapshot, fetch_errors = _live_official_snapshots(timeout=docs_timeout)
+    else:
+        provider_snapshot = OPENCLAW_OFFICIAL_PROVIDER_SNAPSHOT
+        channel_snapshot = OPENCLAW_OFFICIAL_CHANNEL_SNAPSHOT
     local_provider_ids = [
         *[provider["provider_id"] for provider in OPENCLAW_MODEL_PROVIDERS],
         *OPENCLAW_MANIFEST_ONLY_PROVIDERS,
     ]
     local_channel_ids = [channel["channel_id"] for channel in channel_manifest["channels"]]
     provider_coverage = _coverage(
-        OPENCLAW_OFFICIAL_PROVIDER_SNAPSHOT["provider_ids"],
+        provider_snapshot["provider_ids"],
         local_provider_ids,
     )
     channel_coverage = _coverage(
-        OPENCLAW_OFFICIAL_CHANNEL_SNAPSHOT["channel_ids"],
+        channel_snapshot["channel_ids"],
         local_channel_ids,
     )
     selector_checks = _selector_checks()
@@ -224,10 +418,12 @@ def audit_openclaw_parity(*, output_path: Path | None = None) -> dict[str, Any]:
         "schema": OPENCLAW_PARITY_AUDIT_SCHEMA,
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "status": "pass" if provider_coverage["complete"] and channel_coverage["complete"] and selector_complete else "needs_update",
+        "source_mode": "live_docs" if refresh_docs else "checked_snapshot",
         "source_snapshots": {
-            "providers": OPENCLAW_OFFICIAL_PROVIDER_SNAPSHOT,
-            "channels": OPENCLAW_OFFICIAL_CHANNEL_SNAPSHOT,
+            "providers": provider_snapshot,
+            "channels": channel_snapshot,
         },
+        "live_fetch_errors": fetch_errors,
         "local_manifests": {
             "provider_manifest_schema": provider_manifest["schema"],
             "provider_source_version": provider_manifest["source_version"],

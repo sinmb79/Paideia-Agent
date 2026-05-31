@@ -304,6 +304,11 @@ ai22b-talent-foundry audit-openclaw-parity `
   --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_parity_audit.json" `
   --fail-on-missing
 
+ai22b-talent-foundry audit-openclaw-parity `
+  --refresh-docs `
+  --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_parity_live_docs.json" `
+  --fail-on-missing
+
 ai22b-talent-foundry list-openclaw-provider-connectors `
   --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\provider_connectors.json"
 
@@ -352,7 +357,7 @@ ai22b-talent-foundry build-openclaw-runtime-bundle `
 
 The bundle writes:
 
-- `openclaw_config_patch.json`: a review-first `openclaw.json` patch with the selected `provider/model`, `agents.list`, gateway URL, enabled channels, `channels.modelByChannel`, and `bindings[]`.
+- `openclaw_config_patch.json`: a review-first `openclaw.json` patch with the selected `provider/model`, `models.providers`, `agents.list`, gateway URL, enabled channels, `channels.modelByChannel`, and `bindings[]`.
 - `openclaw.env.example.ps1`: a local PowerShell environment template. It lists secret variable names but never writes secret values.
 - `openclaw_provider_doctor.json`, `openclaw_channel_doctor.json`, and `llm_service_health.json`: readiness checks for model auth, channel bridge requirements, and local/remote runtime status.
 - `openclaw_gateway_config.json` and `openclaw_channel_access_config.json`: loopback gateway and deny-by-default channel access setup.

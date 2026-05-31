@@ -444,6 +444,16 @@ def _build_config_patch(
     gateway_url = f"http://{bind_host}:{port}/openclaw/channel-message"
     channel_connectors = {item["channel_id"]: item for item in channel_doctor.get("results", [])}
     agent_workspace = str(employment_record_path.parent)
+    provider_config = {
+        "provider": provider_id,
+        "model": model_selector,
+        "apiProtocol": (provider or {}).get("api_protocol"),
+        "baseURL": (provider or {}).get("base_url"),
+        "auth": {
+            "envCandidates": provider_env_vars,
+            "secretValuesStored": False,
+        },
+    }
     return {
         "schema": OPENCLAW_CONFIG_PATCH_SCHEMA,
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -487,15 +497,8 @@ def _build_config_patch(
                 },
             },
             "models": {
-                provider_id: {
-                    "provider": provider_id,
-                    "model": model_selector,
-                    "apiProtocol": (provider or {}).get("api_protocol"),
-                    "baseURL": (provider or {}).get("base_url"),
-                    "auth": {
-                        "envCandidates": provider_env_vars,
-                        "secretValuesStored": False,
-                    },
+                "providers": {
+                    provider_id: provider_config,
                 },
             },
             "channels": {

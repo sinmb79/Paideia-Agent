@@ -90,9 +90,14 @@ OpenClaw가 지원하는 provider와 channel 목록이 바뀌면 Paideia catalog
 ai22b-talent-foundry audit-openclaw-parity `
   --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_parity_audit.json" `
   --fail-on-missing
+
+ai22b-talent-foundry audit-openclaw-parity `
+  --refresh-docs `
+  --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_parity_live_docs.json" `
+  --fail-on-missing
 ```
 
-현재 snapshot은 OpenClaw `providers`, `channels`, `llms.txt`, `gateway/config-channels` 문서를 기준으로 합니다. 이 감사는 catalog/selector parity를 증명하지만, 모든 외부 OAuth나 channel plugin이 이미 보스 컴퓨터에서 인증되었다는 뜻은 아닙니다. 실제 live 연결은 bridge setup kit와 doctor 명령으로 따로 확인합니다.
+기본 감사는 저장소에 고정된 OpenClaw `providers`, `channels`, `llms.txt`, `gateway/config-channels` snapshot을 기준으로 합니다. `--refresh-docs`를 붙이면 현재 OpenClaw 공식 문서를 가져와 provider/channel drift를 다시 계산합니다. 이 감사는 catalog/selector parity를 증명하지만, 모든 외부 OAuth나 channel plugin이 이미 보스 컴퓨터에서 인증되었다는 뜻은 아닙니다. 실제 live 연결은 bridge setup kit와 doctor 명령으로 따로 확인합니다.
 
 ## iMessage/BlueBubbles 주의
 
@@ -101,7 +106,7 @@ ai22b-talent-foundry audit-openclaw-parity `
 ## 산출물
 
 - `openclaw_runtime_bundle.json`: 전체 실행 준비 manifest입니다.
-- `openclaw_config_patch.json`: OpenClaw식 agent, model, channel, `channels.modelByChannel`, `bindings[]` 설정 patch입니다.
+- `openclaw_config_patch.json`: OpenClaw식 agent, `models.providers`, channel, `channels.modelByChannel`, `bindings[]` 설정 patch입니다.
 - `openclaw.env.example.ps1`: 로컬 환경변수 템플릿입니다. 실제 secret 값은 들어가지 않습니다.
 - `openclaw_provider_doctor.json`: 선택 provider의 live adapter, secret, plugin 필요 상태입니다.
 - `openclaw_channel_doctor.json`: 선택 channel의 gateway, delivery, bridge/plugin 필요 상태입니다.

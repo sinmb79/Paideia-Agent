@@ -444,7 +444,11 @@ class GrahamTalentFoundryTests(unittest.TestCase):
     def test_openclaw_parity_audit_covers_current_docs_snapshot(self) -> None:
         from ai22b.talent_foundry.cli import main as cli_main
         from ai22b.talent_foundry.openclaw_compat import find_openclaw_channel, find_openclaw_provider
-        from ai22b.talent_foundry.openclaw_parity import audit_openclaw_parity
+        from ai22b.talent_foundry.openclaw_parity import (
+            _channel_ids_from_doc_texts,
+            _provider_ids_from_doc_texts,
+            audit_openclaw_parity,
+        )
 
         with tempfile.TemporaryDirectory() as tmp:
             output = Path(tmp) / "openclaw_parity.json"
@@ -452,9 +456,28 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             cli_output = Path(tmp) / "openclaw_parity_cli.json"
             cli_result = cli_main(["audit-openclaw-parity", "--output", str(cli_output), "--fail-on-missing"])
             cli_audit = json.loads(cli_output.read_text(encoding="utf-8"))
+            sample_provider_docs = (
+                "https://docs.openclaw.ai/providers/openai "
+                "https://docs.openclaw.ai/plugins/reference/byteplus "
+                "https://docs.openclaw.ai/plugins/reference/google "
+                "https://docs.openclaw.ai/providers/qwen-oauth"
+            )
+            sample_channel_docs = (
+                "https://docs.openclaw.ai/channels/telegram "
+                "https://docs.openclaw.ai/channels/msteams "
+                "https://docs.openclaw.ai/channels/imessage-from-bluebubbles "
+                "https://docs.openclaw.ai/web/webchat WebChat"
+            )
+            live_output = Path(tmp) / "openclaw_parity_live.json"
+            with patch(
+                "ai22b.talent_foundry.openclaw_parity._fetch_openclaw_doc_text",
+                side_effect=[sample_provider_docs + " https://docs.openclaw.ai/providers/mistral", sample_channel_docs, ""],
+            ):
+                live_audit = audit_openclaw_parity(output_path=live_output, refresh_docs=True)
 
         self.assertEqual(audit["schema"], "ai22b-openclaw-parity-audit/v1")
         self.assertEqual(audit["status"], "pass")
+        self.assertEqual(audit["source_mode"], "checked_snapshot")
         self.assertEqual(audit["coverage"]["providers"]["missing_ids"], [])
         self.assertEqual(audit["coverage"]["channels"]["missing_ids"], [])
         self.assertIn("https://docs.openclaw.ai/providers", audit["source_snapshots"]["providers"]["source_urls"])
@@ -464,6 +487,13 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertEqual(find_openclaw_channel("qa_channel")["channel_id"], "qa-channel")
         self.assertEqual(cli_result, 0)
         self.assertEqual(cli_audit["status"], "pass")
+        self.assertEqual(live_audit["source_mode"], "live_docs")
+        self.assertEqual(live_audit["status"], "pass")
+        self.assertIn("byteplus-plan", _provider_ids_from_doc_texts([sample_provider_docs]))
+        self.assertIn("google-vertex", _provider_ids_from_doc_texts([sample_provider_docs]))
+        self.assertIn("mistral", _provider_ids_from_doc_texts(["https://docs.openclaw.ai/providers/mistral"]))
+        self.assertIn("microsoft-teams", _channel_ids_from_doc_texts([sample_channel_docs]))
+        self.assertIn("bluebubbles", _channel_ids_from_doc_texts([sample_channel_docs]))
 
     def test_channel_connector_catalog_covers_every_openclaw_channel(self) -> None:
         from ai22b.talent_foundry.channel_connectors import (
@@ -642,7 +672,10 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertEqual(config_patch["openclaw_json_patch"]["agents"]["list"][0]["default"], True)
         self.assertEqual(bundle["selection"]["config_action"], "modify")
         self.assertEqual(config_review["status"], "modify_preview_written")
-        self.assertEqual(config_patch["openclaw_json_patch"]["models"]["arcee"]["model"], "arcee/trinity-large-thinking")
+        self.assertEqual(
+            config_patch["openclaw_json_patch"]["models"]["providers"]["arcee"]["model"],
+            "arcee/trinity-large-thinking",
+        )
         self.assertIn("bluebubbles", config_patch["openclaw_json_patch"]["channels"])
         self.assertIn("OPENCLAW_LIVE_ARCEE_KEY", env_template)
         self.assertNotIn("BLUEBUBBLES_SERVER_URL", env_template)
