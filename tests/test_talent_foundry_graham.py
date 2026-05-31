@@ -560,6 +560,8 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             dossier_markdown_exists = artifacts["hiring_dossier_markdown"].exists()
             runtime_bundle_exists = artifacts["openclaw_runtime_bundle"].exists()
             support_matrix_exists = artifacts["openclaw_support_matrix"].exists()
+            goal_readiness = json.loads(artifacts["openclaw_goal_readiness"].read_text(encoding="utf-8"))
+            goal_readiness_markdown_exists = artifacts["openclaw_goal_readiness_markdown"].exists()
 
         self.assertEqual(result, 0)
         self.assertEqual(report["schema"], "ai22b-graham-junior-quickstart/v1")
@@ -570,8 +572,12 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertTrue(dossier_markdown_exists)
         self.assertTrue(runtime_bundle_exists)
         self.assertTrue(support_matrix_exists)
+        self.assertTrue(goal_readiness_markdown_exists)
         self.assertEqual(report["openclaw_support"]["matrix_status"], "pass")
         self.assertEqual(report["openclaw_support"]["selected_support"]["provider_id"], "openrouter")
+        self.assertEqual(goal_readiness["schema"], "ai22b-paideia-openclaw-goal-readiness-audit/v1")
+        self.assertIn("openclaw_goal_readiness_created", {check["id"] for check in report["checks"]})
+        self.assertIn("audit_goal_readiness", report["next_commands"])
         self.assertEqual(gateway_doctor["status"], "ready_for_gateway_start")
         self.assertEqual(report["openclaw_channel_flow"]["status"], "pass")
         self.assertEqual(first_chat["reply_generation_mode"], "deterministic_local_fallback")
@@ -2240,6 +2246,109 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertIn("chat-hired-agent", plan["commands"]["openclaw_cli_live_probe"]["command"])
         self.assertIn("--llm-mode live", plan["commands"]["openclaw_cli_live_probe"]["command"])
         self.assertIn("installed OpenClaw CLI on PATH", plan["commands"]["openclaw_cli_live_probe"]["requires"])
+
+    def test_openclaw_goal_readiness_audit_checks_end_to_end_selection(self) -> None:
+        from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
+        from ai22b.talent_foundry.cli import main as cli_main
+        from ai22b.talent_foundry.registry import hire_installed_agent
+        from ai22b.talent_foundry.training_run import materialize_training_blueprint
+
+        class Completed:
+            def __init__(self, stdout: str, stderr: str = "", returncode: int = 0) -> None:
+                self.stdout = stdout
+                self.stderr = stderr
+                self.returncode = returncode
+
+        def fake_run(command: list[str], **_kwargs: object) -> Completed:
+            args = command[1:]
+            if args == ["--version"]:
+                return Completed("OpenClaw 2026.5.20 (test)\n")
+            if args == ["config", "file"]:
+                return Completed(r"C:\Users\sinmb\.openclaw\openclaw.json")
+            if args == ["config", "validate", "--json"]:
+                return Completed(json.dumps({"valid": True}))
+            if args == ["models", "status", "--json"]:
+                return Completed(
+                    json.dumps(
+                        {
+                            "defaultModel": "openai/gpt-5.5",
+                            "resolvedDefault": "openai/gpt-5.5",
+                            "allowed": ["openai/gpt-5.5"],
+                            "auth": {"missingProvidersInUse": [], "runtimeAuthRoutes": []},
+                        }
+                    )
+                )
+            if args == ["channels", "status", "--json"]:
+                return Completed(json.dumps({"gatewayReachable": False, "configuredChannels": ["telegram"]}))
+            if args == ["gateway", "status", "--json", "--no-probe"]:
+                return Completed(
+                    json.dumps(
+                        {
+                            "service": {"runtime": {"status": "stopped"}},
+                            "gateway": {"bindHost": "127.0.0.1", "port": 18789},
+                        }
+                    )
+                )
+            return Completed("", "unexpected", 1)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            blueprint = create_agent_training_blueprint(
+                owner="Boss",
+                request="Audit the OpenClaw-style LLM and chat readiness for a hired junior.",
+                talent_name="goal-readiness-junior",
+                gender="male",
+                domain="securities_research",
+                role_model_id="graham_value_investing",
+                agent_surface="openclaw-channel-telegram",
+            )
+            run = materialize_training_blueprint(blueprint, output_dir=Path(tmp) / "goal_readiness_junior")
+            artifacts = {key: Path(value) for key, value in run["artifacts"].items()}
+            hiring = hire_installed_agent(
+                artifacts["installed_agent_manifest"],
+                employer="Boss",
+                role="OpenClaw readiness audit agent",
+                llm_service="openclaw_cli_local",
+                llm_model="openai/gpt-5.5",
+                chat_surface="openclaw-channel-telegram",
+                record_name="employment_record_goal_readiness.json",
+            )
+            audit_path = Path(tmp) / "openclaw_goal_readiness.json"
+            summary_path = Path(tmp) / "OPENCLAW_GOAL_READINESS.md"
+            with patch("shutil.which", return_value=r"C:\Users\sinmb\AppData\Roaming\npm\openclaw.cmd"), patch(
+                "subprocess.run",
+                side_effect=fake_run,
+            ):
+                result = cli_main(
+                    [
+                        "audit-openclaw-goal-readiness",
+                        "--employment-record",
+                        str(hiring["employment_record"]),
+                        "--channel",
+                        "telegram",
+                        "--output",
+                        str(audit_path),
+                        "--summary-output",
+                        str(summary_path),
+                    ]
+                )
+            audit = json.loads(audit_path.read_text(encoding="utf-8"))
+            summary = summary_path.read_text(encoding="utf-8")
+
+        checks = {item["id"]: item for item in audit["checks"]}
+        self.assertEqual(result, 0)
+        self.assertEqual(audit["schema"], "ai22b-paideia-openclaw-goal-readiness-audit/v1")
+        self.assertEqual(audit["status"], "ready_for_live_operator_validation")
+        self.assertEqual(audit["selection"]["llm_engine"], "openclaw_cli_local")
+        self.assertEqual(audit["selection"]["openclaw_model"], "openai/gpt-5.5")
+        self.assertEqual(audit["selection"]["openclaw_channel_ids"], ["telegram"])
+        self.assertTrue(checks["selected_llm_is_openclaw_compatible"]["passed"])
+        self.assertTrue(checks["selected_chat_is_openclaw_compatible"]["passed"])
+        self.assertTrue(checks["webchat_per_turn_runtime_controls"]["passed"])
+        self.assertTrue(checks["live_smoke_plan_includes_cli_gateway_and_channel_probes"]["passed"])
+        self.assertTrue(checks["installed_openclaw_runtime_detected"]["passed"])
+        self.assertFalse(audit["claim_boundary"]["secret_values_stored"])
+        self.assertIn("Paideia OpenClaw Goal Readiness", summary)
+        self.assertIn("chat_live", audit["next_commands"])
 
     def test_openclaw_channel_gateway_routes_message_to_paideia_chat(self) -> None:
         from ai22b.talent_foundry.blueprint import create_agent_training_blueprint

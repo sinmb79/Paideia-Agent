@@ -9,6 +9,7 @@ from ai22b.config import PROJECT_ROOT, talent_foundry_storage_path
 from ai22b.talent_foundry.console import run_console_session
 from ai22b.talent_foundry.memory_substrate import run_chat_turn_from_employment
 from ai22b.talent_foundry.openclaw_channel_flow import doctor_openclaw_channel_flow
+from ai22b.talent_foundry.openclaw_goal_readiness import audit_openclaw_goal_readiness
 
 
 GRAHAM_JUNIOR_QUICKSTART_SCHEMA = "ai22b-graham-junior-quickstart/v1"
@@ -86,6 +87,14 @@ def run_graham_junior_quickstart(
         llm_mode=llm_mode,
         learn_from_chat=learn_from_chat,
     )
+    goal_readiness_path = output_dir / "openclaw_goal_readiness.json"
+    goal_readiness_markdown_path = output_dir / "OPENCLAW_GOAL_READINESS.md"
+    goal_readiness = audit_openclaw_goal_readiness(
+        employment_record_path,
+        channels=channels,
+        output_path=goal_readiness_path,
+        summary_output_path=goal_readiness_markdown_path,
+    )
 
     onboarding = _read_json(Path(console_session["artifacts"]["onboarding_session"]))
     release_bundle_path = Path(onboarding["artifacts"]["release_bundle"])
@@ -139,6 +148,13 @@ def run_graham_junior_quickstart(
             "path": str(channel_flow_path),
         },
         {
+            "id": "openclaw_goal_readiness_created",
+            "passed": goal_readiness_path.exists()
+            and goal_readiness.get("schema") == "ai22b-paideia-openclaw-goal-readiness-audit/v1",
+            "path": str(goal_readiness_path),
+            "status": goal_readiness.get("status"),
+        },
+        {
             "id": "openclaw_gateway_llm_doctor_created_when_selected",
             "passed": True if not gateway_llm_doctor_path else _exists(str(gateway_llm_doctor_path)),
             "path": gateway_llm_doctor_path,
@@ -166,6 +182,8 @@ def run_graham_junior_quickstart(
             "openclaw_runtime_bundle": str(runtime_bundle_path),
             "openclaw_support_matrix": str(support_matrix_path),
             "openclaw_channel_flow_doctor": str(channel_flow_path),
+            "openclaw_goal_readiness": str(goal_readiness_path),
+            "openclaw_goal_readiness_markdown": str(goal_readiness_markdown_path),
             "openclaw_gateway_llm_doctor": gateway_llm_doctor_path,
         },
         "first_chat": {
@@ -184,6 +202,15 @@ def run_graham_junior_quickstart(
             "coverage": support_matrix.get("coverage"),
             "selected_support": selected_support,
         },
+        "openclaw_goal_readiness": {
+            "status": goal_readiness.get("status"),
+            "failed_required_checks": [
+                check["id"]
+                for check in goal_readiness.get("checks", [])
+                if check.get("required") and not check.get("passed")
+            ],
+            "installed_runtime_status": goal_readiness.get("installed_runtime", {}).get("status"),
+        },
         "checks": checks,
         "next_commands": {
             "chat_again": (
@@ -193,6 +220,10 @@ def run_graham_junior_quickstart(
             "doctor_channel_flow": (
                 f"ai22b-talent-foundry doctor-openclaw-channel-flow --employment-record {employment_record_path} "
                 f"--output {channel_flow_path}"
+            ),
+            "audit_goal_readiness": (
+                f"ai22b-talent-foundry audit-openclaw-goal-readiness --employment-record {employment_record_path} "
+                f"--output {goal_readiness_path} --summary-output {goal_readiness_markdown_path}"
             ),
             "view_hiring_dossier": str(hiring_dossier_markdown_path),
             "view_assessment_transcript": str(assessment_transcript_path),

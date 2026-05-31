@@ -136,7 +136,7 @@ ai22b-talent-foundry start-console `
   --answers examples\graham_junior_onboarding.answers.json
 ```
 
-For a one-command product smoke test, run the Graham Junior quickstart report. It raises the sample, writes the transcript and hiring dossier, opens a first local chat turn, and runs the OpenClaw channel flow doctor. You can override the LLM with any OpenClaw-style `provider/model` or the Gateway bridge:
+For a one-command product smoke test, run the Graham Junior quickstart report. It raises the sample, writes the transcript and hiring dossier, opens a first local chat turn, runs the OpenClaw channel flow doctor, and writes the OpenClaw goal readiness audit. You can override the LLM with any OpenClaw-style `provider/model` or the Gateway bridge:
 
 ```powershell
 ai22b-talent-foundry run-graham-junior-quickstart `
@@ -260,6 +260,16 @@ powershell -ExecutionPolicy Bypass -File .\start_openclaw_webchat.ps1 -Port 8722
 ```
 
 `build_openclaw_native_onboarding_runbook.ps1` mirrors OpenClaw's own setup order: `openclaw onboard`, model/auth, workspace, Gateway, channel pairing, `openclaw agents add`, preflight, and smoke tests. `doctor_openclaw_installed_runtime.ps1` reads the installed OpenClaw CLI/config/Gateway/model/channel status and redacts home paths, emails, and secret-like values. `build_openclaw_live_smoke_plan.ps1` writes a no-secret operator sequence before any real provider key, Gateway, or external channel is used. `NEXT_STEPS.md` turns the selected provider/model and chat surface into copy-paste commands for runtime inspection, local WebChat, offline chat, live chat, and the smoke sequence. `run_openclaw_smoke_sequence.ps1` executes the safe installed-kit checks in order: runtime bundle, smoke plan, offline context chat, static runtime preflight with channel-flow dry run, and offline channel-message routing. It also records a dedicated `openclaw_cli_live_probe` step so an `openclaw_cli_local` hire can prove that live chat is going through the installed `openclaw agent --local` runtime. It skips OpenClaw CLI/Gateway/live LLM/live channel probes unless you add `-IncludeLive`. `start_openclaw_webchat.ps1` starts the local browser chat surface on `127.0.0.1` by default, exposes `/api/runtime` plus `/api/smoke-plan`, and lets each browser message choose `offline`, `auto`, or `live` mode with an optional OpenClaw-style `provider/model` override.
+
+To check whether one hired talent is ready for the current project goal, run the goal readiness audit. It combines the catalog parity audit, selected provider/model preservation, OpenClaw-style chat channel selection, WebChat per-turn controls, installed OpenClaw CLI status, and no-secret live smoke sequence into one report:
+
+```powershell
+ai22b-talent-foundry audit-openclaw-goal-readiness `
+  --employment-record "<employment_record.json>" `
+  --channel webchat `
+  --output openclaw_goal_readiness.json `
+  --summary-output OPENCLAW_GOAL_READINESS.md
+```
 
 ## Hermes/OpenClaw-Style Skill Migration
 
@@ -809,6 +819,7 @@ Securities-research talents may help organize evidence, compare sources, draft r
 - [Research basis](docs/research_basis.md)
 - [OpenClaw-style onboarding](docs/openclaw_style_onboarding.ko.md)
 - [OpenClaw-style runtime bundle](docs/openclaw_runtime_bundle.ko.md)
+- [OpenClaw goal readiness audit](docs/openclaw_goal_readiness.ko.md)
 - [OpenClaw native config merge](docs/openclaw_native_config_merge.ko.md)
 - [OpenClaw Gateway HTTP LLM bridge](docs/openclaw_gateway_http_bridge.ko.md)
 - [Tesla-style dataflow board benchmark](docs/tesla_board_benchmark.md)

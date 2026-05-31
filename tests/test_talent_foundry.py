@@ -1697,6 +1697,7 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("build-openclaw-onboarding-menu", {command["id"] for command in manifest["commands"]})
         self.assertIn("build-openclaw-native-onboarding-runbook", {command["id"] for command in manifest["commands"]})
         self.assertIn("doctor-openclaw-installed-runtime", {command["id"] for command in manifest["commands"]})
+        self.assertIn("audit-openclaw-goal-readiness", {command["id"] for command in manifest["commands"]})
         self.assertIn("build-paideia-agent-kit", {command["id"] for command in manifest["commands"]})
         self.assertIn("doctor-agent-program", {command["id"] for command in manifest["commands"]})
         self.assertIn("migrate-agent-assets", {command["id"] for command in manifest["commands"]})

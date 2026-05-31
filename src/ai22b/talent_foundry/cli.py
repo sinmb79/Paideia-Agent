@@ -70,6 +70,7 @@ from ai22b.talent_foundry.openclaw_employment_runtime import (
     render_openclaw_employment_runtime_summary,
 )
 from ai22b.talent_foundry.openclaw_gateway_llm import doctor_openclaw_gateway_llm
+from ai22b.talent_foundry.openclaw_goal_readiness import audit_openclaw_goal_readiness
 from ai22b.talent_foundry.openclaw_live_smoke_plan import build_openclaw_live_smoke_plan
 from ai22b.talent_foundry.openclaw_native_handoff import (
     doctor_openclaw_native_handoff,
@@ -332,6 +333,23 @@ def _build_parser() -> argparse.ArgumentParser:
     live_smoke_plan.add_argument("--markdown-output")
     live_smoke_plan.add_argument("--refresh-docs", action="store_true")
     live_smoke_plan.add_argument("--docs-timeout", type=int, default=15)
+
+    goal_readiness = subparsers.add_parser(
+        "audit-openclaw-goal-readiness",
+        help="Audit that a hired Paideia talent's LLM, chat, WebChat, and smoke path are OpenClaw-ready.",
+    )
+    goal_readiness.add_argument("--employment-record", required=True)
+    goal_readiness.add_argument("--channel", action="append", default=[])
+    goal_readiness.add_argument("--output", required=True)
+    goal_readiness.add_argument("--summary-output")
+    goal_readiness.add_argument("--refresh-docs", action="store_true")
+    goal_readiness.add_argument("--docs-timeout", type=int, default=15)
+    goal_readiness.add_argument("--timeout-seconds", type=int, default=20)
+    goal_readiness.add_argument(
+        "--skip-installed-openclaw-probe",
+        action="store_true",
+        help="Skip read-only OpenClaw CLI/config/Gateway status probes.",
+    )
 
     doctor_runtime_preflight = subparsers.add_parser(
         "doctor-openclaw-runtime-preflight",
@@ -1235,6 +1253,20 @@ def main(argv: Sequence[str] | None = None) -> int:
             markdown_output_path=Path(args.markdown_output) if args.markdown_output else None,
             refresh_docs=args.refresh_docs,
             docs_timeout=args.docs_timeout,
+        )
+        print(str(Path(args.output)))
+        return 0
+
+    if args.command == "audit-openclaw-goal-readiness":
+        audit_openclaw_goal_readiness(
+            Path(args.employment_record),
+            channels=args.channel or None,
+            output_path=Path(args.output),
+            summary_output_path=Path(args.summary_output) if args.summary_output else None,
+            refresh_docs=args.refresh_docs,
+            docs_timeout=args.docs_timeout,
+            timeout_seconds=args.timeout_seconds,
+            probe_installed_runtime=not args.skip_installed_openclaw_probe,
         )
         print(str(Path(args.output)))
         return 0
