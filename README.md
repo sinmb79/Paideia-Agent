@@ -259,7 +259,7 @@ powershell -ExecutionPolicy Bypass -File .\run_openclaw_smoke_sequence.ps1 -Chan
 powershell -ExecutionPolicy Bypass -File .\start_openclaw_webchat.ps1 -Port 8722
 ```
 
-`build_openclaw_native_onboarding_runbook.ps1` mirrors OpenClaw's own setup order: `openclaw onboard`, model/auth, workspace, Gateway, channel pairing, `openclaw agents add`, preflight, and smoke tests. `doctor_openclaw_installed_runtime.ps1` reads the installed OpenClaw CLI/config/Gateway/model/channel status and redacts home paths, emails, and secret-like values. `build_openclaw_live_smoke_plan.ps1` writes a no-secret operator sequence before any real provider key, Gateway, or external channel is used. `run_openclaw_smoke_sequence.ps1` executes the safe installed-kit checks in order: runtime bundle, smoke plan, offline context chat, static runtime preflight with channel-flow dry run, and offline channel-message routing. It skips Gateway/live LLM/live channel probes unless you add `-IncludeLive`. `start_openclaw_webchat.ps1` starts the local browser chat surface on `127.0.0.1` by default and exposes `/api/runtime` plus `/api/smoke-plan` for quick inspection.
+`build_openclaw_native_onboarding_runbook.ps1` mirrors OpenClaw's own setup order: `openclaw onboard`, model/auth, workspace, Gateway, channel pairing, `openclaw agents add`, preflight, and smoke tests. `doctor_openclaw_installed_runtime.ps1` reads the installed OpenClaw CLI/config/Gateway/model/channel status and redacts home paths, emails, and secret-like values. `build_openclaw_live_smoke_plan.ps1` writes a no-secret operator sequence before any real provider key, Gateway, or external channel is used. `run_openclaw_smoke_sequence.ps1` executes the safe installed-kit checks in order: runtime bundle, smoke plan, offline context chat, static runtime preflight with channel-flow dry run, and offline channel-message routing. It also records a dedicated `openclaw_cli_live_probe` step so an `openclaw_cli_local` hire can prove that live chat is going through the installed `openclaw agent --local` runtime. It skips OpenClaw CLI/Gateway/live LLM/live channel probes unless you add `-IncludeLive`. `start_openclaw_webchat.ps1` starts the local browser chat surface on `127.0.0.1` by default and exposes `/api/runtime` plus `/api/smoke-plan` for quick inspection.
 
 ## Hermes/OpenClaw-Style Skill Migration
 
@@ -523,7 +523,7 @@ ai22b-talent-foundry doctor-openclaw-employment-runtime `
   --summary-output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\OPENCLAW_EMPLOYMENT_RUNTIME.md"
 ```
 
-For an operator-ready live validation checklist, build a smoke plan. The plan performs no network calls by itself. It writes the exact sequence for offline context verification, runtime bundle creation, static preflight, OpenClaw Gateway probing, live LLM chat, and OpenClaw channel message smoke tests:
+For an operator-ready live validation checklist, build a smoke plan. The plan performs no network calls by itself. It writes the exact sequence for offline context verification, runtime bundle creation, static preflight, installed OpenClaw CLI local-agent probing, OpenClaw Gateway probing, live LLM chat, and OpenClaw channel message smoke tests:
 
 ```powershell
 ai22b-talent-foundry build-openclaw-live-smoke-plan `

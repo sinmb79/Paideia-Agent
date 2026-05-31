@@ -615,6 +615,7 @@ $PlanPath = Join-Path $OutputRoot.FullName "openclaw_live_smoke_plan.json"
 $PlanMarkdownPath = Join-Path $OutputRoot.FullName "OPENCLAW_LIVE_SMOKE_PLAN.md"
 $PreflightPath = Join-Path $OutputRoot.FullName "openclaw_runtime_preflight.static.json"
 $GatewayProbePath = Join-Path $OutputRoot.FullName "openclaw_gateway_llm.live.json"
+$OpenClawCliProbePath = Join-Path $OutputRoot.FullName "openclaw_cli_agent.live.json"
 $ChatOfflinePath = Join-Path $OutputRoot.FullName "chat_offline_smoke.json"
 $ChatLivePath = Join-Path $OutputRoot.FullName "chat_live_smoke.json"
 $ChannelOfflinePath = Join-Path $OutputRoot.FullName "channel_offline_smoke.json"
@@ -699,6 +700,12 @@ try {
     )
     if ($RefreshDocs) { $SmokePlanArgs += "--refresh-docs" }
     Invoke-PaideiaStep -Id "build_live_smoke_plan" -Output $PlanPath -ArgsList $SmokePlanArgs
+    $PlanJson = Get-Content -LiteralPath $PlanPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $UseOpenClawCli = (
+        $PlanJson.selection.llm_engine -eq "openclaw_cli_local" -or
+        $PlanJson.selection.api_protocol -eq "openclaw_cli_agent_local" -or
+        $PlanJson.selection.live_runtime_path -eq "openclaw_cli_local"
+    )
 
     Invoke-PaideiaStep -Id "offline_context_smoke" -Output $ChatOfflinePath -ArgsList @(
         "-m", "ai22b.talent_foundry.cli",
@@ -726,6 +733,20 @@ try {
         "--llm-mode", "offline",
         "--output", $ChannelOfflinePath
     )
+
+    if ($UseOpenClawCli) {
+        Invoke-PaideiaStep -Id "openclaw_cli_live_probe" -Live -Output $OpenClawCliProbePath -ArgsList @(
+            "-m", "ai22b.talent_foundry.cli",
+            "chat-hired-agent",
+            "--employment-record", $EmploymentRecord,
+            "--message", "OpenClaw CLI local agent live smoke test.",
+            "--llm-mode", "live",
+            "--output", $OpenClawCliProbePath
+        )
+    } else {
+        Add-StepRecord -Id "openclaw_cli_live_probe" -Status "skipped_not_openclaw_cli_runtime" -Live $true -ExitCode 0 -Output $OpenClawCliProbePath -Command "selected runtime is not openclaw_cli_local"
+        Write-Host "[skip non-cli] openclaw_cli_live_probe"
+    }
 
     Invoke-PaideiaStep -Id "gateway_live_probe" -Live -Output $GatewayProbePath -ArgsList @(
         "-m", "ai22b.talent_foundry.cli",

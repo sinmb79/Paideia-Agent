@@ -163,6 +163,14 @@ def build_openclaw_live_smoke_plan(
 
     first_channel = channel_ids[0] if channel_ids else "webchat"
     openclaw_model = llm.get("openclaw_model") or llm.get("selected_model") or "<provider/model>"
+    api_protocol = llm.get("api_protocol")
+    llm_engine = llm.get("engine")
+    if api_protocol == "openclaw_cli_agent_local" or llm_engine == "openclaw_cli_local":
+        live_runtime_path = "openclaw_cli_local"
+    elif api_protocol == "openclaw_gateway_openai_chat_completions" or llm_engine == "openclaw_gateway_http":
+        live_runtime_path = "openclaw_gateway_http"
+    else:
+        live_runtime_path = str(llm_engine or llm.get("service_id") or "selected_llm_adapter")
     commands = {
         "offline_context_smoke": _command(
             "ai22b-talent-foundry chat-hired-agent "
@@ -190,6 +198,15 @@ def build_openclaw_live_smoke_plan(
             "--probe-gateway --probe-chat "
             f"--output {_quote(output_dir / 'openclaw_gateway_llm.live.json')}",
             requires=["OpenClaw Gateway running", "Gateway auth env vars when enabled"],
+            network_probe=True,
+        ),
+        "openclaw_cli_live_probe": _command(
+            "ai22b-talent-foundry chat-hired-agent "
+            f"--employment-record {_quote(employment_record_path)} "
+            "--message \"OpenClaw CLI local agent live smoke test\" "
+            "--llm-mode live "
+            f"--output {_quote(output_dir / 'openclaw_cli_agent.live.json')}",
+            requires=["installed OpenClaw CLI on PATH", "`openclaw agent --local` provider auth configured"],
             network_probe=True,
         ),
         "live_llm_chat_smoke": _command(
@@ -241,6 +258,8 @@ def build_openclaw_live_smoke_plan(
             "agent": selection.get("agent", {}),
             "llm_service_id": llm.get("service_id"),
             "llm_engine": llm.get("engine"),
+            "api_protocol": api_protocol,
+            "live_runtime_path": live_runtime_path,
             "openclaw_provider_id": provider_id,
             "openclaw_model": openclaw_model,
             "openclaw_gateway_auto_routed": bool(llm.get("openclaw_gateway_auto_routed")),
@@ -279,6 +298,7 @@ def build_openclaw_live_smoke_plan(
             "offline_context_smoke",
             "build_runtime_bundle_if_missing",
             "static_preflight",
+            "openclaw_cli_live_probe",
             "gateway_live_probe",
             "live_llm_chat_smoke",
             "offline_channel_message_smoke",
@@ -314,6 +334,7 @@ def render_openclaw_live_smoke_plan_markdown(
         f"- Agent: `{selection.get('agent', {}).get('name')}`",
         f"- Provider: `{selection.get('openclaw_provider_id')}`",
         f"- Model: `{selection.get('openclaw_model')}`",
+        f"- Live runtime path: `{selection.get('live_runtime_path')}`",
         f"- Chat surface: `{selection.get('chat_surface')}`",
         f"- Channels: `{', '.join(selection.get('channel_ids') or []) or 'webchat'}`",
         "",

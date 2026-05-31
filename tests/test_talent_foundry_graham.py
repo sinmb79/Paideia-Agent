@@ -2162,17 +2162,63 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertEqual(plan["status"], "ready_for_openclaw_gateway_unverified_external_selection")
         self.assertEqual(plan["selection"]["openclaw_provider_id"], "future-openclaw")
         self.assertEqual(plan["selection"]["openclaw_model"], "future-openclaw/next-model")
+        self.assertEqual(plan["selection"]["live_runtime_path"], "openclaw_gateway_http")
         self.assertEqual(plan["selection"]["channel_ids"], ["futurechat"])
         self.assertFalse(plan["policy"]["external_network_call_performed_by_plan"])
         self.assertFalse(plan["policy"]["secret_values_stored"])
         self.assertTrue(plan["gates"][0]["external_openclaw_provider"])
         self.assertEqual(plan["gates"][1]["external_openclaw_channels"], ["futurechat"])
+        self.assertIn("openclaw_cli_live_probe", plan["operator_sequence"])
+        self.assertIn("chat-hired-agent", plan["commands"]["openclaw_cli_live_probe"]["command"])
         self.assertIn("doctor-openclaw-gateway-llm", plan["commands"]["gateway_live_probe"]["command"])
         self.assertIn("--probe-gateway --probe-chat", plan["commands"]["gateway_live_probe"]["command"])
         self.assertIn("run-openclaw-channel-message", plan["commands"]["live_channel_message_smoke"]["command"])
         self.assertIn("--llm-mode live", plan["commands"]["live_channel_message_smoke"]["command"])
+        self.assertIn("Live runtime path", markdown)
         self.assertIn("OpenClaw Live Smoke Plan", markdown)
         self.assertNotIn("source-future-token", plan_text)
+
+    def test_openclaw_live_smoke_plan_marks_cli_local_runtime_path(self) -> None:
+        from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
+        from ai22b.talent_foundry.openclaw_live_smoke_plan import build_openclaw_live_smoke_plan
+        from ai22b.talent_foundry.registry import hire_installed_agent
+        from ai22b.talent_foundry.training_run import materialize_training_blueprint
+
+        with tempfile.TemporaryDirectory() as tmp:
+            blueprint = create_agent_training_blueprint(
+                owner="Boss",
+                request="Build an OpenClaw CLI local live smoke plan.",
+                talent_name="cli-smoke-junior",
+                gender="male",
+                domain="securities_research",
+                role_model_id="graham_value_investing",
+                agent_surface="openclaw-channel-telegram",
+            )
+            run = materialize_training_blueprint(blueprint, output_dir=Path(tmp) / "cli_smoke_junior")
+            artifacts = {key: Path(value) for key, value in run["artifacts"].items()}
+            hiring = hire_installed_agent(
+                artifacts["installed_agent_manifest"],
+                employer="Boss",
+                role="OpenClaw CLI live smoke test agent",
+                llm_service="openclaw_cli_local",
+                llm_model="openai/gpt-5.5",
+                chat_surface="openclaw-channel-telegram",
+                record_name="employment_record_cli_smoke.json",
+            )
+            plan = build_openclaw_live_smoke_plan(
+                hiring["employment_record"],
+                channels=["telegram"],
+                output_path=Path(tmp) / "openclaw_cli_live_smoke_plan.json",
+            )
+
+        self.assertEqual(plan["selection"]["llm_engine"], "openclaw_cli_local")
+        self.assertEqual(plan["selection"]["api_protocol"], "openclaw_cli_agent_local")
+        self.assertEqual(plan["selection"]["live_runtime_path"], "openclaw_cli_local")
+        self.assertEqual(plan["selection"]["openclaw_model"], "openai/gpt-5.5")
+        self.assertIn("openclaw_cli_live_probe", plan["operator_sequence"])
+        self.assertIn("chat-hired-agent", plan["commands"]["openclaw_cli_live_probe"]["command"])
+        self.assertIn("--llm-mode live", plan["commands"]["openclaw_cli_live_probe"]["command"])
+        self.assertIn("installed OpenClaw CLI on PATH", plan["commands"]["openclaw_cli_live_probe"]["requires"])
 
     def test_openclaw_channel_gateway_routes_message_to_paideia_chat(self) -> None:
         from ai22b.talent_foundry.blueprint import create_agent_training_blueprint

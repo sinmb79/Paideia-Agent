@@ -2067,6 +2067,7 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(step_status["offline_context_smoke"], "passed")
         self.assertEqual(step_status["static_preflight"], "passed")
         self.assertEqual(step_status["offline_channel_message_smoke"], "passed")
+        self.assertEqual(step_status["openclaw_cli_live_probe"], "skipped_not_openclaw_cli_runtime")
         self.assertEqual(step_status["gateway_live_probe"], "skipped_live_not_requested")
         self.assertEqual(step_status["live_llm_chat_smoke"], "skipped_live_not_requested")
         self.assertEqual(step_status["live_channel_message_smoke"], "skipped_live_not_requested")
