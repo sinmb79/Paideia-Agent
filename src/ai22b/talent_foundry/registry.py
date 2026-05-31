@@ -493,6 +493,8 @@ def run_hired_agent(
     *,
     task: str,
     output_path: Path | None = None,
+    llm_mode: str = "offline",
+    llm_model: str | None = None,
 ) -> dict[str, Any]:
     employment_record, agent_manifest, target_root = _load_active_employment(employment_record_path)
     result = run_agent_from_manifest(agent_manifest, task=task)
@@ -500,7 +502,10 @@ def run_hired_agent(
         employment_record["llm_runtime"],
         manifest=agent_manifest,
         task=task,
+        live_mode=llm_mode == "live",
+        model_override=llm_model,
     )
+    result["llm_mode"] = llm_mode
     result["employment_context"] = _employment_context(employment_record)
     result["active_memory_route"] = _route_active_memory_for_employment(
         employment_record,
@@ -890,6 +895,8 @@ def run_hired_workspace_agent(
     task: str,
     workspace_dir: Path,
     output_path: Path | None = None,
+    llm_mode: str = "offline",
+    llm_model: str | None = None,
 ) -> dict[str, Any]:
     employment_record, agent_manifest, target_root = _load_active_employment(employment_record_path)
     result = run_workspace_agent_from_manifest(
@@ -901,7 +908,10 @@ def run_hired_workspace_agent(
         employment_record["llm_runtime"],
         manifest=agent_manifest,
         task=task,
+        live_mode=llm_mode == "live",
+        model_override=llm_model,
     )
+    result["llm_mode"] = llm_mode
     result["employment_context"] = _employment_context(employment_record)
     result["active_memory_route"] = _route_active_memory_for_employment(
         employment_record,
@@ -927,6 +937,8 @@ def run_hired_agent_job(
     job_spec: dict[str, Any],
     workspace_dir: Path,
     output_path: Path | None = None,
+    llm_mode: str = "offline",
+    llm_model: str | None = None,
 ) -> dict[str, Any]:
     employment_record, agent_manifest, target_root = _load_active_employment(employment_record_path)
     result = run_workspace_agent_job_from_manifest(
@@ -939,7 +951,10 @@ def run_hired_agent_job(
         employment_record["llm_runtime"],
         manifest=agent_manifest,
         task=result["job_spec"]["objective"],
+        live_mode=llm_mode == "live",
+        model_override=llm_model,
     )
+    result["llm_mode"] = llm_mode
     result["employment_context"] = _employment_context(employment_record)
     result["active_memory_route"] = _route_active_memory_for_employment(
         employment_record,
@@ -967,6 +982,8 @@ def run_hired_dataflow_job(
     workspace_dir: Path,
     review_label: dict[str, Any],
     output_path: Path | None = None,
+    llm_mode: str = "offline",
+    llm_model: str | None = None,
 ) -> dict[str, Any]:
     employment_record, agent_manifest, target_root = _load_active_employment(employment_record_path)
     entrypoints = employment_record.get("entrypoints", {})
@@ -989,7 +1006,10 @@ def run_hired_dataflow_job(
         employment_record["llm_runtime"],
         manifest=agent_manifest,
         task=result["objective"],
+        live_mode=llm_mode == "live",
+        model_override=llm_model,
     )
+    result["llm_mode"] = llm_mode
 
     run_output_path = output_path or target_root / entrypoints.get("last_dataflow_run", "last_hired_dataflow_run.json")
     _write_json(run_output_path, result)
@@ -1009,6 +1029,8 @@ def run_hired_agent_job_cycle(
     workspace_dir: Path,
     quality_label: dict[str, Any],
     output_path: Path | None = None,
+    llm_mode: str = "offline",
+    llm_model: str | None = None,
 ) -> dict[str, Any]:
     employment_record, _agent_manifest, target_root = _load_active_employment(employment_record_path)
     entrypoints = employment_record.get("entrypoints", {})
@@ -1027,6 +1049,8 @@ def run_hired_agent_job_cycle(
         job_spec=job_spec,
         workspace_dir=workspace_dir,
         output_path=job_run_path,
+        llm_mode=llm_mode,
+        llm_model=llm_model,
     )
     learning_update = record_hired_learning_experience(
         employment_record_path,

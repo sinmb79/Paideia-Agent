@@ -305,6 +305,21 @@ ai22b-talent-foundry hire-installed `
   --chat-surface codex-bridge-chat
 ```
 
+After hiring, the same selection can be used by the work runtime, not only by chat. Keep the default offline mode for deterministic/local smoke tests; add `--live-llm` only when the provider key, local server, or OpenClaw Gateway is ready:
+
+```powershell
+ai22b-talent-foundry run-hired-agent `
+  --employment-record "<employment_record.json>" `
+  --task "Draft a valuation memo outline." `
+  --live-llm
+
+ai22b-talent-foundry run-hired-agent-job `
+  --employment-record "<employment_record.json>" `
+  --job-spec "<job_spec.json>" `
+  --workspace "$env:AI22B_STORAGE_ROOT\talent-foundry\workspaces\job-001" `
+  --llm-mode live
+```
+
 When OpenClaw itself should own all provider authentication and routing, use the Gateway bridge. Paideia sends the trained talent context to `openclaw/default` and passes the backend model as `x-openclaw-model`, matching OpenClaw's agent-first HTTP contract:
 
 ```powershell

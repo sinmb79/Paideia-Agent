@@ -249,6 +249,100 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertEqual(copilot_gateway["openclaw_model"], "github-copilot/gpt-5-copilot")
         self.assertTrue(copilot_gateway["openclaw_gateway_auto_routed"])
 
+    def test_hired_agent_runtime_live_openclaw_provider_model_uses_generic_adapter(self) -> None:
+        from ai22b.talent_foundry.llm_runtime import build_llm_runtime_config, invoke_llm_application_engine
+
+        captured: dict[str, object] = {}
+
+        def fake_request_json(*, url: str, payload: dict, headers: dict, timeout: int = 60) -> dict:
+            captured["url"] = url
+            captured["payload"] = payload
+            captured["headers"] = headers
+            return {
+                "choices": [{"message": {"content": "보스, OpenClaw provider/model 경로의 실제 LLM 응답입니다."}}],
+                "usage": {"total_tokens": 12},
+            }
+
+        runtime = build_llm_runtime_config(
+            engine="openclaw_openai_compatible",
+            model="openrouter/meta-llama/llama-3.1-8b",
+            service="openrouter_api",
+            provider_config={
+                "openclaw_provider_id": "openrouter",
+                "openclaw_model": "openrouter/meta-llama/llama-3.1-8b",
+                "api_protocol": "openai_chat_completions",
+                "base_url": "https://openrouter.ai/api/v1",
+                "secret_env_vars": ["OPENROUTER_API_KEY"],
+                "status": "ready_when_key_configured",
+            },
+        )
+        with patch.dict(os.environ, {"OPENROUTER_API_KEY": "secret-openrouter-key"}), patch(
+            "ai22b.talent_foundry.llm_runtime._request_json",
+            side_effect=fake_request_json,
+        ):
+            result = invoke_llm_application_engine(
+                runtime,
+                manifest={"agent": {"name": "openclaw-junior", "role": "research", "major_goal": "test"}},
+                task="시장 리서치 초안을 작성해줘",
+                live_mode=True,
+            )
+
+        self.assertEqual(captured["url"], "https://openrouter.ai/api/v1/chat/completions")
+        self.assertEqual(captured["payload"]["model"], "meta-llama/llama-3.1-8b")
+        self.assertIn("Authorization", captured["headers"])
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["applied_as"], "live_language_and_task_reasoning_engine")
+        self.assertIn("OpenClaw provider/model", result["draft"])
+        self.assertNotIn("secret-openrouter-key", json.dumps(result, ensure_ascii=False))
+        self.assertFalse(result["data_policy"]["secret_values_stored"])
+
+    def test_hired_agent_runtime_live_openclaw_gateway_uses_agent_target_and_backend_header(self) -> None:
+        from ai22b.talent_foundry.llm_runtime import build_llm_runtime_config, invoke_llm_application_engine
+
+        captured: dict[str, object] = {}
+
+        def fake_request_json(*, url: str, payload: dict, headers: dict, timeout: int = 60) -> dict:
+            captured["url"] = url
+            captured["payload"] = payload
+            captured["headers"] = headers
+            return {
+                "choices": [{"message": {"content": "보스, OpenClaw Gateway가 선택한 백엔드 모델로 응답했습니다."}}],
+                "usage": {"total_tokens": 18},
+            }
+
+        runtime = build_llm_runtime_config(
+            engine="openclaw_gateway_http",
+            model="openrouter/meta-llama/llama-3.1-8b",
+            model_path="http://127.0.0.1:18789/v1",
+            service="openclaw_gateway_http",
+            provider_config={
+                "api_protocol": "openclaw_gateway_openai_chat_completions",
+                "base_url": "http://127.0.0.1:18789/v1",
+                "openclaw_agent_target": "openclaw/default",
+                "openclaw_model": "openrouter/meta-llama/llama-3.1-8b",
+                "secret_env_vars": ["OPENCLAW_GATEWAY_TOKEN"],
+                "status": "ready_when_openclaw_gateway_chat_completions_enabled",
+            },
+        )
+        with patch(
+            "ai22b.talent_foundry.llm_runtime._request_json",
+            side_effect=fake_request_json,
+        ):
+            result = invoke_llm_application_engine(
+                runtime,
+                manifest={"agent": {"name": "gateway-junior", "role": "research", "major_goal": "test"}},
+                task="OpenClaw Gateway live smoke",
+                live_mode=True,
+            )
+
+        self.assertEqual(captured["url"], "http://127.0.0.1:18789/v1/chat/completions")
+        self.assertEqual(captured["payload"]["model"], "openclaw/default")
+        self.assertEqual(captured["headers"]["x-openclaw-model"], "openrouter/meta-llama/llama-3.1-8b")
+        self.assertEqual(captured["headers"]["x-openclaw-message-channel"], "paideia-agent-runtime")
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["model"], "openrouter/meta-llama/llama-3.1-8b")
+        self.assertIn("Gateway", result["draft"])
+
     def test_openclaw_style_onboarding_questions_are_step_based(self) -> None:
         from ai22b.talent_foundry.console import WIZARD_STEPS, questions_with_choices
         from ai22b.talent_foundry.onboarding_choices import resolve_chat_surface

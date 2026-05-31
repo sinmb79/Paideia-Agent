@@ -78,6 +78,21 @@ Gateway를 실제 LLM 브리지로 쓰기 전에는 `doctor-openclaw-gateway-llm
 
 외부 API 어댑터는 사용자의 API 키가 있어야 실사용됩니다. 로컬 모델 어댑터는 localhost 또는 로컬 모델 파일을 우선합니다. OpenClaw의 canonical `provider/model` 형식도 지원하므로 `kilocode/kilo/auto`, `gmi/google/gemini-3.1-flash-lite`, `ollama-cloud/kimi-k2.6`, `zai/glm-5.1`, `lmstudio/<local-model>` 같은 입력을 온보딩에서 해석합니다.
 
+고용 이후의 업무 실행도 같은 LLM 선택값을 사용할 수 있습니다. 기본값은 안전한 `offline` 모드이며, provider API 키, 로컬 모델 서버, 또는 OpenClaw Gateway가 준비된 경우에만 `--live-llm` 또는 `--llm-mode live`를 붙여 실제 LLM 호출을 수행합니다.
+
+```powershell
+ai22b-talent-foundry run-hired-agent `
+  --employment-record "<employment_record.json>" `
+  --task "가치평가 메모 초안을 작성해줘" `
+  --live-llm
+
+ai22b-talent-foundry run-hired-agent-job `
+  --employment-record "<employment_record.json>" `
+  --job-spec "<job_spec.json>" `
+  --workspace "$env:AI22B_STORAGE_ROOT\talent-foundry\workspaces\job-001" `
+  --llm-mode live
+```
+
 ## 빠른 실행
 
 ```powershell

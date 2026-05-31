@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import hashlib
+import json
+import os
 from pathlib import Path
 from typing import Any
+import urllib.request
 
 from ai22b.from_scratch.bigram import generate_text, load_model
 
@@ -29,6 +32,7 @@ EXTERNAL_API_ENGINES = {
 }
 LOCAL_HTTP_ENGINES = {"ollama_local_http", "lm_studio_local_http"}
 LOCAL_FILE_ENGINES = {"bigram_local", "transformers_local", "llama_cpp_local"}
+DEFAULT_OPENAI_APPLICATION_MODEL = "gpt-5.2"
 
 
 def build_llm_runtime_config(
@@ -113,6 +117,9 @@ def invoke_llm_application_engine(
     *,
     manifest: dict[str, Any],
     task: str,
+    live_mode: bool = False,
+    model_override: str | None = None,
+    max_output_tokens: int = 900,
 ) -> dict[str, Any]:
     if runtime_config.get("schema") != RUNTIME_SCHEMA:
         raise ValueError("Unsupported LLM runtime config schema")
@@ -145,6 +152,14 @@ def invoke_llm_application_engine(
         return _invoke_transformers_local(runtime_config, manifest=manifest, task=task)
     if engine == "llama_cpp_local":
         return _inspect_llama_cpp_local(runtime_config)
+    if live_mode:
+        return _invoke_live_application_engine(
+            runtime_config,
+            manifest=manifest,
+            task=task,
+            model_override=model_override,
+            max_output_tokens=max_output_tokens,
+        )
     if engine == "openai_chatgpt_codex":
         return _invoke_openai_chatgpt_codex_bridge(runtime_config, manifest=manifest, task=task)
     if engine in (EXTERNAL_API_ENGINES - {"openai_chatgpt_codex"}) or engine in LOCAL_HTTP_ENGINES:
@@ -385,6 +400,414 @@ def _invoke_configured_adapter_manifest(
             f"Paideia keeps identity and learned routes in local records; the adapter supplies language generation for: {task}"
         ),
     }
+
+
+def _first_env_value(env_vars: list[str]) -> tuple[str | None, str | None]:
+    for env_var in env_vars:
+        value = os.environ.get(env_var)
+        if not value:
+            continue
+        if env_var.endswith("_API_KEYS") and ("," in value or ";" in value):
+            for candidate in value.replace(";", ",").split(","):
+                if candidate.strip():
+                    return env_var, candidate.strip()
+        return env_var, value
+    return None, None
+
+
+def _request_json(
+    *,
+    url: str,
+    payload: dict[str, Any],
+    headers: dict[str, str],
+    timeout: int = 60,
+) -> dict[str, Any]:
+    data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    request = urllib.request.Request(
+        url,
+        data=data,
+        headers={"Content-Type": "application/json", **headers},
+        method="POST",
+    )
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        raw = response.read().decode("utf-8", errors="replace")
+    parsed = json.loads(raw)
+    return parsed if isinstance(parsed, dict) else {"raw": parsed}
+
+
+def _selected_runtime_model(runtime_config: dict[str, Any], model_override: str | None) -> str:
+    selected = (
+        model_override
+        or runtime_config.get("model")
+        or runtime_config.get("openclaw_model")
+        or os.environ.get("AI22B_OPENAI_MODEL")
+        or os.environ.get("OPENAI_MODEL")
+        or DEFAULT_OPENAI_APPLICATION_MODEL
+    )
+    provider_id = runtime_config.get("openclaw_provider_id")
+    if (
+        provider_id
+        and runtime_config.get("api_protocol") != "openclaw_gateway_openai_chat_completions"
+        and str(selected).startswith(f"{provider_id}/")
+    ):
+        return str(selected).split("/", 1)[1]
+    return str(selected)
+
+
+def _live_application_prompt(*, manifest: dict[str, Any], task: str) -> str:
+    agent = manifest.get("agent", {})
+    memory = manifest.get("memory_profile", {})
+    return (
+        "You are the language engine for a locally trained Paideia Agent talent. "
+        "The LLM provides language and task drafting only; identity, learned data, and reasoning habits come from "
+        "the local manifest and employment records. Answer in Korean unless the task clearly asks otherwise. "
+        "Do not output hidden chain-of-thought. Provide a concise answer plus a reviewable reasoning summary.\n\n"
+        f"Agent name: {agent.get('name')}\n"
+        f"Role: {agent.get('role')}\n"
+        f"Major goal: {agent.get('major_goal')}\n"
+        f"Procedural principles: {memory.get('procedural_principles', [])}\n"
+        f"Task: {task}\n"
+    )
+
+
+def _openai_chat_text(response: dict[str, Any]) -> str:
+    choices = response.get("choices") or []
+    if not choices:
+        return ""
+    first = choices[0] if isinstance(choices[0], dict) else {}
+    message = first.get("message", {}) if isinstance(first.get("message"), dict) else {}
+    return str(message.get("content") or first.get("text") or "")
+
+
+def _openai_responses_text(response: dict[str, Any]) -> str:
+    if response.get("output_text"):
+        return str(response["output_text"])
+    chunks: list[str] = []
+    for item in response.get("output", []) or []:
+        if not isinstance(item, dict):
+            continue
+        for content in item.get("content", []) or []:
+            if isinstance(content, dict) and content.get("text"):
+                chunks.append(str(content["text"]))
+    return "\n".join(chunks)
+
+
+def _completed_live_result(
+    runtime_config: dict[str, Any],
+    *,
+    model: str,
+    draft: str,
+    provider: str | None,
+    endpoint: str,
+    auth_env: str | None,
+    usage: Any = None,
+) -> dict[str, Any]:
+    return {
+        "schema": RUNTIME_RESULT_SCHEMA,
+        "engine": runtime_config.get("engine"),
+        "status": "completed",
+        "identity_policy": runtime_config["identity_policy"],
+        "network_access": runtime_config["network_access"],
+        "applied_as": "live_language_and_task_reasoning_engine",
+        "model": model,
+        "openclaw_provider_id": runtime_config.get("openclaw_provider_id"),
+        "openclaw_model": runtime_config.get("openclaw_model"),
+        "api_protocol": runtime_config.get("api_protocol"),
+        "endpoint": endpoint,
+        "auth_env_var": auth_env,
+        "usage": usage,
+        "draft": draft,
+        "data_policy": {
+            "send_private_training_files": False,
+            "send_selected_manifest_summary_and_task": True,
+            "store_hidden_chain_of_thought": False,
+            "secret_values_stored": False,
+        },
+    }
+
+
+def _unavailable_live_result(
+    runtime_config: dict[str, Any],
+    *,
+    reason: str,
+    model: str | None = None,
+    error: Exception | None = None,
+) -> dict[str, Any]:
+    result = {
+        "schema": RUNTIME_RESULT_SCHEMA,
+        "engine": runtime_config.get("engine"),
+        "status": "unavailable",
+        "reason": reason,
+        "identity_policy": runtime_config["identity_policy"],
+        "network_access": runtime_config["network_access"],
+        "model": model,
+        "api_protocol": runtime_config.get("api_protocol"),
+        "required_env_vars": runtime_config.get("secret_env_vars", []),
+        "data_policy": {
+            "secret_values_stored": False,
+            "private_training_files_exported": False,
+        },
+    }
+    if error is not None:
+        result["error_type"] = type(error).__name__
+        result["error"] = str(error)[:800]
+    return result
+
+
+def _invoke_live_application_engine(
+    runtime_config: dict[str, Any],
+    *,
+    manifest: dict[str, Any],
+    task: str,
+    model_override: str | None,
+    max_output_tokens: int,
+) -> dict[str, Any]:
+    engine = runtime_config.get("engine")
+    api_protocol = runtime_config.get("api_protocol")
+    model = _selected_runtime_model(runtime_config, model_override)
+    prompt = _live_application_prompt(manifest=manifest, task=task)
+
+    if engine == "openclaw_manifest_only" or api_protocol == "manifest_only":
+        return _unavailable_live_result(
+            runtime_config,
+            reason="openclaw_provider_plugin_required",
+            model=model,
+        )
+
+    if engine == "openai_chatgpt_codex" or api_protocol == "openai_responses":
+        env_var, api_key = _first_env_value(runtime_config.get("secret_env_vars", ["OPENAI_API_KEY"]))
+        if not api_key:
+            return _unavailable_live_result(runtime_config, reason="provider_api_key_not_set", model=model)
+        base_url = str(runtime_config.get("base_url") or "https://api.openai.com/v1").rstrip("/")
+        payload = {
+            "model": model,
+            "instructions": prompt,
+            "input": task,
+            "max_output_tokens": max_output_tokens,
+        }
+        try:
+            response = _request_json(
+                url=f"{base_url}/responses",
+                payload=payload,
+                headers={"Authorization": f"Bearer {api_key}"},
+            )
+        except Exception as exc:
+            return _unavailable_live_result(
+                runtime_config,
+                reason="openai_responses_call_failed",
+                model=model,
+                error=exc,
+            )
+        return _completed_live_result(
+            runtime_config,
+            model=model,
+            draft=_openai_responses_text(response),
+            provider="openai",
+            endpoint=f"{base_url}/responses",
+            auth_env=env_var,
+            usage=response.get("usage"),
+        )
+
+    if api_protocol == "openclaw_gateway_openai_chat_completions":
+        base_url = str(runtime_config.get("base_url") or runtime_config.get("model_path") or "http://127.0.0.1:18789/v1").rstrip("/")
+        if not base_url.endswith("/v1"):
+            base_url = f"{base_url}/v1"
+        local_endpoint = base_url.startswith(("http://localhost", "http://127.0.0.1"))
+        env_var, gateway_secret = _first_env_value(runtime_config.get("secret_env_vars", []))
+        if not gateway_secret and not local_endpoint:
+            return _unavailable_live_result(runtime_config, reason="openclaw_gateway_auth_not_configured", model=model)
+        headers = {
+            "x-openclaw-session-key": _prompt_fingerprint(manifest=manifest, task=task),
+            "x-openclaw-message-channel": "paideia-agent-runtime",
+        }
+        if gateway_secret:
+            headers["Authorization"] = f"Bearer {gateway_secret}"
+        backend_model = model_override or runtime_config.get("openclaw_model") or runtime_config.get("model")
+        if backend_model:
+            headers["x-openclaw-model"] = str(backend_model)
+        agent_target = str(runtime_config.get("openclaw_agent_target") or "openclaw/default")
+        payload = {
+            "model": agent_target,
+            "messages": [
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": task},
+            ],
+            "temperature": 0.2,
+            "max_tokens": max_output_tokens,
+        }
+        try:
+            response = _request_json(
+                url=f"{base_url}/chat/completions",
+                payload=payload,
+                headers=headers,
+            )
+        except Exception as exc:
+            return _unavailable_live_result(
+                runtime_config,
+                reason="openclaw_gateway_chat_call_failed",
+                model=str(backend_model or agent_target),
+                error=exc,
+            )
+        return _completed_live_result(
+            runtime_config,
+            model=str(backend_model or agent_target),
+            draft=_openai_chat_text(response),
+            provider="openclaw_gateway",
+            endpoint=f"{base_url}/chat/completions",
+            auth_env=env_var,
+            usage=response.get("usage"),
+        )
+
+    if api_protocol == "openai_chat_completions":
+        base_url = str(runtime_config.get("base_url") or runtime_config.get("model_path") or "").rstrip("/")
+        local_endpoint = base_url.startswith(("http://localhost", "http://127.0.0.1"))
+        env_var, api_key = _first_env_value(runtime_config.get("secret_env_vars", []))
+        if not base_url:
+            return _unavailable_live_result(runtime_config, reason="base_url_not_configured", model=model)
+        if runtime_config.get("secret_env_vars") and not api_key and not local_endpoint:
+            return _unavailable_live_result(runtime_config, reason="provider_api_key_not_set", model=model)
+        headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+        payload = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": task},
+            ],
+            "temperature": 0.2,
+            "max_tokens": max_output_tokens,
+        }
+        try:
+            response = _request_json(
+                url=f"{base_url}/chat/completions",
+                payload=payload,
+                headers=headers,
+            )
+        except Exception as exc:
+            return _unavailable_live_result(
+                runtime_config,
+                reason="openai_compatible_chat_call_failed",
+                model=model,
+                error=exc,
+            )
+        return _completed_live_result(
+            runtime_config,
+            model=model,
+            draft=_openai_chat_text(response),
+            provider=str(runtime_config.get("openclaw_provider_id") or runtime_config.get("service") or "openai_compatible"),
+            endpoint=f"{base_url}/chat/completions",
+            auth_env=env_var,
+            usage=response.get("usage"),
+        )
+
+    if api_protocol == "anthropic_messages":
+        env_var, api_key = _first_env_value(runtime_config.get("secret_env_vars", ["ANTHROPIC_API_KEY"]))
+        if not api_key:
+            return _unavailable_live_result(runtime_config, reason="provider_api_key_not_set", model=model)
+        base_url = str(runtime_config.get("base_url") or "https://api.anthropic.com/v1").rstrip("/")
+        payload = {
+            "model": model,
+            "max_tokens": max_output_tokens,
+            "system": prompt,
+            "messages": [{"role": "user", "content": task}],
+        }
+        try:
+            response = _request_json(
+                url=f"{base_url}/messages",
+                payload=payload,
+                headers={"x-api-key": api_key, "anthropic-version": "2023-06-01"},
+            )
+        except Exception as exc:
+            return _unavailable_live_result(
+                runtime_config,
+                reason="anthropic_messages_call_failed",
+                model=model,
+                error=exc,
+            )
+        text = "\n".join(str(part.get("text", "")) for part in response.get("content", []) if isinstance(part, dict))
+        return _completed_live_result(
+            runtime_config,
+            model=model,
+            draft=text,
+            provider=str(runtime_config.get("openclaw_provider_id") or "anthropic"),
+            endpoint=f"{base_url}/messages",
+            auth_env=env_var,
+            usage=response.get("usage"),
+        )
+
+    if api_protocol == "gemini_generate_content":
+        env_var, api_key = _first_env_value(runtime_config.get("secret_env_vars", ["GEMINI_API_KEY", "GOOGLE_API_KEY"]))
+        if not api_key:
+            return _unavailable_live_result(runtime_config, reason="provider_api_key_not_set", model=model)
+        base_url = str(runtime_config.get("base_url") or "https://generativelanguage.googleapis.com/v1beta").rstrip("/")
+        payload = {
+            "contents": [{"role": "user", "parts": [{"text": f"{prompt}\n\n{task}"}]}],
+            "generationConfig": {"temperature": 0.2, "maxOutputTokens": max_output_tokens},
+        }
+        try:
+            response = _request_json(
+                url=f"{base_url}/models/{model}:generateContent?key={api_key}",
+                payload=payload,
+                headers={},
+            )
+        except Exception as exc:
+            return _unavailable_live_result(
+                runtime_config,
+                reason="gemini_generate_content_call_failed",
+                model=model,
+                error=exc,
+            )
+        candidates = response.get("candidates") or []
+        parts = candidates[0].get("content", {}).get("parts", []) if candidates else []
+        text = "\n".join(str(part.get("text", "")) for part in parts if isinstance(part, dict))
+        return _completed_live_result(
+            runtime_config,
+            model=model,
+            draft=text,
+            provider="google",
+            endpoint=f"{base_url}/models/{model}:generateContent",
+            auth_env=env_var,
+            usage=response.get("usageMetadata"),
+        )
+
+    if api_protocol == "ollama_chat":
+        base_url = str(runtime_config.get("base_url") or runtime_config.get("model_path") or "http://localhost:11434").rstrip("/")
+        local_endpoint = base_url.startswith(("http://localhost", "http://127.0.0.1"))
+        env_var, api_key = _first_env_value(runtime_config.get("secret_env_vars", []))
+        if runtime_config.get("secret_env_vars") and not api_key and not local_endpoint:
+            return _unavailable_live_result(runtime_config, reason="provider_api_key_not_set", model=model)
+        payload = {
+            "model": model,
+            "stream": False,
+            "messages": [
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": task},
+            ],
+            "options": {"temperature": 0.2, "num_predict": max_output_tokens},
+        }
+        try:
+            response = _request_json(
+                url=f"{base_url}/api/chat",
+                payload=payload,
+                headers={"Authorization": f"Bearer {api_key}"} if api_key else {},
+            )
+        except Exception as exc:
+            return _unavailable_live_result(runtime_config, reason="ollama_chat_call_failed", model=model, error=exc)
+        text = str(response.get("message", {}).get("content") or response.get("response") or "")
+        return _completed_live_result(
+            runtime_config,
+            model=model,
+            draft=text,
+            provider=str(runtime_config.get("openclaw_provider_id") or "ollama"),
+            endpoint=f"{base_url}/api/chat",
+            auth_env=env_var,
+            usage=response.get("usage"),
+        )
+
+    return _unavailable_live_result(
+        runtime_config,
+        reason="live_provider_protocol_not_supported",
+        model=model,
+    )
 
 
 def _build_runtime_prompt(*, manifest: dict[str, Any], task: str) -> str:
