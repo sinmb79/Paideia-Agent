@@ -722,6 +722,15 @@ class GrahamTalentFoundryTests(unittest.TestCase):
                 side_effect=[sample_provider_docs + " https://docs.openclaw.ai/providers/mistral", sample_channel_docs, ""],
             ):
                 live_audit = audit_openclaw_parity(output_path=live_output, refresh_docs=True)
+            with patch(
+                "ai22b.talent_foundry.openclaw_parity._fetch_openclaw_doc_text",
+                side_effect=[
+                    "https://docs.openclaw.ai/providers/new-frontier-provider",
+                    "https://docs.openclaw.ai/channels/new-family-chat",
+                    "",
+                ],
+            ):
+                drift_audit = audit_openclaw_parity(refresh_docs=True)
 
         self.assertEqual(audit["schema"], "ai22b-openclaw-parity-audit/v1")
         self.assertEqual(audit["status"], "pass")
@@ -737,6 +746,11 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertEqual(cli_audit["status"], "pass")
         self.assertEqual(live_audit["source_mode"], "live_docs")
         self.assertEqual(live_audit["status"], "pass")
+        self.assertEqual(live_audit["doc_drift"]["unknown_provider_doc_slugs"], [])
+        self.assertEqual(live_audit["doc_drift"]["unknown_channel_doc_slugs"], [])
+        self.assertEqual(drift_audit["status"], "needs_update")
+        self.assertIn("new-frontier-provider", drift_audit["doc_drift"]["unknown_provider_doc_slugs"])
+        self.assertIn("new-family-chat", drift_audit["doc_drift"]["unknown_channel_doc_slugs"])
         self.assertIn("byteplus-plan", _provider_ids_from_doc_texts([sample_provider_docs]))
         self.assertIn("google-vertex", _provider_ids_from_doc_texts([sample_provider_docs]))
         self.assertIn("mistral", _provider_ids_from_doc_texts(["https://docs.openclaw.ai/providers/mistral"]))

@@ -6,7 +6,7 @@ from typing import Any
 
 OPENCLAW_PROVIDER_CATALOG_SCHEMA = "ai22b-openclaw-provider-catalog/v1"
 OPENCLAW_CHANNEL_CATALOG_SCHEMA = "ai22b-openclaw-channel-catalog/v1"
-OPENCLAW_CATALOG_SOURCE_VERSION = "official_openclaw_docs_checked_2026-05-31_current_provider_directory"
+OPENCLAW_CATALOG_SOURCE_VERSION = "official_openclaw_docs_checked_2026-06-01_current_provider_channel_directory"
 
 
 OPENCLAW_MODEL_PROVIDERS: list[dict[str, Any]] = [

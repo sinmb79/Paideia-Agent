@@ -25,6 +25,29 @@ OPENCLAW_LIVE_DOC_URLS = [
     "https://docs.openclaw.ai/llms.txt",
 ]
 
+PROVIDER_DOC_NON_ENTRY_SLUGS = {
+    "index",
+    "models",
+}
+
+CHANNEL_DOC_NON_ENTRY_SLUGS = {
+    "access-groups",
+    "ambient-room-events",
+    "bot-loop-protection",
+    "broadcast-groups",
+    "channel-routing",
+    "group-messages",
+    "groups",
+    "location",
+    "matrix-migration",
+    "matrix-presentation",
+    "matrix-presentation-metadata",
+    "matrix-push-rules",
+    "pairing",
+    "security",
+    "troubleshooting",
+}
+
 PROVIDER_DOC_SLUG_IDS: dict[str, list[str]] = {
     "alibaba": ["alibaba"],
     "amazon-bedrock": ["amazon-bedrock"],
@@ -131,7 +154,7 @@ CHANNEL_DOC_SLUG_IDS: dict[str, list[str]] = {
 }
 
 OPENCLAW_OFFICIAL_PROVIDER_SNAPSHOT = {
-    "source": "official_openclaw_docs_provider_directory_and_llms_index_checked_2026-05-31",
+    "source": "official_openclaw_docs_provider_directory_and_llms_index_checked_2026-06-01",
     "source_urls": [
         "https://docs.openclaw.ai/providers",
         "https://docs.openclaw.ai/llms.txt",
@@ -206,7 +229,7 @@ OPENCLAW_OFFICIAL_PROVIDER_SNAPSHOT = {
 }
 
 OPENCLAW_OFFICIAL_CHANNEL_SNAPSHOT = {
-    "source": "official_openclaw_docs_channel_index_and_llms_index_checked_2026-05-31",
+    "source": "official_openclaw_docs_channel_index_and_llms_index_checked_2026-06-01",
     "source_urls": [
         "https://docs.openclaw.ai/channels",
         "https://docs.openclaw.ai/llms.txt",
@@ -263,34 +286,96 @@ def _ids_from_doc_slugs(
     prefix: str,
     slug_ids: dict[str, list[str]],
 ) -> list[str]:
+    ids, _unknown = _ids_and_unknown_from_doc_slugs(text, prefix=prefix, slug_ids=slug_ids)
+    return ids
+
+
+def _ids_and_unknown_from_doc_slugs(
+    text: str,
+    *,
+    prefix: str,
+    slug_ids: dict[str, list[str]],
+    ignored_slugs: set[str] | None = None,
+) -> tuple[list[str], list[str]]:
     ids: list[str] = []
+    unknown_slugs: list[str] = []
+    ignored = ignored_slugs or set()
     for raw_slug in re.findall(rf"https://docs\.openclaw\.ai/{re.escape(prefix)}/([a-z0-9-]+)", text):
-        ids.extend(slug_ids.get(raw_slug, []))
-    return _sorted_set(ids)
+        if raw_slug in ignored:
+            continue
+        mapped = slug_ids.get(raw_slug, [])
+        if mapped:
+            ids.extend(mapped)
+        else:
+            unknown_slugs.append(raw_slug)
+    return _sorted_set(ids), _sorted_set(unknown_slugs)
 
 
 def _provider_ids_from_doc_texts(texts: list[str]) -> list[str]:
     joined = "\n".join(texts)
-    provider_ids = [
-        *_ids_from_doc_slugs(joined, prefix="providers", slug_ids=PROVIDER_DOC_SLUG_IDS),
-        *_ids_from_doc_slugs(joined, prefix="plugins/reference", slug_ids=PROVIDER_DOC_SLUG_IDS),
-    ]
+    provider_ids = _provider_doc_scan(joined)["provider_ids"]
     return _sorted_set(provider_ids)
 
 
 def _channel_ids_from_doc_texts(texts: list[str]) -> list[str]:
     joined = "\n".join(texts)
-    channel_ids = [
-        *_ids_from_doc_slugs(joined, prefix="channels", slug_ids=CHANNEL_DOC_SLUG_IDS),
-        *_ids_from_doc_slugs(joined, prefix="plugins/reference", slug_ids=CHANNEL_DOC_SLUG_IDS),
-        *_ids_from_doc_slugs(joined, prefix="web", slug_ids=CHANNEL_DOC_SLUG_IDS),
-        *_ids_from_doc_slugs(joined, prefix="platforms/mac", slug_ids=CHANNEL_DOC_SLUG_IDS),
-    ]
+    channel_scan = _channel_doc_scan(joined)
+    channel_ids = [*channel_scan["channel_ids"]]
     if re.search(r"\bWebChat\b", joined):
         channel_ids.append("webchat")
     if re.search(r"\bBlueBubbles\b", joined):
         channel_ids.append("bluebubbles")
     return _sorted_set(channel_ids)
+
+
+def _provider_doc_scan(text: str) -> dict[str, list[str]]:
+    provider_doc_ids, unknown_provider_doc_slugs = _ids_and_unknown_from_doc_slugs(
+        text,
+        prefix="providers",
+        slug_ids=PROVIDER_DOC_SLUG_IDS,
+        ignored_slugs=PROVIDER_DOC_NON_ENTRY_SLUGS,
+    )
+    plugin_ids, unmapped_plugin_reference_slugs = _ids_and_unknown_from_doc_slugs(
+        text,
+        prefix="plugins/reference",
+        slug_ids=PROVIDER_DOC_SLUG_IDS,
+    )
+    return {
+        "provider_ids": _sorted_set([*provider_doc_ids, *plugin_ids]),
+        "unknown_provider_doc_slugs": unknown_provider_doc_slugs,
+        "unmapped_plugin_reference_slugs": unmapped_plugin_reference_slugs,
+    }
+
+
+def _channel_doc_scan(text: str) -> dict[str, list[str]]:
+    channel_doc_ids, unknown_channel_doc_slugs = _ids_and_unknown_from_doc_slugs(
+        text,
+        prefix="channels",
+        slug_ids=CHANNEL_DOC_SLUG_IDS,
+        ignored_slugs=CHANNEL_DOC_NON_ENTRY_SLUGS,
+    )
+    plugin_ids, unmapped_plugin_reference_slugs = _ids_and_unknown_from_doc_slugs(
+        text,
+        prefix="plugins/reference",
+        slug_ids=CHANNEL_DOC_SLUG_IDS,
+    )
+    web_ids, unknown_web_slugs = _ids_and_unknown_from_doc_slugs(
+        text,
+        prefix="web",
+        slug_ids=CHANNEL_DOC_SLUG_IDS,
+    )
+    platform_ids, unknown_platform_slugs = _ids_and_unknown_from_doc_slugs(
+        text,
+        prefix="platforms/mac",
+        slug_ids=CHANNEL_DOC_SLUG_IDS,
+    )
+    return {
+        "channel_ids": _sorted_set([*channel_doc_ids, *plugin_ids, *web_ids, *platform_ids]),
+        "unknown_channel_doc_slugs": unknown_channel_doc_slugs,
+        "unmapped_plugin_reference_slugs": unmapped_plugin_reference_slugs,
+        "unknown_web_slugs": unknown_web_slugs,
+        "unknown_platform_slugs": unknown_platform_slugs,
+    }
 
 
 def _fetch_openclaw_doc_text(url: str, *, timeout: int = OPENCLAW_LIVE_DOCS_TIMEOUT_SECONDS) -> str:
@@ -312,17 +397,30 @@ def _live_official_snapshots(*, timeout: int = OPENCLAW_LIVE_DOCS_TIMEOUT_SECOND
             fetch_errors.append({"url": url, "error_type": type(exc).__name__, "error": str(exc)[:300]})
     if fetch_errors and not texts:
         raise RuntimeError("Could not fetch any OpenClaw official docs for live parity audit")
-    provider_ids = _provider_ids_from_doc_texts(texts)
-    channel_ids = _channel_ids_from_doc_texts(texts)
+    joined = "\n".join(texts)
+    provider_scan = _provider_doc_scan(joined)
+    channel_scan = _channel_doc_scan(joined)
+    provider_ids = _sorted_set(provider_scan["provider_ids"])
+    channel_ids = _sorted_set(channel_scan["channel_ids"])
+    if re.search(r"\bWebChat\b", joined):
+        channel_ids = _sorted_set([*channel_ids, "webchat"])
+    if re.search(r"\bBlueBubbles\b", joined):
+        channel_ids = _sorted_set([*channel_ids, "bluebubbles"])
     providers = {
         "source": "official_openclaw_docs_live_fetch",
         "source_urls": fetched_urls,
         "provider_ids": provider_ids,
+        "unknown_provider_doc_slugs": provider_scan["unknown_provider_doc_slugs"],
+        "unmapped_plugin_reference_slugs": provider_scan["unmapped_plugin_reference_slugs"],
     }
     channels = {
         "source": "official_openclaw_docs_live_fetch",
         "source_urls": fetched_urls,
         "channel_ids": channel_ids,
+        "unknown_channel_doc_slugs": channel_scan["unknown_channel_doc_slugs"],
+        "unmapped_plugin_reference_slugs": channel_scan["unmapped_plugin_reference_slugs"],
+        "unknown_web_slugs": channel_scan["unknown_web_slugs"],
+        "unknown_platform_slugs": channel_scan["unknown_platform_slugs"],
     }
     return providers, channels, fetch_errors
 
@@ -414,10 +512,29 @@ def audit_openclaw_parity(
     selector_complete = all(item["resolved"] for item in selector_checks["provider_id_resolution"]) and all(
         item["resolved"] for item in selector_checks["channel_id_resolution"]
     )
+    doc_drift = {
+        "unknown_provider_doc_slugs": provider_snapshot.get("unknown_provider_doc_slugs", []),
+        "unknown_channel_doc_slugs": channel_snapshot.get("unknown_channel_doc_slugs", []),
+        "unknown_web_slugs": channel_snapshot.get("unknown_web_slugs", []),
+        "unknown_platform_slugs": channel_snapshot.get("unknown_platform_slugs", []),
+        "unmapped_provider_reference_slug_count": len(provider_snapshot.get("unmapped_plugin_reference_slugs", [])),
+        "unmapped_channel_reference_slug_count": len(channel_snapshot.get("unmapped_plugin_reference_slugs", [])),
+    }
+    unmapped_docs_block_parity = bool(
+        doc_drift["unknown_provider_doc_slugs"]
+        or doc_drift["unknown_channel_doc_slugs"]
+    )
     audit = {
         "schema": OPENCLAW_PARITY_AUDIT_SCHEMA,
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
-        "status": "pass" if provider_coverage["complete"] and channel_coverage["complete"] and selector_complete else "needs_update",
+        "status": (
+            "pass"
+            if provider_coverage["complete"]
+            and channel_coverage["complete"]
+            and selector_complete
+            and not unmapped_docs_block_parity
+            else "needs_update"
+        ),
         "source_mode": "live_docs" if refresh_docs else "checked_snapshot",
         "source_snapshots": {
             "providers": provider_snapshot,
@@ -434,6 +551,7 @@ def audit_openclaw_parity(
             "providers": provider_coverage,
             "channels": channel_coverage,
         },
+        "doc_drift": doc_drift,
         "connector_strategy": {
             "direct_llm_adapters": [
                 provider["provider_id"]
@@ -449,6 +567,8 @@ def audit_openclaw_parity(
             "claim_boundary": "This audit proves catalog/selector parity with the checked OpenClaw docs snapshot, not that every external OAuth/plugin has been locally authenticated.",
             "secrets": "No provider key, bot token, QR session, or private training file is read or stored.",
             "future_docs_drift": "Refresh this snapshot when OpenClaw provider/channel docs change.",
+            "unknown_provider_or_channel_doc_slugs_block_pass": True,
+            "unmapped_plugin_reference_slugs_are_reported_only": True,
         },
     }
     if output_path is not None:

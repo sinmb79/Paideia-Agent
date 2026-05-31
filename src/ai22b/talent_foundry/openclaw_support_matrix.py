@@ -164,6 +164,8 @@ def build_openclaw_support_matrix(
             "status": parity["status"],
             "provider_missing_ids": parity["coverage"]["providers"]["missing_ids"],
             "channel_missing_ids": parity["coverage"]["channels"]["missing_ids"],
+            "unknown_provider_doc_slugs": parity.get("doc_drift", {}).get("unknown_provider_doc_slugs", []),
+            "unknown_channel_doc_slugs": parity.get("doc_drift", {}).get("unknown_channel_doc_slugs", []),
             "source_urls": sorted(
                 set(parity["source_snapshots"]["providers"]["source_urls"])
                 | set(parity["source_snapshots"]["channels"]["source_urls"])
