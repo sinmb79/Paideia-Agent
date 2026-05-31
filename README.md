@@ -307,6 +307,21 @@ ai22b-talent-foundry hire-installed `
   --chat-surface openclaw-channel-webchat
 ```
 
+Before live chat, run the Gateway LLM doctor. The default mode is static and does not call the network; add `--probe-gateway --probe-chat` only after OpenClaw Gateway is running and the operator has set any required `OPENCLAW_GATEWAY_TOKEN` or `OPENCLAW_GATEWAY_PASSWORD` environment variable:
+
+```powershell
+ai22b-talent-foundry doctor-openclaw-gateway-llm `
+  --employment-record "<employment_record.json>" `
+  --config-patch "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_runtime_bundle\openclaw_config_patch.json" `
+  --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_gateway_llm_doctor.json"
+
+ai22b-talent-foundry doctor-openclaw-gateway-llm `
+  --employment-record "<employment_record.json>" `
+  --probe-gateway `
+  --probe-chat `
+  --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_gateway_llm_doctor.live.json"
+```
+
 For OpenClaw parity discovery:
 
 ```powershell

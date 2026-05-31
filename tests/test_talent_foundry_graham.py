@@ -569,6 +569,135 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertTrue(arcee_ready["results"][0]["ready_for_live_llm"])
         self.assertEqual(arcee_ready["results"][0]["checks"][0]["id"], "env:OPENCLAW_LIVE_ARCEE_KEY")
 
+    def test_openclaw_gateway_llm_doctor_validates_static_config_and_live_probe_contract(self) -> None:
+        from ai22b.talent_foundry.cli import main as cli_main
+        from ai22b.talent_foundry.llm_runtime import build_llm_runtime_config
+        from ai22b.talent_foundry.onboarding_choices import resolve_llm_service
+        from ai22b.talent_foundry.openclaw_gateway_llm import doctor_openclaw_gateway_llm
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            selected = resolve_llm_service(
+                llm_service="openclaw-gateway/openrouter/meta-llama/llama-3.1-8b",
+                llm_model_path="http://127.0.0.1:18789",
+            )
+            employment = {
+                "schema": "ai-talent-local-employment/v1",
+                "employment_id": "gateway-doctor-test",
+                "status": "active",
+                "employer": "Boss",
+                "agent": {
+                    "name": "gateway-junior",
+                    "role": "OpenClaw Gateway test agent",
+                    "major_goal": "Verify gateway LLM bridge",
+                },
+                "llm_service": selected,
+                "llm_runtime": build_llm_runtime_config(
+                    engine=selected["engine"],
+                    model_path=selected["selected_model_path"],
+                    model=selected["selected_model"],
+                    service=selected["service_id"],
+                    provider_config=selected,
+                ),
+                "chat_surface": {"id": "openclaw-channel-webchat"},
+                "entrypoints": {},
+            }
+            employment_path = tmp_path / "employment_record.json"
+            employment_path.write_text(json.dumps(employment, ensure_ascii=False, indent=2), encoding="utf-8")
+            config_patch = {
+                "schema": "ai22b-openclaw-config-patch/v1",
+                "openclaw_json_patch": {
+                    "gateway": {
+                        "http": {
+                            "endpoints": {
+                                "chatCompletions": {
+                                    "enabled": True,
+                                }
+                            }
+                        }
+                    }
+                },
+            }
+            config_patch_path = tmp_path / "openclaw_config_patch.json"
+            config_patch_path.write_text(json.dumps(config_patch, ensure_ascii=False, indent=2), encoding="utf-8")
+            runtime_bundle_path = tmp_path / "openclaw_runtime_bundle.json"
+            runtime_bundle_path.write_text(
+                json.dumps(
+                    {
+                        "schema": "ai22b-openclaw-runtime-bundle/v1",
+                        "artifacts": {
+                            "openclaw_config_patch": "openclaw_config_patch.json",
+                        },
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+            static_output = tmp_path / "gateway_doctor_static.json"
+            static_report = doctor_openclaw_gateway_llm(
+                employment_path,
+                runtime_bundle_path=runtime_bundle_path,
+                output_path=static_output,
+            )
+            cli_output = tmp_path / "gateway_doctor_cli.json"
+            cli_result = cli_main(
+                [
+                    "doctor-openclaw-gateway-llm",
+                    "--employment-record",
+                    str(employment_path),
+                    "--config-patch",
+                    str(config_patch_path),
+                    "--output",
+                    str(cli_output),
+                ]
+            )
+            calls: list[dict[str, object]] = []
+
+            def fake_http_json(**kwargs: object) -> dict[str, object]:
+                calls.append(dict(kwargs))
+                if kwargs["method"] == "GET":
+                    return {"data": [{"id": "openclaw/default"}]}
+                return {
+                    "choices": [{"message": {"content": "Gateway ok"}}],
+                    "usage": {"total_tokens": 3},
+                }
+
+            live_output = tmp_path / "gateway_doctor_live.json"
+            with patch.dict(os.environ, {"OPENCLAW_GATEWAY_TOKEN": "secret-gateway-token"}, clear=False):
+                with patch(
+                    "ai22b.talent_foundry.openclaw_gateway_llm._http_json",
+                    side_effect=fake_http_json,
+                ):
+                    live_report = doctor_openclaw_gateway_llm(
+                        employment_path,
+                        runtime_bundle_path=runtime_bundle_path,
+                        probe_gateway=True,
+                        probe_chat=True,
+                        model_override="openrouter/meta-llama/llama-3.1-70b",
+                        output_path=live_output,
+                    )
+            static_output_exists = static_output.exists()
+            cli_output_exists = cli_output.exists()
+            live_output_exists = live_output.exists()
+
+        live_report_text = json.dumps(live_report, ensure_ascii=False)
+        post_call = next(item for item in calls if item["method"] == "POST")
+
+        self.assertEqual(static_report["schema"], "ai22b-openclaw-gateway-llm-doctor/v1")
+        self.assertEqual(static_report["status"], "ready_for_gateway_start")
+        self.assertEqual(static_report["gateway_contract"]["base_url"], "http://127.0.0.1:18789/v1")
+        self.assertTrue(static_output_exists)
+        self.assertEqual(cli_result, 0)
+        self.assertTrue(cli_output_exists)
+        self.assertTrue(live_output_exists)
+        self.assertEqual(live_report["status"], "pass")
+        self.assertEqual(post_call["payload"]["model"], "openclaw/default")
+        self.assertEqual(post_call["headers"]["x-openclaw-model"], "openrouter/meta-llama/llama-3.1-70b")
+        self.assertEqual(post_call["headers"]["Authorization"], "Bearer secret-gateway-token")
+        self.assertNotIn("secret-gateway-token", live_report_text)
+
     def test_openclaw_runtime_bundle_exports_config_patch_env_template_and_doctors(self) -> None:
         from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
         from ai22b.talent_foundry.cli import main as cli_main

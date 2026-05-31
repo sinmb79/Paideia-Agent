@@ -62,6 +62,7 @@ from ai22b.talent_foundry.onboarding_choices import (
 from ai22b.talent_foundry.openclaw_config_import import import_openclaw_config
 from ai22b.talent_foundry.openclaw_compat import openclaw_channel_manifest, openclaw_provider_manifest
 from ai22b.talent_foundry.openclaw_bridge_setup import build_openclaw_bridge_setup_kit
+from ai22b.talent_foundry.openclaw_gateway_llm import doctor_openclaw_gateway_llm
 from ai22b.talent_foundry.openclaw_native_handoff import (
     doctor_openclaw_native_handoff,
     prepare_openclaw_native_config,
@@ -210,6 +211,28 @@ def _build_parser() -> argparse.ArgumentParser:
     build_runtime_bundle.add_argument("--existing-openclaw-config")
     build_runtime_bundle.add_argument("--config-action", choices=["keep", "modify", "reset"], default="modify")
     build_runtime_bundle.add_argument("--output-dir", required=True)
+
+    doctor_gateway_llm = subparsers.add_parser(
+        "doctor-openclaw-gateway-llm",
+        help="Doctor a hired Paideia employment record for OpenClaw Gateway HTTP LLM use.",
+    )
+    doctor_gateway_llm.add_argument("--employment-record", required=True)
+    doctor_gateway_llm.add_argument("--output", required=True)
+    doctor_gateway_llm.add_argument("--runtime-bundle")
+    doctor_gateway_llm.add_argument("--config-patch")
+    doctor_gateway_llm.add_argument(
+        "--probe-gateway",
+        action="store_true",
+        help="Probe the Gateway /v1/models endpoint.",
+    )
+    doctor_gateway_llm.add_argument(
+        "--probe-chat",
+        action="store_true",
+        help="Probe the Gateway /v1/chat/completions endpoint with a short smoke message.",
+    )
+    doctor_gateway_llm.add_argument("--message", default="Paideia OpenClaw Gateway smoke test.")
+    doctor_gateway_llm.add_argument("--model", help="Override the backend provider/model sent as x-openclaw-model.")
+    doctor_gateway_llm.add_argument("--timeout-seconds", type=int, default=20)
 
     doctor_native_handoff = subparsers.add_parser(
         "doctor-openclaw-native-handoff",
@@ -885,6 +908,21 @@ def main(argv: Sequence[str] | None = None) -> int:
             config_action=args.config_action,
         )
         print(str(Path(bundle["artifacts"]["manifest"])))
+        return 0
+
+    if args.command == "doctor-openclaw-gateway-llm":
+        doctor_openclaw_gateway_llm(
+            Path(args.employment_record),
+            output_path=Path(args.output),
+            runtime_bundle_path=Path(args.runtime_bundle) if args.runtime_bundle else None,
+            config_patch_path=Path(args.config_patch) if args.config_patch else None,
+            probe_gateway=args.probe_gateway,
+            probe_chat=args.probe_chat,
+            model_override=args.model,
+            probe_message=args.message,
+            timeout_seconds=args.timeout_seconds,
+        )
+        print(str(Path(args.output)))
         return 0
 
     if args.command == "doctor-openclaw-native-handoff":
