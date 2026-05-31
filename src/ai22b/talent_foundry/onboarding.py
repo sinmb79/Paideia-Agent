@@ -6,6 +6,13 @@ from pathlib import Path
 from typing import Any
 
 from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
+from ai22b.talent_foundry.onboarding_choices import (
+    DEFAULT_CHAT_SURFACE_ID,
+    DEFAULT_LLM_SERVICE_ID,
+    build_researcher_intake,
+    resolve_chat_surface,
+    resolve_llm_service,
+)
 from ai22b.talent_foundry.registry import assign_hired_goal, run_hired_goal_cycle
 from ai22b.talent_foundry.training_run import materialize_training_blueprint
 
@@ -55,6 +62,11 @@ def run_agent_onboarding(
     role_model_id: str | None = None,
     private_curriculum_dir: str | None = None,
     agent_surface: str = "cli-console",
+    llm_service: str | None = DEFAULT_LLM_SERVICE_ID,
+    llm_engine: str | None = None,
+    llm_model: str | None = None,
+    llm_model_path: str | None = None,
+    chat_surface: str | None = DEFAULT_CHAT_SURFACE_ID,
     initial_goal: str | None = None,
     cycle_note: str | None = None,
     cadence: str = "weekly",
@@ -64,6 +76,13 @@ def run_agent_onboarding(
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_path or output_dir / "onboarding_session.json"
+    selected_llm_service = resolve_llm_service(
+        llm_service=llm_service,
+        llm_engine=llm_engine,
+        llm_model=llm_model,
+        llm_model_path=llm_model_path,
+    )
+    selected_chat_surface = resolve_chat_surface(chat_surface)
 
     blueprint = create_agent_training_blueprint(
         owner=owner,
@@ -75,7 +94,26 @@ def run_agent_onboarding(
         private_curriculum_dir=private_curriculum_dir,
         agent_surface=agent_surface,
     )
-    training_run = materialize_training_blueprint(blueprint, output_dir=output_dir)
+    researcher_intake_path = output_dir / "researcher_intake.json"
+    researcher_intake = build_researcher_intake(
+        owner=owner,
+        request=request,
+        talent_name=talent_name,
+        domain=domain,
+        role_model_id=role_model_id,
+        llm_service=selected_llm_service,
+        chat_surface=selected_chat_surface,
+    )
+    _write_json(researcher_intake_path, researcher_intake)
+    training_run = materialize_training_blueprint(
+        blueprint,
+        output_dir=output_dir,
+        llm_service=selected_llm_service["service_id"],
+        llm_engine=selected_llm_service["engine"],
+        llm_model=selected_llm_service.get("selected_model"),
+        llm_model_path=selected_llm_service.get("selected_model_path"),
+        chat_surface=selected_chat_surface["id"],
+    )
 
     employment_record_path = Path(training_run["artifacts"]["employment_record"])
     target_root = employment_record_path.parent
@@ -124,6 +162,7 @@ def run_agent_onboarding(
         "first_workspace_run": str(workspace_run_path),
         "first_learning_update": str(learning_update_path),
         "first_goal_cycle": str(first_goal_cycle_path),
+        "researcher_intake": str(researcher_intake_path),
         "onboarding_session": str(output_path),
     }
     status = (
@@ -139,6 +178,9 @@ def run_agent_onboarding(
         "status": status,
         "identity": blueprint["identity"],
         "track": track,
+        "selected_llm_service": selected_llm_service,
+        "selected_chat_surface": selected_chat_surface,
+        "researcher_mode": researcher_intake["researcher_contract"],
         "employment": {
             "relationship": "owner_raised_ai_talent_hired_as_local_agent",
             "employment_record": str(employment_record_path),
@@ -149,12 +191,15 @@ def run_agent_onboarding(
         },
         "local_policy": {
             "local_first": True,
-            "network_access": "blocked_by_default",
+            "network_access": selected_llm_service["network_access"],
             "private_data_upload": "forbidden",
             "private_reasoning_trace": "do_not_store",
             "llm_identity_policy": "application_engine_not_identity",
         },
         "stages": [
+            _stage("choose_llm_service", "completed"),
+            _stage("choose_chat_surface", "completed"),
+            _stage("researcher_intake", "completed", researcher_intake_path),
             _stage("blueprint", "completed", Path(training_run["artifacts"]["training_blueprint"])),
             _stage("raise", "completed", Path(training_run["artifacts"]["training_run"])),
             _stage("package", "completed", Path(training_run["artifacts"]["release_archive"])),

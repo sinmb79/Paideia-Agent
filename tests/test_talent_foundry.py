@@ -1731,6 +1731,7 @@ class TalentFoundryTests(unittest.TestCase):
                 kit_dir / "22b_paideia_agent_program.json",
                 output_path=kit_dir / "paideia_doctor_report.json",
             )
+            onboarding = json.loads((kit_dir / "paideia_onboarding.template.json").read_text(encoding="utf-8"))
             hermes_adapter_exists = (kit_dir / "adapter_manifests" / "hermes_style.json").exists()
             openclaw_adapter_exists = (kit_dir / "adapter_manifests" / "openclaw_style.json").exists()
 
@@ -1743,6 +1744,11 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertTrue(openclaw_adapter_exists)
         self.assertTrue(doctor["passed"])
         self.assertTrue(doctor["checks"]["security_defaults"]["passed"])
+        self.assertTrue(doctor["checks"]["onboarding_choices"]["passed"])
+        self.assertEqual(onboarding["flow"][0], "choose_llm_service")
+        self.assertEqual(onboarding["flow"][1], "choose_chat_surface")
+        self.assertIn("openai_chatgpt_codex", {item["id"] for item in onboarding["llm_service_catalog"]})
+        self.assertIn("codex-bridge-chat", {item["id"] for item in onboarding["chat_surface_catalog"]})
         self.assertEqual(manifest["default_safety_posture"]["external_channels"], "disabled")
 
     def test_cli_build_paideia_agent_kit_and_doctor_agent_program(self) -> None:
@@ -1898,7 +1904,8 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("reasoning_kibo_contract", chat["agent_program"])
         self.assertEqual(chat["conversation_intent"], "paideia_program_scope_question")
         self.assertEqual(chat["active_operator"], "paideia.education_axis_scope")
-        self.assertIn("추론기보는 Paideia가 길러낸 여러 결과 중 하나", chat["assistant_answer"])
+        self.assertIn("Reasoning Ledger(Ariadne Thread)는 Paideia가 길러낸 여러 결과 중 하나", chat["assistant_answer"])
+        self.assertEqual(chat["agent_program"]["reasoning_ledger_display_name"], "Reasoning Ledger (Ariadne Thread)")
         self.assertIn("language_pragmatics", chat["assistant_answer"])
         self.assertIn("simulation_rollouts", chat["assistant_answer"])
         self.assertEqual(chat["stored_private_reasoning_trace"], False)
@@ -1920,6 +1927,10 @@ class TalentFoundryTests(unittest.TestCase):
                     "여자",
                     "--owner",
                     "보스",
+                    "--llm-service",
+                    "openai_chatgpt_codex",
+                    "--chat-surface",
+                    "codex-bridge-chat",
                     "--initial-goal",
                     "수면과 운동 루틴 검토 절차를 만든다.",
                     "--cycle-note",
@@ -1936,6 +1947,8 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertEqual(session["schema"], "ai-talent-onboarding-session/v1")
         self.assertEqual(session["status"], "hired_agent_first_goal_cycle_completed")
+        self.assertEqual(session["selected_llm_service"]["service_id"], "openai_chatgpt_codex")
+        self.assertEqual(session["selected_chat_surface"]["id"], "codex-bridge-chat")
         self.assertTrue(employment_record_exists)
 
     def test_guided_console_session_runs_onboarding_from_answers(self) -> None:
@@ -1966,10 +1979,15 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(session["schema"], "ai-talent-guided-console-session/v1")
         self.assertEqual(saved_session["status"], "hired_agent_first_goal_cycle_completed")
         self.assertEqual(session["mode"], "answers_file")
+        question_ids = [question["id"] for question in session["questions"]]
+        self.assertLess(question_ids.index("llm_service"), question_ids.index("request"))
+        self.assertLess(question_ids.index("chat_surface"), question_ids.index("request"))
         self.assertLessEqual(
             {"request", "talent_name", "gender", "initial_goal", "cycle_note"},
             {question["id"] for question in session["questions"]},
         )
+        self.assertEqual(session["answers"]["llm_service"], "openai_chatgpt_codex")
+        self.assertEqual(session["answers"]["chat_surface"], "codex-bridge-chat")
         self.assertEqual(session["answers"]["talent_name"], "서윤")
         self.assertEqual(onboarding["status"], "hired_agent_first_goal_cycle_completed")
         self.assertTrue(all(artifact_exists.values()))
@@ -2092,7 +2110,21 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertEqual(session["schema"], "ai-talent-guided-console-session/v1")
         self.assertEqual(session["status"], "hired_agent_first_goal_cycle_completed")
+        self.assertEqual(session["answers"]["llm_service"], "openai_chatgpt_codex")
+        self.assertEqual(session["answers"]["chat_surface"], "codex-bridge-chat")
         self.assertTrue(onboarding_exists)
+
+    def test_bundled_graham_junior_answers_file_selects_llm_and_chat_surface(self) -> None:
+        from ai22b.config import PROJECT_ROOT
+
+        answers_path = PROJECT_ROOT / "examples" / "graham_junior_onboarding.answers.json"
+        answers = json.loads(answers_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(answers["talent_name"], "grham-junior")
+        self.assertEqual(answers["domain"], "securities_research")
+        self.assertEqual(answers["role_model_id"], "graham_value_investing")
+        self.assertEqual(answers["llm_service"], "openai_chatgpt_codex")
+        self.assertEqual(answers["chat_surface"], "codex-bridge-chat")
 
     def test_demo_runner_writes_release_audit(self) -> None:
         from ai22b.talent_foundry.demo import run_demo
@@ -2192,11 +2224,15 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(saved_session["status"], "hired_agent_first_goal_cycle_completed")
         self.assertTrue(session["local_policy"]["local_first"])
         self.assertEqual(session["local_policy"]["private_data_upload"], "forbidden")
+        self.assertEqual(session["selected_llm_service"]["service_id"], "openai_chatgpt_codex")
+        self.assertEqual(session["selected_chat_surface"]["id"], "codex-bridge-chat")
         self.assertEqual(employment_record["status"], "active")
+        self.assertEqual(employment_record["llm_service"]["service_id"], "openai_chatgpt_codex")
+        self.assertEqual(employment_record["chat_surface"]["id"], "codex-bridge-chat")
         self.assertEqual(goal_cycle["cycle_status"], "completed")
         self.assertEqual(goal_cycle["learning_update"]["decision"], "promoted")
         self.assertLessEqual(
-            {"blueprint", "raise", "hire", "assign_goal", "first_goal_cycle"},
+            {"choose_llm_service", "choose_chat_surface", "researcher_intake", "blueprint", "raise", "hire", "assign_goal", "first_goal_cycle"},
             {stage["id"] for stage in session["stages"]},
         )
         self.assertTrue(all(artifact_exists.values()))

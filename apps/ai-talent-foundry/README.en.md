@@ -14,9 +14,18 @@ Set `AI22B_STORAGE_ROOT` to use a different isolated storage folder.
 
 The first deep role-model track is `graham_value_investing` for a Benjamin Graham process-replication securities research AI talent.
 
-The role model is not used to preload a personality, worldview, or investment style. It is used to reconstruct sourced learning conditions, coursework pressure, assignments, exams, reports, and feedback loops so the talent develops its own reasoning kibo over time.
+The role model is not used to preload a personality, worldview, or investment style. It is used to reconstruct sourced learning conditions, coursework pressure, assignments, exams, reports, and feedback loops so the talent develops its own **Reasoning Ledger** over time. The internal compatibility file is still named `reasoning_kibo.jsonl`.
 
-The generated `reasoning_kibo.jsonl` is cumulative rather than final. It starts from elementary-school learning records, continues through middle school, high school, university, service discipline, graduate school, and doctoral work, then stays open after hiring so real agent work can extend or revise the kibo.
+The generated ledger is cumulative rather than final. It starts from elementary-school learning records, continues through middle school, high school, university, service discipline, graduate school, and doctoral work, then stays open after hiring so real agent work can extend or revise it.
+
+## Guided Onboarding
+
+The first-run flow asks for the LLM service and chat surface before it asks for the talent request. The selected LLM acts as a curriculum researcher and dialogue engine; it does not become the talent identity.
+
+```powershell
+ai22b-talent-foundry start-console `
+  --answers examples\graham_junior_onboarding.answers.json
+```
 
 ```powershell
 ai22b-talent-foundry list-role-models --domain securities_research

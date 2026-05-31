@@ -13,7 +13,7 @@
     "mode": "education_first_assessment_driven",
     "not_a_shortcut": "Do not inject Graham's interpreted personality or worldview. The talent must encounter materials, assignments, exams, failures, and feedback before any reasoning habit is recorded.",
     "historical_facts_policy": "Use verified facts as hard anchors; label unknown transcript/course details as not_yet_sourced; use modern replacements only when clearly marked.",
-    "reasoning_kibo_policy": "Reasoning kibo entries accumulate from yearly learning data, assignments, exams, feedback, and later hired-agent work, not from role-model keywords."
+    "reasoning_kibo_policy": "Reasoning Ledger entries accumulate from yearly learning data, assignments, exams, feedback, and later hired-agent work, not from role-model keywords. The internal compatibility file is reasoning_kibo.jsonl."
   },
   "historical_path_evidence": [
     {

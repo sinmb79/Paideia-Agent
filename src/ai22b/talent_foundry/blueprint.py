@@ -83,7 +83,7 @@ def _track_from_role_model(role_model: dict[str, Any], curriculum: dict[str, Any
         ],
         "doctoral_project": defaults.get(
             "doctoral_project",
-            "Local-first securities research agent with cumulative education-to-work reasoning kibo",
+            "Local-first securities research agent with cumulative education-to-work Reasoning Ledger",
         ),
     }
 

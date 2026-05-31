@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from ai22b.talent_foundry.onboarding import run_agent_onboarding
+from ai22b.talent_foundry.onboarding_choices import DEFAULT_CHAT_SURFACE_ID, DEFAULT_LLM_SERVICE_ID
 from ai22b.talent_foundry.role_models import DEFAULT_PRIVATE_CURRICULUM_DIR
 from ai22b.talent_foundry.registry import (
     assemble_hired_agent_team,
@@ -33,9 +34,31 @@ CONSOLE_QUESTIONS = [
         "default": "보스",
     },
     {
+        "id": "llm_service",
+        "label": "LLM 서비스",
+        "prompt": "연구원/대화 엔진으로 사용할 LLM 서비스는 무엇으로 둘까요?",
+        "default": DEFAULT_LLM_SERVICE_ID,
+    },
+    {
+        "id": "llm_model",
+        "label": "LLM 모델",
+        "prompt": "특정 모델명을 지정할까요? 비워두면 환경변수 또는 기본값을 사용합니다.",
+    },
+    {
+        "id": "llm_model_path",
+        "label": "로컬 모델 경로",
+        "prompt": "로컬 모델 엔진을 고른 경우 모델 경로는 어디인가요?",
+    },
+    {
+        "id": "chat_surface",
+        "label": "채팅 표면",
+        "prompt": "처음 대화할 채팅 표면은 무엇으로 둘까요?",
+        "default": DEFAULT_CHAT_SURFACE_ID,
+    },
+    {
         "id": "request",
         "label": "요청",
-        "prompt": "어떤 분야의 에이전트를 길러 고용하고 싶나요?",
+        "prompt": "선택한 LLM 연구원에게 어떤 AI 인재 육성을 맡길까요?",
         "required": True,
     },
     {
@@ -178,6 +201,10 @@ def run_console_session(
         role_model_id=normalized.get("role_model_id") or None,
         private_curriculum_dir=normalized.get("private_curriculum_dir") or None,
         agent_surface=normalized.get("agent_surface") or "cli-console",
+        llm_service=normalized.get("llm_service") or None,
+        llm_model=normalized.get("llm_model") or None,
+        llm_model_path=normalized.get("llm_model_path") or None,
+        chat_surface=normalized.get("chat_surface") or None,
         initial_goal=normalized.get("initial_goal") or None,
         cycle_note=normalized.get("cycle_note") or None,
         output_path=onboarding_output,

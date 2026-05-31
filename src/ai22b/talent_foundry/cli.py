@@ -36,6 +36,11 @@ from ai22b.talent_foundry.learning_loop import (
 )
 from ai22b.talent_foundry.memory_substrate import run_chat_turn_from_employment
 from ai22b.talent_foundry.onboarding import run_agent_onboarding
+from ai22b.talent_foundry.onboarding_choices import (
+    DEFAULT_CHAT_SURFACE_ID,
+    chat_surface_ids,
+    llm_service_ids,
+)
 from ai22b.talent_foundry.program import create_talent_plan
 from ai22b.talent_foundry.program_manifest import build_public_program_manifest
 from ai22b.talent_foundry.records import build_career_records
@@ -131,6 +136,11 @@ def _build_parser() -> argparse.ArgumentParser:
     onboard.add_argument("--role-model", dest="role_model_id")
     onboard.add_argument("--private-curriculum-dir")
     onboard.add_argument("--agent-surface", default="cli-console")
+    onboard.add_argument("--llm-service", choices=llm_service_ids())
+    onboard.add_argument("--llm-engine")
+    onboard.add_argument("--llm-model")
+    onboard.add_argument("--llm-model-path")
+    onboard.add_argument("--chat-surface", default=DEFAULT_CHAT_SURFACE_ID, choices=chat_surface_ids())
     onboard.add_argument("--initial-goal")
     onboard.add_argument("--cycle-note")
     onboard.add_argument("--cadence", default="weekly")
@@ -457,7 +467,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     run_agent_program_chat_command = subparsers.add_parser(
         "run-agent-program-chat",
-        help="Chat through the Paideia Agent program using local education records and reasoning kibo.",
+        help="Chat through the Paideia Agent program using local education records and the Reasoning Ledger.",
     )
     run_agent_program_chat_command.add_argument("--program", required=True)
     run_agent_program_chat_command.add_argument("--message", required=True)
@@ -556,6 +566,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             role_model_id=args.role_model_id,
             private_curriculum_dir=args.private_curriculum_dir,
             agent_surface=args.agent_surface,
+            llm_service=args.llm_service,
+            llm_engine=args.llm_engine,
+            llm_model=args.llm_model,
+            llm_model_path=args.llm_model_path,
+            chat_surface=args.chat_surface,
             initial_goal=args.initial_goal,
             cycle_note=args.cycle_note,
             cadence=args.cadence,

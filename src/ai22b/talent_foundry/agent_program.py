@@ -7,6 +7,13 @@ from pathlib import Path
 from typing import Any
 
 from ai22b.talent_foundry.memory_substrate import build_memory_substrate, run_chat_turn_from_employment, write_memory_substrate
+from ai22b.talent_foundry.onboarding_choices import (
+    CHAT_SURFACE_CATALOG,
+    DEFAULT_CHAT_SURFACE_ID,
+    LLM_SERVICE_CATALOG,
+    resolve_chat_surface,
+    resolve_llm_service,
+)
 
 
 AGENT_PROGRAM_SCHEMA = "ai22b-paideia-agent-program/v1"
@@ -67,7 +74,7 @@ $env:PYTHONIOENCODING = "utf-8"
 
 Write-Host "Paideia Agent - Codex bridge chat"
 Write-Host "종료하려면 exit 또는 quit 를 입력하세요."
-Write-Host "Codex가 로컬 교육기록, 추론기보, 대화기록을 읽고, 연결된 LLM은 언어/추론 엔진으로만 사용됩니다."
+Write-Host "Codex가 로컬 교육기록, Reasoning Ledger(Ariadne Thread), 대화기록을 읽고, 연결된 LLM은 언어/추론 엔진으로만 사용됩니다."
 Write-Host ""
 
 while ($true) {
@@ -120,17 +127,41 @@ Write-Host $Output
 """
 
 
-def _onboarding_template(program_name: str, agent_name: str) -> dict[str, Any]:
+def _onboarding_template(
+    program_name: str,
+    agent_name: str,
+    *,
+    selected_llm_service: dict[str, Any] | None = None,
+    selected_chat_surface: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     return {
         "schema": "ai22b-paideia-onboarding-template/v1",
         "program": program_name,
         "agent_name": agent_name,
+        "flow": [
+            "choose_llm_service",
+            "choose_chat_surface",
+            "confirm_or_select_role_model",
+            "let_the_selected_llm_act_as_researcher",
+            "raise_assess_and_review_hiring_dossier",
+            "start_chat_or_dataflow_job",
+        ],
+        "llm_service_catalog": LLM_SERVICE_CATALOG,
+        "chat_surface_catalog": CHAT_SURFACE_CATALOG,
+        "selected_llm_service": selected_llm_service or resolve_llm_service(),
+        "selected_chat_surface": selected_chat_surface or resolve_chat_surface(DEFAULT_CHAT_SURFACE_ID),
         "first_run": {
             "run_doctor_first": True,
             "open_chat_script": DEFAULT_CHAT_SCRIPT,
             "default_llm_mode": "offline",
             "live_llm_requires_api_quota": True,
             "learn_from_chat_default": False,
+        },
+        "researcher_mode": {
+            "enabled": True,
+            "role": "The selected LLM acts as curriculum researcher and dialogue engine; it does not become the talent identity.",
+            "inputs": ["owner_request", "domain", "role_model_id", "private_curriculum_dir"],
+            "outputs": ["blueprint", "curriculum_manifest", "assessment_transcript", "hiring_dossier"],
         },
         "memory_policy": {
             "profile_isolation": "one install kit per hired talent profile",
@@ -147,8 +178,9 @@ def _onboarding_template(program_name: str, agent_name: str) -> dict[str, Any]:
         },
         "recommended_first_questions": [
             "너는 어떤 교육과정을 거쳐 만들어졌어?",
-            "이 프로그램은 추론만 배우는거야, 아니면 다른 것도 육성하는거야?",
+            "이 프로그램은 Reasoning Ledger만 배우는거야, 아니면 다른 것도 육성하는거야?",
             "최근 대화에서 배운 점을 어떻게 기록해?",
+            "내 이력서와 성적표를 보여줘.",
         ],
     }
 
@@ -164,7 +196,7 @@ Paideia Agent is not just a chatbot profile. It is a local AI education/runtime 
 
 - local education records
 - learning ledger
-- reasoning kibo / Ariadne Thread
+- Reasoning Ledger / Ariadne Thread
 - memory substrate
 - Codex bridge chat script
 - adapter manifests for Hermes-style and OpenClaw-style runtimes
@@ -178,11 +210,29 @@ powershell -ExecutionPolicy Bypass -File .\\doctor_paideia.ps1
 powershell -ExecutionPolicy Bypass -File .\\start_paideia_chat.ps1
 ```
 
+To let the selected LLM service answer when it is available, use auto mode:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\\start_paideia_chat.ps1 -LlmMode auto -LearnFromChat
+```
+
 Use live LLM mode only after API quota and privacy expectations are clear:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\\start_paideia_chat.ps1 -LiveLlm -LearnFromChat
 ```
+
+## Onboarding Choices
+
+Paideia follows an OpenClaw/Hermes-style first-run shape, but the choices are applied to the education program:
+
+1. choose the LLM service,
+2. choose the chat surface,
+3. select a role-model process or use the bundled Graham Junior sample,
+4. let the selected LLM act as researcher for the curriculum and assessment plan,
+5. review the hiring dossier before real work.
+
+The LLM is the researcher/dialogue engine. The trained talent identity comes from the local education records, memory substrate, and Reasoning Ledger.
 
 ## Design Notes
 
@@ -193,7 +243,7 @@ Paideia benchmarks useful ideas from Hermes/OpenClaw-style agents: installable l
 def _adapter_manifests(agent_name: str) -> dict[str, Any]:
     shared_contract = {
         "identity_source": "local_agent_program_manifest",
-        "memory_source": "learning_ledger + reasoning_kibo + memory_substrate",
+        "memory_source": "learning_ledger + reasoning_kibo internal file + memory_substrate",
         "llm_role": "language_and_tool_reasoning_engine_only",
         "hidden_chain_of_thought": "do_not_store",
         "growth_rule": "promote_only_reviewable_verified_experience",
@@ -265,13 +315,13 @@ def _program_scope_reply(program: dict[str, Any]) -> tuple[str, list[dict[str, s
     ]
     answer = (
         f"보스, {program.get('name_ko', program.get('name'))}는 추론만 배우는 프로그램이 아닙니다. "
-        "추론기보는 Paideia가 길러낸 여러 결과 중 하나입니다.\n\n"
+        "Reasoning Ledger(Ariadne Thread)는 Paideia가 길러낸 여러 결과 중 하나입니다.\n\n"
         "이 교육센터가 프로그래밍해서 육성해야 하는 축은 이렇습니다.\n"
         + "\n".join(axis_lines)
         + "\n\n"
         "즉, grham-쥬니어 같은 개별 AI 인재는 지식만 주입받는 것이 아니라 언어, 사회성, 직업 전문성, "
         "도구 사용, 안전 경계, 시뮬레이션 경험을 단계별로 통과하면서 성장해야 합니다. "
-        "추론기보는 그 전체 성장 과정에서 형성된 문제 해결의 길입니다."
+        "이 기록은 그 전체 성장 과정에서 형성된 문제 해결의 길입니다."
     )
     summary = [
         {
@@ -320,7 +370,7 @@ def build_agent_program(
         "tagline_ko": "단계별 성장, 시뮬레이션, 검증된 기억으로 AI 인재를 육성하는 로컬 AI 교육센터.",
         "name_rationale": {
             "paideia": "holistic education and formation, broader than a reasoning module",
-            "ariadne_thread": "the reasoning-kibo path that helps an agent find a route through memory and tasks",
+            "ariadne_thread": "the Reasoning Ledger path that helps an agent find a route through memory and tasks",
             "homunculus_note": "the artificial-growth metaphor is acknowledged, but the program does not claim consciousness",
         },
         "agent": {
@@ -332,9 +382,9 @@ def build_agent_program(
         "runtime_topology": {
             "codex_role": "local_orchestrator_files_tools_verification_and_growth_commit",
             "connected_llm_role": "language_generation_and_high_level_reasoning_engine_only",
-            "agent_identity_role": "local_learning_data_reasoning_kibo_and_employment_record",
+            "agent_identity_role": "local_learning_data_reasoning_ledger_and_employment_record",
             "answer_flow": [
-                "Codex reads local identity, learning ledger, reasoning kibo, memory substrate, and recent chat logs.",
+                "Codex reads local identity, learning ledger, Reasoning Ledger, memory substrate, and recent chat logs.",
                 "Codex selects bounded context and asks the connected LLM to answer in the agent's learned style.",
                 "Codex stores only reviewable summaries, not hidden chain-of-thought.",
                 "Verified conversations and work are promoted back into the growth ledger.",
@@ -356,6 +406,7 @@ def build_agent_program(
             },
             {
                 "id": "reasoning_kibo",
+                "display_name": "Reasoning Ledger (Ariadne Thread)",
                 "goal": "학습과 시험, 실패, 업무 경험에서 문제 해결의 길을 형성한다.",
                 "outputs": ["reasoning_kibo", "memory_substrate procedural routes"],
             },
@@ -386,6 +437,8 @@ def build_agent_program(
             },
         ],
         "reasoning_kibo_contract": {
+            "display_name": "Reasoning Ledger (Ariadne Thread)",
+            "internal_name": "reasoning_kibo",
             "source_files": {
                 "learning_ledger": entrypoints.get("learning_ledger", "learning_ledger.json"),
                 "memory_substrate": entrypoints.get("memory_substrate", "memory_substrate.json"),
@@ -402,6 +455,36 @@ def build_agent_program(
                 "identity_mixing": "forbidden",
             },
         },
+        "onboarding_flow": {
+            "order": [
+                "choose_llm_service",
+                "choose_chat_surface",
+                "role_model_and_curriculum_selection",
+                "researcher_intake",
+                "education_to_hiring",
+                "hiring_dossier_review",
+                "first_chat_or_dataflow_job",
+            ],
+            "llm_service_catalog": LLM_SERVICE_CATALOG,
+            "chat_surface_catalog": CHAT_SURFACE_CATALOG,
+            "selected_llm_service": employment.get("llm_service") or resolve_llm_service(
+                llm_engine=employment.get("llm_runtime", {}).get("engine"),
+                llm_model=employment.get("llm_runtime", {}).get("model"),
+                llm_model_path=employment.get("llm_runtime", {}).get("model_path"),
+            ),
+            "selected_chat_surface": employment.get("chat_surface") or resolve_chat_surface(DEFAULT_CHAT_SURFACE_ID),
+            "sample_talent": {
+                "name": "grham-junior",
+                "domain": "securities_research",
+                "role_model_id": "graham_value_investing",
+                "answers_file": "examples/graham_junior_onboarding.answers.json",
+            },
+            "researcher_mode": {
+                "selected_llm_acts_as": "curriculum_researcher_and_growth_program_operator",
+                "identity_boundary": "LLM service is not the AI talent identity",
+                "owner_request_becomes": ["blueprint", "curriculum_manifest", "assessment_transcript", "hiring_dossier"],
+            },
+        },
         "entrypoints": {
             "employment_record": _rel(employment_record_path, output_path.parent),
             "agent_manifest": _rel(agent_manifest_path, output_path.parent),
@@ -412,6 +495,8 @@ def build_agent_program(
             ),
             "offline_chat": "run-agent-program-chat --llm-mode offline",
             "live_llm_chat": "run-agent-program-chat --llm-mode live --learn-from-chat",
+            "hiring_dossier": "hiring_dossier.json",
+            "hiring_dossier_markdown": "HIRING_DOSSIER.ko.md",
         },
         "adapter_manifests": _adapter_manifests(str(agent.get("name") or "unknown")),
         "security": {
@@ -529,7 +614,12 @@ def build_paideia_agent_install_kit(
     for adapter_name, adapter in program["adapter_manifests"].items():
         _write_json(adapters_dir / f"{adapter_name}.json", adapter)
 
-    onboarding = _onboarding_template(program_name, str(program.get("agent", {}).get("name") or "unknown"))
+    onboarding = _onboarding_template(
+        program_name,
+        str(program.get("agent", {}).get("name") or "unknown"),
+        selected_llm_service=employment.get("llm_service"),
+        selected_chat_surface=employment.get("chat_surface"),
+    )
     _write_json(output_dir / DEFAULT_ONBOARDING_TEMPLATE, onboarding)
     (output_dir / "README.md").write_text(
         _install_readme(program_name, str(program.get("agent", {}).get("name") or "unknown")),
@@ -641,6 +731,21 @@ def doctor_agent_program(program_path: Path, *, output_path: Path | None = None)
         "passed": {"codex_native", "hermes_style", "openclaw_style"} <= set(adapter_manifests),
         "details": {"adapters": sorted(adapter_manifests)},
     }
+    onboarding_flow = program.get("onboarding_flow", {})
+    checks["onboarding_choices"] = {
+        "passed": (
+            bool(onboarding_flow.get("selected_llm_service"))
+            and bool(onboarding_flow.get("selected_chat_surface"))
+            and "choose_llm_service" in onboarding_flow.get("order", [])
+            and "choose_chat_surface" in onboarding_flow.get("order", [])
+        ),
+        "details": {
+            "selected_llm_service": onboarding_flow.get("selected_llm_service", {}).get("service_id")
+            or onboarding_flow.get("selected_llm_service", {}).get("id"),
+            "selected_chat_surface": onboarding_flow.get("selected_chat_surface", {}).get("id"),
+            "order": onboarding_flow.get("order", []),
+        },
+    }
     imported_skill_manifests = sorted((root / "skills" / "imported").glob("**/paideia_skill_manifest.json"))
     imported_skill_details = []
     unsafe_imports = []
@@ -722,6 +827,9 @@ def run_agent_program_chat(
         "program_path": program_path.name,
         "codex_bridge": program["runtime_topology"]["codex_role"],
         "reasoning_kibo_contract": program["reasoning_kibo_contract"]["policy"],
+        "reasoning_ledger_display_name": program["reasoning_kibo_contract"].get("display_name"),
+        "selected_llm_service": program.get("onboarding_flow", {}).get("selected_llm_service"),
+        "selected_chat_surface": program.get("onboarding_flow", {}).get("selected_chat_surface"),
     }
     _write_json(output_path, chat)
     return chat

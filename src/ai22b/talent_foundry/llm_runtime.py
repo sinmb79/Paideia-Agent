@@ -21,6 +21,8 @@ def build_llm_runtime_config(
     *,
     engine: str = "deterministic_local",
     model_path: str | None = None,
+    model: str | None = None,
+    service: str | None = None,
 ) -> dict[str, Any]:
     compatible_engines = [
         "deterministic_local",
@@ -35,7 +37,9 @@ def build_llm_runtime_config(
     codex_bridge = engine == "openai_chatgpt_codex"
     return {
         "schema": RUNTIME_SCHEMA,
+        "service": service or engine,
         "engine": engine,
+        "model": model,
         "model_path": model_path,
         "local_only": not codex_bridge,
         "network_access": "codex_host_managed_data_minimized" if codex_bridge else "blocked",
@@ -62,6 +66,7 @@ def invoke_llm_application_engine(
 
     engine = runtime_config["engine"]
     model_path = runtime_config.get("model_path")
+    model = runtime_config.get("model")
     if engine in {"bigram_local", "transformers_local", "llama_cpp_local"} and not model_path:
         return {
             "schema": RUNTIME_RESULT_SCHEMA,
@@ -283,6 +288,7 @@ def _invoke_openai_chatgpt_codex_bridge(
             "send_selected_memory_route_only": True,
             "api_key_storage": "not_required_by_this_bridge",
         },
+        "model": runtime_config.get("model"),
         "draft": (
             f"{agent['name']} uses the local manifest, learning ledger, and memory substrate as identity "
             f"and reasoning context. OpenAI ChatGPT Codex supplies language generation only for: {task}"

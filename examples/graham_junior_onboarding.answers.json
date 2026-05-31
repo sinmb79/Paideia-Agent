@@ -1,0 +1,17 @@
+{
+  "owner": "Boss",
+  "llm_service": "openai_chatgpt_codex",
+  "llm_model": "",
+  "llm_model_path": "",
+  "chat_surface": "codex-bridge-chat",
+  "request": "Raise and test a separate Graham-inspired securities research AI talent without modifying any existing talent.",
+  "domain": "securities_research",
+  "role_model_id": "graham_value_investing",
+  "private_curriculum_dir": "data/private/curricula/graham_securities",
+  "agent_surface": "cli-console",
+  "talent_name": "grham-junior",
+  "gender": "male",
+  "initial_goal": "Create a repeatable evidence-first securities research workflow.",
+  "cycle_note": "First cycle: separate facts, assumptions, counterevidence, and safety boundaries.",
+  "post_hire_mode": "single"
+}

@@ -14,7 +14,7 @@ Most agent runtimes begin with an assistant and add tools, memory, channels, and
 
 - **Raise first, hire later**: a talent passes through growth records, courses, exams, reports, and review gates before becoming an agent.
 - **Memory substrate, not full transcript replay**: the runtime selects bounded summaries, learning records, and procedural cues instead of injecting every old conversation.
-- **Reasoning kibo**: a reviewable ledger of hypotheses, evidence, mistakes, corrected principles, study habits, and work patterns. It is not hidden chain-of-thought.
+- **Reasoning Ledger / Ariadne Thread**: a reviewable ledger of hypotheses, evidence, mistakes, corrected principles, study habits, and work patterns. It is not hidden chain-of-thought. The internal compatibility artifact is still named `reasoning_kibo.jsonl`.
 - **Role-model process replication**: a role model contributes sourced learning conditions and curriculum pressure, not a preloaded personality or worldview.
 - **Local-first ownership**: the owner keeps private data, generated memories, voice assets, local curricula, and installed agent bundles on their own machine.
 - **Safe skill migration**: Hermes/OpenClaw/generic skills can be imported, but they are quarantined and disabled until reviewed.
@@ -35,7 +35,7 @@ This track is inspired by Benjamin Graham's publicly documented learning and val
 2. university-level finance, accounting, economics, and statistics,
 3. graduate securities analysis, value investing, behavioral finance, and quant analysis,
 4. doctoral-level research projects,
-5. exams and reports that shape the talent's reasoning kibo over time.
+5. exams and reports that shape the talent's Reasoning Ledger over time.
 
 Copyrighted textbooks are stored as metadata and reading plans only unless the owner provides a lawful local private copy.
 
@@ -46,7 +46,7 @@ flowchart LR
     Owner["Owner request"] --> Blueprint["Growth blueprint"]
     Blueprint --> Curriculum["Curriculum + simulations"]
     Curriculum --> Assessment["Exams, reports, feedback"]
-    Assessment --> Kibo["Reasoning kibo"]
+    Assessment --> Kibo["Reasoning Ledger"]
     Assessment --> Dossier["Hiring dossier"]
     Kibo --> Memory["Memory substrate"]
     Dossier --> Kit["Paideia Agent kit"]
@@ -70,6 +70,7 @@ data/public/                Public research metadata and source indexes
 data/private/               Private owner data placeholder, ignored by Git
 docs/                       Research notes, architecture, privacy, and release hygiene
 evals/                      Evaluation fixtures
+examples/                   Public onboarding samples such as Graham Junior
 models/                     Local model placeholders, ignored except .gitkeep
 runs/                       Generated reports and runtime artifacts, ignored except .gitkeep
 tests/                      Regression tests
@@ -97,6 +98,15 @@ $env:AI22B_STORAGE_ROOT = "D:\AI22B-storage"
 ```
 
 ## Quick Start
+
+Run the bundled Graham Junior sample through the guided onboarding flow:
+
+```powershell
+ai22b-talent-foundry start-console `
+  --answers examples\graham_junior_onboarding.answers.json
+```
+
+This sample first selects the LLM service and chat surface, then lets that selected LLM act as the curriculum researcher for the Graham-inspired securities research track.
 
 List available role models:
 
@@ -138,7 +148,7 @@ ai22b-talent-foundry doctor-agent-program `
   --program "$env:AI22B_STORAGE_ROOT\paideia-agent-kits\grham_junior_paideia_agent\22b_paideia_agent_program.json"
 ```
 
-Chat through the local education records and reasoning kibo:
+Chat through the local education records and Reasoning Ledger:
 
 ```powershell
 ai22b-talent-foundry run-agent-program-chat `
@@ -193,6 +203,34 @@ A Paideia Agent kit can include:
 
 Generated agent kits are local runtime artifacts. They are not committed to the public source repository by default.
 
+## Onboarding Model
+
+Paideia Agent follows the practical first-run pattern seen in installed agent programs:
+
+1. choose an LLM service,
+2. choose the chat surface,
+3. select a role-model process or use the bundled Graham Junior sample,
+4. let the selected LLM act as a researcher that turns the owner request into curriculum, assessment, and growth inputs,
+5. review the hiring dossier before using the installed agent for work.
+
+Supported initial LLM services include `openai_chatgpt_codex`, `deterministic_local`, `bigram_local`, `transformers_local`, and `llama_cpp_local`. Supported initial chat surfaces include `codex-bridge-chat`, `cli-console`, `dataflow-job`, and a disabled `openclaw-style-gateway` adapter manifest.
+
+## Hiring Dossier
+
+The hiring dossier is the resume-like record for a raised AI talent. It explains who the candidate is, what curriculum it completed, which exams and reports it passed, what its transcript says, which papers/projects were produced, what guardrails apply, and whether it is ready to be hired as a local agent.
+
+Key files:
+
+- `hiring_dossier.json`: structured dossier for tooling and adapters.
+- `HIRING_DOSSIER.ko.md`: human-readable Korean dossier.
+- `assessment_transcript.json`: exam/report scores and feedback.
+- `learning_ledger.json`: verified learning experiences.
+- `reasoning_kibo.jsonl`: internal compatibility file for the Reasoning Ledger.
+
+## Research Basis
+
+Paideia Agent keeps a source-to-design map so users can inspect which papers, reports, and reference programs shaped the product. See [Research Basis](docs/research_basis.md) or [연구 근거와 반영 내용](docs/research_basis.ko.md).
+
 ## Validation
 
 Run the main regression suite:
@@ -232,6 +270,7 @@ Securities-research talents may help organize evidence, compare sources, draft r
 - [Paideia Agent overview](docs/paideia_center.md)
 - [Hermes/OpenClaw benchmark notes](docs/paideia_agent_benchmark.md)
 - [English benchmark summary](docs/paideia_agent_benchmark.en.md)
+- [Research basis](docs/research_basis.md)
 - [Public release hygiene policy](docs/40_public_release_hygiene_ko.md)
 - [Korean README](README.ko.md)
 

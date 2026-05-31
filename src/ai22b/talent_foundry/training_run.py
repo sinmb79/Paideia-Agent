@@ -175,6 +175,11 @@ def materialize_training_blueprint(
     blueprint: dict[str, Any],
     *,
     output_dir: Path,
+    llm_service: str | None = None,
+    llm_engine: str = "deterministic_local",
+    llm_model: str | None = None,
+    llm_model_path: str | None = None,
+    chat_surface: str | None = None,
 ) -> dict[str, Any]:
     if blueprint.get("schema") != "ai-talent-training-blueprint/v1":
         raise ValueError("Unsupported training blueprint schema")
@@ -315,6 +320,11 @@ def materialize_training_blueprint(
         install["installed_manifest"],
         employer=blueprint["owner"],
         role=blueprint["track"]["target_role"],
+        llm_service=llm_service,
+        llm_engine=llm_engine,
+        llm_model=llm_model,
+        llm_model_path=llm_model_path,
+        chat_surface=chat_surface,
     )
 
     artifacts["release_checksum"] = package["checksum"]

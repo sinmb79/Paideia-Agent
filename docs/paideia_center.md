@@ -6,13 +6,13 @@
 
 `Paideia`는 단순한 지식 전달보다 넓은 교육과 형성을 뜻합니다. 이 프로젝트는 특정 답변 스타일을 주입하는 챗봇이 아니라, 성장 단계, 교과 과정, 시험, 실패, 사회성, 도구 사용, 안전 경계, 업무 경험을 누적해 AI 인재를 길러내는 것을 목표로 합니다.
 
-따라서 추론기보는 Paideia의 핵심 산출물 중 하나이지, 전체 프로그램 그 자체는 아닙니다.
+따라서 추론기록, 즉 **Reasoning Ledger(Ariadne Thread)** 는 Paideia의 핵심 산출물 중 하나이지, 전체 프로그램 그 자체는 아닙니다.
 
 ## 구성
 
 - `Paideia Agent`: AI 교육센터/육성 프로그램.
 - `AI talent`: Paideia에서 길러지는 개별 AI 인재. 예: sample talent, grham-쥬니어.
-- `Ariadne Thread`: 기억과 경험의 미로에서 길을 찾는 추론기보.
+- `Reasoning Ledger / Ariadne Thread`: 기억과 경험의 미로에서 길을 찾는 검토 가능한 추론 기록. 내부 호환 파일명은 `reasoning_kibo.jsonl`입니다.
 - `Memory substrate`: 학습 데이터, 경험, 절차, 대화 발달을 담는 기억 기판.
 - `Codex bridge`: 로컬 파일, 도구 실행, 검증, 성장 기록 승격을 담당하는 실행 관문.
 - `Connected LLM`: 언어 생성과 고차원 추론을 수행하는 엔진. 정체성 자체가 아니다.
@@ -22,7 +22,7 @@
 Paideia는 추론만 육성하지 않습니다. 다음 축을 각각 프로그램화하고 평가/승격할 수 있어야 합니다.
 
 1. 언어와 대화법: 인사, 잡담, 질문 의도 파악, 정정 수용, 말투.
-2. 추론기보: 문제 정의, 근거, 반례, 보류 조건, 실패 회복.
+2. Reasoning Ledger: 문제 정의, 근거, 반례, 보류 조건, 실패 회복.
 3. 직업군 전문성: 교과, 실습, 시험, 보고서, 자격/학위형 기록.
 4. 사회성: 갈등, 사과, 화해, 협업, 부모/보스 피드백 수용.
 5. 도구 사용: Codex, 로컬 파일, 브라우징, 워크스페이스 작업, 데이터플로우.
@@ -50,7 +50,7 @@ previous checkpoint
 ```text
 local education records
 + learning ledger
-+ reasoning kibo
++ Reasoning Ledger
 + memory substrate
 + recent chat/work logs
 -> Codex bridge

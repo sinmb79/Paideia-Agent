@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from ai22b.config import PROJECT_ROOT
+from ai22b.talent_foundry.onboarding_choices import CHAT_SURFACE_CATALOG, LLM_SERVICE_CATALOG
 
 
 PUBLIC_PROGRAM_MANIFEST_SCHEMA = "ai-talent-foundry-public-program-manifest/v1"
@@ -105,7 +106,7 @@ def _commands() -> list[dict[str, str]]:
         "build-paideia-agent-kit": "Build an installable Paideia Agent kit with onboarding, doctor, and adapter manifests.",
         "doctor-agent-program": "Doctor a Paideia Agent program before first run.",
         "migrate-agent-assets": "Import Hermes/OpenClaw/generic skills into a Paideia Agent kit as quarantined wrappers.",
-        "run-agent-program-chat": "Chat through the Paideia Agent education center/runtime using local growth records and reasoning kibo.",
+        "run-agent-program-chat": "Chat through the Paideia Agent education center/runtime using local growth records and the Reasoning Ledger.",
         "run-hired-agent-job": "Run a hired talent from a job spec with deliverables and acceptance checks.",
         "run-hired-dataflow-job": "Run the hired talent through the local Agent Dataflow Runtime.",
         "run-hired-agent-job-cycle": "Run a job, attach a quality label, promote verified learning, and refresh active memory.",
@@ -210,6 +211,16 @@ def build_public_program_manifest(run_dir: Path, *, output_path: Path | None = N
         },
         "guided_console": {
             "entrypoint": "ai22b-talent-foundry start-console",
+            "onboarding_order": [
+                "choose_llm_service",
+                "choose_chat_surface",
+                "capture_owner_request",
+                "select_role_model",
+                "raise_and_review_hiring_dossier",
+            ],
+            "llm_service_catalog": LLM_SERVICE_CATALOG,
+            "chat_surface_catalog": CHAT_SURFACE_CATALOG,
+            "bundled_sample_answers": "examples/graham_junior_onboarding.answers.json",
             "post_hire_modes": ["single", "projection_swarm", "specialist_team"],
             "answers_file_supported": True,
             "interactive_prompt_supported": True,

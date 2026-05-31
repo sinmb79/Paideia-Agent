@@ -23,7 +23,7 @@ Hermes presents itself as a self-improving agent with a built-in learning loop. 
 
 Paideia adapts this as:
 
-- `reasoning_kibo.jsonl` for reviewable learning evolution,
+- Reasoning Ledger / Ariadne Thread for reviewable learning evolution (`reasoning_kibo.jsonl` remains the internal compatibility filename),
 - `learning_ledger.json` for quality-gated experience promotion,
 - `memory_substrate.json` for bounded recall,
 - adapter manifests for future external runtimes,

@@ -1032,7 +1032,13 @@ def _invoke_live_chat_llm(
             "reason": "live_chat_requires_openai_chatgpt_codex_engine",
             "identity_policy": runtime_config.get("identity_policy"),
         }
-    selected_model = model or os.environ.get("AI22B_OPENAI_MODEL") or os.environ.get("OPENAI_MODEL") or DEFAULT_OPENAI_CHAT_MODEL
+    selected_model = (
+        model
+        or runtime_config.get("model")
+        or os.environ.get("AI22B_OPENAI_MODEL")
+        or os.environ.get("OPENAI_MODEL")
+        or DEFAULT_OPENAI_CHAT_MODEL
+    )
     return _call_openai_responses_chat(chat_context=chat_context, model=selected_model)
 
 

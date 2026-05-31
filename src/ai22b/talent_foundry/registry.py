@@ -15,6 +15,7 @@ from ai22b.talent_foundry.learning_loop import (
     route_active_memory,
 )
 from ai22b.talent_foundry.llm_runtime import build_llm_runtime_config, invoke_llm_application_engine
+from ai22b.talent_foundry.onboarding_choices import resolve_chat_surface, resolve_llm_service
 from ai22b.talent_foundry.team import DEFAULT_TEAM_ROLES
 from ai22b.talent_foundry.workspace_agent import run_workspace_agent_from_manifest, run_workspace_agent_job_from_manifest
 
@@ -47,9 +48,10 @@ def _employment_id(
     role: str,
     source_sha256: str,
     llm_engine: str,
+    llm_model: str | None,
     llm_model_path: str | None,
 ) -> str:
-    raw = f"{install_id}|{employer}|{role}|{source_sha256}|{llm_engine}|{llm_model_path or ''}".encode("utf-8")
+    raw = f"{install_id}|{employer}|{role}|{source_sha256}|{llm_engine}|{llm_model or ''}|{llm_model_path or ''}".encode("utf-8")
     return hashlib.sha256(raw).hexdigest()[:16]
 
 
@@ -74,8 +76,11 @@ def hire_installed_agent(
     *,
     employer: str,
     role: str,
+    llm_service: str | None = None,
     llm_engine: str = "deterministic_local",
+    llm_model: str | None = None,
     llm_model_path: str | None = None,
+    chat_surface: str | None = None,
     record_name: str = "employment_record.json",
 ) -> dict[str, Path]:
     installed_manifest = _read_json(installed_manifest_path)
@@ -88,13 +93,21 @@ def hire_installed_agent(
     agent_manifest_path = target_root / installed_manifest["entrypoints"]["agent_manifest"]
     agent_manifest = _read_json(agent_manifest_path)
     agent = agent_manifest["agent"]
+    selected_llm_service = resolve_llm_service(
+        llm_service=llm_service,
+        llm_engine=llm_engine,
+        llm_model=llm_model,
+        llm_model_path=llm_model_path,
+    )
+    selected_chat_surface = resolve_chat_surface(chat_surface)
     employment_id = _employment_id(
         install_id=installed_manifest["install_id"],
         employer=employer,
         role=role,
         source_sha256=installed_manifest["source_sha256"],
-        llm_engine=llm_engine,
-        llm_model_path=llm_model_path,
+        llm_engine=selected_llm_service["engine"],
+        llm_model=selected_llm_service.get("selected_model"),
+        llm_model_path=selected_llm_service.get("selected_model_path"),
     )
     hired_at = datetime.now(timezone.utc).isoformat()
     employment_record = {
@@ -143,7 +156,14 @@ def hire_installed_agent(
             "goal_cycle_log": "employment_goal_cycle_log.jsonl",
         },
         "guardrails": agent_manifest.get("tool_policy", {}).get("blocked_tools", []),
-        "llm_runtime": build_llm_runtime_config(engine=llm_engine, model_path=llm_model_path),
+        "llm_service": selected_llm_service,
+        "chat_surface": selected_chat_surface,
+        "llm_runtime": build_llm_runtime_config(
+            engine=selected_llm_service["engine"],
+            model_path=selected_llm_service.get("selected_model_path"),
+            model=selected_llm_service.get("selected_model"),
+            service=selected_llm_service["service_id"],
+        ),
         "growth_after_hire": {
             "continues": True,
             "principle": "고용은 종료가 아니라 업무 경험을 통한 계속 성장의 시작이다.",
