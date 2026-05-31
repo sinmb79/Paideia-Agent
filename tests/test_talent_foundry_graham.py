@@ -498,6 +498,78 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertTrue(arcee_ready["results"][0]["ready_for_live_llm"])
         self.assertEqual(arcee_ready["results"][0]["checks"][0]["id"], "env:OPENCLAW_LIVE_ARCEE_KEY")
 
+    def test_openclaw_runtime_bundle_exports_config_patch_env_template_and_doctors(self) -> None:
+        from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
+        from ai22b.talent_foundry.cli import main as cli_main
+        from ai22b.talent_foundry.openclaw_runtime_bundle import build_openclaw_runtime_bundle
+        from ai22b.talent_foundry.registry import hire_installed_agent
+        from ai22b.talent_foundry.training_run import materialize_training_blueprint
+
+        blueprint = create_agent_training_blueprint(
+            owner="Boss",
+            request="Prepare an OpenClaw-style runtime bundle for a hired Paideia talent.",
+            talent_name="runtime-junior",
+            gender="male",
+            domain="securities_research",
+            role_model_id="graham_value_investing",
+            agent_surface="openclaw-channel-bluebubbles",
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            run = materialize_training_blueprint(blueprint, output_dir=Path(tmp) / "runtime_junior")
+            artifacts = {key: Path(value) for key, value in run["artifacts"].items()}
+            hiring = hire_installed_agent(
+                artifacts["installed_agent_manifest"],
+                employer="Boss",
+                role="OpenClaw runtime setup test agent",
+                llm_service="arcee/trinity-large-thinking",
+                chat_surface="openclaw-channel-bluebubbles",
+                record_name="employment_record_runtime.json",
+            )
+            output_dir = Path(tmp) / "runtime_bundle"
+            bundle = build_openclaw_runtime_bundle(
+                hiring["employment_record"],
+                channels=["bluebubbles", "webchat"],
+                output_dir=output_dir,
+                port=9123,
+            )
+            manifest_path = Path(bundle["artifacts"]["manifest"])
+            manifest_exists = manifest_path.exists()
+            config_patch = json.loads(Path(bundle["artifacts"]["openclaw_config_patch"]).read_text(encoding="utf-8"))
+            env_template = Path(bundle["artifacts"]["openclaw_env_template"]).read_text(encoding="utf-8")
+            provider_doctor = json.loads(Path(bundle["artifacts"]["provider_doctor"]).read_text(encoding="utf-8"))
+            channel_doctor = json.loads(Path(bundle["artifacts"]["channel_doctor"]).read_text(encoding="utf-8"))
+            cli_output_dir = Path(tmp) / "runtime_bundle_cli"
+            cli_result = cli_main(
+                [
+                    "build-openclaw-runtime-bundle",
+                    "--employment-record",
+                    str(hiring["employment_record"]),
+                    "--channel",
+                    "webchat",
+                    "--output-dir",
+                    str(cli_output_dir),
+                ]
+            )
+            cli_manifest_exists = (cli_output_dir / "openclaw_runtime_bundle.json").exists()
+
+        self.assertEqual(bundle["schema"], "ai22b-openclaw-runtime-bundle/v1")
+        self.assertTrue(manifest_exists)
+        self.assertEqual(config_patch["schema"], "ai22b-openclaw-config-patch/v1")
+        self.assertEqual(bundle["selection"]["provider_id"], "arcee")
+        self.assertEqual(bundle["selection"]["model"], "arcee/trinity-large-thinking")
+        self.assertEqual(bundle["selection"]["channels"], ["bluebubbles", "webchat"])
+        self.assertEqual(config_patch["openclaw_json_patch"]["models"]["arcee"]["model"], "arcee/trinity-large-thinking")
+        self.assertIn("bluebubbles", config_patch["openclaw_json_patch"]["channels"])
+        self.assertIn("OPENCLAW_LIVE_ARCEE_KEY", env_template)
+        self.assertIn("BLUEBUBBLES_SERVER_URL", env_template)
+        self.assertNotIn("test-arcee-key", env_template)
+        self.assertFalse(provider_doctor["secret_values_stored"])
+        self.assertFalse(channel_doctor["secret_values_stored"])
+        self.assertIn("run-openclaw-channel-gateway-server", bundle["next_commands"]["run_channel_gateway"])
+        self.assertEqual(cli_result, 0)
+        self.assertTrue(cli_manifest_exists)
+
     def test_openclaw_channel_gateway_routes_message_to_paideia_chat(self) -> None:
         from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
         from ai22b.talent_foundry.channel_gateway import (

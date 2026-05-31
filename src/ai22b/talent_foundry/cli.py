@@ -60,6 +60,7 @@ from ai22b.talent_foundry.onboarding_choices import (
     resolve_llm_service,
 )
 from ai22b.talent_foundry.openclaw_compat import openclaw_channel_manifest, openclaw_provider_manifest
+from ai22b.talent_foundry.openclaw_runtime_bundle import build_openclaw_runtime_bundle
 from ai22b.talent_foundry.program import create_talent_plan
 from ai22b.talent_foundry.program_manifest import build_public_program_manifest
 from ai22b.talent_foundry.provider_connectors import (
@@ -157,6 +158,16 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     doctor_channel_connectors.add_argument("--channel", action="append", default=[])
     doctor_channel_connectors.add_argument("--output", required=True)
+
+    build_runtime_bundle = subparsers.add_parser(
+        "build-openclaw-runtime-bundle",
+        help="Build an OpenClaw-style runtime setup bundle from a hired Paideia employment record.",
+    )
+    build_runtime_bundle.add_argument("--employment-record", required=True)
+    build_runtime_bundle.add_argument("--channel", action="append", default=[])
+    build_runtime_bundle.add_argument("--bind-host", default="127.0.0.1")
+    build_runtime_bundle.add_argument("--port", type=int, default=8722)
+    build_runtime_bundle.add_argument("--output-dir", required=True)
 
     build_gateway_config = subparsers.add_parser(
         "build-openclaw-gateway-config",
@@ -752,6 +763,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             output_path=Path(args.output),
         )
         print(str(Path(args.output)))
+        return 0
+
+    if args.command == "build-openclaw-runtime-bundle":
+        bundle = build_openclaw_runtime_bundle(
+            Path(args.employment_record),
+            channels=args.channel or None,
+            bind_host=args.bind_host,
+            port=args.port,
+            output_dir=Path(args.output_dir),
+        )
+        print(str(Path(bundle["artifacts"]["manifest"])))
         return 0
 
     if args.command == "build-openclaw-gateway-config":

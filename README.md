@@ -313,6 +313,23 @@ The provider catalog follows OpenClaw's canonical `provider/model` IDs where pos
 
 For OpenClaw-style key resolution, Paideia checks `OPENCLAW_LIVE_<PROVIDER>_KEY`, `<PROVIDER>_API_KEYS`, `<PROVIDER>_API_KEY`, and provider-specific env vars such as `ARCEEAI_API_KEY`, `VOLCANO_ENGINE_API_KEY`, `DASHSCOPE_API_KEY`, or `XIAOMI_TOKEN_PLAN_API_KEY`. Comma or semicolon key lists use the first non-empty key for live smoke tests.
 
+After an agent is hired, build a reviewable OpenClaw-style runtime setup bundle. This is the practical handoff point between Paideia's education records and OpenClaw-like execution:
+
+```powershell
+ai22b-talent-foundry build-openclaw-runtime-bundle `
+  --employment-record "<employment_record.json>" `
+  --channel webchat `
+  --channel telegram `
+  --output-dir "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_runtime_bundle"
+```
+
+The bundle writes:
+
+- `openclaw_config_patch.json`: a review-first `openclaw.json` patch with the selected `provider/model`, agent identity boundary, gateway URL, and enabled channels.
+- `openclaw.env.example.ps1`: a local PowerShell environment template. It lists secret variable names but never writes secret values.
+- `openclaw_provider_doctor.json`, `openclaw_channel_doctor.json`, and `llm_service_health.json`: readiness checks for model auth, channel bridge requirements, and local/remote runtime status.
+- `openclaw_gateway_config.json` and `openclaw_channel_access_config.json`: loopback gateway and deny-by-default channel access setup.
+
 OpenClaw-style channels can now be routed through a local Paideia gateway envelope. The core returns a sendable outbound envelope; actual platform plugins remain responsible for bot tokens, pairing, and final delivery.
 
 ```powershell
@@ -503,6 +520,7 @@ Securities-research talents may help organize evidence, compare sources, draft r
 - [English benchmark summary](docs/paideia_agent_benchmark.en.md)
 - [Research basis](docs/research_basis.md)
 - [OpenClaw-style onboarding](docs/openclaw_style_onboarding.ko.md)
+- [OpenClaw-style runtime bundle](docs/openclaw_runtime_bundle.ko.md)
 - [Tesla-style dataflow board benchmark](docs/tesla_board_benchmark.md)
 - [Legacy 22B-AI system integration](docs/legacy_system_integration.md)
 - [Public release hygiene policy](docs/40_public_release_hygiene_ko.md)
