@@ -72,6 +72,7 @@ from ai22b.talent_foundry.registry import (
 from ai22b.talent_foundry.runtime import run_work_session
 from ai22b.talent_foundry.team import run_clone_team_session
 from ai22b.talent_foundry.training_run import materialize_training_blueprint
+from ai22b.talent_foundry.webchat_server import run_openclaw_webchat_server
 from ai22b.talent_foundry.workspace_agent import run_workspace_agent_from_manifest
 
 
@@ -136,6 +137,19 @@ def _build_parser() -> argparse.ArgumentParser:
     run_channel_message.add_argument("--live-llm", action="store_true")
     run_channel_message.add_argument("--llm-model")
     run_channel_message.add_argument("--learn-from-chat", action="store_true")
+
+    run_webchat_server = subparsers.add_parser(
+        "run-openclaw-webchat-server",
+        help="Start a local OpenClaw-style WebChat server for a hired Paideia agent.",
+    )
+    run_webchat_server.add_argument("--employment-record", required=True)
+    run_webchat_server.add_argument("--bind-host", default="127.0.0.1")
+    run_webchat_server.add_argument("--port", type=int, default=8722)
+    run_webchat_server.add_argument("--output-dir")
+    run_webchat_server.add_argument("--llm-mode", choices=["offline", "auto", "live"], default="offline")
+    run_webchat_server.add_argument("--live-llm", action="store_true")
+    run_webchat_server.add_argument("--llm-model")
+    run_webchat_server.add_argument("--learn-from-chat", action="store_true")
 
     create = subparsers.add_parser("create", help="Create an AI talent plan and hiring packet.")
     create.add_argument("--name", default="신용")
@@ -629,6 +643,19 @@ def main(argv: Sequence[str] | None = None) -> int:
             learn_from_chat=args.learn_from_chat,
         )
         print(str(Path(args.output)))
+        return 0
+
+    if args.command == "run-openclaw-webchat-server":
+        llm_mode = "live" if args.live_llm else args.llm_mode
+        run_openclaw_webchat_server(
+            Path(args.employment_record),
+            bind_host=args.bind_host,
+            port=args.port,
+            output_dir=Path(args.output_dir) if args.output_dir else None,
+            llm_mode=llm_mode,
+            llm_model=args.llm_model,
+            learn_from_chat=args.learn_from_chat,
+        )
         return 0
 
     if args.command == "create":

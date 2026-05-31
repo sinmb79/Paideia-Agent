@@ -320,6 +320,17 @@ ai22b-talent-foundry run-openclaw-channel-message `
   --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\telegram_channel_run.json"
 ```
 
+For a browser chat test without any external channel token, start the local WebChat loopback server and open the printed URL:
+
+```powershell
+ai22b-talent-foundry run-openclaw-webchat-server `
+  --employment-record "<employment_record.json>" `
+  --port 8722 `
+  --output-dir "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\webchat"
+```
+
+The server binds to `127.0.0.1` by default. Each message is translated into the same OpenClaw-style channel envelope, routed through the installed Paideia talent, and saved as a local `webchat_*.json` run.
+
 Every onboarding run now writes `llm_service_health.json`. This file records whether the chosen provider is ready for bridge mode, needs an API key, needs a local model path, or is only a manifest until the local server is running. It never stores secret values and does not perform a network probe.
 
 You can run the same check directly:

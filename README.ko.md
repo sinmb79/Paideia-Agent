@@ -94,6 +94,16 @@ ai22b-talent-foundry onboard
 
 이 wizard는 기존 설정 감지, QuickStart/Advanced, Model/Auth, Workspace, Gateway/Channels, Skills, Education Path, Runtime, Agent Identity, Health Check, Finish 순서로 진행합니다.
 
+고용된 에이전트를 브라우저 채팅으로 바로 테스트하려면 로컬 WebChat 서버를 실행합니다.
+
+```powershell
+ai22b-talent-foundry run-openclaw-webchat-server `
+  --employment-record "<employment_record.json>" `
+  --port 8722
+```
+
+기본 바인딩은 `127.0.0.1`이며, 메시지는 OpenClaw식 `webchat` 채널 envelope를 거쳐 Paideia 인재의 로컬 기억/추론 자료를 읽고 답합니다.
+
 Hopper Junior 예시:
 
 ```powershell

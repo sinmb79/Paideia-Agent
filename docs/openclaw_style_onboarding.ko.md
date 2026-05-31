@@ -74,6 +74,17 @@ ai22b-talent-foundry run-openclaw-channel-message `
   --output telegram_channel_run.json
 ```
 
+외부 채널 토큰 없이 브라우저에서 바로 대화하려면 로컬 WebChat 서버를 실행합니다.
+
+```powershell
+ai22b-talent-foundry run-openclaw-webchat-server `
+  --employment-record "<employment_record.json>" `
+  --port 8722 `
+  --output-dir webchat_runs
+```
+
+기본값은 `127.0.0.1` 바인딩이므로 로컬 PC 안에서만 열립니다. WebChat 입력은 `webchat` 채널 envelope로 변환된 뒤 Paideia 인재의 memory substrate와 Reasoning Ledger를 거쳐 답변되고, 각 대화는 `webchat_*.json`으로 저장됩니다.
+
 ## 산출물
 
 - `console_session.json`: 전체 온보딩 세션과 health 요약

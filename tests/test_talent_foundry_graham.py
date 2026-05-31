@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import json
 import tempfile
+import threading
 import unittest
 from pathlib import Path
+from urllib.request import Request, urlopen
 
 
 class GrahamTalentFoundryTests(unittest.TestCase):
@@ -380,6 +382,75 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertFalse(channel_run["security"]["external_send_performed_by_core"])
         self.assertTrue(chat_turn_exists)
         self.assertGreater(len(channel_run["outbound"]["text"]), 5)
+
+    def test_openclaw_webchat_server_routes_browser_message_locally(self) -> None:
+        from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
+        from ai22b.talent_foundry.registry import hire_installed_agent
+        from ai22b.talent_foundry.training_run import materialize_training_blueprint
+        from ai22b.talent_foundry.webchat_server import make_openclaw_webchat_server
+
+        blueprint = create_agent_training_blueprint(
+            owner="Boss",
+            request="Route a local WebChat message through the Paideia OpenClaw gateway.",
+            talent_name="webchat-junior",
+            gender="male",
+            domain="securities_research",
+            role_model_id="graham_value_investing",
+            agent_surface="openclaw-channel-webchat",
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            run = materialize_training_blueprint(blueprint, output_dir=Path(tmp) / "webchat_junior")
+            artifacts = {key: Path(value) for key, value in run["artifacts"].items()}
+            hiring = hire_installed_agent(
+                artifacts["installed_agent_manifest"],
+                employer="Boss",
+                role="Local WebChat test agent",
+                chat_surface="openclaw-channel-webchat",
+                record_name="employment_record_webchat.json",
+            )
+            output_dir = Path(tmp) / "webchat_runs"
+            server = make_openclaw_webchat_server(
+                hiring["employment_record"],
+                port=0,
+                output_dir=output_dir,
+            )
+            host, port = server.server_address
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                with urlopen(f"http://{host}:{port}/health", timeout=10) as response:
+                    health = json.loads(response.read().decode("utf-8"))
+                body = json.dumps(
+                    {
+                        "message": "Can you answer through local WebChat?",
+                        "conversation_id": "webchat-test",
+                        "sender_id": "boss-browser",
+                    }
+                ).encode("utf-8")
+                request = Request(
+                    f"http://{host}:{port}/api/message",
+                    data=body,
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                with urlopen(request, timeout=10) as response:
+                    webchat = json.loads(response.read().decode("utf-8"))
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=2)
+
+            channel_run_exists = Path(webchat["channel_run_path"]).exists()
+
+        self.assertEqual(health["schema"], "ai22b-openclaw-webchat-server/v1")
+        self.assertEqual(health["channel_id"], "webchat")
+        self.assertEqual(webchat["schema"], "ai22b-openclaw-webchat-response/v1")
+        self.assertEqual(webchat["status"], "reply_ready")
+        self.assertEqual(webchat["channel_run"]["outbound"]["channel_id"], "webchat")
+        self.assertFalse(webchat["security"]["external_send_performed_by_core"])
+        self.assertTrue(channel_run_exists)
+        self.assertGreater(len(webchat["reply_text"]), 5)
 
     def test_owner_self_extension_blueprint_uses_private_local_track_without_role_model(self) -> None:
         from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
