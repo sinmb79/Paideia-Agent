@@ -7,7 +7,7 @@ This document maps reference programs, papers, and reports to concrete Paideia A
 | Source | What It Shows | Reflected In Paideia Agent |
 | --- | --- | --- |
 | OpenClaw onboarding wizard | First-run setup should choose provider/model, gateway mode, chat/channel path, skills, and next steps. | `start-console` now asks for LLM service and chat surface before the owner request. `paideia_onboarding.template.json` records the selected service, selected surface, catalogs, and first-run flow. |
-| OpenClaw model provider docs | Agent programs need explicit provider/model selection and fallback semantics. | `llm_service_catalog` separates OpenAI/Codex, deterministic local, bigram, Transformers, and llama.cpp/GGUF paths. |
+| OpenClaw model provider docs | Agent programs need explicit provider/model selection and fallback semantics. | `llm_service_catalog` separates OpenAI/Codex, Claude, Gemini, Mistral, OpenRouter, Ollama, LM Studio, deterministic local, bigram, Transformers, and llama.cpp/GGUF paths. |
 | OpenClaw agent runtime docs | OpenAI/Codex can be a runtime surface without making the model provider equal to the agent identity. | Paideia records `llm_identity_policy: application_engine_not_identity` and stores talent identity in local education artifacts. |
 | Hermes Agent repository | Modern agents expose setup, model switching, CLI chat, tools, skills, memory, gateways, and migration. | Paideia adds install kits, doctor checks, skill migration wrappers, adapter manifests, and the `Reasoning Ledger` as a growth record. |
 | OpenHands | Workspace agents should leave inspectable files, plans, traces, and runnable evidence. | Hired-agent workspace/dataflow runs write local plans, results, traces, and learning promotion records. |
@@ -48,7 +48,10 @@ Detailed note: [Tesla-style dataflow board benchmark](tesla_board_benchmark.md).
 ## Product Decisions From These Sources
 
 - Onboarding is now explicit: choose LLM service, choose chat surface, choose role model, then raise and review the talent.
+- Role models are now a selectable public-metadata catalog for common agent roles such as software engineering, data/BI, support quality, cybersecurity, marketing, healthcare operations, education, management, legal/compliance, blockchain, and information systems.
+- New role-model curricula use `role_model_foundation_core` plus university, graduate, doctoral, and assessment-ladder stages so non-Graham talents also produce transcripts, dossiers, and Reasoning Ledger entries.
 - The bundled first test path is `examples/graham_junior_onboarding.answers.json`.
+- Additional public onboarding samples live in `examples/role_model_onboarding_samples.json`.
 - `Reasoning kibo` remains an internal file name for compatibility, but the public term is **Reasoning Ledger / Ariadne Thread**.
 - The LLM is a researcher and dialogue engine; the trained talent identity comes from local records.
 - The hiring dossier is a first-class product artifact, not an afterthought.
@@ -66,6 +69,18 @@ Detailed note: [Tesla-style dataflow board benchmark](tesla_board_benchmark.md).
 - OpenClaw agent runtimes: https://docs.openclaw.ai/concepts/agent-runtimes
 - Hermes Agent repository: https://github.com/NousResearch/hermes-agent
 - OpenHands overview: https://docs.openhands.dev/overview/introduction
+- Grace Hopper public biography: https://president.yale.edu/biography-grace-murray-hopper
+- Edsger Dijkstra pioneer profile: https://history.computer.org/pioneers/dijkstra.html
+- John Tukey public biography: https://www.britannica.com/biography/John-Wilder-Tukey
+- W. Edwards Deming public biography: https://deming.org/deming/deming-the-man/
+- Ross Anderson public page: https://www.cl.cam.ac.uk/~rja14/
+- David Ogilvy public biography: https://www.ogilvy.com/about/david-ogilvy
+- Florence Nightingale public biography: https://www.florence-nightingale.co.uk/florence-nightingale/biography/
+- Maria Montessori public biography: https://montessori-ami.org/resource-library/facts/biography-maria-montessori
+- Peter Drucker public biography: https://www.drucker.institute/about-peter-drucker/
+- Ruth Bader Ginsburg public biography: https://www.supremecourt.gov/about/biographies.aspx
+- Hal Finney public writings index: https://nakamotoinstitute.org/hal-finney/
+- Claude Shannon public profile: https://www.itsoc.org/about/shannon
 - Reflexion: https://arxiv.org/abs/2303.11366
 - Generative Agents: https://arxiv.org/abs/2304.03442
 - CoALA: https://arxiv.org/abs/2309.02427

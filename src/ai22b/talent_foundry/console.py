@@ -6,8 +6,13 @@ from pathlib import Path
 from typing import Any, Callable
 
 from ai22b.talent_foundry.onboarding import run_agent_onboarding
-from ai22b.talent_foundry.onboarding_choices import DEFAULT_CHAT_SURFACE_ID, DEFAULT_LLM_SERVICE_ID
-from ai22b.talent_foundry.role_models import DEFAULT_PRIVATE_CURRICULUM_DIR
+from ai22b.talent_foundry.onboarding_choices import (
+    CHAT_SURFACE_CATALOG,
+    DEFAULT_CHAT_SURFACE_ID,
+    DEFAULT_LLM_SERVICE_ID,
+    LLM_SERVICE_CATALOG,
+)
+from ai22b.talent_foundry.role_models import list_role_models, summarize_role_model
 from ai22b.talent_foundry.registry import (
     assemble_hired_agent_team,
     assemble_hired_projection_swarm,
@@ -77,7 +82,7 @@ CONSOLE_QUESTIONS = [
         "id": "private_curriculum_dir",
         "label": "비공개 교재 폴더",
         "prompt": "보스가 제공할 비공개 교재 폴더는 어디로 둘까요?",
-        "default": str(DEFAULT_PRIVATE_CURRICULUM_DIR),
+        "default": "",
     },
     {
         "id": "agent_surface",
@@ -151,6 +156,49 @@ def _write_json(path: Path, data: dict[str, Any]) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def _role_model_summaries() -> list[dict[str, Any]]:
+    return [summarize_role_model(model) for model in list_role_models()]
+
+
+def _domain_choices() -> list[str]:
+    return sorted({str(model.get("domain")) for model in _role_model_summaries() if model.get("domain")})
+
+
+def _question_choices(question_id: str) -> list[dict[str, str]]:
+    if question_id == "llm_service":
+        return [{"id": item["id"], "label": item.get("label", item["id"])} for item in LLM_SERVICE_CATALOG]
+    if question_id == "chat_surface":
+        return [{"id": item["id"], "label": item.get("label", item["id"])} for item in CHAT_SURFACE_CATALOG]
+    if question_id == "domain":
+        return [{"id": domain, "label": domain} for domain in _domain_choices()]
+    if question_id == "role_model_id":
+        return [
+            {
+                "id": str(item["role_model_id"]),
+                "label": str(item.get("display_name") or item["role_model_id"]),
+            }
+            for item in _role_model_summaries()
+        ]
+    if question_id == "post_hire_mode":
+        return [
+            {"id": "single", "label": "Single hired agent"},
+            {"id": "projection_swarm", "label": "Parent-controlled projection swarm"},
+            {"id": "specialist_team", "label": "Separately hired specialist team"},
+        ]
+    return []
+
+
+def questions_with_choices() -> list[dict[str, Any]]:
+    questions = []
+    for question in CONSOLE_QUESTIONS:
+        item = dict(question)
+        choices = _question_choices(question["id"])
+        if choices:
+            item["choices"] = choices
+        questions.append(item)
+    return questions
+
+
 def _normalized_answers(answers: dict[str, Any]) -> dict[str, str]:
     normalized: dict[str, str] = {}
     for question in CONSOLE_QUESTIONS:
@@ -168,10 +216,16 @@ def _normalized_answers(answers: dict[str, Any]) -> dict[str, str]:
 
 def collect_console_answers(input_func: Callable[[str], str] = input) -> dict[str, str]:
     answers: dict[str, str] = {}
-    for question in CONSOLE_QUESTIONS:
+    for question in questions_with_choices():
         default = question.get("default")
         suffix = f" [{default}]" if default else ""
-        raw = input_func(f"{question['prompt']}{suffix}: ")
+        choices = question.get("choices", [])
+        choice_hint = ""
+        if choices:
+            choice_hint = "\n선택 가능: " + ", ".join(
+                f"{item['id']} ({item.get('label', item['id'])})" for item in choices
+            )
+        raw = input_func(f"{question['prompt']}{choice_hint}{suffix}: ")
         answers[question["id"]] = raw if raw.strip() else str(default or "")
     return _normalized_answers(answers)
 
@@ -307,7 +361,10 @@ def run_console_session(
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "mode": mode,
         "status": status,
-        "questions": CONSOLE_QUESTIONS,
+        "questions": questions_with_choices(),
+        "llm_service_catalog": LLM_SERVICE_CATALOG,
+        "chat_surface_catalog": CHAT_SURFACE_CATALOG,
+        "role_model_catalog": _role_model_summaries(),
         "answers": normalized,
         "onboarding_summary": {
             "schema": onboarding["schema"],

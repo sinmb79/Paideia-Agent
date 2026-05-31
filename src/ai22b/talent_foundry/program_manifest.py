@@ -7,6 +7,7 @@ from typing import Any
 
 from ai22b.config import PROJECT_ROOT
 from ai22b.talent_foundry.onboarding_choices import CHAT_SURFACE_CATALOG, LLM_SERVICE_CATALOG
+from ai22b.talent_foundry.role_models import list_role_models, summarize_role_model
 
 
 PUBLIC_PROGRAM_MANIFEST_SCHEMA = "ai-talent-foundry-public-program-manifest/v1"
@@ -220,6 +221,7 @@ def build_public_program_manifest(run_dir: Path, *, output_path: Path | None = N
             ],
             "llm_service_catalog": LLM_SERVICE_CATALOG,
             "chat_surface_catalog": CHAT_SURFACE_CATALOG,
+            "role_model_catalog": [summarize_role_model(item) for item in list_role_models()],
             "bundled_sample_answers": "examples/graham_junior_onboarding.answers.json",
             "post_hire_modes": ["single", "projection_swarm", "specialist_team"],
             "answers_file_supported": True,

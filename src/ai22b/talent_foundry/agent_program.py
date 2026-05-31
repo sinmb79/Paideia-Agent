@@ -14,6 +14,7 @@ from ai22b.talent_foundry.onboarding_choices import (
     resolve_chat_surface,
     resolve_llm_service,
 )
+from ai22b.talent_foundry.role_models import list_role_models, summarize_role_model
 
 
 AGENT_PROGRAM_SCHEMA = "ai22b-paideia-agent-program/v1"
@@ -148,6 +149,7 @@ def _onboarding_template(
         ],
         "llm_service_catalog": LLM_SERVICE_CATALOG,
         "chat_surface_catalog": CHAT_SURFACE_CATALOG,
+        "role_model_catalog": [summarize_role_model(item) for item in list_role_models()],
         "selected_llm_service": selected_llm_service or resolve_llm_service(),
         "selected_chat_surface": selected_chat_surface or resolve_chat_surface(DEFAULT_CHAT_SURFACE_ID),
         "first_run": {
@@ -467,6 +469,7 @@ def build_agent_program(
             ],
             "llm_service_catalog": LLM_SERVICE_CATALOG,
             "chat_surface_catalog": CHAT_SURFACE_CATALOG,
+            "role_model_catalog": [summarize_role_model(item) for item in list_role_models()],
             "selected_llm_service": employment.get("llm_service") or resolve_llm_service(
                 llm_engine=employment.get("llm_runtime", {}).get("engine"),
                 llm_model=employment.get("llm_runtime", {}).get("model"),

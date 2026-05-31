@@ -93,7 +93,8 @@ def create_talent_plan(
         "디지털 리터러시",
     ]
     university_courses = (
-        _courses_from_stage(curriculum_manifest, "graham_columbia_liberal_core")
+        _courses_from_stage(curriculum_manifest, "role_model_foundation_core")
+        + _courses_from_stage(curriculum_manifest, "graham_columbia_liberal_core")
         + _courses_from_stage(curriculum_manifest, "university_core")
         if role_model_enabled
         else []

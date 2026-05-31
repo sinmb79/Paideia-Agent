@@ -139,6 +139,31 @@ def _submissions_for(blueprint: dict[str, Any]) -> dict[str, dict[str, Any]]:
                 },
             }
         )
+        curriculum = blueprint.get("curriculum_manifest") or {}
+        required_gates = (
+            curriculum.get("assessment_ladder", {}).get("required_for_hiring", [])
+            if isinstance(curriculum, dict)
+            else []
+        )
+        for gate_id in required_gates:
+            if not isinstance(gate_id, str):
+                continue
+            gate_words = gate_id.replace("_", " ")
+            submissions.setdefault(
+                gate_id,
+                {
+                    "answer": (
+                        f"{gate_words} evidence verification safety boundary review "
+                        "with counterexample tracking and revised learning rules"
+                    ),
+                    "project": f"{gate_words.title()} assessment",
+                    "evidence": [
+                        f"{gate_id}_work_product",
+                        f"{gate_id}_feedback_note",
+                        f"{gate_id}_revision_log",
+                    ],
+                },
+            )
     return submissions
 
 

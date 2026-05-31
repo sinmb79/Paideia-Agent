@@ -22,6 +22,13 @@ def _stage_courses(curriculum_manifest: dict[str, Any] | None, stage_id: str) ->
     return []
 
 
+def _stage_courses_any(curriculum_manifest: dict[str, Any] | None, stage_ids: list[str]) -> list[str]:
+    courses: list[str] = []
+    for stage_id in stage_ids:
+        courses.extend(_stage_courses(curriculum_manifest, stage_id))
+    return list(dict.fromkeys(courses))
+
+
 def _stage_assessments(curriculum_manifest: dict[str, Any] | None, stage_id: str) -> list[str]:
     if not curriculum_manifest:
         return []
@@ -33,7 +40,10 @@ def _stage_assessments(curriculum_manifest: dict[str, Any] | None, stage_id: str
 
 def _build_yearly_learning_ladder(curriculum_manifest: dict[str, Any] | None) -> list[dict[str, Any]]:
     high_school = _stage_courses(curriculum_manifest, "high_school_foundation")
-    liberal_core = _stage_courses(curriculum_manifest, "graham_columbia_liberal_core")
+    liberal_core = _stage_courses_any(
+        curriculum_manifest,
+        ["role_model_foundation_core", "graham_columbia_liberal_core"],
+    )
     university_core = _stage_courses(curriculum_manifest, "university_core")
     graduate = _stage_courses(curriculum_manifest, "graduate_specialization")
     doctoral = _stage_courses(curriculum_manifest, "doctoral_research")
@@ -206,6 +216,7 @@ def _build_yearly_learning_ladder(curriculum_manifest: dict[str, Any] | None) ->
         assessment
         for stage_id in [
             "high_school_foundation",
+            "role_model_foundation_core",
             "graham_columbia_liberal_core",
             "university_core",
             "graduate_specialization",

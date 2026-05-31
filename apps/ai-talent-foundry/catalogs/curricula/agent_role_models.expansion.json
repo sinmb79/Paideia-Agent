@@ -1,0 +1,268 @@
+{
+  "schema": "ai-talent-curriculum-catalog/v1",
+  "catalog_id": "agent_role_model_curricula_expansion_2026_05",
+  "purpose": "Metadata-only curricula for selectable Paideia Agent role-model onboarding.",
+  "policy": {
+    "language": "ko",
+    "public_release": "course_metadata_assessment_plan_and_source_links_only",
+    "copyrighted_texts": "metadata_only_unless_user_provides_lawful_local_copy",
+    "reasoning_ledger": "formed_from_exams_feedback_and_work_not_from_personality_keywords"
+  },
+  "curricula": [
+    {
+      "schema": "ai-talent-curriculum-manifest/v1",
+      "curriculum_id": "hopper_software_tooling_curriculum",
+      "domain": "software_agent_engineering",
+      "role_model_id": "hopper_software_tooling",
+      "language": "ko",
+      "major_defaults": {
+        "track_id": "software_tooling_hopper_track",
+        "track_name": "Software tooling and compiler-agent education track",
+        "specialty": "software tooling AI talent",
+        "target_role": "developer-tool and debugging agent",
+        "keywords": ["software", "compiler", "debugging", "developer tools"],
+        "domains": ["programming foundations", "discrete mathematics", "compiler design", "operating systems", "testing", "technical writing"],
+        "university": "Computer science, mathematics, and systems programming",
+        "graduate_school": "Compilers, developer tools, software engineering, and human-computer programming systems",
+        "doctoral_project": "Local developer-tool agent that debugs, explains, tests, and documents software changes with verified logs"
+      },
+      "process_replication": {"mode": "education_first_assessment_driven", "not_a_shortcut": "Do not inject role-model personality; require assignments, tests, and feedback.", "reasoning_kibo_policy": "Reasoning Ledger grows from schoolwork, exams, tool builds, bug reports, and post-hire code reviews."},
+      "material_policy": {"public_open_materials": "allowed_when_license_allows_local_use", "user_provided_private_materials": "allowed_only_from_local_private_curriculum_dir", "public_release": "never_include_private_materials_or_full_copyrighted_texts"},
+      "public_sources": [
+        {"id": "yale_hopper", "title": "Grace Murray Hopper biography", "provider": "Yale", "url": "https://president.yale.edu/biography-grace-murray-hopper", "use": "role-model fact source"},
+        {"id": "navy_hopper", "title": "Grace Hopper", "provider": "U.S. Navy history", "url": "https://www.history.navy.mil/browse-by-topic/people/trailblazers/grace-hopper.html", "use": "career process source"},
+        {"id": "mit_6_828", "title": "Operating System Engineering", "provider": "MIT OCW", "url": "https://pdos.csail.mit.edu/6.828/2018/schedule.html", "use": "systems curriculum reference"}
+      ],
+      "stages": [
+        {"id": "high_school_foundation", "label": "High-school foundation", "courses": ["Korean technical reading", "English technical reading", "Mathematics I/II", "Probability and statistics", "Intro programming", "Ethics and online safety"], "assessments": ["csat_like_verbal_quant", "reading_summary_exam", "basic_statistics_exam"]},
+        {"id": "role_model_foundation_core", "label": "Role-model foundation core", "courses": ["Discrete mathematics", "Mathematical proof", "Early programming laboratory", "Technical communication", "Debugging diary"], "assessments": ["discrete_math_exam", "debugging_diary_review", "technical_explanation_essay"]},
+        {"id": "university_core", "label": "University core", "courses": ["Data structures", "Algorithms", "Computer architecture", "Operating systems", "Compilers", "Software testing", "Version control workflow", "Python and C systems programming"], "assessments": ["algorithms_exam", "compiler_project", "systems_debugging_project"]},
+        {"id": "graduate_specialization", "label": "Graduate specialization", "courses": ["Program analysis", "Developer-tool UX", "Static analysis", "Build systems", "Agentic coding workflows", "Secure software supply chain"], "assessments": ["static_analysis_case", "tool_ux_study", "secure_release_review"]},
+        {"id": "doctoral_research", "label": "Doctoral research", "courses": ["Reproducible software agents", "IDE/CLI tool orchestration", "Evaluation harness design", "Human review loops"], "assessments": ["doctoral_dissertation", "doctoral_defense", "local_agent_employment_review"]}
+      ],
+      "assessment_ladder": {"required_for_hiring": ["discrete_math_exam", "algorithms_exam", "compiler_project", "systems_debugging_project", "static_analysis_case", "secure_release_review", "doctoral_dissertation", "doctoral_defense"], "record_policy": "Every assessment result is stored in assessment_transcript.json."}
+    },
+    {
+      "schema": "ai-talent-curriculum-manifest/v1",
+      "curriculum_id": "dijkstra_verified_programming_curriculum",
+      "domain": "software_agent_engineering",
+      "role_model_id": "dijkstra_verified_programming",
+      "language": "ko",
+      "major_defaults": {
+        "track_id": "verified_programming_dijkstra_track",
+        "track_name": "Verified programming and algorithmic reasoning track",
+        "specialty": "verified programming AI talent",
+        "target_role": "formal-methods and correctness review agent",
+        "keywords": ["formal methods", "algorithm", "correctness", "invariants"],
+        "domains": ["mathematical proof", "algorithms", "program derivation", "formal specification", "operating systems", "code review"],
+        "university": "Computer science and mathematics",
+        "graduate_school": "Algorithms, formal methods, operating systems, and program verification",
+        "doctoral_project": "Local correctness-review agent that turns requirements into invariants, tests, and proof obligations"
+      },
+      "process_replication": {"mode": "education_first_assessment_driven", "not_a_shortcut": "Do not inject Dijkstra's interpreted style; force proof exercises and code reviews.", "reasoning_kibo_policy": "Reasoning Ledger grows from proof attempts, failed invariants, and reviewed corrections."},
+      "material_policy": {"public_open_materials": "allowed_when_license_allows_local_use", "user_provided_private_materials": "allowed_only_from_local_private_curriculum_dir", "public_release": "metadata_only"},
+      "public_sources": [
+        {"id": "ieee_dijkstra", "title": "Edsger Dijkstra", "provider": "IEEE Computer Society", "url": "https://history.computer.org/pioneers/dijkstra.html", "use": "role-model fact source"},
+        {"id": "ewd_archive", "title": "EWD archive", "provider": "University of Texas", "url": "https://www.cs.utexas.edu/users/EWD/", "use": "public metadata and reading index"}
+      ],
+      "stages": [
+        {"id": "high_school_foundation", "label": "High-school foundation", "courses": ["Korean logical reading", "English technical reading", "Mathematics I/II", "Probability and statistics", "Intro programming"], "assessments": ["csat_like_verbal_quant", "reading_summary_exam", "basic_statistics_exam"]},
+        {"id": "role_model_foundation_core", "label": "Role-model foundation core", "courses": ["Mathematical logic", "Proof writing", "Discrete structures", "Program derivation drills", "Invariant notebooks"], "assessments": ["logic_proof_exam", "invariant_notebook_review", "program_derivation_exam"]},
+        {"id": "university_core", "label": "University core", "courses": ["Algorithms", "Automata", "Operating systems", "Programming languages", "Software engineering", "Testing and verification"], "assessments": ["algorithms_proof_exam", "operating_systems_exam", "verification_project"]},
+        {"id": "graduate_specialization", "label": "Graduate specialization", "courses": ["Formal specification", "Model checking", "Type systems", "Distributed algorithms", "Secure coding review"], "assessments": ["formal_spec_case", "model_checking_lab", "distributed_correctness_review"]},
+        {"id": "doctoral_research", "label": "Doctoral research", "courses": ["Proof-carrying agent work", "Verified workflow design", "Reproducible correctness evaluation"], "assessments": ["doctoral_dissertation", "doctoral_defense", "local_agent_employment_review"]}
+      ],
+      "assessment_ladder": {"required_for_hiring": ["logic_proof_exam", "program_derivation_exam", "algorithms_proof_exam", "verification_project", "formal_spec_case", "model_checking_lab", "doctoral_dissertation", "doctoral_defense"], "record_policy": "Every assessment result is stored in assessment_transcript.json."}
+    },
+    {
+      "schema": "ai-talent-curriculum-manifest/v1",
+      "curriculum_id": "tukey_data_analysis_curriculum",
+      "domain": "data_analysis_bi",
+      "role_model_id": "tukey_data_analysis",
+      "language": "ko",
+      "major_defaults": {"track_id": "eda_tukey_track", "track_name": "Exploratory data analysis and BI reasoning track", "specialty": "data analysis AI talent", "target_role": "BI and exploratory data analysis agent", "keywords": ["data", "statistics", "EDA", "BI"], "domains": ["statistics", "exploratory data analysis", "visualization", "experimentation", "BI reporting", "data quality"], "university": "Statistics, mathematics, and data science", "graduate_school": "Applied statistics, exploratory data analysis, and decision analytics", "doctoral_project": "Local BI agent that profiles data, finds anomalies, tests explanations, and writes reviewable evidence reports"},
+      "process_replication": {"mode": "education_first_assessment_driven", "not_a_shortcut": "Do not inject statistical taste; build it through data exercises and critique.", "reasoning_kibo_policy": "Reasoning Ledger grows from data notebooks, wrong hypotheses, and revised visual explanations."},
+      "material_policy": {"public_open_materials": "allowed_when_license_allows_local_use", "user_provided_private_materials": "allowed_only_from_local_private_curriculum_dir", "public_release": "metadata_only"},
+      "public_sources": [{"id": "britannica_tukey", "title": "John W. Tukey", "provider": "Britannica", "url": "https://www.britannica.com/biography/John-Wilder-Tukey", "use": "role-model fact source"}, {"id": "stanford_stat_learning", "title": "An Introduction to Statistical Learning", "provider": "ISLR", "url": "https://www.statlearning.com/", "use": "open statistical learning reference"}],
+      "stages": [
+        {"id": "high_school_foundation", "label": "High-school foundation", "courses": ["Korean argument", "English data reading", "Mathematics", "Probability and statistics", "Spreadsheet basics"], "assessments": ["csat_like_verbal_quant", "reading_summary_exam", "basic_statistics_exam"]},
+        {"id": "role_model_foundation_core", "label": "Role-model foundation core", "courses": ["Exploratory graphs", "Resistant summaries", "Data cleaning diary", "Hypothesis notebook", "Experiment critique"], "assessments": ["eda_graph_exam", "data_cleaning_review", "experiment_critique_essay"]},
+        {"id": "university_core", "label": "University core", "courses": ["Regression", "Sampling", "Data visualization", "Python/R analytics", "Database fundamentals", "Dashboard design"], "assessments": ["regression_exam", "dashboard_project", "data_quality_audit"]},
+        {"id": "graduate_specialization", "label": "Graduate specialization", "courses": ["Causal inference", "Robust statistics", "Forecasting", "Metric design", "Decision analytics"], "assessments": ["causal_case_report", "forecast_backtest", "metric_design_review"]},
+        {"id": "doctoral_research", "label": "Doctoral research", "courses": ["Reproducible analytics agents", "BI memory routing", "Decision audit notebooks"], "assessments": ["doctoral_dissertation", "doctoral_defense", "local_agent_employment_review"]}
+      ],
+      "assessment_ladder": {"required_for_hiring": ["eda_graph_exam", "data_cleaning_review", "regression_exam", "dashboard_project", "data_quality_audit", "causal_case_report", "doctoral_dissertation", "doctoral_defense"], "record_policy": "Every assessment result is stored in assessment_transcript.json."}
+    },
+    {
+      "schema": "ai-talent-curriculum-manifest/v1",
+      "curriculum_id": "deming_quality_ops_curriculum",
+      "domain": "customer_support_quality_ops",
+      "role_model_id": "deming_quality_ops",
+      "language": "ko",
+      "major_defaults": {"track_id": "quality_ops_deming_track", "track_name": "Quality operations and support-learning track", "specialty": "quality operations AI talent", "target_role": "support quality and operations improvement agent", "keywords": ["quality", "support", "operations", "process"], "domains": ["statistics", "quality control", "root-cause analysis", "customer support", "process improvement", "incident review"], "university": "Industrial engineering, statistics, and operations", "graduate_school": "Quality systems, service operations, and process analytics", "doctoral_project": "Local quality agent that turns support incidents into measurable process improvements"},
+      "process_replication": {"mode": "education_first_assessment_driven", "not_a_shortcut": "Do not inject management slogans; require process data and reviewed changes.", "reasoning_kibo_policy": "Reasoning Ledger grows from control charts, support cases, and failed process experiments."},
+      "material_policy": {"public_open_materials": "allowed_when_license_allows_local_use", "user_provided_private_materials": "allowed_only_from_local_private_curriculum_dir", "public_release": "metadata_only"},
+      "public_sources": [{"id": "deming_institute", "title": "Deming the man", "provider": "The Deming Institute", "url": "https://deming.org/deming/deming-the-man/", "use": "role-model fact source"}, {"id": "nist_quality", "title": "Quality management references", "provider": "NIST", "url": "https://www.nist.gov/baldrige/w-edwards-deming", "use": "quality management context"}],
+      "stages": [
+        {"id": "high_school_foundation", "label": "High-school foundation", "courses": ["Korean service reading", "English business reading", "Mathematics", "Probability and statistics", "Ethics"], "assessments": ["csat_like_verbal_quant", "reading_summary_exam", "basic_statistics_exam"]},
+        {"id": "role_model_foundation_core", "label": "Role-model foundation core", "courses": ["Statistical thinking", "Process diary", "Customer complaint classification", "Control chart basics", "Root-cause writing"], "assessments": ["control_chart_exam", "root_cause_case", "support_empathy_review"]},
+        {"id": "university_core", "label": "University core", "courses": ["Operations management", "Service design", "Applied statistics", "Queueing basics", "Knowledge-base design", "Incident analysis"], "assessments": ["operations_exam", "support_quality_audit", "knowledge_base_project"]},
+        {"id": "graduate_specialization", "label": "Graduate specialization", "courses": ["Six sigma concepts", "Experiment design", "Reliability operations", "Customer experience metrics", "Change management"], "assessments": ["process_improvement_case", "cx_metric_review", "experiment_design_project"]},
+        {"id": "doctoral_research", "label": "Doctoral research", "courses": ["Support-learning agents", "Quality memory loops", "Operational risk dashboards"], "assessments": ["doctoral_dissertation", "doctoral_defense", "local_agent_employment_review"]}
+      ],
+      "assessment_ladder": {"required_for_hiring": ["control_chart_exam", "root_cause_case", "operations_exam", "support_quality_audit", "process_improvement_case", "cx_metric_review", "doctoral_dissertation", "doctoral_defense"], "record_policy": "Every assessment result is stored in assessment_transcript.json."}
+    },
+    {
+      "schema": "ai-talent-curriculum-manifest/v1",
+      "curriculum_id": "anderson_security_engineering_curriculum",
+      "domain": "cybersecurity",
+      "role_model_id": "anderson_security_engineering",
+      "language": "ko",
+      "major_defaults": {"track_id": "security_engineering_anderson_track", "track_name": "Security engineering and threat-modeling track", "specialty": "security engineering AI talent", "target_role": "security review and threat-modeling agent", "keywords": ["security", "threat model", "privacy", "risk"], "domains": ["systems security", "threat modeling", "cryptography basics", "privacy", "secure design", "incident response"], "university": "Computer science and security engineering", "graduate_school": "Security engineering, privacy, protocol analysis, and risk economics", "doctoral_project": "Local security agent that threat-models systems and produces reviewable mitigations without unsafe exploitation"},
+      "process_replication": {"mode": "education_first_assessment_driven", "not_a_shortcut": "Do not inject security opinions; require threat models, evidence, and safe lab boundaries.", "reasoning_kibo_policy": "Reasoning Ledger grows from safe labs, failed mitigations, and reviewed risk tradeoffs."},
+      "material_policy": {"public_open_materials": "allowed_when_license_allows_local_use", "user_provided_private_materials": "allowed_only_from_local_private_curriculum_dir", "public_release": "metadata_only"},
+      "public_sources": [{"id": "cambridge_anderson", "title": "Ross Anderson", "provider": "University of Cambridge", "url": "https://www.cl.cam.ac.uk/~rja14/", "use": "role-model fact source"}, {"id": "security_engineering_book", "title": "Security Engineering", "provider": "University of Cambridge", "url": "https://www.cl.cam.ac.uk/~rja14/book.html", "use": "reading metadata"}],
+      "stages": [
+        {"id": "high_school_foundation", "label": "High-school foundation", "courses": ["Korean risk reading", "English security reading", "Mathematics", "Probability and statistics", "Digital citizenship"], "assessments": ["csat_like_verbal_quant", "reading_summary_exam", "basic_statistics_exam"]},
+        {"id": "role_model_foundation_core", "label": "Role-model foundation core", "courses": ["Security mindset without exploitation", "Assets and adversaries", "Protocol reading", "Privacy diary", "Ethics and permission"], "assessments": ["threat_model_basics_exam", "privacy_boundary_review", "protocol_reading_note"]},
+        {"id": "university_core", "label": "University core", "courses": ["Network security", "Operating systems", "Cryptography basics", "Secure coding", "Web security", "Risk communication"], "assessments": ["network_security_exam", "secure_code_review", "web_security_safe_lab"]},
+        {"id": "graduate_specialization", "label": "Graduate specialization", "courses": ["Security economics", "Authentication systems", "Hardware/software trust", "Incident response", "Compliance mapping"], "assessments": ["security_economics_case", "auth_design_review", "incident_response_tabletop"]},
+        {"id": "doctoral_research", "label": "Doctoral research", "courses": ["Security-agent guardrails", "Risk evidence routing", "Responsible disclosure workflow"], "assessments": ["doctoral_dissertation", "doctoral_defense", "local_agent_employment_review"]}
+      ],
+      "assessment_ladder": {"required_for_hiring": ["threat_model_basics_exam", "privacy_boundary_review", "network_security_exam", "secure_code_review", "auth_design_review", "incident_response_tabletop", "doctoral_dissertation", "doctoral_defense"], "record_policy": "Every assessment result is stored in assessment_transcript.json."}
+    },
+    {
+      "schema": "ai-talent-curriculum-manifest/v1",
+      "curriculum_id": "ogilvy_research_copywriting_curriculum",
+      "domain": "marketing_sales",
+      "role_model_id": "ogilvy_research_copywriting",
+      "language": "ko",
+      "major_defaults": {"track_id": "research_copywriting_ogilvy_track", "track_name": "Research copywriting and campaign-testing track", "specialty": "marketing research AI talent", "target_role": "campaign research and copywriting agent", "keywords": ["marketing", "copywriting", "sales", "campaign"], "domains": ["customer research", "copywriting", "A/B testing", "brand constraints", "sales psychology", "analytics"], "university": "Marketing, communication, statistics, and consumer research", "graduate_school": "Marketing analytics, copy testing, and brand strategy", "doctoral_project": "Local marketing agent that writes evidence-backed copy and tests claims against customer research"},
+      "process_replication": {"mode": "education_first_assessment_driven", "not_a_shortcut": "Do not inject copywriting slogans; require research briefs, tests, and revisions.", "reasoning_kibo_policy": "Reasoning Ledger grows from brief critiques, copy tests, and customer evidence."},
+      "material_policy": {"public_open_materials": "allowed_when_license_allows_local_use", "user_provided_private_materials": "allowed_only_from_local_private_curriculum_dir", "public_release": "metadata_only"},
+      "public_sources": [{"id": "ogilvy_bio", "title": "David Ogilvy", "provider": "Ogilvy", "url": "https://www.ogilvy.com/about/david-ogilvy", "use": "role-model fact source"}],
+      "stages": [
+        {"id": "high_school_foundation", "label": "High-school foundation", "courses": ["Korean persuasive writing", "English reading", "Statistics basics", "Media literacy", "Ethics"], "assessments": ["csat_like_verbal_quant", "reading_summary_exam", "basic_statistics_exam"]},
+        {"id": "role_model_foundation_core", "label": "Role-model foundation core", "courses": ["Customer observation", "Benefit proof notes", "Headline testing", "Creative constraint drills", "Research memo writing"], "assessments": ["customer_research_note", "headline_test_exam", "claim_evidence_review"]},
+        {"id": "university_core", "label": "University core", "courses": ["Marketing principles", "Consumer behavior", "Communication theory", "Survey design", "Copywriting workshop", "Analytics"], "assessments": ["consumer_behavior_exam", "survey_design_project", "copy_revision_portfolio"]},
+        {"id": "graduate_specialization", "label": "Graduate specialization", "courses": ["Brand strategy", "Conversion testing", "Sales enablement", "Creative evaluation", "Marketing experiment design"], "assessments": ["campaign_brief_case", "ab_test_interpretation", "brand_constraint_review"]},
+        {"id": "doctoral_research", "label": "Doctoral research", "courses": ["Marketing-agent evaluation", "Claim safety", "Evidence-routed campaign memory"], "assessments": ["doctoral_dissertation", "doctoral_defense", "local_agent_employment_review"]}
+      ],
+      "assessment_ladder": {"required_for_hiring": ["customer_research_note", "headline_test_exam", "claim_evidence_review", "copy_revision_portfolio", "campaign_brief_case", "ab_test_interpretation", "doctoral_dissertation", "doctoral_defense"], "record_policy": "Every assessment result is stored in assessment_transcript.json."}
+    },
+    {
+      "schema": "ai-talent-curriculum-manifest/v1",
+      "curriculum_id": "nightingale_healthcare_statistics_curriculum",
+      "domain": "healthcare_operations",
+      "role_model_id": "nightingale_healthcare_statistics",
+      "language": "ko",
+      "major_defaults": {"track_id": "healthcare_statistics_nightingale_track", "track_name": "Healthcare statistics and safety operations track", "specialty": "healthcare operations AI talent", "target_role": "healthcare evidence and safety-dashboard agent", "keywords": ["healthcare", "statistics", "safety", "operations"], "domains": ["public health", "healthcare operations", "statistics", "visualization", "patient safety", "ethics"], "university": "Public health, statistics, and healthcare operations", "graduate_school": "Healthcare analytics, safety improvement, and operations research", "doctoral_project": "Local healthcare operations agent that summarizes safety evidence without medical advice claims"},
+      "process_replication": {"mode": "education_first_assessment_driven", "not_a_shortcut": "Do not inject medical authority; require data, uncertainty, and safety boundaries.", "reasoning_kibo_policy": "Reasoning Ledger grows from dashboards, safety reviews, and evidence summaries."},
+      "material_policy": {"public_open_materials": "allowed_when_license_allows_local_use", "user_provided_private_materials": "allowed_only_from_local_private_curriculum_dir", "public_release": "metadata_only"},
+      "public_sources": [{"id": "nightingale_museum", "title": "Florence Nightingale biography", "provider": "Florence Nightingale Museum", "url": "https://www.florence-nightingale.co.uk/florence-nightingale/biography/", "use": "role-model fact source"}],
+      "stages": [
+        {"id": "high_school_foundation", "label": "High-school foundation", "courses": ["Korean health reading", "English science reading", "Mathematics", "Probability and statistics", "Bioethics"], "assessments": ["csat_like_verbal_quant", "reading_summary_exam", "basic_statistics_exam"]},
+        {"id": "role_model_foundation_core", "label": "Role-model foundation core", "courses": ["Clinical observation notes", "Sanitation and environment", "Health statistics basics", "Chart interpretation", "Care empathy"], "assessments": ["health_observation_note", "chart_interpretation_exam", "safety_boundary_review"]},
+        {"id": "university_core", "label": "University core", "courses": ["Public health", "Epidemiology basics", "Healthcare operations", "Biostatistics", "Data visualization", "Health policy"], "assessments": ["biostatistics_exam", "health_dashboard_project", "policy_summary_exam"]},
+        {"id": "graduate_specialization", "label": "Graduate specialization", "courses": ["Quality improvement", "Patient safety", "Operations research", "Health informatics", "Ethical communication"], "assessments": ["safety_improvement_case", "operations_research_lab", "health_evidence_brief"]},
+        {"id": "doctoral_research", "label": "Doctoral research", "courses": ["Healthcare-agent guardrails", "Safety dashboard evaluation", "Evidence synthesis"], "assessments": ["doctoral_dissertation", "doctoral_defense", "local_agent_employment_review"]}
+      ],
+      "assessment_ladder": {"required_for_hiring": ["health_observation_note", "chart_interpretation_exam", "biostatistics_exam", "health_dashboard_project", "safety_improvement_case", "health_evidence_brief", "doctoral_dissertation", "doctoral_defense"], "record_policy": "Every assessment result is stored in assessment_transcript.json."}
+    },
+    {
+      "schema": "ai-talent-curriculum-manifest/v1",
+      "curriculum_id": "montessori_learning_design_curriculum",
+      "domain": "education_tutoring",
+      "role_model_id": "montessori_learning_design",
+      "language": "ko",
+      "major_defaults": {"track_id": "learning_design_montessori_track", "track_name": "Learner-observation and tutoring design track", "specialty": "education and tutoring AI talent", "target_role": "adaptive tutoring and curriculum-design agent", "keywords": ["education", "tutoring", "learning design", "assessment"], "domains": ["learning science", "developmental observation", "curriculum design", "assessment", "tutoring dialogue", "safety"], "university": "Education, psychology, learning science, and assessment", "graduate_school": "Adaptive tutoring, curriculum design, and learner modeling", "doctoral_project": "Local tutoring agent that diagnoses learner state and adapts lessons with reviewable evidence"},
+      "process_replication": {"mode": "education_first_assessment_driven", "not_a_shortcut": "Do not inject educational doctrine; require learner observations and outcome reviews.", "reasoning_kibo_policy": "Reasoning Ledger grows from tutoring sessions, learner misconceptions, and revised lesson plans."},
+      "material_policy": {"public_open_materials": "allowed_when_license_allows_local_use", "user_provided_private_materials": "allowed_only_from_local_private_curriculum_dir", "public_release": "metadata_only"},
+      "public_sources": [{"id": "ami_montessori", "title": "Maria Montessori biography", "provider": "AMI", "url": "https://montessori-ami.org/resource-library/facts/biography-maria-montessori", "use": "role-model fact source"}],
+      "stages": [
+        {"id": "high_school_foundation", "label": "High-school foundation", "courses": ["Korean explanation writing", "English reading", "Mathematics", "Psychology basics", "Ethics"], "assessments": ["csat_like_verbal_quant", "reading_summary_exam", "basic_statistics_exam"]},
+        {"id": "role_model_foundation_core", "label": "Role-model foundation core", "courses": ["Learner observation", "Developmental notes", "Prepared learning environment", "Misconception diary", "Feedback language"], "assessments": ["learner_observation_note", "misconception_diagnosis_exam", "feedback_language_review"]},
+        {"id": "university_core", "label": "University core", "courses": ["Learning science", "Educational psychology", "Assessment design", "Curriculum planning", "Tutoring practice", "Accessibility"], "assessments": ["learning_science_exam", "lesson_plan_project", "assessment_design_review"]},
+        {"id": "graduate_specialization", "label": "Graduate specialization", "courses": ["Adaptive tutoring systems", "Learner modeling", "Educational measurement", "Motivation and feedback", "Safe tutoring boundaries"], "assessments": ["adaptive_tutor_case", "learner_model_audit", "safe_tutoring_review"]},
+        {"id": "doctoral_research", "label": "Doctoral research", "courses": ["Education-agent evaluation", "Longitudinal learning memory", "Human review loops"], "assessments": ["doctoral_dissertation", "doctoral_defense", "local_agent_employment_review"]}
+      ],
+      "assessment_ladder": {"required_for_hiring": ["learner_observation_note", "misconception_diagnosis_exam", "learning_science_exam", "lesson_plan_project", "adaptive_tutor_case", "safe_tutoring_review", "doctoral_dissertation", "doctoral_defense"], "record_policy": "Every assessment result is stored in assessment_transcript.json."}
+    },
+    {
+      "schema": "ai-talent-curriculum-manifest/v1",
+      "curriculum_id": "drucker_management_knowledge_work_curriculum",
+      "domain": "management_productivity",
+      "role_model_id": "drucker_management_knowledge_work",
+      "language": "ko",
+      "major_defaults": {"track_id": "management_knowledge_work_drucker_track", "track_name": "Management knowledge-work and decision memo track", "specialty": "management productivity AI talent", "target_role": "management memo and productivity agent", "keywords": ["management", "productivity", "decision memo", "knowledge work"], "domains": ["management", "economics", "decision writing", "organization design", "productivity systems", "strategy"], "university": "Management, economics, writing, and information systems", "graduate_school": "Knowledge work, decision systems, and organizational analysis", "doctoral_project": "Local management agent that turns objectives into decisions, memos, metrics, and review cycles"},
+      "process_replication": {"mode": "education_first_assessment_driven", "not_a_shortcut": "Do not inject management maxims; require cases, memos, and measured outcomes.", "reasoning_kibo_policy": "Reasoning Ledger grows from decision memos, failed assumptions, and revised operating principles."},
+      "material_policy": {"public_open_materials": "allowed_when_license_allows_local_use", "user_provided_private_materials": "allowed_only_from_local_private_curriculum_dir", "public_release": "metadata_only"},
+      "public_sources": [{"id": "drucker_institute", "title": "About Peter Drucker", "provider": "Drucker Institute", "url": "https://www.drucker.institute/about-peter-drucker/", "use": "role-model fact source"}],
+      "stages": [
+        {"id": "high_school_foundation", "label": "High-school foundation", "courses": ["Korean memo writing", "English business reading", "Mathematics", "Economics basics", "Ethics"], "assessments": ["csat_like_verbal_quant", "reading_summary_exam", "basic_statistics_exam"]},
+        {"id": "role_model_foundation_core", "label": "Role-model foundation core", "courses": ["Decision memo basics", "Organization observation", "Effectiveness diary", "Economic history reading", "Argument revision"], "assessments": ["decision_memo_exam", "organization_case_note", "effectiveness_review"]},
+        {"id": "university_core", "label": "University core", "courses": ["Management principles", "Microeconomics", "Accounting basics", "Information systems", "Business writing", "Project management"], "assessments": ["management_exam", "business_memo_portfolio", "project_plan_review"]},
+        {"id": "graduate_specialization", "label": "Graduate specialization", "courses": ["Strategy", "Knowledge management", "Decision analysis", "Metrics and dashboards", "Change leadership"], "assessments": ["strategy_case", "knowledge_work_system_design", "decision_quality_audit"]},
+        {"id": "doctoral_research", "label": "Doctoral research", "courses": ["Management-agent evaluation", "Goal memory routing", "Decision-review loops"], "assessments": ["doctoral_dissertation", "doctoral_defense", "local_agent_employment_review"]}
+      ],
+      "assessment_ladder": {"required_for_hiring": ["decision_memo_exam", "organization_case_note", "management_exam", "business_memo_portfolio", "strategy_case", "decision_quality_audit", "doctoral_dissertation", "doctoral_defense"], "record_policy": "Every assessment result is stored in assessment_transcript.json."}
+    },
+    {
+      "schema": "ai-talent-curriculum-manifest/v1",
+      "curriculum_id": "ginsburg_legal_research_curriculum",
+      "domain": "legal_compliance_research",
+      "role_model_id": "ginsburg_legal_research",
+      "language": "ko",
+      "major_defaults": {"track_id": "legal_research_ginsburg_track", "track_name": "Legal research and compliance memo track", "specialty": "legal research AI talent", "target_role": "legal research and compliance-support agent", "keywords": ["legal research", "compliance", "case brief", "citation"], "domains": ["legal reading", "case briefing", "statutory analysis", "compliance", "citation", "non-advice boundaries"], "university": "Law-adjacent liberal arts, writing, politics, and legal research foundations", "graduate_school": "Legal research, compliance systems, and precedent analysis", "doctoral_project": "Local legal research agent that summarizes sources and boundaries without giving legal advice"},
+      "process_replication": {"mode": "education_first_assessment_driven", "not_a_shortcut": "Do not inject legal conclusions; require citations, counterarguments, and non-advice boundaries.", "reasoning_kibo_policy": "Reasoning Ledger grows from case briefs, citation errors, and reviewed compliance memos."},
+      "material_policy": {"public_open_materials": "allowed_when_license_allows_local_use", "user_provided_private_materials": "allowed_only_from_local_private_curriculum_dir", "public_release": "metadata_only"},
+      "public_sources": [{"id": "scotus_bio", "title": "Biographies of Justices", "provider": "Supreme Court of the United States", "url": "https://www.supremecourt.gov/about/biographies.aspx", "use": "role-model fact source"}],
+      "stages": [
+        {"id": "high_school_foundation", "label": "High-school foundation", "courses": ["Korean argument", "English legal reading", "History and civics", "Statistics basics", "Ethics"], "assessments": ["csat_like_verbal_quant", "reading_summary_exam", "basic_statistics_exam"]},
+        {"id": "role_model_foundation_core", "label": "Role-model foundation core", "courses": ["Case reading", "Argument mapping", "Citation basics", "Comparative institutions", "Non-advice communication"], "assessments": ["case_brief_exam", "citation_accuracy_review", "argument_counterpoint_essay"]},
+        {"id": "university_core", "label": "University core", "courses": ["Constitutional structure", "Civil procedure concepts", "Statutory interpretation", "Legal writing", "Compliance basics", "Research databases"], "assessments": ["legal_writing_portfolio", "statutory_interpretation_exam", "compliance_boundary_review"]},
+        {"id": "graduate_specialization", "label": "Graduate specialization", "courses": ["Advanced legal research", "Policy analysis", "Regulatory compliance", "Precedent networks", "Risk communication"], "assessments": ["precedent_map_project", "regulatory_memo_case", "non_advice_safety_review"]},
+        {"id": "doctoral_research", "label": "Doctoral research", "courses": ["Legal-agent evaluation", "Citation memory routing", "Compliance guardrail design"], "assessments": ["doctoral_dissertation", "doctoral_defense", "local_agent_employment_review"]}
+      ],
+      "assessment_ladder": {"required_for_hiring": ["case_brief_exam", "citation_accuracy_review", "legal_writing_portfolio", "statutory_interpretation_exam", "precedent_map_project", "non_advice_safety_review", "doctoral_dissertation", "doctoral_defense"], "record_policy": "Every assessment result is stored in assessment_transcript.json."}
+    },
+    {
+      "schema": "ai-talent-curriculum-manifest/v1",
+      "curriculum_id": "finney_blockchain_protocol_curriculum",
+      "domain": "blockchain_protocol_research",
+      "role_model_id": "finney_blockchain_protocol",
+      "language": "ko",
+      "major_defaults": {"track_id": "blockchain_protocol_finney_track", "track_name": "Cryptography and blockchain protocol research track", "specialty": "blockchain protocol AI talent", "target_role": "blockchain protocol and wallet-safety research agent", "keywords": ["blockchain", "cryptography", "protocol", "security"], "domains": ["cryptography", "distributed systems", "protocol analysis", "wallet safety", "privacy", "testnet workflows"], "university": "Computer science, cryptography, and distributed systems", "graduate_school": "Blockchain protocols, applied cryptography, and security engineering", "doctoral_project": "Local blockchain research agent that explains protocols, tests assumptions, and blocks investment execution"},
+      "process_replication": {"mode": "education_first_assessment_driven", "not_a_shortcut": "Do not inject crypto opinions; require reproducible protocol tests and safety boundaries.", "reasoning_kibo_policy": "Reasoning Ledger grows from protocol reading, testnet labs, and reviewed security findings."},
+      "material_policy": {"public_open_materials": "allowed_when_license_allows_local_use", "user_provided_private_materials": "allowed_only_from_local_private_curriculum_dir", "public_release": "metadata_only"},
+      "public_sources": [{"id": "nakamoto_finney", "title": "Hal Finney", "provider": "Nakamoto Institute", "url": "https://nakamotoinstitute.org/hal-finney/", "use": "role-model fact source"}],
+      "stages": [
+        {"id": "high_school_foundation", "label": "High-school foundation", "courses": ["Korean technical reading", "English protocol reading", "Mathematics", "Probability and statistics", "Digital safety"], "assessments": ["csat_like_verbal_quant", "reading_summary_exam", "basic_statistics_exam"]},
+        {"id": "role_model_foundation_core", "label": "Role-model foundation core", "courses": ["Cryptography intuition", "Protocol reading notes", "Privacy ethics", "Reproducible test diary", "Security boundary writing"], "assessments": ["crypto_basics_exam", "protocol_reading_exam", "wallet_safety_review"]},
+        {"id": "university_core", "label": "University core", "courses": ["Data structures", "Networks", "Distributed systems", "Applied cryptography", "Blockchain fundamentals", "Secure programming"], "assessments": ["distributed_systems_exam", "applied_crypto_lab", "testnet_workflow_project"]},
+        {"id": "graduate_specialization", "label": "Graduate specialization", "courses": ["Consensus protocols", "Smart contract risk", "Wallet architecture", "Privacy systems", "Protocol governance"], "assessments": ["consensus_case_report", "smart_contract_risk_review", "privacy_protocol_review"]},
+        {"id": "doctoral_research", "label": "Doctoral research", "courses": ["Protocol-agent evaluation", "Reproducible blockchain labs", "Risk communication"], "assessments": ["doctoral_dissertation", "doctoral_defense", "local_agent_employment_review"]}
+      ],
+      "assessment_ladder": {"required_for_hiring": ["crypto_basics_exam", "protocol_reading_exam", "distributed_systems_exam", "applied_crypto_lab", "testnet_workflow_project", "smart_contract_risk_review", "doctoral_dissertation", "doctoral_defense"], "record_policy": "Every assessment result is stored in assessment_transcript.json."}
+    },
+    {
+      "schema": "ai-talent-curriculum-manifest/v1",
+      "curriculum_id": "shannon_information_theory_curriculum",
+      "domain": "information_systems_research",
+      "role_model_id": "shannon_information_theory",
+      "language": "ko",
+      "major_defaults": {"track_id": "information_theory_shannon_track", "track_name": "Information theory and systems modeling track", "specialty": "information systems research AI talent", "target_role": "information theory and systems research agent", "keywords": ["information theory", "compression", "communication", "systems"], "domains": ["probability", "circuits", "information theory", "coding", "systems modeling", "research synthesis"], "university": "Mathematics, electrical engineering, and computer science", "graduate_school": "Information theory, coding, communication systems, and modeling", "doctoral_project": "Local research agent that models communication, compression, and uncertainty with reproducible notebooks"},
+      "process_replication": {"mode": "education_first_assessment_driven", "not_a_shortcut": "Do not inject genius narratives; require math exercises, circuits, and research notebooks.", "reasoning_kibo_policy": "Reasoning Ledger grows from proofs, failed models, and corrected experiments."},
+      "material_policy": {"public_open_materials": "allowed_when_license_allows_local_use", "user_provided_private_materials": "allowed_only_from_local_private_curriculum_dir", "public_release": "metadata_only"},
+      "public_sources": [{"id": "itsoc_shannon", "title": "Claude Shannon", "provider": "IEEE Information Theory Society", "url": "https://www.itsoc.org/about/shannon", "use": "role-model fact source"}, {"id": "mit_shannon", "title": "Claude Shannon at 100", "provider": "MIT", "url": "https://news.mit.edu/2016/claude-shannon-information-theory-100th-birthday-0428", "use": "legacy context"}],
+      "stages": [
+        {"id": "high_school_foundation", "label": "High-school foundation", "courses": ["Korean science reading", "English math reading", "Mathematics", "Probability and statistics", "Physics basics"], "assessments": ["csat_like_verbal_quant", "reading_summary_exam", "basic_statistics_exam"]},
+        {"id": "role_model_foundation_core", "label": "Role-model foundation core", "courses": ["Probability intuition", "Circuit logic", "Signal and noise notes", "Puzzle-to-model diary", "Research notebook habits"], "assessments": ["probability_model_exam", "circuit_logic_lab", "noise_model_review"]},
+        {"id": "university_core", "label": "University core", "courses": ["Linear algebra", "Probability", "Signals and systems", "Digital logic", "Algorithms", "Communication systems"], "assessments": ["linear_algebra_exam", "signals_systems_exam", "coding_theory_project"]},
+        {"id": "graduate_specialization", "label": "Graduate specialization", "courses": ["Information theory", "Error-correcting codes", "Compression", "Statistical learning", "Research synthesis"], "assessments": ["entropy_proof_exam", "compression_experiment", "research_synthesis_review"]},
+        {"id": "doctoral_research", "label": "Doctoral research", "courses": ["Information-agent evaluation", "Uncertainty notebooks", "Communication model audits"], "assessments": ["doctoral_dissertation", "doctoral_defense", "local_agent_employment_review"]}
+      ],
+      "assessment_ladder": {"required_for_hiring": ["probability_model_exam", "circuit_logic_lab", "linear_algebra_exam", "signals_systems_exam", "coding_theory_project", "entropy_proof_exam", "doctoral_dissertation", "doctoral_defense"], "record_policy": "Every assessment result is stored in assessment_transcript.json."}
+    }
+  ]
+}

@@ -15,6 +15,14 @@ TRANSFORMERS_REQUIRED_FILE_GROUPS = {
     "tokenizer": ["tokenizer.json", "tokenizer_config.json", "vocab.json", "spiece.model"],
     "weights": ["model.safetensors", "pytorch_model.bin"],
 }
+EXTERNAL_API_ENGINES = {
+    "openai_chatgpt_codex",
+    "anthropic_claude_api",
+    "google_gemini_api",
+    "mistral_api",
+    "openrouter_api",
+}
+LOCAL_HTTP_ENGINES = {"ollama_local_http", "lm_studio_local_http"}
 
 
 def build_llm_runtime_config(
@@ -30,19 +38,35 @@ def build_llm_runtime_config(
         "transformers_local",
         "llama_cpp_local",
         "openai_chatgpt_codex",
+        "anthropic_claude_api",
+        "google_gemini_api",
+        "mistral_api",
+        "openrouter_api",
+        "ollama_local_http",
+        "lm_studio_local_http",
     ]
     if engine not in compatible_engines:
         raise ValueError(f"Unsupported LLM runtime engine: {engine}")
 
     codex_bridge = engine == "openai_chatgpt_codex"
+    external_api = engine in EXTERNAL_API_ENGINES
+    local_http = engine in LOCAL_HTTP_ENGINES
+    if codex_bridge:
+        network_access = "codex_host_managed_data_minimized"
+    elif external_api:
+        network_access = "external_api_selected_data_minimized"
+    elif local_http:
+        network_access = "localhost_only"
+    else:
+        network_access = "blocked"
     return {
         "schema": RUNTIME_SCHEMA,
         "service": service or engine,
         "engine": engine,
         "model": model,
         "model_path": model_path,
-        "local_only": not codex_bridge,
-        "network_access": "codex_host_managed_data_minimized" if codex_bridge else "blocked",
+        "local_only": not external_api,
+        "network_access": network_access,
         "identity_policy": "application_engine_not_identity",
         "private_reasoning_trace": "do_not_store",
         "compatible_engines": compatible_engines,
@@ -94,6 +118,8 @@ def invoke_llm_application_engine(
         return _inspect_llama_cpp_local(runtime_config)
     if engine == "openai_chatgpt_codex":
         return _invoke_openai_chatgpt_codex_bridge(runtime_config, manifest=manifest, task=task)
+    if engine in (EXTERNAL_API_ENGINES - {"openai_chatgpt_codex"}) or engine in LOCAL_HTTP_ENGINES:
+        return _invoke_configured_adapter_manifest(runtime_config, manifest=manifest, task=task)
 
     agent = manifest["agent"]
     prompt_fingerprint = _prompt_fingerprint(manifest=manifest, task=task)
@@ -292,6 +318,37 @@ def _invoke_openai_chatgpt_codex_bridge(
         "draft": (
             f"{agent['name']} uses the local manifest, learning ledger, and memory substrate as identity "
             f"and reasoning context. OpenAI ChatGPT Codex supplies language generation only for: {task}"
+        ),
+    }
+
+
+def _invoke_configured_adapter_manifest(
+    runtime_config: dict[str, Any],
+    *,
+    manifest: dict[str, Any],
+    task: str,
+) -> dict[str, Any]:
+    agent = manifest["agent"]
+    engine = runtime_config["engine"]
+    is_local_http = engine in LOCAL_HTTP_ENGINES
+    return {
+        "schema": RUNTIME_RESULT_SCHEMA,
+        "engine": engine,
+        "status": "adapter_manifest_ready",
+        "identity_policy": runtime_config["identity_policy"],
+        "network_access": runtime_config["network_access"],
+        "applied_as": "language_and_tool_reasoning_engine_only_when_configured",
+        "prompt_fingerprint": _prompt_fingerprint(manifest=manifest, task=task),
+        "data_policy": {
+            "send_private_training_files": False,
+            "send_selected_memory_route_only": True,
+            "requires_user_configured_key_or_local_server": True,
+            "local_http_only": is_local_http,
+        },
+        "model": runtime_config.get("model"),
+        "draft": (
+            f"{agent['name']} is ready to use {engine} as the selected LLM adapter. "
+            f"Paideia keeps identity and learned routes in local records; the adapter supplies language generation for: {task}"
         ),
     }
 

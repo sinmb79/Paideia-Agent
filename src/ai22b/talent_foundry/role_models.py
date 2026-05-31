@@ -9,7 +9,9 @@ from ai22b.config import PROJECT_ROOT, storage_path
 
 
 ROLE_MODEL_SCHEMA = "ai-talent-role-model/v1"
+ROLE_MODEL_CATALOG_SCHEMA = "ai-talent-role-model-catalog/v1"
 CURRICULUM_MANIFEST_SCHEMA = "ai-talent-curriculum-manifest/v1"
+CURRICULUM_CATALOG_SCHEMA = "ai-talent-curriculum-catalog/v1"
 ROLE_MODEL_CATALOG_DIR = PROJECT_ROOT / "apps" / "ai-talent-foundry" / "catalogs" / "role_models"
 CURRICULUM_CATALOG_DIR = PROJECT_ROOT / "apps" / "ai-talent-foundry" / "catalogs" / "curricula"
 DEFAULT_PRIVATE_CURRICULUM_DIR = storage_path("private", "curricula", "graham_securities")
@@ -29,11 +31,18 @@ def list_role_models(domain: str | None = None) -> list[dict[str, Any]]:
         return models
     for path in sorted(ROLE_MODEL_CATALOG_DIR.glob("*.json")):
         item = _read_json(path)
-        if item.get("schema") != ROLE_MODEL_SCHEMA:
+        if item.get("schema") == ROLE_MODEL_SCHEMA:
+            candidates = [item]
+        elif item.get("schema") == ROLE_MODEL_CATALOG_SCHEMA:
+            candidates = list(item.get("role_models", []))
+        else:
             continue
-        if domain and item.get("domain") != domain:
-            continue
-        models.append(item)
+        for candidate in candidates:
+            if candidate.get("schema") != ROLE_MODEL_SCHEMA:
+                continue
+            if domain and candidate.get("domain") != domain:
+                continue
+            models.append(candidate)
     return models
 
 
@@ -48,10 +57,17 @@ def _curriculum_for(role_model: dict[str, Any]) -> dict[str, Any]:
     role_model_id = role_model["role_model_id"]
     for path in sorted(CURRICULUM_CATALOG_DIR.glob("*.json")):
         item = _read_json(path)
-        if item.get("schema") != CURRICULUM_MANIFEST_SCHEMA:
+        if item.get("schema") == CURRICULUM_MANIFEST_SCHEMA:
+            candidates = [item]
+        elif item.get("schema") == CURRICULUM_CATALOG_SCHEMA:
+            candidates = list(item.get("curricula", []))
+        else:
             continue
-        if item.get("role_model_id") == role_model_id:
-            return item
+        for candidate in candidates:
+            if candidate.get("schema") != CURRICULUM_MANIFEST_SCHEMA:
+                continue
+            if candidate.get("role_model_id") == role_model_id:
+                return candidate
     raise RoleModelNotFoundError(f"No curriculum manifest for role model: {role_model_id}")
 
 
@@ -78,10 +94,14 @@ def build_curriculum_manifest(
 ) -> dict[str, Any]:
     role_model = get_role_model(role_model_id)
     manifest = deepcopy(_curriculum_for(role_model))
-    private_dir = Path(private_curriculum_dir) if private_curriculum_dir else DEFAULT_PRIVATE_CURRICULUM_DIR
+    private_dir = (
+        Path(private_curriculum_dir)
+        if private_curriculum_dir
+        else storage_path("private", "curricula", role_model_id)
+    )
     manifest["private_curriculum"] = {
         "path": str(private_dir),
-        "public_export_label": "[AI22B_STORAGE_ROOT]/private/curricula/graham_securities",
+        "public_export_label": f"[AI22B_STORAGE_ROOT]/private/curricula/{role_model_id}",
         "allowed_file_policy": "local_user_provided_materials_only",
         "public_release": "redact_or_metadata_only",
     }
@@ -96,6 +116,8 @@ def summarize_role_model(role_model: dict[str, Any]) -> dict[str, Any]:
         "display_name": role_model.get("display_name"),
         "inspiration_mode": role_model.get("inspiration_mode"),
         "birth_date": identity.get("birth_date"),
+        "status": role_model.get("catalog_status", "ready"),
+        "primary_agent_use_case": role_model.get("primary_agent_use_case"),
         "source_count": len(role_model.get("source_facts", [])),
         "copyright_policy": role_model.get("copyright_policy", {}).get("public_repo_policy"),
     }

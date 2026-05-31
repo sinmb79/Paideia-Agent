@@ -62,28 +62,50 @@ def _select_track(request: str) -> dict[str, Any]:
 
 
 def _track_from_role_model(role_model: dict[str, Any], curriculum: dict[str, Any]) -> dict[str, Any]:
-    if role_model.get("role_model_id") != "graham_value_investing":
-        return FALLBACK_TRACK
     defaults = curriculum.get("major_defaults", {})
+    role_model_id = str(role_model.get("role_model_id") or "role_model")
+    domain = str(role_model.get("domain") or curriculum.get("domain") or "role_model")
+    display_name = str(role_model.get("display_name") or role_model_id)
+    stage_courses = [
+        course
+        for stage in curriculum.get("stages", [])
+        for course in stage.get("courses", [])
+        if isinstance(course, str)
+    ]
+    domains = list(dict.fromkeys(defaults.get("domains") or stage_courses[:8] or [domain]))
+    if role_model_id == "graham_value_investing":
+        track_id = defaults.get("track_id", "securities_research_phd")
+        name = defaults.get("track_name", "Graham process-replication securities research PhD track")
+        specialty = defaults.get("specialty", "securities research AI PhD")
+        target_role = defaults.get("target_role", "securities research agent")
+        keywords = defaults.get("keywords", ["securities", "research", "Graham", "value investing"])
+        if not defaults.get("domains") and not stage_courses:
+            domains = [
+                "financial accounting",
+                "corporate finance",
+                "financial economics",
+                "securities analysis",
+                "public filings research",
+                "portfolio risk",
+                "financial regulation and compliance",
+                "research writing",
+            ]
+    else:
+        track_id = defaults.get("track_id", f"{domain}_role_model_track")
+        name = defaults.get("track_name", f"{display_name} education-process track")
+        specialty = defaults.get("specialty", f"{domain} AI talent")
+        target_role = defaults.get("target_role", role_model.get("primary_agent_use_case") or f"{domain} agent")
+        keywords = defaults.get("keywords", [domain, role_model_id])
     return {
-        "track_id": "securities_research_phd",
-        "name": "Graham process-replication securities research PhD track",
-        "specialty": "증권 리서치 AI 박사",
-        "target_role": "증권 리서치 에이전트",
-        "keywords": ["securities", "research", "Graham", "증권", "가치평가"],
-        "domains": [
-            "financial accounting",
-            "corporate finance",
-            "financial economics",
-            "securities analysis",
-            "public filings research",
-            "portfolio risk",
-            "financial regulation and compliance",
-            "research writing",
-        ],
+        "track_id": track_id,
+        "name": name,
+        "specialty": specialty,
+        "target_role": target_role,
+        "keywords": keywords,
+        "domains": domains,
         "doctoral_project": defaults.get(
             "doctoral_project",
-            "Local-first securities research agent with cumulative education-to-work Reasoning Ledger",
+            f"Local-first {domain} agent with cumulative education-to-work Reasoning Ledger",
         ),
     }
 
@@ -251,7 +273,12 @@ def create_agent_training_blueprint(
 
     track = dict(_track_from_role_model(role_model, curriculum)) if role_model and curriculum else dict(_select_track(request))
     if domain == "securities_research" and not role_model:
-        track = dict(_track_from_role_model({"role_model_id": "graham_value_investing"}, {"major_defaults": {}}))
+        track = dict(
+            _track_from_role_model(
+                {"role_model_id": "graham_value_investing", "domain": "securities_research"},
+                {"domain": "securities_research", "major_defaults": {}},
+            )
+        )
     track["domains"] = _highlight_domains(request, list(track["domains"]))
 
     training_pipeline = _training_pipeline(track)

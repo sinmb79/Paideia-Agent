@@ -1,6 +1,6 @@
 # Paideia Agent
 
-[English](README.md) | [한국어 설명문](README.ko.md)
+[English](README.md) | [한국어](README.ko.md)
 
 Paideia Agent is a local-first AI talent foundry and agent runtime. It is designed to raise an AI talent through staged education, assessments, memory formation, work experience, and review, then package that talent as an installable local agent.
 
@@ -19,9 +19,9 @@ Most agent runtimes begin with an assistant and add tools, memory, channels, and
 - **Local-first ownership**: the owner keeps private data, generated memories, voice assets, local curricula, and installed agent bundles on their own machine.
 - **Safe skill migration**: Hermes/OpenClaw/generic skills can be imported, but they are quarantined and disabled until reviewed.
 
-## Current Deep Track
+## Bundled Role Models
 
-The first deep track is:
+The first deep track is still the directly testable Graham Junior sample:
 
 ```text
 domain: securities_research
@@ -38,6 +38,24 @@ This track is inspired by Benjamin Graham's publicly documented learning and val
 5. exams and reports that shape the talent's Reasoning Ledger over time.
 
 Copyrighted textbooks are stored as metadata and reading plans only unless the owner provides a lawful local private copy.
+
+The onboarding catalog now also includes selectable public-metadata role-model tracks for common agent use cases:
+
+| Domain | Role model process | Good first agent use |
+| --- | --- | --- |
+| `software_agent_engineering` | `hopper_software_tooling`, `dijkstra_verified_programming` | coding, debugging, tool-building, correctness review |
+| `data_analysis_bi` | `tukey_data_analysis` | data profiling, BI, experiment analysis |
+| `customer_support_quality_ops` | `deming_quality_ops` | support quality, process improvement, incident learning |
+| `cybersecurity` | `anderson_security_engineering` | threat modeling, security review, privacy/risk analysis |
+| `marketing_sales` | `ogilvy_research_copywriting` | customer research, campaign briefs, copy testing |
+| `healthcare_operations` | `nightingale_healthcare_statistics` | healthcare operations and safety dashboards, not medical advice |
+| `education_tutoring` | `montessori_learning_design` | tutoring design, learner diagnosis, adaptive curriculum |
+| `management_productivity` | `drucker_management_knowledge_work` | management memos, decision support, productivity systems |
+| `legal_compliance_research` | `ginsburg_legal_research` | legal/compliance research summaries, not legal advice |
+| `blockchain_protocol_research` | `finney_blockchain_protocol` | protocol research, wallet-safety review, not investment advice |
+| `information_systems_research` | `shannon_information_theory` | information theory, compression, uncertainty modeling |
+
+All of these are **process templates**, not impersonation targets. The catalog stores public facts, source links, curriculum pressure, and assessment ladders. It does not store copyrighted textbook bodies or inject a public figure's personality.
 
 ## Architecture
 
@@ -111,7 +129,8 @@ This sample first selects the LLM service and chat surface, then lets that selec
 List available role models:
 
 ```powershell
-ai22b-talent-foundry list-role-models --domain securities_research
+ai22b-talent-foundry list-role-models
+ai22b-talent-foundry list-role-models --domain software_agent_engineering
 ```
 
 Create a Graham-inspired blueprint without modifying another talent:
@@ -131,6 +150,22 @@ Run the education-to-employment flow from a blueprint:
 ```powershell
 ai22b-talent-foundry raise `
   --blueprint "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\agent_training_blueprint.json"
+```
+
+Create a non-Graham talent with a local Ollama-compatible LLM adapter selected during onboarding:
+
+```powershell
+ai22b-talent-foundry onboard-agent `
+  --request "Raise a developer-tool agent that learns through debugging, compilers, tests, and documentation." `
+  --talent-name "hopper-junior" `
+  --gender "male" `
+  --owner "Boss" `
+  --domain software_agent_engineering `
+  --role-model hopper_software_tooling `
+  --llm-service ollama_local `
+  --llm-model "llama3.1:8b" `
+  --llm-model-path "http://localhost:11434" `
+  --chat-surface codex-bridge-chat
 ```
 
 Build an installable Paideia Agent kit from a hired employment record:
@@ -213,7 +248,21 @@ Paideia Agent follows the practical first-run pattern seen in installed agent pr
 4. let the selected LLM act as a researcher that turns the owner request into curriculum, assessment, and growth inputs,
 5. review the hiring dossier before using the installed agent for work.
 
-Supported initial LLM services include `openai_chatgpt_codex`, `deterministic_local`, `bigram_local`, `transformers_local`, and `llama_cpp_local`. Supported initial chat surfaces include `codex-bridge-chat`, `cli-console`, `dataflow-job`, and a disabled `openclaw-style-gateway` adapter manifest.
+Supported initial LLM services include:
+
+- `openai_chatgpt_codex`
+- `anthropic_claude_api`
+- `google_gemini_api`
+- `mistral_api`
+- `openrouter_api`
+- `ollama_local`
+- `lm_studio_local`
+- `deterministic_local`
+- `bigram_local`
+- `transformers_local`
+- `llama_cpp_local`
+
+External API adapters are manifest-ready and require the user's own keys before live use. Local model adapters prefer localhost or local files. Supported initial chat surfaces include `codex-bridge-chat`, `cli-console`, `dataflow-job`, and a disabled `openclaw-style-gateway` adapter manifest.
 
 ## Hiring Dossier
 

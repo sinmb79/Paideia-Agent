@@ -1,128 +1,132 @@
 # Paideia Agent
 
-[English](README.md) | [한국어 설명문](README.ko.md)
+[English](README.md) | [한국어](README.ko.md)
 
-Paideia Agent는 로컬 우선 AI 인재 육성 프로그램이자 설치형 에이전트 런타임입니다. 단순히 프롬프트로 성격을 흉내 내는 챗봇이 아니라, 교육 과정, 시험, 과제, 실패와 회복, 기억 형성, 업무 경험을 누적한 뒤 고용 가능한 에이전트로 내보내는 것을 목표로 합니다.
+Paideia Agent는 로컬 우선 AI 인재 육성 프로그램이자 설치형 에이전트 런타임입니다. 단순히 프롬프트 프로필을 만드는 것이 아니라, 공개 근거가 있는 커리큘럼, 시험, 과제, 피드백, 이력서형 dossier, Reasoning Ledger를 거쳐 고용 가능한 로컬 AI 인재를 만드는 것을 목표로 합니다.
 
-## 핵심 개념
+## 핵심 차이
 
-- **먼저 육성, 나중에 고용**: AI 인재는 성장 기록, 교과 과정, 시험, 리포트, 검토 게이트를 거친 뒤 에이전트가 됩니다.
-- **Reasoning Ledger / Ariadne Thread**: 기존의 “추론기보”를 외국 사용자도 이해하기 쉬운 용어로 정리한 이름입니다. 숨은 chain-of-thought가 아니라, 가설, 근거, 반례, 오답, 수정된 원칙, 업무 습관을 요약한 검토 가능한 학습 기록입니다. 내부 호환 파일명은 `reasoning_kibo.jsonl`로 유지합니다.
-- **기억기판**: 모든 대화 전문을 넣는 것이 아니라, 현재 작업에 필요한 검증된 요약과 절차 기억만 선택해 연결합니다.
-- **LLM은 엔진**: OpenAI/Codex 같은 LLM은 언어와 도구 실행 엔진이며, 에이전트의 정체성과 학습 기록은 로컬 산출물에서 옵니다.
-- **스킬 마이그레이션**: Hermes/OpenClaw/generic 스킬을 가져올 수 있지만, 기본값은 격리와 비활성화입니다.
+- **먼저 육성하고, 나중에 고용합니다.** 에이전트는 출발점이 아니라 교육을 마친 뒤의 실행 형태입니다.
+- **LLM은 엔진입니다.** ChatGPT/Codex, Claude, Gemini, Mistral, OpenRouter, Ollama, LM Studio, GGUF/Transformers 모델은 언어 생성과 추론 엔진으로 연결됩니다. 정체성은 로컬 학습 기록, 성적표, 메모리 기판, Reasoning Ledger에서 옵니다.
+- **롤모델은 인격 주입이 아닙니다.** 특정 인물의 성격을 흉내 내는 것이 아니라, 공개적으로 확인 가능한 학습 경로와 과제 압력을 커리큘럼으로 재구성합니다.
+- **Reasoning Ledger / Ariadne Thread**는 숨은 chain-of-thought가 아닙니다. 가설, 근거, 반례, 오답, 수정된 원칙, 공부 습관, 업무 경험을 검토 가능한 요약으로 축적하는 성장 기록입니다. 내부 호환 파일명은 `reasoning_kibo.jsonl`입니다.
+- **공개 저장소에는 메타데이터만 둡니다.** 개인 학습자료, 로컬 기억, 생성된 에이전트 번들, 모델 체크포인트, 비공개 교재 본문은 GitHub에 올리지 않습니다.
 
-## 첫 번째 깊은 트랙
+## 온보딩에서 선택할 수 있는 롤모델
 
-첫 구현 트랙은 증권 리서치입니다.
+첫 직접 테스트 샘플은 `graham_value_investing` 기반의 `grham-junior`입니다. 여기에 더해 에이전트로 자주 쓰이는 분야의 공개 메타데이터 롤모델을 추가했습니다.
 
-```text
-domain: securities_research
-role_model: graham_value_investing
-sample talent: grham-junior
+| 분야 | 롤모델 프로세스 | 추천 용도 |
+| --- | --- | --- |
+| `securities_research` | `graham_value_investing` | 증권 리서치, 가치평가, 공시 분석 |
+| `software_agent_engineering` | `hopper_software_tooling`, `dijkstra_verified_programming` | 코딩, 디버깅, 개발도구, 정확성 검토 |
+| `data_analysis_bi` | `tukey_data_analysis` | 데이터 분석, BI, 실험 해석 |
+| `customer_support_quality_ops` | `deming_quality_ops` | 고객지원 품질, 운영개선, 장애 회고 |
+| `cybersecurity` | `anderson_security_engineering` | 위협모델링, 보안 리뷰, 개인정보/리스크 분석 |
+| `marketing_sales` | `ogilvy_research_copywriting` | 마케팅 리서치, 카피라이팅, 캠페인 테스트 |
+| `healthcare_operations` | `nightingale_healthcare_statistics` | 의료 운영/안전 대시보드, 의학적 조언은 제외 |
+| `education_tutoring` | `montessori_learning_design` | 튜터링, 학습자 진단, 커리큘럼 설계 |
+| `management_productivity` | `drucker_management_knowledge_work` | 의사결정 메모, 경영 보조, 생산성 시스템 |
+| `legal_compliance_research` | `ginsburg_legal_research` | 법률/컴플라이언스 리서치, 법률 조언은 제외 |
+| `blockchain_protocol_research` | `finney_blockchain_protocol` | 블록체인 프로토콜, 지갑 안전, 투자 조언은 제외 |
+| `information_systems_research` | `shannon_information_theory` | 정보이론, 압축, 통신/불확실성 모델링 |
+
+## LLM 선택
+
+온보딩은 OpenClaw/Hermes처럼 먼저 LLM 서비스와 채팅 표면을 고르게 합니다.
+
+지원 선택지:
+
+- `openai_chatgpt_codex`
+- `anthropic_claude_api`
+- `google_gemini_api`
+- `mistral_api`
+- `openrouter_api`
+- `ollama_local`
+- `lm_studio_local`
+- `deterministic_local`
+- `bigram_local`
+- `transformers_local`
+- `llama_cpp_local`
+
+외부 API 어댑터는 사용자의 API 키가 있어야 실사용됩니다. 로컬 모델 어댑터는 localhost 또는 로컬 모델 파일을 우선합니다.
+
+## 빠른 실행
+
+```powershell
+python -m pip install -e .
+$env:PYTHONPATH = "src"
+$env:AI22B_STORAGE_ROOT = "$env:USERPROFILE\Documents\22B-AI-local-storage"
 ```
 
-이 트랙은 Benjamin Graham의 공개적으로 확인 가능한 학습 환경과 가치투자 계보에서 영감을 받습니다. 다만 Graham의 성격이나 결론을 미리 주입하지 않습니다. 공개 근거가 있는 학습 조건, 교과 과정, 시험, 과제, 리포트, 피드백 루프를 구성해 AI 인재가 그 과정 안에서 자기 Reasoning Ledger를 만들어가도록 설계합니다.
+롤모델 목록:
 
-## 실행 예시
+```powershell
+ai22b-talent-foundry list-role-models
+ai22b-talent-foundry list-role-models --domain software_agent_engineering
+```
 
-먼저 Graham Junior 샘플을 온보딩으로 바로 실행할 수 있습니다.
+Graham Junior 샘플:
 
 ```powershell
 ai22b-talent-foundry start-console `
   --answers examples\graham_junior_onboarding.answers.json
 ```
 
-이 샘플은 먼저 `openai_chatgpt_codex` LLM 서비스와 `codex-bridge-chat` 채팅 표면을 선택한 뒤, 선택된 LLM을 교육과정 연구원으로 사용해 Graham 기반 증권 리서치 트랙을 육성합니다.
+Hopper Junior 예시:
 
 ```powershell
-python -m pip install -e .
-$env:PYTHONPATH = "src"
-ai22b-talent-foundry list-role-models --domain securities_research
-```
-
-Graham 트랙 블루프린트 예시:
-
-```powershell
-ai22b-talent-foundry blueprint `
-  --request "Raise a separate Graham learning-path sample AI without modifying existing talents." `
-  --talent-name "grham-junior" `
+ai22b-talent-foundry onboard-agent `
+  --request "디버깅, 컴파일러, 테스트, 문서화를 통해 배우는 개발도구 에이전트를 육성한다." `
+  --talent-name "hopper-junior" `
   --gender "male" `
   --owner "Boss" `
-  --domain securities_research `
-  --role-model graham_value_investing
+  --domain software_agent_engineering `
+  --role-model hopper_software_tooling `
+  --llm-service ollama_local `
+  --llm-model "llama3.1:8b" `
+  --llm-model-path "http://localhost:11434" `
+  --chat-surface codex-bridge-chat
 ```
 
-설치형 Paideia Agent kit 생성:
+## 산출물
 
-```powershell
-ai22b-talent-foundry build-paideia-agent-kit `
-  --employment-record .\employment_record.json `
-  --output-dir .\paideia_agent_kit
+육성 후에는 다음과 같은 파일들이 로컬 저장소에 생성됩니다.
 
-ai22b-talent-foundry doctor-agent-program `
-  --program .\paideia_agent_kit\22b_paideia_agent_program.json
-```
+- `role_model_profile.json`
+- `saju_narrative_seed.json`
+- `curriculum_manifest.json`
+- `assessment_transcript.json`
+- `reasoning_kibo.jsonl`
+- `hiring_dossier.json`
+- `HIRING_DOSSIER.ko.md`
+- `learning_ledger.json`
+- `memory_substrate.json`
+- `22b_paideia_agent_program.json`
+- Hermes/OpenClaw 스타일 어댑터 manifest
 
-## Hermes/OpenClaw 스킬 가져오기
+## 공개 저장소 규칙
 
-```powershell
-ai22b-talent-foundry migrate-agent-assets `
-  --source C:\path\to\skill-folder `
-  --paideia-kit C:\path\to\paideia_agent_kit `
-  --source-runtime openclaw
-```
+공개 GitHub에는 코드, 문서, 공개 메타데이터, 테스트 픽스처만 올립니다. 아래 항목은 제외합니다.
 
-가져온 스킬은 `skills/imported/<runtime>/<skill>/` 아래에 복사됩니다. 즉시 실행되지 않고, wrapper `SKILL.md`와 `paideia_skill_manifest.json`을 만든 뒤 `disabled` 상태로 보관됩니다. 보스 검토, 위험 패턴 확인, doctor 검사를 통과한 뒤에만 교육축 또는 절차 스킬로 승격해야 합니다.
+- `data/private/**`
+- `runs/**`
+- `apps/*/runs/**`
+- 모델 체크포인트
+- API 키와 토큰
+- 개인 음성/이미지/문서
+- 생성된 에이전트 번들
 
-## 온보딩 모델
-
-Paideia Agent의 첫 실행 순서는 다음과 같습니다.
-
-1. LLM 서비스를 선택합니다.
-2. 채팅 표면을 선택합니다.
-3. Graham Junior 샘플 또는 사용자가 원하는 롤모델/분야를 선택합니다.
-4. 선택한 LLM이 연구원 역할로 사용자 요청을 교육과정, 평가, 성장 입력으로 바꿉니다.
-5. 육성 후 이력서형 dossier를 검토하고 채팅 또는 업무 실행을 시작합니다.
-
-지원되는 초기 LLM 서비스는 `openai_chatgpt_codex`, `deterministic_local`, `bigram_local`, `transformers_local`, `llama_cpp_local`입니다. 지원되는 초기 채팅 표면은 `codex-bridge-chat`, `cli-console`, `dataflow-job`, 그리고 기본 비활성화 상태의 `openclaw-style-gateway` 어댑터입니다.
-
-## 이력서형 Dossier
-
-`hiring_dossier.json`과 `HIRING_DOSSIER.ko.md`는 육성된 AI 인재를 실제 에이전트로 고용하기 전 확인하는 이력서형 기록입니다. 여기에는 이름, 성별, 출생 설정, 학력, 전공, 성적표, 논문/리포트, 프로젝트, 활동, 시험 결과, 박사 심사, 고용 권한, 금지사항, 계속 성장 정책이 들어갑니다.
-
-관련 파일:
-
-- `hiring_dossier.json`: 도구와 어댑터가 읽는 구조화 이력서.
-- `HIRING_DOSSIER.ko.md`: 사람이 읽는 한글 이력서.
-- `assessment_transcript.json`: 시험과 리포트 성적표.
-- `learning_ledger.json`: 검증된 학습 경험 원장.
-- `reasoning_kibo.jsonl`: Reasoning Ledger의 내부 호환 파일.
-
-## 연구 근거
-
-참고한 연구논문, 보고서, 프로그램과 Paideia Agent에 반영된 내용을 별도 문서로 정리했습니다.
-
-- [연구 근거와 반영 내용](docs/research_basis.ko.md)
-- [Research Basis](docs/research_basis.md)
-- [Tesla식 데이터플로우 기판 벤치마킹](docs/tesla_board_benchmark.ko.md): 보스가 제안한 테슬라 AI 칩/기판 비유를 기억 지역성, 컨텍스트 패킹, 학습 승격, Reasoning Ledger 구조로 번역한 문서입니다.
-- [기존 22B-AI 시스템 계승 메모](docs/legacy_system_integration.ko.md): 이전 신용 성장 시스템과 from-scratch 모델 작업을 Paideia의 legacy foundation으로 계승하는 방식을 설명합니다.
-
-## 공개 저장소 원칙
-
-이 저장소는 공개 가능한 코드, 문서, 테스트, 공개 메타데이터만 담습니다. 개인 성장 데이터, 로컬 기억, 생성된 에이전트 번들, 모델 체크포인트, 음성 자산, 비공개 교재는 GitHub에 올리지 않습니다.
-
-공개 전 점검:
+검사:
 
 ```powershell
 .\scripts\check_public_repo_hygiene.ps1
 ```
 
-## 참고 문서
+## 더 보기
 
-- [Paideia Agent overview](docs/paideia_center.md)
-- [Hermes/OpenClaw benchmark summary](docs/paideia_agent_benchmark.en.md)
-- [연구 근거와 반영 내용](docs/research_basis.ko.md)
-- [Tesla식 데이터플로우 기판 벤치마킹](docs/tesla_board_benchmark.ko.md)
-- [기존 22B-AI 시스템 계승 메모](docs/legacy_system_integration.ko.md)
-- [Security policy](SECURITY.md)
+- [English README](README.md)
+- [연구 근거](docs/research_basis.ko.md)
+- [Research Basis](docs/research_basis.md)
+- [Tesla 기판 벤치마킹](docs/tesla_board_benchmark.ko.md)
+- [기존 22B-AI 시스템 통합](docs/legacy_system_integration.ko.md)

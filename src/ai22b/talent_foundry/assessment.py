@@ -114,16 +114,28 @@ def _score_submission(submission: dict[str, Any], keywords: list[str]) -> dict[s
     }
 
 
+def _generic_rubric(gate_id: str) -> dict[str, Any]:
+    tokens = [
+        token
+        for token in gate_id.replace("-", "_").split("_")
+        if token and token not in {"exam", "project", "review", "case"}
+    ]
+    keywords = list(dict.fromkeys(tokens + ["evidence", "verification", "safety", "review"]))
+    return {
+        "name": gate_id.replace("_", " ").title(),
+        "pass_score": 75,
+        "keywords": keywords,
+        "generic": True,
+    }
+
+
 def evaluate_assessment(
     plan: dict[str, Any],
     *,
     gate_id: str,
     submission: dict[str, Any],
 ) -> dict[str, Any]:
-    if gate_id not in RUBRICS:
-        raise ValueError(f"Unknown assessment gate: {gate_id}")
-
-    rubric = RUBRICS[gate_id]
+    rubric = RUBRICS.get(gate_id) or _generic_rubric(gate_id)
     rubric_scores = _score_submission(submission, rubric["keywords"])
     score = sum(rubric_scores.values())
     passed = score >= int(rubric["pass_score"])

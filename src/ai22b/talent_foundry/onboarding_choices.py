@@ -28,6 +28,72 @@ LLM_SERVICE_CATALOG: list[dict[str, Any]] = [
         "privacy_note": "No network call.",
     },
     {
+        "id": "anthropic_claude_api",
+        "label": "Anthropic Claude API adapter",
+        "engine": "anthropic_claude_api",
+        "status": "adapter_manifest_ready",
+        "default_chat_mode": "live_when_configured",
+        "model_policy": "Requires --llm-model and an Anthropic API key in the user's own environment.",
+        "requires": ["ANTHROPIC_API_KEY", "network access"],
+        "researcher_fit": "external_api_choice",
+        "privacy_note": "External API choice; send only selected memory summaries after explicit configuration.",
+    },
+    {
+        "id": "google_gemini_api",
+        "label": "Google Gemini API adapter",
+        "engine": "google_gemini_api",
+        "status": "adapter_manifest_ready",
+        "default_chat_mode": "live_when_configured",
+        "model_policy": "Requires --llm-model and a Gemini API key in the user's own environment.",
+        "requires": ["GEMINI_API_KEY", "network access"],
+        "researcher_fit": "external_api_choice",
+        "privacy_note": "External API choice; send only selected memory summaries after explicit configuration.",
+    },
+    {
+        "id": "mistral_api",
+        "label": "Mistral API adapter",
+        "engine": "mistral_api",
+        "status": "adapter_manifest_ready",
+        "default_chat_mode": "live_when_configured",
+        "model_policy": "Requires --llm-model and a Mistral API key in the user's own environment.",
+        "requires": ["MISTRAL_API_KEY", "network access"],
+        "researcher_fit": "external_api_choice",
+        "privacy_note": "External API choice; send only selected memory summaries after explicit configuration.",
+    },
+    {
+        "id": "openrouter_api",
+        "label": "OpenRouter multi-provider adapter",
+        "engine": "openrouter_api",
+        "status": "adapter_manifest_ready",
+        "default_chat_mode": "live_when_configured",
+        "model_policy": "Requires --llm-model and OPENROUTER_API_KEY in the user's own environment.",
+        "requires": ["OPENROUTER_API_KEY", "network access"],
+        "researcher_fit": "external_api_choice",
+        "privacy_note": "External router choice; send only selected memory summaries after explicit configuration.",
+    },
+    {
+        "id": "ollama_local",
+        "label": "Ollama local model server",
+        "engine": "ollama_local_http",
+        "status": "adapter_manifest_ready",
+        "default_chat_mode": "local_http_when_running",
+        "model_policy": "Use --llm-model for an installed Ollama model; --llm-model-path can hold the localhost URL.",
+        "requires": ["local Ollama server"],
+        "researcher_fit": "local_private_model",
+        "privacy_note": "Localhost-only adapter; no external API by default.",
+    },
+    {
+        "id": "lm_studio_local",
+        "label": "LM Studio local server",
+        "engine": "lm_studio_local_http",
+        "status": "adapter_manifest_ready",
+        "default_chat_mode": "local_http_when_running",
+        "model_policy": "Use --llm-model for the loaded local model; --llm-model-path can hold the localhost URL.",
+        "requires": ["local LM Studio server"],
+        "researcher_fit": "local_private_model",
+        "privacy_note": "Localhost-only adapter; no external API by default.",
+    },
+    {
         "id": "bigram_local",
         "label": "From-scratch local bigram checkpoint",
         "engine": "bigram_local",
@@ -99,6 +165,14 @@ CHAT_SURFACE_CATALOG: list[dict[str, Any]] = [
 
 DEFAULT_LLM_SERVICE_ID = "openai_chatgpt_codex"
 DEFAULT_CHAT_SURFACE_ID = "codex-bridge-chat"
+EXTERNAL_API_ENGINES = {
+    "openai_chatgpt_codex",
+    "anthropic_claude_api",
+    "google_gemini_api",
+    "mistral_api",
+    "openrouter_api",
+}
+LOCAL_HTTP_ENGINES = {"ollama_local_http", "lm_studio_local_http"}
 
 
 def _catalog_by_id(catalog: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
@@ -132,11 +206,16 @@ def resolve_llm_service(
     resolved["service_id"] = resolved["id"]
     resolved["selected_model"] = llm_model or None
     resolved["selected_model_path"] = llm_model_path or None
-    resolved["network_access"] = (
-        "codex_or_openai_data_minimized"
-        if resolved["engine"] == "openai_chatgpt_codex"
-        else "blocked"
-    )
+    engine = resolved["engine"]
+    if engine == "openai_chatgpt_codex":
+        network_access = "codex_or_openai_data_minimized"
+    elif engine in EXTERNAL_API_ENGINES:
+        network_access = "external_api_selected_data_minimized"
+    elif engine in LOCAL_HTTP_ENGINES:
+        network_access = "localhost_only"
+    else:
+        network_access = "blocked"
+    resolved["network_access"] = network_access
     return resolved
 
 
@@ -158,6 +237,9 @@ def build_researcher_intake(
     llm_service: dict[str, Any],
     chat_surface: dict[str, Any],
 ) -> dict[str, Any]:
+    from ai22b.talent_foundry.role_models import list_role_models, summarize_role_model
+
+    available_role_models = [summarize_role_model(item) for item in list_role_models(domain)]
     return {
         "schema": "ai22b-paideia-researcher-intake/v1",
         "owner": owner,
@@ -165,6 +247,8 @@ def build_researcher_intake(
         "talent_name": talent_name,
         "selected_llm_service": llm_service,
         "selected_chat_surface": chat_surface,
+        "available_role_models": available_role_models,
+        "available_llm_services": LLM_SERVICE_CATALOG,
         "researcher_contract": {
             "role": "curriculum_researcher_and_growth_program_operator",
             "llm_is_identity": False,

@@ -254,8 +254,11 @@ def _build_parser() -> argparse.ArgumentParser:
     hire_installed.add_argument("--installed-manifest", required=True)
     hire_installed.add_argument("--employer", default="보스")
     hire_installed.add_argument("--role", required=True)
+    hire_installed.add_argument("--llm-service", choices=llm_service_ids())
     hire_installed.add_argument("--llm-engine", default="deterministic_local")
+    hire_installed.add_argument("--llm-model")
     hire_installed.add_argument("--llm-model-path")
+    hire_installed.add_argument("--chat-surface", choices=chat_surface_ids())
 
     run_hired_agent_command = subparsers.add_parser(
         "run-hired-agent",
@@ -811,8 +814,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             Path(args.installed_manifest),
             employer=args.employer,
             role=args.role,
+            llm_service=args.llm_service,
             llm_engine=args.llm_engine,
+            llm_model=args.llm_model,
             llm_model_path=args.llm_model_path,
+            chat_surface=args.chat_surface,
         )
         print(str(hiring["employment_record"]))
         return 0
