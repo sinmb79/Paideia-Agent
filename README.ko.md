@@ -426,3 +426,7 @@ ai22b-talent-foundry build-openclaw-live-smoke-plan `
 ```
 
 `start-console`과 `onboard`도 이제 고용이 끝난 직후 같은 smoke plan을 자동으로 생성합니다. 그래서 첫 실행 폴더 안에서 교육/고용 산출물과 OpenClaw 라이브 검증 순서를 함께 확인할 수 있습니다.
+
+## WebChat 런타임 패널
+
+WebChat 화면과 `/api/runtime`, `/api/smoke-plan`은 선택된 OpenClaw provider/model, 채팅 surface, 채널 경로, live smoke-test 순서를 함께 보여줍니다. API 키, 봇 토큰, OAuth refresh token, QR 세션, 비공개 학습 파일은 읽거나 저장하지 않습니다.

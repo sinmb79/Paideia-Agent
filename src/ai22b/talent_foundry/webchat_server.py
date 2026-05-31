@@ -9,10 +9,13 @@ from typing import Any
 from urllib.parse import urlparse
 
 from ai22b.talent_foundry.channel_gateway import run_openclaw_channel_message
+from ai22b.talent_foundry.openclaw_employment_runtime import build_runtime_selection_snapshot
+from ai22b.talent_foundry.openclaw_live_smoke_plan import build_openclaw_live_smoke_plan
 
 
 WEBCHAT_SERVER_SCHEMA = "ai22b-openclaw-webchat-server/v1"
 WEBCHAT_RESPONSE_SCHEMA = "ai22b-openclaw-webchat-response/v1"
+WEBCHAT_RUNTIME_SCHEMA = "ai22b-openclaw-webchat-runtime/v1"
 MAX_MESSAGE_BYTES = 1_000_000
 
 
@@ -51,10 +54,18 @@ def _webchat_html(agent_name: str) -> str:
   <style>
     :root {{ color-scheme: light dark; font-family: system-ui, -apple-system, Segoe UI, sans-serif; }}
     body {{ margin: 0; background: #101418; color: #eef4f7; }}
-    main {{ max-width: 880px; margin: 0 auto; padding: 24px; min-height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; gap: 16px; }}
+    main {{ max-width: 980px; margin: 0 auto; padding: 24px; min-height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; gap: 16px; }}
     header {{ display: flex; justify-content: space-between; align-items: baseline; gap: 16px; border-bottom: 1px solid #28343d; padding-bottom: 12px; }}
     h1 {{ font-size: 20px; margin: 0; }}
     #status {{ color: #9ab0bd; font-size: 13px; }}
+    #runtime {{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }}
+    .metric {{ border: 1px solid #2b3a44; border-radius: 8px; padding: 10px; background: #111a22; min-height: 54px; }}
+    .metric span {{ display: block; color: #9ab0bd; font-size: 12px; margin-bottom: 4px; }}
+    .metric strong {{ font-size: 13px; overflow-wrap: anywhere; }}
+    details {{ border: 1px solid #2b3a44; border-radius: 8px; padding: 10px 12px; background: #0d1318; }}
+    summary {{ cursor: pointer; font-weight: 700; }}
+    #smoke {{ margin: 10px 0 0; padding-left: 20px; color: #c8d7df; }}
+    #smoke li {{ margin: 4px 0; }}
     #chat {{ flex: 1; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; padding: 4px 0; }}
     .msg {{ border: 1px solid #2b3a44; border-radius: 8px; padding: 12px; line-height: 1.55; white-space: pre-wrap; }}
     .user {{ align-self: flex-end; background: #17324a; max-width: 78%; }}
@@ -71,6 +82,11 @@ def _webchat_html(agent_name: str) -> str:
       <h1>{escaped_agent_name} WebChat</h1>
       <span id="status">local loopback gateway</span>
     </header>
+    <section id="runtime" aria-label="OpenClaw runtime"></section>
+    <details open>
+      <summary>OpenClaw smoke plan</summary>
+      <ol id="smoke"></ol>
+    </details>
     <section id="chat" aria-live="polite"></section>
     <form id="form">
       <textarea id="message" placeholder="Type a message for the local Paideia agent"></textarea>
@@ -82,6 +98,8 @@ def _webchat_html(agent_name: str) -> str:
     const form = document.querySelector("#form");
     const textarea = document.querySelector("#message");
     const send = document.querySelector("#send");
+    const runtime = document.querySelector("#runtime");
+    const smoke = document.querySelector("#smoke");
     const conversationId = "webchat-" + Math.random().toString(16).slice(2);
     function addMessage(kind, text) {{
       const div = document.createElement("div");
@@ -89,6 +107,36 @@ def _webchat_html(agent_name: str) -> str:
       div.textContent = text;
       chat.appendChild(div);
       div.scrollIntoView({{ block: "end" }});
+    }}
+    function metric(label, value) {{
+      const div = document.createElement("div");
+      div.className = "metric";
+      div.innerHTML = "<span></span><strong></strong>";
+      div.querySelector("span").textContent = label;
+      div.querySelector("strong").textContent = value || "not selected";
+      runtime.appendChild(div);
+    }}
+    async function loadRuntime() {{
+      try {{
+        const response = await fetch("/api/runtime");
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "runtime request failed");
+        const llm = data.runtime_selection.llm;
+        const chatRuntime = data.runtime_selection.chat;
+        metric("Provider", llm.openclaw_provider_id || llm.service_id);
+        metric("Model", llm.openclaw_model || llm.selected_model);
+        metric("Chat surface", chatRuntime.surface_id);
+        metric("Network", llm.network_access);
+        metric("Plan status", data.live_smoke_plan.status);
+        metric("Secrets", data.security.secret_values_stored ? "stored" : "not stored");
+        for (const step of data.live_smoke_plan.operator_sequence) {{
+          const li = document.createElement("li");
+          li.textContent = step;
+          smoke.appendChild(li);
+        }}
+      }} catch (error) {{
+        metric("Runtime", "unavailable: " + error.message);
+      }}
     }}
     form.addEventListener("submit", async (event) => {{
       event.preventDefault();
@@ -113,10 +161,40 @@ def _webchat_html(agent_name: str) -> str:
         textarea.focus();
       }}
     }});
+    loadRuntime();
   </script>
 </body>
 </html>
 """
+
+
+def _runtime_payload(employment_record_path: Path, employment: dict[str, Any]) -> dict[str, Any]:
+    runtime_selection = build_runtime_selection_snapshot(employment, channels=["webchat"])
+    live_smoke_plan = _smoke_plan_payload(employment_record_path)
+    return {
+        "schema": WEBCHAT_RUNTIME_SCHEMA,
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "runtime_selection": runtime_selection,
+        "live_smoke_plan": {
+            "schema": live_smoke_plan["schema"],
+            "status": live_smoke_plan["status"],
+            "operator_sequence": live_smoke_plan["operator_sequence"],
+            "commands": live_smoke_plan["commands"],
+            "policy": live_smoke_plan["policy"],
+        },
+        "security": {
+            "secret_values_stored": False,
+            "external_network_call_performed": False,
+            "private_training_files_sent_to_channel": False,
+        },
+    }
+
+
+def _smoke_plan_payload(employment_record_path: Path) -> dict[str, Any]:
+    return build_openclaw_live_smoke_plan(
+        employment_record_path,
+        channels=["webchat"],
+    )
 
 
 def make_openclaw_webchat_server(
@@ -158,6 +236,8 @@ def make_openclaw_webchat_server(
                         "agent": employment["agent"],
                         "paths": {
                             "webchat": "/webchat",
+                            "runtime": "/api/runtime",
+                            "smoke_plan": "/api/smoke-plan",
                             "message": "/api/message",
                         },
                         "security": {
@@ -167,6 +247,12 @@ def make_openclaw_webchat_server(
                         },
                     },
                 )
+                return
+            if path == "/api/runtime":
+                _write_json_response(self, 200, _runtime_payload(employment_record_path, employment))
+                return
+            if path == "/api/smoke-plan":
+                _write_json_response(self, 200, _smoke_plan_payload(employment_record_path))
                 return
             if path in {"/", "/webchat"}:
                 _write_text_response(

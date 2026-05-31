@@ -2301,6 +2301,8 @@ class GrahamTalentFoundryTests(unittest.TestCase):
                 artifacts["installed_agent_manifest"],
                 employer="Boss",
                 role="Local WebChat test agent",
+                llm_service="openclaw-gateway/openrouter/meta-llama/llama-3.1-8b",
+                llm_model_path="http://127.0.0.1:18789/v1",
                 chat_surface="openclaw-channel-webchat",
                 record_name="employment_record_webchat.json",
             )
@@ -2316,6 +2318,12 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             try:
                 with urlopen(f"http://{host}:{port}/health", timeout=10) as response:
                     health = json.loads(response.read().decode("utf-8"))
+                with urlopen(f"http://{host}:{port}/api/runtime", timeout=10) as response:
+                    runtime = json.loads(response.read().decode("utf-8"))
+                with urlopen(f"http://{host}:{port}/api/smoke-plan", timeout=10) as response:
+                    smoke_plan = json.loads(response.read().decode("utf-8"))
+                with urlopen(f"http://{host}:{port}/webchat", timeout=10) as response:
+                    html = response.read().decode("utf-8")
                 body = json.dumps(
                     {
                         "message": "Can you answer through local WebChat?",
@@ -2340,6 +2348,16 @@ class GrahamTalentFoundryTests(unittest.TestCase):
 
         self.assertEqual(health["schema"], "ai22b-openclaw-webchat-server/v1")
         self.assertEqual(health["channel_id"], "webchat")
+        self.assertEqual(runtime["schema"], "ai22b-openclaw-webchat-runtime/v1")
+        self.assertEqual(runtime["runtime_selection"]["llm"]["openclaw_provider_id"], "openrouter")
+        self.assertEqual(runtime["runtime_selection"]["llm"]["openclaw_model"], "openrouter/meta-llama/llama-3.1-8b")
+        self.assertEqual(runtime["runtime_selection"]["chat"]["openclaw_channels"][0]["channel_id"], "webchat")
+        self.assertFalse(runtime["security"]["secret_values_stored"])
+        self.assertFalse(runtime["security"]["external_network_call_performed"])
+        self.assertIn("gateway_live_probe", runtime["live_smoke_plan"]["operator_sequence"])
+        self.assertEqual(smoke_plan["schema"], "ai22b-openclaw-live-smoke-plan/v1")
+        self.assertIn("live_channel_message_smoke", smoke_plan["operator_sequence"])
+        self.assertIn("OpenClaw smoke plan", html)
         self.assertEqual(webchat["schema"], "ai22b-openclaw-webchat-response/v1")
         self.assertEqual(webchat["status"], "reply_ready")
         self.assertEqual(webchat["channel_run"]["outbound"]["channel_id"], "webchat")
