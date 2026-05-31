@@ -293,6 +293,7 @@ def build_public_program_manifest(run_dir: Path, *, output_path: Path | None = N
             "role_model_catalog": [summarize_role_model(item) for item in list_role_models()],
             "bundled_sample_answers": "examples/graham_junior_onboarding.answers.json",
             "openclaw_config_prefill_supported": True,
+            "openclaw_config_direct_hire_supported": True,
             "post_hire_modes": ["single", "projection_swarm", "specialist_team"],
             "answers_file_supported": True,
             "interactive_prompt_supported": True,

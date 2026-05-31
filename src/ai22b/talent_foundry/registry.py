@@ -51,9 +51,44 @@ def _employment_id(
     llm_engine: str,
     llm_model: str | None,
     llm_model_path: str | None,
+    llm_service_fingerprint: str | None = None,
 ) -> str:
-    raw = f"{install_id}|{employer}|{role}|{source_sha256}|{llm_engine}|{llm_model or ''}|{llm_model_path or ''}".encode("utf-8")
+    raw = (
+        f"{install_id}|{employer}|{role}|{source_sha256}|{llm_engine}|"
+        f"{llm_model or ''}|{llm_model_path or ''}|{llm_service_fingerprint or ''}"
+    ).encode("utf-8")
     return hashlib.sha256(raw).hexdigest()[:16]
+
+
+def _summarize_openclaw_config_import(imported: dict[str, Any]) -> dict[str, Any]:
+    detected = imported.get("detected", {})
+    artifacts = imported.get("artifacts", {})
+    return {
+        "schema": "ai22b-paideia-openclaw-config-import-employment-reference/v1",
+        "source": "openclaw_config_import",
+        "status": imported.get("status"),
+        "source_openclaw_config_path_stored": False,
+        "detected": {
+            "primary_model": detected.get("primary_model"),
+            "primary_provider_id": detected.get("primary_provider_id"),
+            "supported_provider_ids": detected.get("supported_provider_ids", []),
+            "unsupported_provider_ids": detected.get("unsupported_provider_ids", []),
+            "channel_ids": detected.get("channel_ids", []),
+            "external_or_unverified_channel_ids": detected.get("external_or_unverified_channel_ids", []),
+            "model_by_channel": detected.get("model_by_channel", {}),
+            "binding_count": len(detected.get("bindings", [])),
+            "secret_reference_count": len(detected.get("secret_references", [])),
+        },
+        "paideia_selection": imported.get("paideia_selection", {}),
+        "artifact_names": {
+            key: Path(str(value)).name
+            for key, value in artifacts.items()
+            if value
+        },
+        "artifact_location_hint": "employment_record_parent/openclaw_config_import unless --openclaw-import-dir was supplied",
+        "source_docs_checked": imported.get("source_docs_checked", []),
+        "secret_values_stored": False,
+    }
 
 
 def _registry_root_from_installed_manifest(installed_manifest_path: Path) -> Path:
@@ -82,6 +117,7 @@ def hire_installed_agent(
     llm_model: str | None = None,
     llm_model_path: str | None = None,
     chat_surface: str | None = None,
+    openclaw_config_import: dict[str, Any] | None = None,
     record_name: str = "employment_record.json",
 ) -> dict[str, Path]:
     installed_manifest = _read_json(installed_manifest_path)
@@ -109,6 +145,7 @@ def hire_installed_agent(
         llm_engine=selected_llm_service["engine"],
         llm_model=selected_llm_service.get("selected_model"),
         llm_model_path=selected_llm_service.get("selected_model_path"),
+        llm_service_fingerprint=json.dumps(selected_llm_service, ensure_ascii=False, sort_keys=True),
     )
     hired_at = datetime.now(timezone.utc).isoformat()
     employment_record = {
@@ -174,6 +211,8 @@ def hire_installed_agent(
         "llm_policy": agent_manifest.get("llm_policy", {}),
         "status": "active",
     }
+    if openclaw_config_import is not None:
+        employment_record["openclaw_config_import"] = _summarize_openclaw_config_import(openclaw_config_import)
     employment_record["runtime_selection"] = build_runtime_selection_snapshot(employment_record)
     employment_record_path = target_root / record_name
     _write_json(employment_record_path, employment_record)

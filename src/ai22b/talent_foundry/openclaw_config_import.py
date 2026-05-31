@@ -411,8 +411,7 @@ def _build_setup_plan(
         "recommended_paideia_commands": {
             "hire_with_imported_model": (
                 "ai22b-talent-foundry hire-installed --installed-manifest <installed_agent_manifest.json> "
-                f"--llm-service {primary_model or primary_provider or '<provider/model>'} "
-                f"--chat-surface openclaw-channel-{channel_ids[0] if channel_ids else 'webchat'}"
+                f"--openclaw-config {config_path}"
             ),
             "build_runtime_bundle": (
                 "ai22b-talent-foundry build-openclaw-runtime-bundle "

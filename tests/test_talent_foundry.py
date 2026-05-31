@@ -1556,6 +1556,7 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("projection_swarm", manifest["guided_console"]["post_hire_modes"])
         self.assertIn("specialist_team", manifest["guided_console"]["post_hire_modes"])
         self.assertIn("single", manifest["guided_console"]["post_hire_modes"])
+        self.assertTrue(manifest["guided_console"]["openclaw_config_direct_hire_supported"])
         self.assertEqual(manifest["family_lineage_model"]["child_blueprint"], "family_seed_to_training_blueprint")
         self.assertEqual(manifest["family_lineage_model"]["biological_claim"], "not_claimed")
         self.assertEqual(manifest["reasoning_model"]["memory_routing"]["active_context_budget"], "bounded")

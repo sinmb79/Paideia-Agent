@@ -401,3 +401,14 @@ ai22b-talent-foundry run-simulation-rollouts `
   --reviewed-by "보스" `
   --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\simulation_rollout_execution.json"
 ```
+
+## OpenClaw 설정으로 바로 고용하기
+
+기존 OpenClaw 설정을 그대로 이어서 고용하려면 `hire-installed --openclaw-config`를 사용합니다. Paideia는 OpenClaw의 `provider/model` 선택과 첫 채팅 채널을 읽어 고용 기록의 LLM/채팅 런타임에 반영하고, API 키와 봇 토큰은 저장하지 않습니다.
+
+```powershell
+ai22b-talent-foundry hire-installed `
+  --installed-manifest "<installed_agent_manifest.json>" `
+  --role "Research agent" `
+  --openclaw-config "$env:USERPROFILE\.openclaw\openclaw.json"
+```

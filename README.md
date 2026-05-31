@@ -423,6 +423,15 @@ ai22b-talent-foundry start-console `
   --output-dir "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_prefilled_onboarding"
 ```
 
+The same OpenClaw config can now flow directly into hiring. `hire-installed --openclaw-config` imports the config, uses the selected OpenClaw `provider/model` as the hired agent's LLM route, uses the first detected OpenClaw channel as the chat surface unless overridden, and records only a no-secret import reference in `employment_record.json`:
+
+```powershell
+ai22b-talent-foundry hire-installed `
+  --installed-manifest "<installed_agent_manifest.json>" `
+  --role "Research agent" `
+  --openclaw-config "$env:USERPROFILE\.openclaw\openclaw.json"
+```
+
 After an agent is hired, build a reviewable OpenClaw-style runtime setup bundle. This is the practical handoff point between Paideia's education records and OpenClaw-like execution:
 
 ```powershell

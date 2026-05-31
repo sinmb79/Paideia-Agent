@@ -2003,6 +2003,88 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertNotIn("source-arcee-key", redacted)
         self.assertNotIn("source-telegram-token", redacted)
 
+    def test_hire_installed_uses_openclaw_config_defaults_and_preserves_gateway_choices(self) -> None:
+        from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
+        from ai22b.talent_foundry.cli import main as cli_main
+        from ai22b.talent_foundry.training_run import materialize_training_blueprint
+
+        with tempfile.TemporaryDirectory() as tmp:
+            config_path = Path(tmp) / ".openclaw" / "openclaw.json"
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "agents": {"defaults": {"model": {"primary": "future-openclaw/next-model"}}},
+                        "models": {"providers": {"future-openclaw": {"token": "source-future-token"}}},
+                        "channels": {
+                            "futurechat": {"botToken": "source-future-channel-token"},
+                            "modelByChannel": {"futurechat": {"boss": "future-openclaw/next-model"}},
+                        },
+                        "bindings": [{"match": {"channel": "futurechat", "conversation": "boss"}, "agentId": "main"}],
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            blueprint = create_agent_training_blueprint(
+                owner="Boss",
+                request="Hire a Paideia talent from an existing OpenClaw config.",
+                talent_name="import-hire-junior",
+                gender="male",
+                domain="securities_research",
+                role_model_id="graham_value_investing",
+                agent_surface="openclaw-channel-webchat",
+            )
+            run = materialize_training_blueprint(blueprint, output_dir=Path(tmp) / "import_hire_junior")
+            installed_manifest = Path(run["artifacts"]["installed_agent_manifest"])
+            import_dir = Path(tmp) / "hire_import"
+            result = cli_main(
+                [
+                    "hire-installed",
+                    "--installed-manifest",
+                    str(installed_manifest),
+                    "--employer",
+                    "Boss",
+                    "--role",
+                    "OpenClaw imported runtime test agent",
+                    "--openclaw-config",
+                    str(config_path),
+                    "--openclaw-import-dir",
+                    str(import_dir),
+                ]
+            )
+            employment_record_path = installed_manifest.parent / "employment_record.json"
+            employment_record_text = employment_record_path.read_text(encoding="utf-8")
+            employment_record = json.loads(employment_record_text)
+
+        self.assertEqual(result, 0)
+        self.assertEqual(employment_record["llm_service"]["service_id"], "openclaw_gateway_http")
+        self.assertEqual(employment_record["llm_service"]["openclaw_model"], "future-openclaw/next-model")
+        self.assertTrue(employment_record["llm_service"]["openclaw_provider_unverified"])
+        self.assertEqual(employment_record["chat_surface"]["id"], "openclaw-channel-futurechat")
+        self.assertEqual(
+            employment_record["runtime_selection"]["llm"]["openclaw_provider_id"],
+            "future-openclaw",
+        )
+        self.assertEqual(
+            employment_record["runtime_selection"]["chat"]["openclaw_channels"][0]["channel_id"],
+            "futurechat",
+        )
+        self.assertEqual(employment_record["openclaw_config_import"]["status"], "import_ready")
+        self.assertFalse(employment_record["openclaw_config_import"]["source_openclaw_config_path_stored"])
+        self.assertEqual(
+            employment_record["openclaw_config_import"]["paideia_selection"]["llm_service"],
+            "future-openclaw/next-model",
+        )
+        self.assertGreaterEqual(
+            employment_record["openclaw_config_import"]["detected"]["secret_reference_count"],
+            2,
+        )
+        self.assertIn("paideia_openclaw_config_import.json", employment_record["openclaw_config_import"]["artifact_names"].values())
+        self.assertNotIn("source-future-token", employment_record_text)
+        self.assertNotIn("source-future-channel-token", employment_record_text)
+
     def test_openclaw_channel_gateway_routes_message_to_paideia_chat(self) -> None:
         from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
         from ai22b.talent_foundry.channel_gateway import (

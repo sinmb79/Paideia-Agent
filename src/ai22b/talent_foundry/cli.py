@@ -709,6 +709,14 @@ def _build_parser() -> argparse.ArgumentParser:
     hire_installed.add_argument("--llm-model")
     hire_installed.add_argument("--llm-model-path")
     hire_installed.add_argument("--chat-surface")
+    hire_installed.add_argument(
+        "--openclaw-config",
+        help="Import an existing OpenClaw config and use its provider/model plus first chat channel as hiring defaults.",
+    )
+    hire_installed.add_argument(
+        "--openclaw-import-dir",
+        help="Directory for redacted OpenClaw import artifacts created during hiring.",
+    )
 
     run_hired_agent_command = subparsers.add_parser(
         "run-hired-agent",
@@ -1712,17 +1720,30 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if args.command == "hire-installed":
+        llm_service = args.llm_service
+        chat_surface = args.chat_surface
+        imported_openclaw_config = None
+        if args.openclaw_config:
+            default_import_dir = Path(args.installed_manifest).expanduser().resolve().parent / "openclaw_config_import"
+            import_dir = Path(args.openclaw_import_dir) if args.openclaw_import_dir else default_import_dir
+            imported_openclaw_config = import_openclaw_config(Path(args.openclaw_config), output_dir=import_dir)
+            imported_selection = imported_openclaw_config.get("paideia_selection", {})
+            llm_service = llm_service or imported_selection.get("llm_service")
+            chat_surface = chat_surface or imported_selection.get("chat_surface")
         hiring = hire_installed_agent(
             Path(args.installed_manifest),
             employer=args.employer,
             role=args.role,
-            llm_service=args.llm_service,
+            llm_service=llm_service,
             llm_engine=args.llm_engine,
             llm_model=args.llm_model,
             llm_model_path=args.llm_model_path,
-            chat_surface=args.chat_surface,
+            chat_surface=chat_surface,
+            openclaw_config_import=imported_openclaw_config,
         )
         print(str(hiring["employment_record"]))
+        if imported_openclaw_config is not None:
+            print(f"OpenClaw config import status: {imported_openclaw_config.get('status')}")
         return 0
 
     if args.command == "run-hired-agent":
