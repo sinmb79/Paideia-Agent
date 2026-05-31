@@ -409,6 +409,8 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             )
             live_smoke_plan = json.loads(Path(session["artifacts"]["openclaw_live_smoke_plan"]).read_text(encoding="utf-8"))
             live_smoke_plan_markdown = Path(session["artifacts"]["openclaw_live_smoke_plan_markdown"]).read_text(encoding="utf-8")
+            next_steps = json.loads(Path(session["artifacts"]["onboarding_next_steps"]).read_text(encoding="utf-8"))
+            next_steps_markdown = Path(session["artifacts"]["onboarding_next_steps_markdown"]).read_text(encoding="utf-8")
 
         self.assertEqual(session["wizard"]["schema"], "ai22b-paideia-openclaw-style-onboarding/v1")
         self.assertEqual(config["schema"], "ai22b-paideia-openclaw-style-config/v1")
@@ -455,6 +457,14 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertFalse(live_smoke_plan["policy"]["external_network_call_performed_by_plan"])
         self.assertFalse(live_smoke_plan["policy"]["secret_values_stored"])
         self.assertIn("OpenClaw Live Smoke Plan", live_smoke_plan_markdown)
+        self.assertEqual(next_steps["schema"], "ai22b-paideia-onboarding-next-steps/v1")
+        self.assertEqual(next_steps["webchat"]["per_turn_modes"], ["offline", "auto", "live"])
+        self.assertIn("run_installed_smoke_live", next_steps["commands"])
+        self.assertIn("Paideia Agent Next Steps", next_steps_markdown)
+        self.assertEqual(
+            session["post_hire_extensions"]["onboarding_next_steps"]["schema"],
+            "ai22b-paideia-onboarding-next-steps/v1",
+        )
         self.assertEqual(
             session["post_hire_extensions"]["openclaw_live_smoke_plan"]["schema"],
             "ai22b-openclaw-live-smoke-plan/v1",
@@ -484,10 +494,21 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             runtime_bundle = json.loads(Path(session["artifacts"]["openclaw_runtime_bundle"]).read_text(encoding="utf-8"))
             gateway_doctor = json.loads(Path(session["artifacts"]["openclaw_gateway_llm_doctor"]).read_text(encoding="utf-8"))
             support_matrix = json.loads(Path(session["artifacts"]["openclaw_support_matrix"]).read_text(encoding="utf-8"))
+            live_smoke_plan = json.loads(Path(session["artifacts"]["openclaw_live_smoke_plan"]).read_text(encoding="utf-8"))
+            next_steps = json.loads(Path(session["artifacts"]["onboarding_next_steps"]).read_text(encoding="utf-8"))
+            next_steps_markdown = Path(session["artifacts"]["onboarding_next_steps_markdown"]).read_text(encoding="utf-8")
 
         self.assertEqual(session["selected_llm_service"]["service_id"], "openclaw_gateway_http")
         self.assertEqual(session["openclaw_runtime"]["selection"]["provider_id"], "openrouter")
         self.assertEqual(session["openclaw_runtime"]["selection"]["channels"], ["webchat"])
+        self.assertEqual(session["openclaw_live_smoke_plan"]["schema"], "ai22b-openclaw-live-smoke-plan/v1")
+        self.assertEqual(session["onboarding_next_steps"]["schema"], "ai22b-paideia-onboarding-next-steps/v1")
+        self.assertEqual(session["onboarding_next_steps"]["webchat_url"], "http://127.0.0.1:8722/")
+        self.assertIn("start_webchat_offline", session["onboarding_next_steps"]["command_ids"])
+        self.assertEqual(live_smoke_plan["selection"]["live_runtime_path"], "openclaw_gateway_http")
+        self.assertEqual(next_steps["selection"]["llm_service_id"], "openclaw_gateway_http")
+        self.assertEqual(next_steps["webchat"]["per_turn_modes"], ["offline", "auto", "live"])
+        self.assertIn("Paideia Agent Next Steps", next_steps_markdown)
         self.assertEqual(session["openclaw_runtime"]["selected_support"]["provider_id"], "openrouter")
         self.assertEqual(
             session["openclaw_runtime"]["selected_support"]["provider_support"]["support_level"],

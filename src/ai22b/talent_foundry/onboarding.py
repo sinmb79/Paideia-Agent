@@ -15,7 +15,9 @@ from ai22b.talent_foundry.onboarding_choices import (
     resolve_llm_service,
 )
 from ai22b.talent_foundry.openclaw_runtime_bundle import build_openclaw_runtime_bundle
+from ai22b.talent_foundry.openclaw_live_smoke_plan import build_openclaw_live_smoke_plan
 from ai22b.talent_foundry.openclaw_support_matrix import build_openclaw_support_matrix
+from ai22b.talent_foundry.onboarding_next_steps import build_onboarding_next_steps
 from ai22b.talent_foundry.registry import assign_hired_goal, run_hired_goal_cycle
 from ai22b.talent_foundry.training_run import materialize_training_blueprint
 
@@ -186,6 +188,27 @@ def run_agent_onboarding(
         openclaw_runtime_bundle,
         selected_llm_service,
     )
+    runtime_channels = [str(item) for item in openclaw_runtime_bundle.get("selection", {}).get("channels", [])]
+    live_smoke_plan_path = output_dir / "openclaw_live_smoke_plan.json"
+    live_smoke_plan_markdown_path = output_dir / "OPENCLAW_LIVE_SMOKE_PLAN.md"
+    live_smoke_plan = build_openclaw_live_smoke_plan(
+        employment_record_path,
+        runtime_bundle_path=Path(openclaw_runtime_bundle["artifacts"]["manifest"]),
+        channels=runtime_channels or None,
+        output_path=live_smoke_plan_path,
+        markdown_output_path=live_smoke_plan_markdown_path,
+    )
+    next_steps_path = output_dir / "onboarding_next_steps.json"
+    next_steps_markdown_path = output_dir / "NEXT_STEPS.md"
+    onboarding_next_steps = build_onboarding_next_steps(
+        employment_record_path=employment_record_path,
+        selected_llm_service=selected_llm_service,
+        selected_chat_surface=selected_chat_surface,
+        llm_health=llm_health,
+        live_smoke_plan_path=live_smoke_plan_path,
+        output_path=next_steps_path,
+        markdown_output_path=next_steps_markdown_path,
+    )
 
     artifacts = {
         "training_blueprint": training_run["artifacts"]["training_blueprint"],
@@ -219,6 +242,10 @@ def run_agent_onboarding(
         "openclaw_channel_doctor": openclaw_runtime_bundle["artifacts"]["channel_doctor"],
         "openclaw_channel_connectors": openclaw_runtime_bundle["artifacts"]["channel_connector_catalog"],
         "openclaw_support_matrix": str(openclaw_support_matrix_path),
+        "openclaw_live_smoke_plan": str(live_smoke_plan_path),
+        "openclaw_live_smoke_plan_markdown": str(live_smoke_plan_markdown_path),
+        "onboarding_next_steps": str(next_steps_path),
+        "onboarding_next_steps_markdown": str(next_steps_markdown_path),
         "openclaw_gateway_config": openclaw_runtime_bundle["artifacts"]["gateway_config"],
         "openclaw_channel_access_config": openclaw_runtime_bundle["artifacts"]["channel_access_config"],
         "openclaw_bridge_setup_kit": openclaw_runtime_bundle["artifacts"]["bridge_setup_kit"],
@@ -253,6 +280,21 @@ def run_agent_onboarding(
             "selection": openclaw_runtime_bundle["selection"],
             "readiness": openclaw_runtime_bundle["readiness"],
             "selected_support": selected_openclaw_support,
+        },
+        "openclaw_live_smoke_plan": {
+            "schema": live_smoke_plan["schema"],
+            "status": live_smoke_plan["status"],
+            "operator_sequence": live_smoke_plan["operator_sequence"],
+            "secret_values_stored": live_smoke_plan["policy"]["secret_values_stored"],
+            "external_network_call_performed_by_plan": live_smoke_plan["policy"]["external_network_call_performed_by_plan"],
+        },
+        "onboarding_next_steps": {
+            "schema": onboarding_next_steps["schema"],
+            "webchat_url": onboarding_next_steps["webchat"]["url"],
+            "per_turn_modes": onboarding_next_steps["webchat"]["per_turn_modes"],
+            "command_ids": list(onboarding_next_steps["commands"].keys()),
+            "secret_values_stored": onboarding_next_steps["policy"]["secret_values_stored"],
+            "external_network_by_default": onboarding_next_steps["policy"]["external_network_by_default"],
         },
         "researcher_mode": researcher_intake["researcher_contract"],
         "employment": {
@@ -292,6 +334,9 @@ def run_agent_onboarding(
         ],
         "artifacts": artifacts,
         "next_commands": [
+            f"ai22b-talent-foundry run-openclaw-webchat-server --employment-record \"{employment_record_path}\" --port 8722 --llm-mode offline",
+            f"ai22b-talent-foundry chat-hired-agent --employment-record \"{employment_record_path}\" --message \"안녕\" --llm-mode offline",
+            f"ai22b-talent-foundry build-openclaw-live-smoke-plan --employment-record \"{employment_record_path}\" --output \"{live_smoke_plan_path}\" --markdown-output \"{live_smoke_plan_markdown_path}\"",
             f"ai22b-talent-foundry build-openclaw-support-matrix --output \"{openclaw_support_matrix_path}\"",
             *openclaw_runtime_bundle["next_commands"].values(),
             f"ai22b-talent-foundry run-hired-goal-cycle --employment-record \"{employment_record_path}\" --goal \"{goal_path}\" --cycle-note \"다음 주 업무를 진행한다.\" --workspace \"{target_root / 'next_goal_workspace'}\" --score {review_score} --reviewed-by \"{reviewed_by or owner}\"",
