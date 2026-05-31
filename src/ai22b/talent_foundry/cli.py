@@ -71,6 +71,7 @@ from ai22b.talent_foundry.openclaw_native_handoff import (
 )
 from ai22b.talent_foundry.openclaw_parity import audit_openclaw_parity
 from ai22b.talent_foundry.openclaw_runtime_bundle import build_openclaw_runtime_bundle
+from ai22b.talent_foundry.openclaw_selection_doctor import doctor_openclaw_selection
 from ai22b.talent_foundry.openclaw_support_matrix import build_openclaw_support_matrix
 from ai22b.talent_foundry.program import create_talent_plan
 from ai22b.talent_foundry.program_manifest import build_public_program_manifest
@@ -210,6 +211,20 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Fetch current OpenClaw docs before calculating parity summary.",
     )
     support_matrix_command.add_argument("--docs-timeout", type=int, default=15)
+
+    selection_doctor = subparsers.add_parser(
+        "doctor-openclaw-selection",
+        help="Preview one OpenClaw LLM provider/model and chat channel selection before onboarding.",
+    )
+    selection_doctor.add_argument("--llm-service")
+    selection_doctor.add_argument("--llm-engine")
+    selection_doctor.add_argument("--llm-model")
+    selection_doctor.add_argument("--llm-model-path")
+    selection_doctor.add_argument("--chat-surface")
+    selection_doctor.add_argument("--channel", action="append", default=[])
+    selection_doctor.add_argument("--output", required=True)
+    selection_doctor.add_argument("--refresh-docs", action="store_true")
+    selection_doctor.add_argument("--docs-timeout", type=int, default=15)
 
     import_openclaw_config_command = subparsers.add_parser(
         "import-openclaw-config",
@@ -974,6 +989,21 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "build-openclaw-support-matrix":
         build_openclaw_support_matrix(
+            output_path=Path(args.output),
+            refresh_docs=args.refresh_docs,
+            docs_timeout=args.docs_timeout,
+        )
+        print(str(Path(args.output)))
+        return 0
+
+    if args.command == "doctor-openclaw-selection":
+        doctor_openclaw_selection(
+            llm_service=args.llm_service,
+            llm_engine=args.llm_engine,
+            llm_model=args.llm_model,
+            llm_model_path=args.llm_model_path,
+            chat_surface=args.chat_surface,
+            channels=args.channel or None,
             output_path=Path(args.output),
             refresh_docs=args.refresh_docs,
             docs_timeout=args.docs_timeout,

@@ -641,6 +641,55 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertEqual(cli_matrix["schema"], "ai22b-openclaw-support-matrix/v1")
         self.assertEqual(cli_matrix["status"], "pass")
 
+    def test_openclaw_selection_doctor_previews_provider_model_and_channel_path(self) -> None:
+        from ai22b.talent_foundry.cli import main as cli_main
+        from ai22b.talent_foundry.openclaw_selection_doctor import doctor_openclaw_selection
+
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "openclaw_selection_doctor.json"
+            doctor = doctor_openclaw_selection(
+                llm_service="openclaw-gateway/openrouter/meta-llama/llama-3.1-8b",
+                llm_model_path="http://127.0.0.1:18789/v1",
+                chat_surface="openclaw-channel-webchat",
+                channels=["telegram"],
+                output_path=output,
+            )
+            cli_output = Path(tmp) / "openclaw_selection_doctor_cli.json"
+            cli_result = cli_main(
+                [
+                    "doctor-openclaw-selection",
+                    "--llm-service",
+                    "openclaw-gateway/openrouter/meta-llama/llama-3.1-8b",
+                    "--llm-model-path",
+                    "http://127.0.0.1:18789/v1",
+                    "--chat-surface",
+                    "openclaw-channel-webchat",
+                    "--channel",
+                    "telegram",
+                    "--output",
+                    str(cli_output),
+                ]
+            )
+            cli_doctor = json.loads(cli_output.read_text(encoding="utf-8"))
+
+        channel_support = {item["channel_id"]: item["support"] for item in doctor["openclaw_selection"]["channels"]}
+        self.assertEqual(doctor["schema"], "ai22b-openclaw-selection-doctor/v1")
+        self.assertEqual(doctor["status"], "ready_for_onboarding")
+        self.assertEqual(doctor["openclaw_selection"]["provider_id"], "openrouter")
+        self.assertEqual(
+            doctor["openclaw_selection"]["provider_support"]["support_level"],
+            "paideia_direct_or_openclaw_gateway_ready",
+        )
+        self.assertEqual(channel_support["webchat"]["support_level"], "loopback_chat_ready")
+        self.assertEqual(channel_support["telegram"]["support_level"], "paideia_direct_flow_ready")
+        self.assertEqual(doctor["llm_service_health"]["status"], "configured_gateway_manifest_only")
+        self.assertFalse(doctor["claim_boundary"]["secret_values_stored"])
+        self.assertFalse(doctor["claim_boundary"]["external_network_call_performed"])
+        self.assertIn("doctor-openclaw-gateway-llm", doctor["next_commands"]["gateway_llm_after_hire"])
+        self.assertEqual(cli_result, 0)
+        self.assertEqual(cli_doctor["schema"], "ai22b-openclaw-selection-doctor/v1")
+        self.assertEqual(cli_doctor["openclaw_selection"]["provider_id"], "openrouter")
+
     def test_channel_connector_catalog_covers_every_openclaw_channel(self) -> None:
         from ai22b.talent_foundry.channel_connectors import (
             build_openclaw_channel_connector_catalog,
