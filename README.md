@@ -154,7 +154,7 @@ ai22b-talent-foundry onboard
 
 This wizard uses config detection, QuickStart/Advanced mode, Model/Auth, Workspace, Gateway/Channels, Skills, Education Path, Runtime, Agent Identity, Health Check, and Finish steps.
 
-This sample first selects the LLM service and chat surface, then lets that selected LLM act as the curriculum researcher for the Graham-inspired securities research track. Each onboarding run now also writes an OpenClaw runtime bundle with provider/channel doctors, a reviewable `openclaw_config_patch.json`, WebChat/channel gateway setup files, a bridge setup kit with plugin plans and smoke-test payloads, native OpenClaw handoff commands, and a Gateway LLM doctor when `openclaw_gateway_http` is selected.
+This sample first selects the LLM service and chat surface, then lets that selected LLM act as the curriculum researcher for the Graham-inspired securities research track. Each onboarding run now also writes an OpenClaw runtime bundle with provider/channel doctors, a channel pairing doctor for QR/session/local-bridge readiness, a reviewable `openclaw_config_patch.json`, WebChat/channel gateway setup files, a bridge setup kit with plugin plans and smoke-test payloads, native OpenClaw handoff commands, and a Gateway LLM doctor when `openclaw_gateway_http` is selected.
 
 List available role models:
 
@@ -428,7 +428,7 @@ The bundle writes:
 - `openclaw_config_patch.json`: a review-first `openclaw.json` patch with the selected `provider/model`, `models.providers`, `agents.list`, gateway URL, enabled channels, `channels.modelByChannel`, `bindings[]`, and `gateway.http.endpoints.chatCompletions.enabled=true` for OpenAI-compatible Gateway clients.
 - `openclaw_native_handoff.json`: a native OpenClaw handoff plan with `openclaw setup --workspace`, `openclaw doctor`, `openclaw channels add --channel <id> --help`, and `openclaw gateway run` commands for owners who want OpenClaw itself to own provider auth, channel plugins, gateway sessions, and platform delivery.
 - `openclaw.env.example.ps1`: a local PowerShell environment template. It lists secret variable names but never writes secret values.
-- `openclaw_provider_doctor.json`, `openclaw_channel_doctor.json`, `openclaw_gateway_llm_doctor.json` when applicable, and `llm_service_health.json`: readiness checks for model auth, channel bridge requirements, OpenClaw Gateway HTTP LLM compatibility, and local/remote runtime status.
+- `openclaw_provider_doctor.json`, `openclaw_channel_doctor.json`, `openclaw_channel_pairing_doctor.json`, `openclaw_gateway_llm_doctor.json` when applicable, and `llm_service_health.json`: readiness checks for model auth, channel bridge requirements, QR/session/local-bridge readiness, OpenClaw Gateway HTTP LLM compatibility, and local/remote runtime status.
 - `openclaw_gateway_config.json` and `openclaw_channel_access_config.json`: loopback gateway and deny-by-default channel access setup.
 - `openclaw_bridge_setup/`: provider/channel plugin plans, deny-by-default access config, env template, and smoke-test payloads generated from the hired runtime selection.
 - `openclaw_existing_config_review.json`: OpenClaw-style existing config detection with `keep`, `modify`, or `reset` semantics. `modify` writes a redacted merge preview; `reset` writes a plan only and never deletes or overwrites the config.
@@ -473,7 +473,7 @@ ai22b-talent-foundry build-openclaw-bridge-setup-kit `
   --output-dir "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_bridge_setup"
 ```
 
-This writes `openclaw_bridge_setup_kit.json`, `openclaw_bridge.env.example.ps1`, `openclaw_provider_plugin_plan.json`, `openclaw_channel_plugin_plan.json`, `openclaw_bridge_channel_access_config.json`, `openclaw_bridge_smoke_tests.json`, and `smoke_test_payloads/*.json`. It stores no provider keys, bot tokens, QR sessions, or private training files.
+This writes `openclaw_bridge_setup_kit.json`, `openclaw_bridge.env.example.ps1`, `openclaw_provider_plugin_plan.json`, `openclaw_channel_plugin_plan.json`, `openclaw_channel_pairing_doctor.json`, `openclaw_bridge_channel_access_config.json`, `openclaw_bridge_smoke_tests.json`, and `smoke_test_payloads/*.json`. It stores no provider keys, bot tokens, QR sessions, local path values, or private training files.
 
 OpenClaw-style channels can now be routed through a local Paideia gateway envelope. The core returns a sendable outbound envelope; actual platform plugins remain responsible for bot tokens, pairing, and final delivery.
 
@@ -542,9 +542,17 @@ ai22b-talent-foundry list-openclaw-channel-connectors `
 
 ai22b-talent-foundry doctor-openclaw-channel-connectors `
   --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\channel_connector_doctor.json"
+
+ai22b-talent-foundry doctor-openclaw-channel-pairing `
+  --channel whatsapp `
+  --channel signal `
+  --channel imessage `
+  --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\channel_pairing_doctor.json"
 ```
 
 Telegram, Discord, Slack, Google Chat, LINE, Matrix, Mattermost, SMS, Synology Chat, and WebChat have Paideia direct adapters for reviewed inbound/outbound gateway flows where the platform exposes a normal HTTP API or webhook. Current OpenClaw iMessage support runs through the bundled `imessage`/`imsg` path; `bluebubbles` is kept only as a migration target for older configs. ClickClack and QA Channel are represented too: ClickClack needs an external bot-token plugin, while QA Channel is for deterministic OpenClaw-style channel tests. The remaining OpenClaw channels remain selectable and can use the normalized gateway envelope today, while raw platform integration is marked with the required bridge/plugin setup such as WhatsApp QR pairing, signal-cli, Bot Framework, or regional account/session plugins.
+
+`doctor-openclaw-channel-pairing` is the user-facing bridge readiness check for channels that cannot be finished by a normal webhook alone. It separates QR session channels such as WhatsApp, WeChat, and Zalo Personal from local bridge channels such as Signal and iMessage, enterprise bot setup such as Microsoft Teams, and legacy migration paths such as BlueBubbles. It only records env-var presence, path existence booleans, and next actions; it never serializes QR sessions, phone numbers, tokens, cookies, or absolute local path values.
 
 To inspect or send the returned outbound envelope, use the dry-run-first delivery adapter:
 

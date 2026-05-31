@@ -904,6 +904,73 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertTrue(doctor_by_id["webchat"]["ready_for_live_delivery"])
         self.assertFalse(doctor["secret_values_stored"])
 
+    def test_openclaw_channel_pairing_doctor_separates_qr_bridge_and_direct_channels(self) -> None:
+        from ai22b.talent_foundry.cli import main as cli_main
+        from ai22b.talent_foundry.openclaw_channel_pairing import doctor_openclaw_channel_pairing
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            whatsapp_session = tmp_path / "whatsapp-session"
+            whatsapp_session.mkdir()
+            signal_cli = tmp_path / "signal-cli.exe"
+            signal_cli.write_text("fake signal-cli for path readiness checks", encoding="utf-8")
+            output = tmp_path / "channel_pairing_doctor.json"
+            cli_output = tmp_path / "channel_pairing_doctor_cli.json"
+            with patch.dict(
+                os.environ,
+                {
+                    "WHATSAPP_SESSION_DIR": str(whatsapp_session),
+                    "SIGNAL_CLI_PATH": str(signal_cli),
+                    "SIGNAL_PHONE_NUMBER": "+15555550123",
+                    "MICROSOFT_APP_ID": "test-app-id",
+                    "MICROSOFT_APP_PASSWORD": "test-password",
+                },
+                clear=False,
+            ):
+                doctor = doctor_openclaw_channel_pairing(
+                    channels=["whatsapp", "signal", "imessage", "webchat", "microsoft-teams"],
+                    output_path=output,
+                )
+                cli_result = cli_main(
+                    [
+                        "doctor-openclaw-channel-pairing",
+                        "--channel",
+                        "whatsapp",
+                        "--channel",
+                        "signal",
+                        "--output",
+                        str(cli_output),
+                    ]
+                )
+            output_exists = output.exists()
+            cli_output_exists = cli_output.exists()
+
+        by_id = {item["channel_id"]: item for item in doctor["results"]}
+        rendered = json.dumps(doctor, ensure_ascii=False)
+
+        self.assertEqual(doctor["schema"], "ai22b-openclaw-channel-pairing-doctor/v1")
+        self.assertEqual(doctor["status"], "ready_for_owner_review")
+        self.assertTrue(output_exists)
+        self.assertEqual(cli_result, 0)
+        self.assertTrue(cli_output_exists)
+        self.assertEqual(by_id["whatsapp"]["pairing_kind"], "qr_session_pairing")
+        self.assertEqual(by_id["whatsapp"]["pairing_status"], "ready_for_qr_pairing")
+        self.assertTrue(by_id["whatsapp"]["session_state"]["required"])
+        self.assertFalse(by_id["whatsapp"]["session_state"]["session_values_stored"])
+        self.assertEqual(by_id["signal"]["pairing_kind"], "local_cli_or_service_bridge")
+        self.assertEqual(by_id["signal"]["pairing_status"], "ready_for_bridge_probe")
+        self.assertEqual(by_id["imessage"]["pairing_kind"], "native_imsg_bridge")
+        self.assertEqual(by_id["imessage"]["pairing_status"], "needs_local_bridge_setup")
+        self.assertEqual(by_id["webchat"]["pairing_status"], "ready")
+        self.assertEqual(by_id["microsoft-teams"]["pairing_status"], "ready_for_enterprise_bot_review")
+        self.assertFalse(doctor["policy"]["secret_values_stored"])
+        self.assertFalse(doctor["policy"]["session_values_stored"])
+        self.assertFalse(doctor["policy"]["absolute_local_paths_stored"])
+        self.assertNotIn(str(whatsapp_session), rendered)
+        self.assertNotIn(str(signal_cli), rendered)
+        self.assertNotIn("+15555550123", rendered)
+        self.assertNotIn("test-password", rendered)
+
     def test_provider_connector_catalog_covers_openclaw_provider_manifest(self) -> None:
         from ai22b.talent_foundry.openclaw_compat import openclaw_provider_manifest
         from ai22b.talent_foundry.provider_connectors import (
@@ -1129,9 +1196,13 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             env_template = Path(bundle["artifacts"]["openclaw_env_template"]).read_text(encoding="utf-8")
             bridge_kit = json.loads(Path(bundle["artifacts"]["bridge_setup_kit"]).read_text(encoding="utf-8"))
             bridge_channel_plan = json.loads(Path(bundle["artifacts"]["bridge_channel_plugin_plan"]).read_text(encoding="utf-8"))
+            bridge_channel_pairing = json.loads(
+                Path(bundle["artifacts"]["bridge_channel_pairing_doctor"]).read_text(encoding="utf-8")
+            )
             bridge_smoke_tests = json.loads(Path(bundle["artifacts"]["bridge_smoke_tests"]).read_text(encoding="utf-8"))
             provider_doctor = json.loads(Path(bundle["artifacts"]["provider_doctor"]).read_text(encoding="utf-8"))
             channel_doctor = json.loads(Path(bundle["artifacts"]["channel_doctor"]).read_text(encoding="utf-8"))
+            channel_pairing_doctor = json.loads(Path(bundle["artifacts"]["channel_pairing_doctor"]).read_text(encoding="utf-8"))
             config_review = json.loads(
                 Path(bundle["artifacts"]["existing_openclaw_config_review"]).read_text(encoding="utf-8")
             )
@@ -1251,8 +1322,12 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertEqual(set(bridge_kit["selection"]["channels"]), {"bluebubbles", "webchat"})
         self.assertEqual(bundle["readiness"]["bridge_setup_kit"]["status"], "ready_for_owner_review")
         self.assertIn("bluebubbles", {item["channel_id"] for item in bridge_channel_plan["channels"]})
+        self.assertIn("bluebubbles", {item["channel_id"] for item in bridge_channel_pairing["results"]})
+        self.assertEqual(channel_pairing_doctor["schema"], "ai22b-openclaw-channel-pairing-doctor/v1")
+        self.assertIn("channel_pairing_summary", bundle["readiness"])
         self.assertIn("webchat", bridge_smoke_tests["payloads"])
         self.assertIn("build-openclaw-bridge-setup-kit", bundle["next_commands"]["build_bridge_setup_kit"])
+        self.assertIn("doctor-openclaw-channel-pairing", bundle["next_commands"]["doctor_channel_pairing"])
         self.assertEqual(native_handoff["schema"], "ai22b-openclaw-native-handoff/v1")
         self.assertEqual(native_handoff["native_openclaw_selection"]["model"], "arcee/trinity-large-thinking")
         self.assertIn("openclaw setup --workspace", native_handoff["operator_commands"]["setup_workspace"])
@@ -1351,6 +1426,7 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             env_template = Path(kit["artifacts"]["env_template"]).read_text(encoding="utf-8")
             provider_plan = json.loads(Path(kit["artifacts"]["provider_plugin_plan"]).read_text(encoding="utf-8"))
             channel_plan = json.loads(Path(kit["artifacts"]["channel_plugin_plan"]).read_text(encoding="utf-8"))
+            channel_pairing = json.loads(Path(kit["artifacts"]["channel_pairing_doctor"]).read_text(encoding="utf-8"))
             smoke_tests = json.loads(Path(kit["artifacts"]["smoke_tests"]).read_text(encoding="utf-8"))
             cli_dir = Path(tmp) / "bridge_kit_cli"
             cli_result = cli_main(
@@ -1381,6 +1457,12 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertEqual(provider_by_id["arcee"]["adapter_path"], "paideia_live_adapter")
         self.assertEqual(channel_by_id["telegram"]["direct_raw_ingress_ready"], True)
         self.assertEqual(channel_by_id["whatsapp"]["connector_status"], "external_plugin_required_qr_pairing")
+        self.assertEqual(channel_pairing["schema"], "ai22b-openclaw-channel-pairing-doctor/v1")
+        self.assertEqual(
+            next(item for item in channel_pairing["results"] if item["channel_id"] == "whatsapp")["pairing_kind"],
+            "qr_session_pairing",
+        )
+        self.assertIn("doctor-openclaw-channel-pairing", kit["next_commands"]["doctor_channel_pairing"])
         self.assertIn("telegram", smoke_tests["payloads"])
         self.assertIn("telegram", smoke_tests["platform_events"])
         self.assertIn("run-openclaw-channel-gateway-server", smoke_tests["commands"]["start_gateway"])

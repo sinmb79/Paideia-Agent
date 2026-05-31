@@ -63,6 +63,7 @@ from ai22b.talent_foundry.onboarding_choices import (
 from ai22b.talent_foundry.openclaw_config_import import import_openclaw_config
 from ai22b.talent_foundry.openclaw_compat import openclaw_channel_manifest, openclaw_provider_manifest
 from ai22b.talent_foundry.openclaw_bridge_setup import build_openclaw_bridge_setup_kit
+from ai22b.talent_foundry.openclaw_channel_pairing import doctor_openclaw_channel_pairing
 from ai22b.talent_foundry.openclaw_channel_flow import doctor_openclaw_channel_flow
 from ai22b.talent_foundry.openclaw_gateway_llm import doctor_openclaw_gateway_llm
 from ai22b.talent_foundry.openclaw_native_handoff import (
@@ -170,6 +171,13 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     doctor_channel_connectors.add_argument("--channel", action="append", default=[])
     doctor_channel_connectors.add_argument("--output", required=True)
+
+    doctor_channel_pairing = subparsers.add_parser(
+        "doctor-openclaw-channel-pairing",
+        help="Doctor QR pairing, local bridge, enterprise bot, and session readiness for OpenClaw chat channels.",
+    )
+    doctor_channel_pairing.add_argument("--channel", action="append", default=[])
+    doctor_channel_pairing.add_argument("--output", required=True)
 
     doctor_channel_flow = subparsers.add_parser(
         "doctor-openclaw-channel-flow",
@@ -973,6 +981,14 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "doctor-openclaw-channel-connectors":
         doctor_openclaw_channel_connectors(
+            channels=args.channel or None,
+            output_path=Path(args.output),
+        )
+        print(str(Path(args.output)))
+        return 0
+
+    if args.command == "doctor-openclaw-channel-pairing":
+        doctor_openclaw_channel_pairing(
             channels=args.channel or None,
             output_path=Path(args.output),
         )

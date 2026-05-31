@@ -24,6 +24,7 @@ from ai22b.talent_foundry.openclaw_compat import (
     openclaw_channel_manifest,
     openclaw_provider_manifest,
 )
+from ai22b.talent_foundry.openclaw_channel_pairing import doctor_openclaw_channel_pairing
 from ai22b.talent_foundry.openclaw_gateway_llm import doctor_openclaw_gateway_llm
 from ai22b.talent_foundry.provider_connectors import doctor_openclaw_provider_connectors
 
@@ -820,6 +821,7 @@ def build_openclaw_runtime_bundle(
     provider_doctor_path = output_dir / "openclaw_provider_doctor.json"
     channel_connector_catalog_path = output_dir / "openclaw_channel_connectors.json"
     channel_doctor_path = output_dir / "openclaw_channel_doctor.json"
+    channel_pairing_doctor_path = output_dir / "openclaw_channel_pairing_doctor.json"
     llm_health_path = output_dir / "llm_service_health.json"
     gateway_llm_doctor_path = output_dir / "openclaw_gateway_llm_doctor.json"
     bridge_setup_dir = output_dir / "openclaw_bridge_setup"
@@ -850,6 +852,10 @@ def build_openclaw_runtime_bundle(
     channel_doctor = doctor_openclaw_channel_connectors(
         channels=selected_channels,
         output_path=channel_doctor_path,
+    )
+    channel_pairing_doctor = doctor_openclaw_channel_pairing(
+        channels=selected_channels,
+        output_path=channel_pairing_doctor_path,
     )
     llm_health = build_llm_service_health(employment.get("llm_service", {}))
     _write_json(llm_health_path, llm_health)
@@ -943,11 +949,13 @@ def build_openclaw_runtime_bundle(
         "provider_doctor": str(provider_doctor_path),
         "channel_connector_catalog": str(channel_connector_catalog_path),
         "channel_doctor": str(channel_doctor_path),
+        "channel_pairing_doctor": str(channel_pairing_doctor_path),
         "llm_service_health": str(llm_health_path),
         "bridge_setup_kit": bridge_setup_kit["artifacts"]["manifest"],
         "bridge_env_template": bridge_setup_kit["artifacts"]["env_template"],
         "bridge_provider_plugin_plan": bridge_setup_kit["artifacts"]["provider_plugin_plan"],
         "bridge_channel_plugin_plan": bridge_setup_kit["artifacts"]["channel_plugin_plan"],
+        "bridge_channel_pairing_doctor": bridge_setup_kit["artifacts"]["channel_pairing_doctor"],
         "bridge_channel_access_config": bridge_setup_kit["artifacts"]["channel_access_config"],
         "bridge_smoke_tests": bridge_setup_kit["artifacts"]["smoke_tests"],
         "bridge_smoke_test_payloads_dir": bridge_setup_kit["artifacts"]["smoke_test_payloads_dir"],
@@ -987,6 +995,7 @@ def build_openclaw_runtime_bundle(
             "provider_doctor_summary": provider_doctor["summary"],
             "channel_connector_summary": channel_connector_catalog["summary"],
             "channel_doctor_summary": channel_doctor["summary"],
+            "channel_pairing_summary": channel_pairing_doctor["summary"],
             "gateway_llm_doctor": gateway_llm_doctor,
             "existing_openclaw_config": {
                 "status": existing_config_review["status"],
@@ -998,6 +1007,7 @@ def build_openclaw_runtime_bundle(
                 "status": bridge_setup_kit["status"],
                 "provider_summary": bridge_setup_kit["readiness"]["provider_summary"],
                 "channel_summary": bridge_setup_kit["readiness"]["channel_summary"],
+                "channel_pairing_summary": bridge_setup_kit["readiness"]["channel_pairing_summary"],
                 "secret_values_stored": bridge_setup_kit["readiness"]["secret_values_stored"],
             },
             "secret_values_stored": False,
@@ -1012,6 +1022,11 @@ def build_openclaw_runtime_bundle(
                 "ai22b-talent-foundry doctor-openclaw-channel-connectors "
                 + " ".join(f"--channel {channel}" for channel in selected_channels)
                 + f" --output {channel_doctor_path}"
+            ),
+            "doctor_channel_pairing": (
+                "ai22b-talent-foundry doctor-openclaw-channel-pairing "
+                + " ".join(f"--channel {channel}" for channel in selected_channels)
+                + f" --output {channel_pairing_doctor_path}"
             ),
             "doctor_channel_flow": (
                 "ai22b-talent-foundry doctor-openclaw-channel-flow "

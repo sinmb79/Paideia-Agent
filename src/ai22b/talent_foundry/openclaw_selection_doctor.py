@@ -139,6 +139,7 @@ def doctor_openclaw_selection(
             "bridge_env_template": bridge_setup["artifacts"]["env_template"],
             "provider_plugin_plan": bridge_setup["artifacts"]["provider_plugin_plan"],
             "channel_plugin_plan": bridge_setup["artifacts"]["channel_plugin_plan"],
+            "channel_pairing_doctor": bridge_setup["artifacts"]["channel_pairing_doctor"],
             "channel_access_config": bridge_setup["artifacts"]["channel_access_config"],
             "bridge_smoke_tests": bridge_setup["artifacts"]["smoke_tests"],
         }
@@ -248,6 +249,7 @@ def render_openclaw_selection_summary(
                 f"- Manifest: `{artifacts.get('bridge_setup_kit')}`",
                 f"- Env template: `{artifacts.get('bridge_env_template')}`",
                 f"- Channel plugin plan: `{artifacts.get('channel_plugin_plan')}`",
+                f"- Channel pairing doctor: `{artifacts.get('channel_pairing_doctor')}`",
                 f"- Smoke tests: `{artifacts.get('bridge_smoke_tests')}`",
                 "",
             ]

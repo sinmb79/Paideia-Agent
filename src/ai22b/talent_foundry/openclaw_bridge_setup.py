@@ -8,6 +8,7 @@ from typing import Any
 from ai22b.talent_foundry.channel_connectors import doctor_openclaw_channel_connectors
 from ai22b.talent_foundry.channel_ingress import build_openclaw_channel_access_config
 from ai22b.talent_foundry.openclaw_compat import find_openclaw_channel, find_openclaw_provider
+from ai22b.talent_foundry.openclaw_channel_pairing import doctor_openclaw_channel_pairing
 from ai22b.talent_foundry.openclaw_runtime_bundle import OPENCLAW_REFERENCE_URLS
 from ai22b.talent_foundry.provider_connectors import doctor_openclaw_provider_connectors
 
@@ -327,6 +328,7 @@ def build_openclaw_bridge_setup_kit(
 
     provider_doctor = doctor_openclaw_provider_connectors(providers=selected_providers)
     channel_doctor = doctor_openclaw_channel_connectors(channels=selected_channels)
+    channel_pairing_doctor = doctor_openclaw_channel_pairing(channels=selected_channels)
     provider_plan = _build_provider_plan(provider_doctor)
     channel_plan = _build_channel_plan(channel_doctor)
     smoke_tests = _build_smoke_tests(
@@ -341,6 +343,7 @@ def build_openclaw_bridge_setup_kit(
     env_template_path = output_dir / "openclaw_bridge.env.example.ps1"
     provider_plan_path = output_dir / "openclaw_provider_plugin_plan.json"
     channel_plan_path = output_dir / "openclaw_channel_plugin_plan.json"
+    channel_pairing_doctor_path = output_dir / "openclaw_channel_pairing_doctor.json"
     access_config_path = output_dir / "openclaw_bridge_channel_access_config.json"
     smoke_tests_path = output_dir / "openclaw_bridge_smoke_tests.json"
     manifest_path = output_dir / "openclaw_bridge_setup_kit.json"
@@ -358,6 +361,7 @@ def build_openclaw_bridge_setup_kit(
     )
     _write_json(provider_plan_path, provider_plan)
     _write_json(channel_plan_path, channel_plan)
+    _write_json(channel_pairing_doctor_path, channel_pairing_doctor)
     _write_json(smoke_tests_path, smoke_tests)
     access_config = build_openclaw_channel_access_config(
         channels=selected_channels,
@@ -383,6 +387,7 @@ def build_openclaw_bridge_setup_kit(
         "readiness": {
             "provider_summary": provider_doctor["summary"],
             "channel_summary": channel_doctor["summary"],
+            "channel_pairing_summary": channel_pairing_doctor["summary"],
             "access_policy": access_config["default_policy"],
             "secret_values_stored": False,
         },
@@ -391,6 +396,7 @@ def build_openclaw_bridge_setup_kit(
             "env_template": str(env_template_path),
             "provider_plugin_plan": str(provider_plan_path),
             "channel_plugin_plan": str(channel_plan_path),
+            "channel_pairing_doctor": str(channel_pairing_doctor_path),
             "channel_access_config": str(access_config_path),
             "smoke_tests": str(smoke_tests_path),
             "smoke_test_payloads_dir": str(output_dir / "smoke_test_payloads"),
@@ -405,6 +411,11 @@ def build_openclaw_bridge_setup_kit(
                 "ai22b-talent-foundry doctor-openclaw-channel-connectors "
                 + " ".join(f"--channel {channel}" for channel in selected_channels)
                 + f" --output {output_dir / 'channel_doctor.json'}"
+            ),
+            "doctor_channel_pairing": (
+                "ai22b-talent-foundry doctor-openclaw-channel-pairing "
+                + " ".join(f"--channel {channel}" for channel in selected_channels)
+                + f" --output {channel_pairing_doctor_path}"
             ),
             "start_gateway": smoke_tests["commands"]["start_gateway"],
             "send_normalized_payload": smoke_tests["commands"]["send_normalized_payload"],
