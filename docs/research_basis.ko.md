@@ -12,6 +12,16 @@
 | Hermes Agent | 설치, 모델 전환, CLI 채팅, 도구, 스킬, 메모리, 게이트웨이, OpenClaw 마이그레이션을 강조합니다. | 설치 키트, doctor 검사, 스킬 마이그레이션 wrapper, adapter manifest, Reasoning Ledger를 추가했습니다. |
 | OpenHands | 워크스페이스 에이전트는 계획, 결과, trace 같은 검증 가능한 파일을 남겨야 합니다. | 고용 에이전트의 workspace/dataflow 실행이 계획, 결과, trace, 학습 승격 기록을 남깁니다. |
 
+## 하드웨어와 데이터플로우 벤치마크
+
+| 출처 | 확인한 점 | Paideia Agent 반영 |
+| --- | --- | --- |
+| Tesla AI & Robotics | AI 시스템은 높은 throughput, 낮은 latency, determinism, correctness, memory-efficient 데이터 처리가 중요합니다. | 선택된 LLM은 계산 엔진으로 두고, `memory_substrate`와 Codex bridge가 현재 질문에 필요한 hot context만 가까이 배치합니다. |
+| Tesla Hot Chips 31 FSD Computer 발표 | FSD Chip 발표는 data aligner, local SRAM, weight buffer, data sharing, DRAM/SRAM 접근 감소, in-place reuse를 강조합니다. | 보스의 기판 비유를 **Memory Board Architecture**로 정리했습니다. inline context formatter, hot/evidence/safety lane, staged learning update, 검증된 Reasoning Ledger 경로 재사용으로 번역했습니다. |
+| Computing's Energy Problem | 현대 계산에서는 연산 자체보다 데이터 이동과 에너지 비용이 병목이 될 수 있습니다. | 전체 기록을 프롬프트에 쏟아붓지 않고, 선택, 압축, staging, promotion을 거치는 소프트웨어 데이터플로우 기판으로 설계합니다. |
+
+상세 문서: [Tesla식 데이터플로우 기판 벤치마킹](tesla_board_benchmark.ko.md).
+
 ## 학습과 기억 연구
 
 | 출처 | 확인한 점 | Paideia Agent 반영 |
@@ -43,9 +53,14 @@
 - LLM은 연구원과 대화 엔진입니다. AI 인재의 정체성은 로컬 교육기록, 학습원장, 기억기판, dossier에서 옵니다.
 - 이력서형 dossier를 제품의 핵심 산출물로 설명합니다.
 - 외부 게이트웨이와 마이그레이션 스킬은 기본 비활성화이며, 보스 검토와 doctor 검사를 통과해야 합니다.
+- 이전 신용 성장 시스템은 폐기하지 않고, 앞으로 Paideia 인재들이 공통으로 사용할 수 있는 legacy life-development foundation으로 계승합니다. 상세 내용은 [기존 22B-AI 시스템 계승 메모](legacy_system_integration.ko.md)에 정리했습니다.
+- 보스의 Tesla 기판 비유는 Paideia가 Tesla 하드웨어를 구현한다는 주장이 아니라, Memory Board Architecture라는 소프트웨어 설계 원칙으로 반영했습니다.
 
 ## 주요 링크
 
+- Tesla AI & Robotics: https://www.tesla.com/AI?redirect=no
+- Tesla Hot Chips 31 FSD Computer presentation: https://old.hotchips.org/hc31/HC31_2.3_Tesla_Hotchips_ppt_Final_0817.pdf
+- Mark Horowitz, Computing's Energy Problem: https://doi.org/10.1109/ISSCC.2014.6757323
 - OpenClaw onboarding reference: https://docs.openclaw.ai/reference/wizard
 - OpenClaw model providers: https://docs.openclaw.ai/providers/models
 - OpenClaw agent runtimes: https://docs.openclaw.ai/concepts/agent-runtimes

@@ -231,6 +231,11 @@ Key files:
 
 Paideia Agent keeps a source-to-design map so users can inspect which papers, reports, and reference programs shaped the product. See [Research Basis](docs/research_basis.md) or [연구 근거와 반영 내용](docs/research_basis.ko.md).
 
+Two important design notes are split out for easier review:
+
+- [Tesla-style dataflow board benchmark](docs/tesla_board_benchmark.md): maps Boss's Tesla AI-chip board analogy to memory locality, context packing, staged learning, and Reasoning Ledger updates.
+- [Legacy 22B-AI system integration](docs/legacy_system_integration.md): explains that the earlier Shinyong growth system and from-scratch local model work are retained as Paideia's legacy foundation, not discarded.
+
 ## Validation
 
 Run the main regression suite:
@@ -271,6 +276,8 @@ Securities-research talents may help organize evidence, compare sources, draft r
 - [Hermes/OpenClaw benchmark notes](docs/paideia_agent_benchmark.md)
 - [English benchmark summary](docs/paideia_agent_benchmark.en.md)
 - [Research basis](docs/research_basis.md)
+- [Tesla-style dataflow board benchmark](docs/tesla_board_benchmark.md)
+- [Legacy 22B-AI system integration](docs/legacy_system_integration.md)
 - [Public release hygiene policy](docs/40_public_release_hygiene_ko.md)
 - [Korean README](README.ko.md)
 

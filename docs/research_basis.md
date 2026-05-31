@@ -12,6 +12,16 @@ This document maps reference programs, papers, and reports to concrete Paideia A
 | Hermes Agent repository | Modern agents expose setup, model switching, CLI chat, tools, skills, memory, gateways, and migration. | Paideia adds install kits, doctor checks, skill migration wrappers, adapter manifests, and the `Reasoning Ledger` as a growth record. |
 | OpenHands | Workspace agents should leave inspectable files, plans, traces, and runnable evidence. | Hired-agent workspace/dataflow runs write local plans, results, traces, and learning promotion records. |
 
+## Hardware And Dataflow Benchmarks
+
+| Source | What It Shows | Reflected In Paideia Agent |
+| --- | --- | --- |
+| Tesla AI & Robotics | AI systems need high throughput, low latency, determinism, correctness, and memory-efficient handling of large sensor/data streams. | Paideia treats the selected LLM as compute, while `memory_substrate` and the Codex bridge keep only the current hot context near the answer path. |
+| Tesla Hot Chips 31 FSD Computer presentation | The FSD Chip presentation emphasizes neural accelerator data alignment, local SRAM, weight buffers, data sharing, reduced DRAM/SRAM activity, and in-place reuse. | Boss's board analogy became the **Memory Board Architecture**: inline context formatting, hot/evidence/safety lanes, staged learning updates, and local reuse of verified Reasoning Ledger paths. |
+| Computing's Energy Problem | Data movement and energy cost can dominate raw arithmetic, so locality and specialization matter. | Paideia avoids dumping whole archives into prompts; it selects, compresses, stages, and promotes memory like a software dataflow board. |
+
+Detailed note: [Tesla-style dataflow board benchmark](tesla_board_benchmark.md).
+
 ## Learning And Memory Research
 
 | Source | What It Shows | Reflected In Paideia Agent |
@@ -43,9 +53,14 @@ This document maps reference programs, papers, and reports to concrete Paideia A
 - The LLM is a researcher and dialogue engine; the trained talent identity comes from local records.
 - The hiring dossier is a first-class product artifact, not an afterthought.
 - External gateway channels and migrated skills stay disabled until owner review and doctor checks pass.
+- The earlier Shinyong growth system is not discarded; it is a legacy life-development foundation for future Paideia talents. See [Legacy 22B-AI system integration](legacy_system_integration.md).
+- Boss's Tesla board analogy is reflected as Memory Board Architecture, not as a claim that Paideia implements Tesla hardware.
 
 ## Primary Links
 
+- Tesla AI & Robotics: https://www.tesla.com/AI?redirect=no
+- Tesla Hot Chips 31 FSD Computer presentation: https://old.hotchips.org/hc31/HC31_2.3_Tesla_Hotchips_ppt_Final_0817.pdf
+- Mark Horowitz, Computing's Energy Problem: https://doi.org/10.1109/ISSCC.2014.6757323
 - OpenClaw onboarding reference: https://docs.openclaw.ai/reference/wizard
 - OpenClaw model providers: https://docs.openclaw.ai/providers/models
 - OpenClaw agent runtimes: https://docs.openclaw.ai/concepts/agent-runtimes

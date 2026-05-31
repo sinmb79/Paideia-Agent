@@ -105,6 +105,8 @@ Paideia Agent의 첫 실행 순서는 다음과 같습니다.
 
 - [연구 근거와 반영 내용](docs/research_basis.ko.md)
 - [Research Basis](docs/research_basis.md)
+- [Tesla식 데이터플로우 기판 벤치마킹](docs/tesla_board_benchmark.ko.md): 보스가 제안한 테슬라 AI 칩/기판 비유를 기억 지역성, 컨텍스트 패킹, 학습 승격, Reasoning Ledger 구조로 번역한 문서입니다.
+- [기존 22B-AI 시스템 계승 메모](docs/legacy_system_integration.ko.md): 이전 신용 성장 시스템과 from-scratch 모델 작업을 Paideia의 legacy foundation으로 계승하는 방식을 설명합니다.
 
 ## 공개 저장소 원칙
 
@@ -121,4 +123,6 @@ Paideia Agent의 첫 실행 순서는 다음과 같습니다.
 - [Paideia Agent overview](docs/paideia_center.md)
 - [Hermes/OpenClaw benchmark summary](docs/paideia_agent_benchmark.en.md)
 - [연구 근거와 반영 내용](docs/research_basis.ko.md)
+- [Tesla식 데이터플로우 기판 벤치마킹](docs/tesla_board_benchmark.ko.md)
+- [기존 22B-AI 시스템 계승 메모](docs/legacy_system_integration.ko.md)
 - [Security policy](SECURITY.md)
