@@ -102,6 +102,16 @@ ai22b-talent-foundry start-console `
 
 대화형 첫 실행은 OpenClaw식 별칭을 사용할 수 있습니다.
 
+제품형 smoke test를 한 번에 실행하려면 Graham Junior quickstart report를 사용합니다. 이 명령은 샘플을 육성하고, 성적표와 hiring dossier를 만들고, 첫 로컬 채팅을 실행하고, OpenClaw channel flow doctor까지 돌립니다.
+
+```powershell
+ai22b-talent-foundry run-graham-junior-quickstart `
+  --llm-service "openclaw-gateway/openrouter/meta-llama/llama-3.1-8b" `
+  --llm-model-path "http://127.0.0.1:18789" `
+  --chat-surface openclaw-channel-webchat `
+  --channel webchat
+```
+
 ```powershell
 ai22b-talent-foundry onboard
 ```

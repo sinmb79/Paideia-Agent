@@ -46,6 +46,7 @@ from ai22b.talent_foundry.distribution import (
 from ai22b.talent_foundry.dossier import build_hiring_dossier, render_hiring_dossier_markdown
 from ai22b.talent_foundry.employment import create_employment_contract
 from ai22b.talent_foundry.family import create_child_seed, create_child_training_blueprint, create_family_union
+from ai22b.talent_foundry.graham_quickstart import run_graham_junior_quickstart
 from ai22b.talent_foundry.institutions import default_major_gate_submissions, run_institutional_review
 from ai22b.talent_foundry.learning_loop import (
     build_reasoning_kernel,
@@ -410,6 +411,26 @@ def _build_parser() -> argparse.ArgumentParser:
     start_console.add_argument("--output")
     start_console.add_argument("--openclaw-config", help="Existing OpenClaw openclaw.json to prefill model/channel choices.")
     start_console.add_argument("--openclaw-import-dir", help="Directory for redacted OpenClaw import artifacts.")
+
+    graham_quickstart = subparsers.add_parser(
+        "run-graham-junior-quickstart",
+        help="Run the bundled Graham Junior sample and write a one-file evidence report.",
+    )
+    graham_quickstart.add_argument("--answers", default="examples/graham_junior_onboarding.answers.json")
+    graham_quickstart.add_argument("--output-dir", default=str(DEFAULT_RUN_DIR / "graham_junior_quickstart"))
+    graham_quickstart.add_argument("--output")
+    graham_quickstart.add_argument("--llm-service")
+    graham_quickstart.add_argument("--llm-model")
+    graham_quickstart.add_argument("--llm-model-path")
+    graham_quickstart.add_argument("--chat-surface")
+    graham_quickstart.add_argument("--channel", action="append", default=[])
+    graham_quickstart.add_argument(
+        "--message",
+        default="Graham Junior quickstart: summarize your training record and how I can chat with you.",
+    )
+    graham_quickstart.add_argument("--llm-mode", choices=["offline", "auto", "live"], default="offline")
+    graham_quickstart.add_argument("--live-llm", action="store_true")
+    graham_quickstart.add_argument("--learn-from-chat", action="store_true")
 
     onboard_wizard = subparsers.add_parser(
         "onboard",
@@ -852,6 +873,24 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(str(output_path))
         else:
             print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.command == "run-graham-junior-quickstart":
+        llm_mode = "live" if args.live_llm else args.llm_mode
+        report = run_graham_junior_quickstart(
+            output_dir=Path(args.output_dir),
+            answers_path=Path(args.answers),
+            output_path=Path(args.output) if args.output else None,
+            llm_service=args.llm_service,
+            llm_model=args.llm_model,
+            llm_model_path=args.llm_model_path,
+            chat_surface=args.chat_surface,
+            channels=args.channel or None,
+            message=args.message,
+            llm_mode=llm_mode,
+            learn_from_chat=args.learn_from_chat,
+        )
+        print(str(Path(report["artifacts"]["quickstart_report"])))
         return 0
 
     if args.command == "list-openclaw-provider-connectors":

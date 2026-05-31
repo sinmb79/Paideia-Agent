@@ -332,6 +332,54 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertEqual(gateway_doctor["gateway_contract"]["backend_model_header"], "openrouter/meta-llama/llama-3.1-8b")
         self.assertIn("doctor-openclaw-gateway-llm", "\n".join(session["next_commands"]))
 
+    def test_graham_junior_quickstart_links_chat_dossier_transcript_and_openclaw_doctors(self) -> None:
+        from ai22b.config import PROJECT_ROOT
+        from ai22b.talent_foundry.cli import main as cli_main
+
+        with tempfile.TemporaryDirectory() as tmp:
+            output_dir = Path(tmp) / "graham_quickstart"
+            output = output_dir / "quickstart.json"
+            result = cli_main(
+                [
+                    "run-graham-junior-quickstart",
+                    "--answers",
+                    str(PROJECT_ROOT / "examples" / "graham_junior_onboarding.answers.json"),
+                    "--output-dir",
+                    str(output_dir),
+                    "--output",
+                    str(output),
+                    "--llm-service",
+                    "openclaw-gateway/openrouter/meta-llama/llama-3.1-8b",
+                    "--llm-model-path",
+                    "http://127.0.0.1:18789",
+                    "--chat-surface",
+                    "openclaw-channel-webchat",
+                    "--channel",
+                    "webchat",
+                ]
+            )
+            report = json.loads(output.read_text(encoding="utf-8"))
+            artifacts = {key: Path(value) for key, value in report["artifacts"].items() if value}
+            gateway_doctor = json.loads(artifacts["openclaw_gateway_llm_doctor"].read_text(encoding="utf-8"))
+            first_chat = json.loads(artifacts["first_chat"].read_text(encoding="utf-8"))
+            assessment_exists = artifacts["assessment_transcript"].exists()
+            dossier_exists = artifacts["hiring_dossier"].exists()
+            dossier_markdown_exists = artifacts["hiring_dossier_markdown"].exists()
+            runtime_bundle_exists = artifacts["openclaw_runtime_bundle"].exists()
+
+        self.assertEqual(result, 0)
+        self.assertEqual(report["schema"], "ai22b-graham-junior-quickstart/v1")
+        self.assertEqual(report["status"], "pass")
+        self.assertEqual(report["selected_llm_service"], "openclaw-gateway/openrouter/meta-llama/llama-3.1-8b")
+        self.assertTrue(assessment_exists)
+        self.assertTrue(dossier_exists)
+        self.assertTrue(dossier_markdown_exists)
+        self.assertTrue(runtime_bundle_exists)
+        self.assertEqual(gateway_doctor["status"], "ready_for_gateway_start")
+        self.assertEqual(report["openclaw_channel_flow"]["status"], "pass")
+        self.assertEqual(first_chat["reply_generation_mode"], "deterministic_local_fallback")
+        self.assertFalse(report["security"]["external_network_delivery_performed"])
+
     def test_owner_self_extension_manifest_redacts_paths_and_content_by_default(self) -> None:
         from ai22b.talent_foundry.self_extension import build_owner_self_extension_manifest
 

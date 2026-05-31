@@ -136,6 +136,16 @@ ai22b-talent-foundry start-console `
   --answers examples\graham_junior_onboarding.answers.json
 ```
 
+For a one-command product smoke test, run the Graham Junior quickstart report. It raises the sample, writes the transcript and hiring dossier, opens a first local chat turn, and runs the OpenClaw channel flow doctor. You can override the LLM with any OpenClaw-style `provider/model` or the Gateway bridge:
+
+```powershell
+ai22b-talent-foundry run-graham-junior-quickstart `
+  --llm-service "openclaw-gateway/openrouter/meta-llama/llama-3.1-8b" `
+  --llm-model-path "http://127.0.0.1:18789" `
+  --chat-surface openclaw-channel-webchat `
+  --channel webchat
+```
+
 The interactive first-run path also has an OpenClaw-style alias:
 
 ```powershell
