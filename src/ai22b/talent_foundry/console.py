@@ -14,6 +14,7 @@ from ai22b.talent_foundry.onboarding_choices import (
     LLM_SERVICE_CATALOG,
 )
 from ai22b.talent_foundry.openclaw_selection_doctor import (
+    build_openclaw_selection_console_preview,
     doctor_openclaw_selection,
     render_openclaw_selection_summary,
 )
@@ -598,6 +599,7 @@ def run_console_session(
     )
     selection_summary_path = output_dir / "OPENCLAW_SELECTION_SUMMARY.md"
     render_openclaw_selection_summary(selection_doctor, output_path=selection_summary_path)
+    selection_preview = build_openclaw_selection_console_preview(selection_doctor)
 
     onboarding_dir = output_dir / "onboarding"
     onboarding_output = onboarding_dir / "onboarding_session.json"
@@ -854,6 +856,10 @@ def run_console_session(
             "openclaw_selection": selection_doctor["openclaw_selection"],
             "support_matrix_summary": selection_doctor["support_matrix_summary"],
             "claim_boundary": selection_doctor["claim_boundary"],
+        },
+        "openclaw_selection_preview": {
+            "lines": selection_preview,
+            "summary_path": str(selection_summary_path),
         },
         "local_policy": onboarding["local_policy"],
         "post_hire_extensions": post_hire_extensions,

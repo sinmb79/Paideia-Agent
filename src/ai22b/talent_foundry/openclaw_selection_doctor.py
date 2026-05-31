@@ -238,6 +238,24 @@ def render_openclaw_selection_summary(
     return summary
 
 
+def build_openclaw_selection_console_preview(doctor: dict[str, Any]) -> list[str]:
+    selection = doctor.get("openclaw_selection", {})
+    provider_support = selection.get("provider_support") or {}
+    channels = selection.get("channels") or []
+    channel_bits = []
+    for item in channels:
+        support = item.get("support") or {}
+        channel_bits.append(f"{item.get('channel_id')}={support.get('support_level') or 'unknown'}")
+    llm_health = doctor.get("llm_service_health", {})
+    return [
+        f"OpenClaw selection: {doctor.get('status')}",
+        f"Provider: {selection.get('provider_id') or 'not resolved'} ({provider_support.get('support_level') or 'unknown'})",
+        f"LLM health: {llm_health.get('status')}",
+        f"Channels: {', '.join(channel_bits) if channel_bits else 'none selected'}",
+        "Safety: no secret values stored; no external network call performed.",
+    ]
+
+
 def _next_commands(
     *,
     provider_id: str | None,

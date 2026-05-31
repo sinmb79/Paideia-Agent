@@ -312,6 +312,8 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertFalse(selection_doctor["claim_boundary"]["external_network_call_performed"])
         self.assertIn("# OpenClaw Selection Summary", selection_summary)
         self.assertIn("Status: `ready_for_onboarding`", selection_summary)
+        self.assertIn("OpenClaw selection: ready_for_onboarding", session["openclaw_selection_preview"]["lines"])
+        self.assertTrue(session["openclaw_selection_preview"]["summary_path"].endswith("OPENCLAW_SELECTION_SUMMARY.md"))
         self.assertEqual(session["openclaw_runtime"]["selected_support"]["matrix_status"], "pass")
         self.assertFalse(llm_health["network_probe_performed"])
 
@@ -652,7 +654,10 @@ class GrahamTalentFoundryTests(unittest.TestCase):
 
     def test_openclaw_selection_doctor_previews_provider_model_and_channel_path(self) -> None:
         from ai22b.talent_foundry.cli import main as cli_main
-        from ai22b.talent_foundry.openclaw_selection_doctor import doctor_openclaw_selection
+        from ai22b.talent_foundry.openclaw_selection_doctor import (
+            build_openclaw_selection_console_preview,
+            doctor_openclaw_selection,
+        )
 
         with tempfile.TemporaryDirectory() as tmp:
             output = Path(tmp) / "openclaw_selection_doctor.json"
@@ -686,6 +691,7 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             cli_summary_text = cli_summary.read_text(encoding="utf-8")
 
         channel_support = {item["channel_id"]: item["support"] for item in doctor["openclaw_selection"]["channels"]}
+        preview_lines = build_openclaw_selection_console_preview(doctor)
         self.assertEqual(doctor["schema"], "ai22b-openclaw-selection-doctor/v1")
         self.assertEqual(doctor["status"], "ready_for_onboarding")
         self.assertEqual(doctor["openclaw_selection"]["provider_id"], "openrouter")
@@ -699,6 +705,8 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertFalse(doctor["claim_boundary"]["secret_values_stored"])
         self.assertFalse(doctor["claim_boundary"]["external_network_call_performed"])
         self.assertIn("doctor-openclaw-gateway-llm", doctor["next_commands"]["gateway_llm_after_hire"])
+        self.assertIn("OpenClaw selection: ready_for_onboarding", preview_lines)
+        self.assertIn("Provider: openrouter (paideia_direct_or_openclaw_gateway_ready)", preview_lines)
         self.assertEqual(cli_result, 0)
         self.assertEqual(cli_doctor["schema"], "ai22b-openclaw-selection-doctor/v1")
         self.assertEqual(cli_doctor["openclaw_selection"]["provider_id"], "openrouter")

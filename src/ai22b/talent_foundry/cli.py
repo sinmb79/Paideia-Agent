@@ -1260,7 +1260,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             answers = collect_console_answers(prefill=prefill_answers)
             mode = "interactive_prompt"
-        run_console_session(
+        session = run_console_session(
             answers=answers,
             output_dir=output_dir,
             output_path=output_path,
@@ -1269,6 +1269,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             prefill_artifacts=prefill_artifacts,
         )
         print(str(output_path))
+        preview = session.get("openclaw_selection_preview", {})
+        lines = preview.get("lines") or []
+        if lines:
+            print("OpenClaw selection preview:")
+            for line in lines:
+                print(f"  {line}")
+            if preview.get("summary_path"):
+                print(f"  Summary: {preview['summary_path']}")
         return 0
 
     if args.command == "check-llm-service":
