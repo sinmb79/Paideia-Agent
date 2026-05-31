@@ -13,6 +13,7 @@ from ai22b.talent_foundry.channel_gateway import (
     build_openclaw_gateway_config,
     run_openclaw_channel_message,
 )
+from ai22b.talent_foundry.channel_ingress import translate_openclaw_platform_event
 from ai22b.talent_foundry.openclaw_compat import find_openclaw_channel
 
 
@@ -78,6 +79,7 @@ def make_openclaw_channel_gateway_server(
     employment_record_path: Path,
     *,
     channels: list[str] | None = None,
+    access_config_path: Path | None = None,
     bind_host: str = "127.0.0.1",
     port: int = 8722,
     llm_mode: str = "offline",
@@ -100,6 +102,7 @@ def make_openclaw_channel_gateway_server(
         port=port,
     )
     allowed_channels = {item["channel_id"] for item in config["allowed_channels"]}
+    access_config = _read_json(access_config_path) if access_config_path else None
 
     class PaideiaOpenClawGatewayHandler(BaseHTTPRequestHandler):
         server_version = "PaideiaOpenClawChannelGateway/0.1"
@@ -123,6 +126,7 @@ def make_openclaw_channel_gateway_server(
                         "paths": config["gateway"]["http_paths"],
                         "security": {
                             "bind_host": bind_host,
+                            "platform_event_access_config_loaded": bool(access_config),
                             "external_send_performed_by_core": False,
                             "private_training_files_sent_to_channel": False,
                             "raw_external_payload_saved": False,
@@ -143,29 +147,77 @@ def make_openclaw_channel_gateway_server(
 
         def do_POST(self) -> None:
             path = urlparse(self.path).path
-            if path != "/openclaw/channel-message":
-                _write_json_response(self, 404, {"error": "not_found"})
+            if path == "/openclaw/channel-message":
+                self._handle_channel_message()
                 return
+            if path.startswith("/openclaw/platform-event"):
+                self._handle_platform_event(path)
+                return
+            _write_json_response(self, 404, {"error": "not_found"})
+
+        def _read_payload(self) -> dict[str, Any] | None:
             try:
                 size = int(self.headers.get("Content-Length", "0"))
                 if size > MAX_CHANNEL_MESSAGE_BYTES:
                     _write_json_response(self, 413, {"error": "request_too_large"})
-                    return
-                payload = json.loads(self.rfile.read(size).decode("utf-8")) if size else {}
+                    return None
+                return json.loads(self.rfile.read(size).decode("utf-8")) if size else {}
             except Exception as exc:
                 _write_json_response(self, 400, {"error": "invalid_json", "detail": str(exc)[:240]})
+                return None
+
+        def _handle_channel_message(self) -> None:
+            payload = self._read_payload()
+            if payload is None:
                 return
+            response = self._run_normalized_payload(payload)
+            _write_json_response(self, response["status_code"], response["body"])
+
+        def _handle_platform_event(self, path: str) -> None:
+            payload = self._read_payload()
+            if payload is None:
+                return
+            path_parts = [part for part in path.split("/") if part]
+            channel_id = ""
+            if len(path_parts) >= 3:
+                channel_id = path_parts[2]
+            channel_id = str(payload.get("channel_id") or payload.get("platform") or channel_id or "").strip()
+            try:
+                translation = translate_openclaw_platform_event(
+                    channel_id=channel_id,
+                    payload=payload,
+                    access_config=access_config,
+                )
+            except Exception as exc:
+                _write_json_response(self, 400, {"error": "platform_event_translation_failed", "detail": str(exc)[:500]})
+                return
+            if not translation["access"]["allowed"]:
+                _write_json_response(self, 403, translation)
+                return
+            response = self._run_normalized_payload(translation["channel_message"])
+            body = {
+                "schema": OPENCLAW_CHANNEL_GATEWAY_RESPONSE_SCHEMA,
+                "status": response["body"].get("status"),
+                "platform_event_translation": translation,
+                **response["body"],
+            }
+            _write_json_response(self, response["status_code"], body)
+
+        def _run_normalized_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
             normalized = _extract_channel_payload(payload)
             channel = find_openclaw_channel(normalized["channel_id"])
             if channel is None:
-                _write_json_response(self, 400, {"error": "unsupported_channel", "channel_id": normalized["channel_id"]})
-                return
+                return {
+                    "status_code": 400,
+                    "body": {"error": "unsupported_channel", "channel_id": normalized["channel_id"]},
+                }
             if channel["channel_id"] not in allowed_channels:
-                _write_json_response(self, 403, {"error": "channel_not_allowed", "channel_id": channel["channel_id"]})
-                return
+                return {
+                    "status_code": 403,
+                    "body": {"error": "channel_not_allowed", "channel_id": channel["channel_id"]},
+                }
             if not normalized["message"]:
-                _write_json_response(self, 400, {"error": "message_required"})
-                return
+                return {"status_code": 400, "body": {"error": "message_required"}}
             timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
             run_path = output_dir / f"{channel['channel_id']}_{timestamp}.json"
             try:
@@ -182,12 +234,13 @@ def make_openclaw_channel_gateway_server(
                     metadata=normalized["metadata"],
                 )
             except Exception as exc:
-                _write_json_response(self, 500, {"error": "channel_run_failed", "detail": str(exc)[:500]})
-                return
-            _write_json_response(
-                self,
-                200,
-                {
+                return {
+                    "status_code": 500,
+                    "body": {"error": "channel_run_failed", "detail": str(exc)[:500]},
+                }
+            return {
+                "status_code": 200,
+                "body": {
                     "schema": OPENCLAW_CHANNEL_GATEWAY_RESPONSE_SCHEMA,
                     "status": run["status"],
                     "channel_run": run,
@@ -195,7 +248,7 @@ def make_openclaw_channel_gateway_server(
                     "outbound": run["outbound"],
                     "security": run["security"],
                 },
-            )
+            }
 
     server = ThreadingHTTPServer((bind_host, port), PaideiaOpenClawGatewayHandler)
     server.paideia_openclaw_channel_gateway = {  # type: ignore[attr-defined]
@@ -214,6 +267,7 @@ def run_openclaw_channel_gateway_server(
     employment_record_path: Path,
     *,
     channels: list[str] | None = None,
+    access_config_path: Path | None = None,
     bind_host: str = "127.0.0.1",
     port: int = 8722,
     llm_mode: str = "offline",
@@ -224,6 +278,7 @@ def run_openclaw_channel_gateway_server(
     server = make_openclaw_channel_gateway_server(
         employment_record_path,
         channels=channels,
+        access_config_path=access_config_path,
         bind_host=bind_host,
         port=port,
         llm_mode=llm_mode,

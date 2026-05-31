@@ -89,6 +89,7 @@ def build_openclaw_gateway_config(
                 "health": "/health",
                 "config": "/openclaw/gateway-config",
                 "message": "/openclaw/channel-message",
+                "platform_event": "/openclaw/platform-event/{channel}",
             },
         },
         "allowed_channels": [

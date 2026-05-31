@@ -27,6 +27,10 @@ from ai22b.talent_foundry.channel_delivery import (
     build_openclaw_channel_delivery_config,
     send_openclaw_channel_outbound,
 )
+from ai22b.talent_foundry.channel_ingress import (
+    build_openclaw_channel_access_config,
+    translate_openclaw_platform_event,
+)
 from ai22b.talent_foundry.cohort import create_specialist_cohort
 from ai22b.talent_foundry.console import collect_console_answers, run_console_session
 from ai22b.talent_foundry.distribution import (
@@ -149,6 +153,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     run_channel_gateway_server.add_argument("--employment-record", required=True)
     run_channel_gateway_server.add_argument("--channel", action="append", default=[])
+    run_channel_gateway_server.add_argument("--access-config")
     run_channel_gateway_server.add_argument("--bind-host", default="127.0.0.1")
     run_channel_gateway_server.add_argument("--port", type=int, default=8722)
     run_channel_gateway_server.add_argument("--output-dir")
@@ -163,6 +168,24 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     build_channel_delivery_config.add_argument("--channel", action="append", default=[])
     build_channel_delivery_config.add_argument("--output", required=True)
+
+    build_channel_access_config = subparsers.add_parser(
+        "build-openclaw-channel-access-config",
+        help="Write a local allowlist config for OpenClaw-style inbound platform events.",
+    )
+    build_channel_access_config.add_argument("--channel", action="append", default=[])
+    build_channel_access_config.add_argument("--allow-sender", action="append", default=[])
+    build_channel_access_config.add_argument("--allow-conversation", action="append", default=[])
+    build_channel_access_config.add_argument("--output", required=True)
+
+    translate_platform_event = subparsers.add_parser(
+        "translate-openclaw-platform-event",
+        help="Translate a Telegram/Discord/Slack platform event JSON into an OpenClaw channel message envelope.",
+    )
+    translate_platform_event.add_argument("--channel", required=True)
+    translate_platform_event.add_argument("--event", required=True)
+    translate_platform_event.add_argument("--access-config")
+    translate_platform_event.add_argument("--output", required=True)
 
     send_channel_outbound = subparsers.add_parser(
         "send-openclaw-channel-outbound",
@@ -689,6 +712,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         run_openclaw_channel_gateway_server(
             Path(args.employment_record),
             channels=args.channel or None,
+            access_config_path=Path(args.access_config) if args.access_config else None,
             bind_host=args.bind_host,
             port=args.port,
             output_dir=Path(args.output_dir) if args.output_dir else None,
@@ -701,6 +725,30 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "build-openclaw-channel-delivery-config":
         build_openclaw_channel_delivery_config(
             channels=args.channel or None,
+            output_path=Path(args.output),
+        )
+        print(str(Path(args.output)))
+        return 0
+
+    if args.command == "build-openclaw-channel-access-config":
+        build_openclaw_channel_access_config(
+            channels=args.channel or None,
+            allowed_senders=args.allow_sender or None,
+            allowed_conversations=args.allow_conversation or None,
+            output_path=Path(args.output),
+        )
+        print(str(Path(args.output)))
+        return 0
+
+    if args.command == "translate-openclaw-platform-event":
+        access_config = (
+            json.loads(Path(args.access_config).read_text(encoding="utf-8-sig")) if args.access_config else None
+        )
+        event_payload = json.loads(Path(args.event).read_text(encoding="utf-8-sig"))
+        translate_openclaw_platform_event(
+            channel_id=args.channel,
+            payload=event_payload,
+            access_config=access_config,
             output_path=Path(args.output),
         )
         print(str(Path(args.output)))

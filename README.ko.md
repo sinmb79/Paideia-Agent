@@ -121,6 +121,23 @@ ai22b-talent-foundry run-openclaw-channel-gateway-server `
 
 이 서버는 `POST /openclaw/channel-message`를 받아 Paideia 인재에게 전달하고, 원래 들어온 채널/세션으로 되돌려 보낼 outbound envelope를 반환합니다. 실제 플랫폼 토큰, 페어링, 허용목록, 최종 전송은 채널 플러그인이 담당합니다.
 
+실제 플랫폼 webhook/event payload는 먼저 deny-by-default ingress layer에서 표준 envelope로 번역합니다.
+
+```powershell
+ai22b-talent-foundry build-openclaw-channel-access-config `
+  --channel telegram `
+  --allow-sender "telegram:12345" `
+  --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\channel_access.json"
+
+ai22b-talent-foundry translate-openclaw-platform-event `
+  --channel telegram `
+  --event ".\telegram_update.json" `
+  --access-config "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\channel_access.json" `
+  --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\telegram_translation.json"
+```
+
+gateway 서버를 `--access-config`와 함께 실행하면 `/openclaw/platform-event/telegram`, `/discord`, `/slack` 경로로 들어온 raw event도 처리합니다. 허용목록에 없는 sender/conversation은 403으로 차단됩니다.
+
 반환된 outbound envelope는 기본 dry-run delivery adapter로 먼저 검토할 수 있습니다.
 
 ```powershell

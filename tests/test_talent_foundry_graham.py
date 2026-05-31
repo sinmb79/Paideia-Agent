@@ -618,6 +618,145 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertTrue(discord["target_valid"])
         self.assertFalse(discord["auth"]["token_present"])
 
+    def test_channel_ingress_translates_platform_events_with_allowlist(self) -> None:
+        from ai22b.talent_foundry.channel_ingress import (
+            build_openclaw_channel_access_config,
+            translate_openclaw_platform_event,
+        )
+
+        telegram_update = {
+            "update_id": 9001,
+            "message": {
+                "message_id": 77,
+                "message_thread_id": 42,
+                "from": {"id": 12345, "username": "boss"},
+                "chat": {"id": -1001234567890, "type": "supergroup", "title": "Research Room"},
+                "text": "Gateway inbound test",
+            },
+        }
+        slack_event = {
+            "type": "event_callback",
+            "team_id": "T123",
+            "event_id": "Ev123",
+            "event": {
+                "type": "message",
+                "channel": "C123456",
+                "user": "U123",
+                "text": "Slack inbound test",
+                "ts": "1717171717.000100",
+            },
+        }
+        access = build_openclaw_channel_access_config(
+            channels=["telegram", "slack"],
+            allowed_senders=["telegram:12345"],
+        )
+
+        telegram = translate_openclaw_platform_event(
+            channel_id="telegram",
+            payload=telegram_update,
+            access_config=access,
+        )
+        slack = translate_openclaw_platform_event(
+            channel_id="slack",
+            payload=slack_event,
+            access_config=access,
+        )
+
+        self.assertEqual(telegram["schema"], "ai22b-openclaw-platform-event-translation/v1")
+        self.assertTrue(telegram["access"]["allowed"])
+        self.assertEqual(telegram["channel_message"]["channel"]["channel_id"], "telegram")
+        self.assertEqual(
+            telegram["channel_message"]["conversation_id"],
+            "agent:main:telegram:group:-1001234567890:topic:42",
+        )
+        self.assertEqual(telegram["channel_message"]["sender"]["sender_id"], "telegram:12345")
+        self.assertEqual(telegram["channel_message"]["message"]["text"], "Gateway inbound test")
+        self.assertFalse(telegram["security"]["raw_external_payload_saved"])
+        self.assertFalse(slack["access"]["allowed"])
+        self.assertEqual(slack["access"]["decision"], "blocked_sender_or_conversation_not_allowed")
+        self.assertEqual(
+            slack["channel_message"]["conversation_id"],
+            "agent:main:slack:channel:C123456:thread:1717171717.000100",
+        )
+
+    def test_channel_gateway_server_routes_allowed_platform_event(self) -> None:
+        from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
+        from ai22b.talent_foundry.channel_ingress import build_openclaw_channel_access_config
+        from ai22b.talent_foundry.channel_gateway_server import make_openclaw_channel_gateway_server
+        from ai22b.talent_foundry.registry import hire_installed_agent
+        from ai22b.talent_foundry.training_run import materialize_training_blueprint
+
+        blueprint = create_agent_training_blueprint(
+            owner="Boss",
+            request="Route an allowed Telegram platform event through the Paideia OpenClaw channel gateway.",
+            talent_name="ingress-junior",
+            gender="male",
+            domain="securities_research",
+            role_model_id="graham_value_investing",
+            agent_surface="openclaw-channel-telegram",
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            run = materialize_training_blueprint(blueprint, output_dir=Path(tmp) / "ingress_junior")
+            artifacts = {key: Path(value) for key, value in run["artifacts"].items()}
+            hiring = hire_installed_agent(
+                artifacts["installed_agent_manifest"],
+                employer="Boss",
+                role="Local platform ingress test agent",
+                chat_surface="openclaw-channel-telegram",
+                record_name="employment_record_ingress.json",
+            )
+            access_path = Path(tmp) / "channel_access.json"
+            build_openclaw_channel_access_config(
+                channels=["telegram"],
+                allowed_senders=["telegram:12345"],
+                output_path=access_path,
+            )
+            server = make_openclaw_channel_gateway_server(
+                hiring["employment_record"],
+                channels=["telegram"],
+                access_config_path=access_path,
+                port=0,
+                output_dir=Path(tmp) / "ingress_runs",
+            )
+            host, port = server.server_address
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                telegram_update = {
+                    "update_id": 9002,
+                    "message": {
+                        "message_id": 88,
+                        "message_thread_id": 42,
+                        "from": {"id": 12345, "username": "boss"},
+                        "chat": {"id": -1001234567890, "type": "supergroup", "title": "Research Room"},
+                        "text": "Allowed platform event should route.",
+                    },
+                }
+                request = Request(
+                    f"http://{host}:{port}/openclaw/platform-event/telegram",
+                    data=json.dumps(telegram_update).encode("utf-8"),
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                with urlopen(request, timeout=10) as response:
+                    gateway = json.loads(response.read().decode("utf-8"))
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=2)
+
+            channel_run_exists = Path(gateway["channel_run_path"]).exists()
+
+        self.assertEqual(gateway["schema"], "ai22b-openclaw-channel-gateway-response/v1")
+        self.assertTrue(gateway["platform_event_translation"]["access"]["allowed"])
+        self.assertEqual(gateway["outbound"]["channel_id"], "telegram")
+        self.assertEqual(
+            gateway["outbound"]["conversation_id"],
+            "agent:main:telegram:group:-1001234567890:topic:42",
+        )
+        self.assertTrue(channel_run_exists)
+
     def test_channel_delivery_live_slack_uses_chat_post_message_without_storing_token(self) -> None:
         from ai22b.talent_foundry.channel_delivery import send_openclaw_channel_outbound
 

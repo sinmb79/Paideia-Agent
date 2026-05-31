@@ -337,6 +337,23 @@ ai22b-talent-foundry run-openclaw-channel-gateway-server `
 
 The server exposes `GET /health`, `GET /openclaw/gateway-config`, and `POST /openclaw/channel-message`. By default it returns a channel-specific outbound envelope and does not send to Telegram/Discord/Slack itself; platform plugins keep control of tokens, pairing, allowlists, and final delivery. This follows OpenClaw's deterministic routing pattern: reply to the origin channel/session rather than letting the model choose a destination.
 
+Raw platform events can be translated through a deny-by-default ingress layer before routing:
+
+```powershell
+ai22b-talent-foundry build-openclaw-channel-access-config `
+  --channel telegram `
+  --allow-sender "telegram:12345" `
+  --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\channel_access.json"
+
+ai22b-talent-foundry translate-openclaw-platform-event `
+  --channel telegram `
+  --event ".\telegram_update.json" `
+  --access-config "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\channel_access.json" `
+  --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\telegram_translation.json"
+```
+
+The HTTP gateway also accepts `POST /openclaw/platform-event/telegram`, `/discord`, and `/slack` when started with `--access-config`. Unlisted senders or conversations receive a `403` translation result instead of being routed into the talent.
+
 To inspect or send the returned outbound envelope, use the dry-run-first delivery adapter:
 
 ```powershell

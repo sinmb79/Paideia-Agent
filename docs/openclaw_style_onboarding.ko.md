@@ -90,6 +90,23 @@ ai22b-talent-foundry run-openclaw-channel-gateway-server `
 
 플러그인은 `POST /openclaw/channel-message`로 channel, conversation/session key, sender, text를 넘기면 됩니다. Paideia는 모델이 채널을 임의로 고르게 하지 않고, OpenClaw의 routing 철학처럼 원래 들어온 채널/세션으로 답변 envelope를 되돌려줍니다.
 
+Telegram/Discord/Slack의 raw webhook/event payload를 직접 받을 때는 access config를 먼저 만듭니다.
+
+```powershell
+ai22b-talent-foundry build-openclaw-channel-access-config `
+  --channel telegram `
+  --allow-sender "telegram:12345" `
+  --output channel_access.json
+
+ai22b-talent-foundry translate-openclaw-platform-event `
+  --channel telegram `
+  --event telegram_update.json `
+  --access-config channel_access.json `
+  --output telegram_translation.json
+```
+
+이 access config를 gateway 서버의 `--access-config`에 넘기면 `/openclaw/platform-event/telegram`, `/openclaw/platform-event/discord`, `/openclaw/platform-event/slack`으로 들어오는 raw event가 표준 envelope로 번역된 뒤, 허용된 sender/conversation만 실제 Paideia 채팅 런타임으로 라우팅됩니다.
+
 outbound envelope는 곧바로 외부로 보내기보다 먼저 dry-run delivery로 검토합니다.
 
 ```powershell
