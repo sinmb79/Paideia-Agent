@@ -14,6 +14,7 @@ from ai22b.talent_foundry.onboarding_choices import (
     resolve_chat_surface,
     resolve_llm_service,
 )
+from ai22b.talent_foundry.openclaw_onboarding_menu import build_openclaw_onboarding_menu
 from ai22b.talent_foundry.role_models import list_role_models, summarize_role_model
 
 
@@ -24,6 +25,9 @@ DEFAULT_AGENT_PROGRAM_NAME = "Paideia Agent"
 DEFAULT_AGENT_PROGRAM_NAME_KO = "Paideia Agent"
 DEFAULT_AGENT_PROGRAM_FILE = "22b_paideia_agent_program.json"
 DEFAULT_CHAT_SCRIPT = "start_paideia_chat.ps1"
+DEFAULT_OPENCLAW_MENU_SCRIPT = "refresh_openclaw_onboarding_menu.ps1"
+DEFAULT_OPENCLAW_MENU_FILE = "openclaw_onboarding_menu.json"
+DEFAULT_OPENCLAW_MENU_MARKDOWN = "OPENCLAW_ONBOARDING_MENU.md"
 DEFAULT_OPENCLAW_RUNTIME_SCRIPT = "build_openclaw_runtime_bundle.ps1"
 DEFAULT_OPENCLAW_SMOKE_PLAN_SCRIPT = "build_openclaw_live_smoke_plan.ps1"
 DEFAULT_OPENCLAW_WEBCHAT_SCRIPT = "start_openclaw_webchat.ps1"
@@ -205,6 +209,33 @@ foreach ($Item in $Channel) {
 python @ArgsList
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 Write-Host "OpenClaw runtime bundle: $OutputDir\\openclaw_runtime_bundle.json"
+"""
+
+
+def _openclaw_onboarding_menu_script() -> str:
+    return """param(
+    [string]$Output = ".\\openclaw_onboarding_menu.json",
+    [string]$MarkdownOutput = ".\\OPENCLAW_ONBOARDING_MENU.md",
+    [switch]$RefreshDocs
+)
+
+$ErrorActionPreference = "Stop"
+[Console]::InputEncoding = [System.Text.UTF8Encoding]::new()
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
+$env:PYTHONIOENCODING = "utf-8"
+
+$ArgsList = @(
+    "-m", "ai22b.talent_foundry.cli",
+    "build-openclaw-onboarding-menu",
+    "--output", $Output,
+    "--markdown-output", $MarkdownOutput
+)
+if ($RefreshDocs) { $ArgsList += "--refresh-docs" }
+
+python @ArgsList
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+Write-Host "OpenClaw onboarding menu: $Output"
+Write-Host "Markdown guide: $MarkdownOutput"
 """
 
 
@@ -415,6 +446,14 @@ powershell -ExecutionPolicy Bypass -File .\\doctor_paideia.ps1
 powershell -ExecutionPolicy Bypass -File .\\start_paideia_chat.ps1
 ```
 
+Review the OpenClaw-compatible provider/channel menu before choosing a live LLM or chat channel:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\\refresh_openclaw_onboarding_menu.ps1
+```
+
+Add `-RefreshDocs` when you want to compare against the current official OpenClaw docs. The generated `OPENCLAW_ONBOARDING_MENU.md` lists the full provider/channel support matrix and accepts free-form `provider/model` or `openclaw-channel-<channel>` selectors.
+
 To let the selected LLM service answer when it is available, use auto mode:
 
 ```powershell
@@ -587,6 +626,10 @@ def build_agent_program(
     agent = employment.get("agent", {})
     script_path = output_path.parent / DEFAULT_CHAT_SCRIPT
     script_path.write_text(_chat_script(), encoding="utf-8")
+    (output_path.parent / DEFAULT_OPENCLAW_MENU_SCRIPT).write_text(
+        _openclaw_onboarding_menu_script(),
+        encoding="utf-8",
+    )
     (output_path.parent / DEFAULT_OPENCLAW_RUNTIME_SCRIPT).write_text(
         _openclaw_runtime_bundle_script(),
         encoding="utf-8",
@@ -738,6 +781,7 @@ def build_agent_program(
             "employment_record": _rel(employment_record_path, output_path.parent),
             "agent_manifest": _rel(agent_manifest_path, output_path.parent),
             "chat_script": DEFAULT_CHAT_SCRIPT,
+            "openclaw_onboarding_menu_script": DEFAULT_OPENCLAW_MENU_SCRIPT,
             "openclaw_runtime_bundle_script": DEFAULT_OPENCLAW_RUNTIME_SCRIPT,
             "openclaw_live_smoke_plan_script": DEFAULT_OPENCLAW_SMOKE_PLAN_SCRIPT,
             "openclaw_webchat_script": DEFAULT_OPENCLAW_WEBCHAT_SCRIPT,
@@ -748,6 +792,10 @@ def build_agent_program(
             "openclaw_runtime_bundle_command": (
                 "ai22b-talent-foundry build-openclaw-runtime-bundle "
                 "--employment-record employment_record.json --channel webchat --output-dir openclaw_runtime_bundle"
+            ),
+            "openclaw_onboarding_menu_command": (
+                "ai22b-talent-foundry build-openclaw-onboarding-menu "
+                f"--output {DEFAULT_OPENCLAW_MENU_FILE} --markdown-output {DEFAULT_OPENCLAW_MENU_MARKDOWN}"
             ),
             "openclaw_live_smoke_plan_command": (
                 "ai22b-talent-foundry build-openclaw-live-smoke-plan "
@@ -782,6 +830,7 @@ def build_agent_program(
             "doctor_script": DEFAULT_DOCTOR_SCRIPT,
             "onboarding_template": DEFAULT_ONBOARDING_TEMPLATE,
             "start_chat_script": DEFAULT_CHAT_SCRIPT,
+            "openclaw_onboarding_menu_script": DEFAULT_OPENCLAW_MENU_SCRIPT,
             "openclaw_runtime_bundle_script": DEFAULT_OPENCLAW_RUNTIME_SCRIPT,
             "openclaw_live_smoke_plan_script": DEFAULT_OPENCLAW_SMOKE_PLAN_SCRIPT,
             "openclaw_webchat_script": DEFAULT_OPENCLAW_WEBCHAT_SCRIPT,
@@ -890,6 +939,10 @@ def build_paideia_agent_install_kit(
         selected_llm_service=employment.get("llm_service"),
         selected_chat_surface=employment.get("chat_surface"),
     )
+    openclaw_menu = build_openclaw_onboarding_menu(
+        output_path=output_dir / DEFAULT_OPENCLAW_MENU_FILE,
+        markdown_output_path=output_dir / DEFAULT_OPENCLAW_MENU_MARKDOWN,
+    )
     _write_json(output_dir / DEFAULT_ONBOARDING_TEMPLATE, onboarding)
     (output_dir / "README.md").write_text(
         _install_readme(program_name, str(program.get("agent", {}).get("name") or "unknown")),
@@ -910,12 +963,25 @@ def build_paideia_agent_install_kit(
         "entrypoints": {
             "doctor": DEFAULT_DOCTOR_SCRIPT,
             "start_chat": DEFAULT_CHAT_SCRIPT,
+            "refresh_openclaw_onboarding_menu": DEFAULT_OPENCLAW_MENU_SCRIPT,
             "build_openclaw_runtime_bundle": DEFAULT_OPENCLAW_RUNTIME_SCRIPT,
             "build_openclaw_live_smoke_plan": DEFAULT_OPENCLAW_SMOKE_PLAN_SCRIPT,
             "start_openclaw_webchat": DEFAULT_OPENCLAW_WEBCHAT_SCRIPT,
             "program": program_path.name,
             "onboarding_template": DEFAULT_ONBOARDING_TEMPLATE,
+            "openclaw_onboarding_menu": DEFAULT_OPENCLAW_MENU_FILE,
+            "openclaw_onboarding_menu_markdown": DEFAULT_OPENCLAW_MENU_MARKDOWN,
             "adapter_manifests": "adapter_manifests",
+        },
+        "openclaw_onboarding_menu": {
+            "schema": openclaw_menu["schema"],
+            "status": openclaw_menu["status"],
+            "source_mode": openclaw_menu["source_mode"],
+            "provider_count": openclaw_menu["llm_selection"]["counts"]["total"],
+            "channel_count": openclaw_menu["chat_selection"]["counts"]["total"],
+            "accepts_freeform_provider_model": openclaw_menu["llm_selection"]["accepts_freeform_provider_model"],
+            "accepts_freeform_openclaw_channel": openclaw_menu["chat_selection"]["accepts_freeform_openclaw_channel"],
+            "refresh_script": DEFAULT_OPENCLAW_MENU_SCRIPT,
         },
         "benchmarked_from": {
             "hermes_agent": [
@@ -957,6 +1023,7 @@ def doctor_agent_program(program_path: Path, *, output_path: Path | None = None)
         "employment_record",
         "agent_manifest",
         "chat_script",
+        "openclaw_onboarding_menu_script",
         "openclaw_runtime_bundle_script",
         "openclaw_live_smoke_plan_script",
         "openclaw_webchat_script",

@@ -208,6 +208,15 @@ ai22b-talent-foundry build-paideia-agent-kit `
 
 The kit scripts call `python -m ai22b.talent_foundry.cli`, so run them from an installed Paideia environment or set `PYTHONPATH` to this repository's `src` folder during source development.
 
+Each generated kit includes an OpenClaw provider/channel menu snapshot:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\refresh_openclaw_onboarding_menu.ps1
+powershell -ExecutionPolicy Bypass -File .\refresh_openclaw_onboarding_menu.ps1 -RefreshDocs
+```
+
+The `OPENCLAW_ONBOARDING_MENU.md` file lists every OpenClaw-compatible provider/channel known to Paideia, plus the free-form `provider/model` and `openclaw-channel-<channel>` selectors that let OpenClaw Gateway own future providers or chat plugins Paideia has not hard-coded yet.
+
 Doctor the kit before first use:
 
 ```powershell
@@ -267,8 +276,11 @@ A Paideia Agent kit can include:
 - `22b_paideia_agent_program.json`
 - `paideia_agent_install_manifest.json`
 - `paideia_onboarding.template.json`
+- `openclaw_onboarding_menu.json`
+- `OPENCLAW_ONBOARDING_MENU.md`
 - `doctor_paideia.ps1`
 - `start_paideia_chat.ps1`
+- `refresh_openclaw_onboarding_menu.ps1`
 - `build_openclaw_runtime_bundle.ps1`
 - `build_openclaw_live_smoke_plan.ps1`
 - `start_openclaw_webchat.ps1`

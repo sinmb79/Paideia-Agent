@@ -76,7 +76,7 @@ ai22b-talent-foundry doctor-agent-program `
   --output .\paideia_agent_kit\paideia_doctor_report.json
 ```
 
-설치 키트에는 `README.md`, `doctor_paideia.ps1`, `start_paideia_chat.ps1`, `build_openclaw_runtime_bundle.ps1`, `build_openclaw_live_smoke_plan.ps1`, `start_openclaw_webchat.ps1`, `paideia_onboarding.template.json`, `adapter_manifests/`가 포함됩니다. Hermes/OpenClaw식 확장을 고려하되, 외부 채널과 커뮤니티 스킬은 기본 비활성화입니다. OpenClaw식 런타임 검증은 설치 폴더 안에서 runtime bundle 생성, no-secret live smoke plan 생성, 로컬 WebChat 실행 순서로 진행합니다.
+설치 키트에는 `README.md`, `doctor_paideia.ps1`, `start_paideia_chat.ps1`, `refresh_openclaw_onboarding_menu.ps1`, `build_openclaw_runtime_bundle.ps1`, `build_openclaw_live_smoke_plan.ps1`, `start_openclaw_webchat.ps1`, `paideia_onboarding.template.json`, `openclaw_onboarding_menu.json`, `OPENCLAW_ONBOARDING_MENU.md`, `adapter_manifests/`가 포함됩니다. Hermes/OpenClaw식 확장을 고려하되, 외부 채널과 커뮤니티 스킬은 기본 비활성화입니다. OpenClaw식 런타임 검증은 설치 폴더 안에서 provider/channel 메뉴 확인, runtime bundle 생성, no-secret live smoke plan 생성, 로컬 WebChat 실행 순서로 진행합니다.
 
 ## Hermes/OpenClaw 스킬 마이그레이션
 
