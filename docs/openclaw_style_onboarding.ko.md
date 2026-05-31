@@ -44,6 +44,18 @@ ai22b-talent-foundry start-console
 ai22b-talent-foundry onboard --answers examples\graham_junior_onboarding.answers.json
 ```
 
+## OpenClaw 호환 provider/channel
+
+Paideia는 OpenClaw처럼 `provider/model` 선택을 지원합니다. 예를 들어 `openrouter/meta-llama/llama-3.1-8b`를 `--llm-service`에 직접 넣으면 provider는 `openrouter`, 모델은 `meta-llama/llama-3.1-8b`로 분리되어 고용 기록과 LLM 런타임에 저장됩니다.
+
+```powershell
+ai22b-talent-foundry list-openclaw-compat --output openclaw_compat.json
+```
+
+현재 직접 호출 가능한 계열은 OpenAI/Codex, Anthropic Messages, Gemini generateContent, OpenAI-compatible provider(OpenRouter, Mistral, DeepSeek, Groq, xAI, Perplexity, Together, Fireworks, DeepInfra, vLLM, SGLang 등), Ollama입니다. Bedrock, Copilot Proxy, Gemini CLI, Vertex, ComfyUI 등 provider별 플러그인이 필요한 항목은 온보딩 manifest에는 표시하지만 live 호출은 provider plugin 설정 전까지 비활성으로 둡니다.
+
+채팅 표면도 OpenClaw channel 이름을 노출합니다. `openclaw-channel-telegram`, `openclaw-channel-discord`, `openclaw-channel-slack`, `openclaw-channel-whatsapp`, `openclaw-channel-signal`, `openclaw-channel-matrix`, `openclaw-channel-webchat` 같은 항목은 Gateway/페어링/허용목록 검토 전까지 manifest-only 상태입니다.
+
 ## 산출물
 
 - `console_session.json`: 전체 온보딩 세션과 health 요약

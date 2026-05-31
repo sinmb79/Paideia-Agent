@@ -149,15 +149,21 @@ class GrahamTalentFoundryTests(unittest.TestCase):
     def test_onboarding_exposes_multi_provider_llms_and_role_model_choices(self) -> None:
         from ai22b.talent_foundry.console import questions_with_choices
         from ai22b.talent_foundry.llm_runtime import build_llm_runtime_config, invoke_llm_application_engine
-        from ai22b.talent_foundry.onboarding_choices import llm_service_ids
+        from ai22b.talent_foundry.onboarding_choices import chat_surface_ids, llm_service_ids, resolve_llm_service
 
         self.assertIn("ollama_local", llm_service_ids())
         self.assertIn("openrouter_api", llm_service_ids())
+        self.assertIn("deepseek_api", llm_service_ids())
+        self.assertIn("groq_api", llm_service_ids())
+        self.assertIn("openclaw-channel-telegram", chat_surface_ids())
+        self.assertIn("openclaw-channel-whatsapp", chat_surface_ids())
         questions = questions_with_choices()
         role_question = next(item for item in questions if item["id"] == "role_model_id")
         llm_question = next(item for item in questions if item["id"] == "llm_service")
+        chat_question = next(item for item in questions if item["id"] == "chat_surface")
         self.assertIn("hopper_software_tooling", {item["id"] for item in role_question["choices"]})
         self.assertIn("anthropic_claude_api", {item["id"] for item in llm_question["choices"]})
+        self.assertIn("openclaw-channel-telegram", {item["id"] for item in chat_question["choices"]})
 
         config = build_llm_runtime_config(engine="openrouter_api", model="user-selected-model")
         result = invoke_llm_application_engine(
@@ -168,6 +174,16 @@ class GrahamTalentFoundryTests(unittest.TestCase):
 
         self.assertEqual(config["network_access"], "external_api_selected_data_minimized")
         self.assertEqual(result["status"], "adapter_manifest_ready")
+
+        selected = resolve_llm_service(llm_service="openrouter/meta-llama/llama-3.1-8b")
+        self.assertEqual(selected["service_id"], "openrouter_api")
+        self.assertEqual(selected["openclaw_provider_id"], "openrouter")
+        self.assertEqual(selected["openclaw_model"], "openrouter/meta-llama/llama-3.1-8b")
+        self.assertEqual(selected["selected_model"], "meta-llama/llama-3.1-8b")
+
+        local_vllm = resolve_llm_service(llm_service="vllm/Qwen3-8B")
+        self.assertEqual(local_vllm["service_id"], "vllm_local")
+        self.assertEqual(local_vllm["network_access"], "localhost_only")
 
     def test_openclaw_style_onboarding_questions_are_step_based(self) -> None:
         from ai22b.talent_foundry.console import WIZARD_STEPS, questions_with_choices
@@ -289,6 +305,23 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertEqual(owner_data["scan"]["file_count"], 1)
         self.assertEqual(health["status"], "needs_model_path")
         self.assertFalse(health["network_probe_performed"])
+
+    def test_cli_lists_openclaw_compatible_providers_and_channels(self) -> None:
+        from ai22b.talent_foundry.cli import main as cli_main
+
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "openclaw_compat.json"
+            self.assertEqual(cli_main(["list-openclaw-compat", "--output", str(output)]), 0)
+            data = json.loads(output.read_text(encoding="utf-8"))
+
+        provider_ids = {item["provider_id"] for item in data["model_providers"]["providers"]}
+        channel_ids = {item["channel_id"] for item in data["chat_channels"]["channels"]}
+        self.assertIn("openai", provider_ids)
+        self.assertIn("openrouter", provider_ids)
+        self.assertIn("ollama", provider_ids)
+        self.assertIn("discord", channel_ids)
+        self.assertIn("telegram", channel_ids)
+        self.assertIn("whatsapp", channel_ids)
 
     def test_owner_self_extension_blueprint_uses_private_local_track_without_role_model(self) -> None:
         from ai22b.talent_foundry.blueprint import create_agent_training_blueprint

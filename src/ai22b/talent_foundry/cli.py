@@ -41,9 +41,9 @@ from ai22b.talent_foundry.onboarding_choices import (
     DEFAULT_CHAT_SURFACE_ID,
     build_llm_service_health,
     chat_surface_ids,
-    llm_service_ids,
     resolve_llm_service,
 )
+from ai22b.talent_foundry.openclaw_compat import openclaw_channel_manifest, openclaw_provider_manifest
 from ai22b.talent_foundry.program import create_talent_plan
 from ai22b.talent_foundry.program_manifest import build_public_program_manifest
 from ai22b.talent_foundry.records import build_career_records
@@ -103,6 +103,12 @@ def _build_parser() -> argparse.ArgumentParser:
     list_role_models_command.add_argument("--domain")
     list_role_models_command.add_argument("--output")
 
+    list_openclaw_compat = subparsers.add_parser(
+        "list-openclaw-compat",
+        help="List OpenClaw-compatible LLM providers and chat channels supported by Paideia onboarding.",
+    )
+    list_openclaw_compat.add_argument("--output")
+
     create = subparsers.add_parser("create", help="Create an AI talent plan and hiring packet.")
     create.add_argument("--name", default="신용")
     create.add_argument("--gender", default="남자")
@@ -141,7 +147,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "check-llm-service",
         help="Write a no-network health manifest for a selected LLM service.",
     )
-    llm_health.add_argument("--llm-service", choices=llm_service_ids())
+    llm_health.add_argument("--llm-service")
     llm_health.add_argument("--llm-engine")
     llm_health.add_argument("--llm-model")
     llm_health.add_argument("--llm-model-path")
@@ -168,7 +174,7 @@ def _build_parser() -> argparse.ArgumentParser:
     onboard.add_argument("--role-model", dest="role_model_id")
     onboard.add_argument("--private-curriculum-dir")
     onboard.add_argument("--agent-surface", default="cli-console")
-    onboard.add_argument("--llm-service", choices=llm_service_ids())
+    onboard.add_argument("--llm-service")
     onboard.add_argument("--llm-engine")
     onboard.add_argument("--llm-model")
     onboard.add_argument("--llm-model-path")
@@ -294,7 +300,7 @@ def _build_parser() -> argparse.ArgumentParser:
     hire_installed.add_argument("--installed-manifest", required=True)
     hire_installed.add_argument("--employer", default="보스")
     hire_installed.add_argument("--role", required=True)
-    hire_installed.add_argument("--llm-service", choices=llm_service_ids())
+    hire_installed.add_argument("--llm-service")
     hire_installed.add_argument("--llm-engine", default="deterministic_local")
     hire_installed.add_argument("--llm-model")
     hire_installed.add_argument("--llm-model-path")
@@ -545,6 +551,21 @@ def main(argv: Sequence[str] | None = None) -> int:
             "schema": "ai-talent-role-model-list/v1",
             "domain": args.domain,
             "role_models": [summarize_role_model(item) for item in list_role_models(args.domain)],
+        }
+        if args.output:
+            output_path = Path(args.output)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+            print(str(output_path))
+        else:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.command == "list-openclaw-compat":
+        result = {
+            "schema": "ai22b-openclaw-compat-list/v1",
+            "model_providers": openclaw_provider_manifest(),
+            "chat_channels": openclaw_channel_manifest(),
         }
         if args.output:
             output_path = Path(args.output)

@@ -5,6 +5,14 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
+from ai22b.talent_foundry.openclaw_compat import (
+    find_openclaw_provider,
+    openclaw_channel_manifest,
+    openclaw_chat_surface_entries,
+    openclaw_llm_service_entries,
+    openclaw_provider_manifest,
+)
+
 
 LLM_SERVICE_CATALOG: list[dict[str, Any]] = [
     {
@@ -17,6 +25,11 @@ LLM_SERVICE_CATALOG: list[dict[str, Any]] = [
         "requires": ["Codex/ChatGPT runtime for bridge context", "OPENAI_API_KEY only for live Responses API chat"],
         "researcher_fit": "recommended",
         "privacy_note": "Sends selected memory summaries only when live mode is explicitly used.",
+        "openclaw_provider_id": "openai",
+        "api_protocol": "openai_responses",
+        "base_url": "https://api.openai.com/v1",
+        "secret_env_vars": ["OPENAI_API_KEY"],
+        "aliases": ["openai", "codex"],
     },
     {
         "id": "deterministic_local",
@@ -39,6 +52,11 @@ LLM_SERVICE_CATALOG: list[dict[str, Any]] = [
         "requires": ["ANTHROPIC_API_KEY", "network access"],
         "researcher_fit": "external_api_choice",
         "privacy_note": "External API choice; send only selected memory summaries after explicit configuration.",
+        "openclaw_provider_id": "anthropic",
+        "api_protocol": "anthropic_messages",
+        "base_url": "https://api.anthropic.com/v1",
+        "secret_env_vars": ["ANTHROPIC_API_KEY"],
+        "aliases": ["anthropic", "claude"],
     },
     {
         "id": "google_gemini_api",
@@ -50,6 +68,11 @@ LLM_SERVICE_CATALOG: list[dict[str, Any]] = [
         "requires": ["GEMINI_API_KEY", "network access"],
         "researcher_fit": "external_api_choice",
         "privacy_note": "External API choice; send only selected memory summaries after explicit configuration.",
+        "openclaw_provider_id": "google",
+        "api_protocol": "gemini_generate_content",
+        "base_url": "https://generativelanguage.googleapis.com/v1beta",
+        "secret_env_vars": ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
+        "aliases": ["google", "gemini"],
     },
     {
         "id": "mistral_api",
@@ -61,6 +84,11 @@ LLM_SERVICE_CATALOG: list[dict[str, Any]] = [
         "requires": ["MISTRAL_API_KEY", "network access"],
         "researcher_fit": "external_api_choice",
         "privacy_note": "External API choice; send only selected memory summaries after explicit configuration.",
+        "openclaw_provider_id": "mistral",
+        "api_protocol": "openai_chat_completions",
+        "base_url": "https://api.mistral.ai/v1",
+        "secret_env_vars": ["MISTRAL_API_KEY"],
+        "aliases": ["mistral"],
     },
     {
         "id": "openrouter_api",
@@ -72,6 +100,11 @@ LLM_SERVICE_CATALOG: list[dict[str, Any]] = [
         "requires": ["OPENROUTER_API_KEY", "network access"],
         "researcher_fit": "external_api_choice",
         "privacy_note": "External router choice; send only selected memory summaries after explicit configuration.",
+        "openclaw_provider_id": "openrouter",
+        "api_protocol": "openai_chat_completions",
+        "base_url": "https://openrouter.ai/api/v1",
+        "secret_env_vars": ["OPENROUTER_API_KEY"],
+        "aliases": ["openrouter"],
     },
     {
         "id": "ollama_local",
@@ -83,6 +116,11 @@ LLM_SERVICE_CATALOG: list[dict[str, Any]] = [
         "requires": ["local Ollama server"],
         "researcher_fit": "local_private_model",
         "privacy_note": "Localhost-only adapter; no external API by default.",
+        "openclaw_provider_id": "ollama",
+        "api_protocol": "ollama_chat",
+        "base_url": "http://localhost:11434",
+        "secret_env_vars": [],
+        "aliases": ["ollama"],
     },
     {
         "id": "lm_studio_local",
@@ -94,6 +132,11 @@ LLM_SERVICE_CATALOG: list[dict[str, Any]] = [
         "requires": ["local LM Studio server"],
         "researcher_fit": "local_private_model",
         "privacy_note": "Localhost-only adapter; no external API by default.",
+        "openclaw_provider_id": "lm-studio",
+        "api_protocol": "openai_chat_completions",
+        "base_url": "http://localhost:1234/v1",
+        "secret_env_vars": [],
+        "aliases": ["lm-studio", "lm_studio", "lmstudio"],
     },
     {
         "id": "bigram_local",
@@ -128,7 +171,7 @@ LLM_SERVICE_CATALOG: list[dict[str, Any]] = [
         "researcher_fit": "local_private_model",
         "privacy_note": "Local files only.",
     },
-]
+] + openclaw_llm_service_entries()
 
 CHAT_SURFACE_CATALOG: list[dict[str, Any]] = [
     {
@@ -163,7 +206,7 @@ CHAT_SURFACE_CATALOG: list[dict[str, Any]] = [
         "best_for": "future messaging-channel integration after explicit review",
         "channel_policy": "external_channels_disabled_until_configured",
     },
-]
+] + openclaw_chat_surface_entries()
 
 DEFAULT_LLM_SERVICE_ID = "openai_chatgpt_codex"
 DEFAULT_CHAT_SURFACE_ID = "codex-bridge-chat"
@@ -173,6 +216,8 @@ EXTERNAL_API_ENGINES = {
     "google_gemini_api",
     "mistral_api",
     "openrouter_api",
+    "openclaw_openai_compatible",
+    "openclaw_manifest_only",
 }
 LOCAL_HTTP_ENGINES = {"ollama_local_http", "lm_studio_local_http"}
 LLM_HEALTH_SCHEMA = "ai22b-paideia-llm-service-health/v1"
@@ -209,10 +254,38 @@ def resolve_llm_service(
     llm_model_path: str | None = None,
 ) -> dict[str, Any]:
     requested = (llm_service or llm_engine or DEFAULT_LLM_SERVICE_ID).strip()
+    provider_model: str | None = None
+    provider_from_model: dict[str, Any] | None = None
+    if "/" in requested and requested not in _catalog_by_id(LLM_SERVICE_CATALOG):
+        provider_id, model_id = requested.split("/", 1)
+        provider_from_model = find_openclaw_provider(provider_id)
+        if provider_from_model:
+            provider_model = requested
+            requested = provider_from_model["service_id"]
+            llm_model = llm_model or model_id
     by_id = _catalog_by_id(LLM_SERVICE_CATALOG)
     service = by_id.get(requested)
     if service is None:
         service = next((item for item in LLM_SERVICE_CATALOG if item["engine"] == requested), None)
+    if service is None:
+        provider = find_openclaw_provider(requested)
+        if provider is not None:
+            service = {
+                "id": provider["service_id"],
+                "label": provider["label"],
+                "engine": provider["engine"],
+                "status": provider["status"],
+                "default_chat_mode": "live_when_configured",
+                "model_policy": "Use OpenClaw-style provider/model names, e.g. provider/model.",
+                "requires": [*provider.get("secret_env_vars", []), "network access or local server"],
+                "researcher_fit": "openclaw_provider_choice",
+                "privacy_note": "Sends selected memory summaries only when live mode is explicitly used.",
+                "openclaw_provider_id": provider["provider_id"],
+                "api_protocol": provider["api_protocol"],
+                "base_url": provider.get("base_url"),
+                "secret_env_vars": provider.get("secret_env_vars", []),
+                "aliases": provider.get("aliases", []),
+            }
     if service is None:
         raise ValueError(f"Unsupported LLM service: {requested}")
 
@@ -220,9 +293,20 @@ def resolve_llm_service(
     resolved["service_id"] = resolved["id"]
     resolved["selected_model"] = llm_model or None
     resolved["selected_model_path"] = llm_model_path or None
+    if provider_model:
+        resolved["openclaw_model"] = provider_model
+    elif resolved.get("openclaw_provider_id") and llm_model:
+        resolved["openclaw_model"] = f"{resolved['openclaw_provider_id']}/{llm_model}"
+    if provider_from_model:
+        resolved["openclaw_provider"] = provider_from_model
     engine = resolved["engine"]
+    base_url = str(resolved.get("selected_model_path") or resolved.get("base_url") or "")
     if engine == "openai_chatgpt_codex":
         network_access = "codex_or_openai_data_minimized"
+    elif engine == "openclaw_manifest_only":
+        network_access = "disabled_until_provider_plugin_configured"
+    elif engine == "openclaw_openai_compatible" and base_url.startswith(("http://localhost", "http://127.0.0.1")):
+        network_access = "localhost_only"
     elif engine in EXTERNAL_API_ENGINES:
         network_access = "external_api_selected_data_minimized"
     elif engine in LOCAL_HTTP_ENGINES:
@@ -248,7 +332,8 @@ def build_llm_service_health(llm_service: dict[str, Any]) -> dict[str, Any]:
     selected_model_path = llm_service.get("selected_model_path")
     checks: list[dict[str, Any]] = []
 
-    for env_var in SERVICE_SECRET_ENV_VARS.get(service_id, []):
+    env_vars = llm_service.get("secret_env_vars") or SERVICE_SECRET_ENV_VARS.get(service_id, [])
+    for env_var in env_vars:
         present = bool(os.environ.get(env_var))
         checks.append(
             {
@@ -260,7 +345,10 @@ def build_llm_service_health(llm_service: dict[str, Any]) -> dict[str, Any]:
             }
         )
 
-    if engine in LOCAL_HTTP_ENGINES:
+    if engine in LOCAL_HTTP_ENGINES or (
+        engine == "openclaw_openai_compatible"
+        and str(llm_service.get("base_url") or "").startswith(("http://localhost", "http://127.0.0.1"))
+    ):
         checks.append(
             {
                 "id": "local_model_name",
@@ -273,8 +361,8 @@ def build_llm_service_health(llm_service: dict[str, Any]) -> dict[str, Any]:
             {
                 "id": "local_http_url",
                 "kind": "local_server_manifest",
-                "passed": bool(selected_model_path or LOCAL_HTTP_DEFAULT_URLS.get(service_id)),
-                "url": selected_model_path or LOCAL_HTTP_DEFAULT_URLS.get(service_id),
+                "passed": bool(selected_model_path or llm_service.get("base_url") or LOCAL_HTTP_DEFAULT_URLS.get(service_id)),
+                "url": selected_model_path or llm_service.get("base_url") or LOCAL_HTTP_DEFAULT_URLS.get(service_id),
                 "network_probe_performed": False,
                 "message": "URL recorded for later local probe; no network call performed.",
             }
@@ -293,7 +381,9 @@ def build_llm_service_health(llm_service: dict[str, Any]) -> dict[str, Any]:
             }
         )
 
-    if service_id == "openai_chatgpt_codex":
+    if engine == "openclaw_manifest_only":
+        status = "manifest_only_needs_provider_plugin"
+    elif service_id == "openai_chatgpt_codex":
         # Codex bridge can still prepare local context without a live API key.
         live_secret = next((check for check in checks if check["id"] == "env:OPENAI_API_KEY"), None)
         status = "ready_for_codex_bridge" if live_secret and not live_secret["passed"] else "ready_for_live_or_bridge"
@@ -311,6 +401,10 @@ def build_llm_service_health(llm_service: dict[str, Any]) -> dict[str, Any]:
         "service_id": service_id,
         "engine": engine,
         "selected_model": selected_model,
+        "openclaw_provider_id": llm_service.get("openclaw_provider_id"),
+        "openclaw_model": llm_service.get("openclaw_model"),
+        "api_protocol": llm_service.get("api_protocol"),
+        "base_url_recorded": bool(llm_service.get("base_url") or selected_model_path),
         "selected_model_path_recorded": bool(selected_model_path),
         "status": status,
         "network_probe_performed": False,
@@ -344,6 +438,8 @@ def build_researcher_intake(
         "selected_chat_surface": chat_surface,
         "available_role_models": available_role_models,
         "available_llm_services": LLM_SERVICE_CATALOG,
+        "openclaw_model_provider_catalog": openclaw_provider_manifest(),
+        "openclaw_chat_channel_catalog": openclaw_channel_manifest(),
         "researcher_contract": {
             "role": "curriculum_researcher_and_growth_program_operator",
             "llm_is_identity": False,

@@ -163,6 +163,7 @@ def hire_installed_agent(
             model_path=selected_llm_service.get("selected_model_path"),
             model=selected_llm_service.get("selected_model"),
             service=selected_llm_service["service_id"],
+            provider_config=selected_llm_service,
         ),
         "growth_after_hire": {
             "continues": True,

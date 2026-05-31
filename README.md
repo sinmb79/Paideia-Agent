@@ -268,7 +268,7 @@ Paideia Agent follows the practical first-run pattern seen in installed agent pr
 4. let the selected LLM act as a researcher that turns the owner request into curriculum, assessment, and growth inputs,
 5. review the hiring dossier before using the installed agent for work.
 
-Supported initial LLM services include:
+Paideia now mirrors OpenClaw's `provider/model` selection style. Built-in direct adapters include:
 
 - `openai_chatgpt_codex`
 - `anthropic_claude_api`
@@ -277,12 +277,30 @@ Supported initial LLM services include:
 - `openrouter_api`
 - `ollama_local`
 - `lm_studio_local`
+- OpenAI-compatible OpenClaw providers such as `deepseek_api`, `groq_api`, `xai_api`, `perplexity_api`, `together_ai`, `fireworks_api`, `deepinfra_api`, `cerebras_api`, `moonshot_api`, `qwen_api`, `z_ai_api`, `venice_api`, `nvidia_api`, `vllm_local`, `sglang_local`, `litellm_gateway`, and `vercel_ai_gateway`
 - `deterministic_local`
 - `bigram_local`
 - `transformers_local`
 - `llama_cpp_local`
 
-External API adapters are manifest-ready and require the user's own keys before live use. Local model adapters prefer localhost or local files. Supported initial chat surfaces include `codex-bridge-chat`, `cli-console`, `dataflow-job`, and a disabled `openclaw-style-gateway` adapter manifest.
+The CLI also accepts OpenClaw-style model selectors directly:
+
+```powershell
+ai22b-talent-foundry hire-installed `
+  --installed-manifest "<installed_agent_manifest.json>" `
+  --role "Research agent" `
+  --llm-service "openrouter/meta-llama/llama-3.1-8b" `
+  --chat-surface codex-bridge-chat
+```
+
+For OpenClaw parity discovery:
+
+```powershell
+ai22b-talent-foundry list-openclaw-compat `
+  --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_compat.json"
+```
+
+External API adapters require the user's own keys before live use. Local model adapters prefer localhost or local files. Chat surfaces include `codex-bridge-chat`, `cli-console`, `dataflow-job`, a disabled `openclaw-style-gateway`, and OpenClaw channel manifests such as `openclaw-channel-telegram`, `openclaw-channel-discord`, `openclaw-channel-slack`, `openclaw-channel-whatsapp`, `openclaw-channel-signal`, `openclaw-channel-microsoft-teams`, `openclaw-channel-google-chat`, `openclaw-channel-imessage`, `openclaw-channel-matrix`, `openclaw-channel-mattermost`, and `openclaw-channel-webchat`.
 
 Every onboarding run now writes `llm_service_health.json`. This file records whether the chosen provider is ready for bridge mode, needs an API key, needs a local model path, or is only a manifest until the local server is running. It never stores secret values and does not perform a network probe.
 

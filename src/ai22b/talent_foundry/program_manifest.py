@@ -15,6 +15,7 @@ DEFAULT_PUBLIC_PROGRAM_MANIFEST_NAME = "ai_talent_foundry_public_manifest.json"
 
 REQUIRED_INSTALLER_COMMANDS = [
     "list-role-models",
+    "list-openclaw-compat",
     "blueprint",
     "onboard",
     "start-console",
@@ -98,6 +99,7 @@ def _research_summary() -> dict[str, Any]:
 def _commands() -> list[dict[str, str]]:
     purposes = {
         "list-role-models": "List role-model process templates available for a talent track.",
+        "list-openclaw-compat": "List OpenClaw-compatible LLM provider and chat channel catalogs.",
         "blueprint": "Create a growth-to-employment blueprint from an owner request.",
         "onboard": "Run the OpenClaw-style wizard for model, workspace, channel, skills, education path, identity, and health setup.",
         "start-console": "Guide a non-expert installer through request, identity, first goal, and onboarding execution.",

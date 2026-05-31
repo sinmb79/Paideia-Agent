@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import re
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -928,6 +929,86 @@ def _parse_json_object(text: str) -> dict[str, Any] | None:
         return None
 
 
+def _live_chat_payload(chat_context: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "task": "Generate one live chat turn for the hired local AI talent.",
+        "local_talent_context": _compact_chat_context_for_live_llm(chat_context),
+    }
+
+
+def _first_env_value(env_vars: list[str]) -> tuple[str | None, str | None]:
+    for env_var in env_vars:
+        value = os.environ.get(env_var)
+        if value:
+            return env_var, value
+    return None, None
+
+
+def _request_json(
+    *,
+    url: str,
+    payload: dict[str, Any],
+    headers: dict[str, str],
+    timeout: int = 60,
+) -> dict[str, Any]:
+    data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    request = urllib.request.Request(
+        url,
+        data=data,
+        headers={"Content-Type": "application/json", **headers},
+        method="POST",
+    )
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        raw = response.read().decode("utf-8", errors="replace")
+    parsed = json.loads(raw)
+    return parsed if isinstance(parsed, dict) else {"raw": parsed}
+
+
+def _parsed_live_text_result(
+    *,
+    engine: str,
+    model: str,
+    output_text: str,
+    network_access: str,
+    response_metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    parsed = _parse_json_object(output_text)
+    if not parsed:
+        parsed = {
+            "assistant_reply": output_text.strip(),
+            "reviewable_reasoning_summary": [
+                {
+                    "step": "LLM response",
+                    "summary": "The provider returned plain text, so Paideia used it as the assistant reply.",
+                }
+            ],
+            "learning_candidate": {
+                "lesson": "Live provider formatting may need repair.",
+                "reusable_principle": "Validate provider output before promoting chat learning.",
+                "memory_tags": ["live_llm_format_repair"],
+                "confidence": 0.5,
+            },
+        }
+    return {
+        "schema": "ai-talent-live-llm-result/v1",
+        "engine": engine,
+        "status": "completed",
+        "model": model,
+        "assistant_reply": str(parsed.get("assistant_reply", "")).strip(),
+        "reviewable_reasoning_summary": parsed.get("reviewable_reasoning_summary") or [],
+        "learning_candidate": parsed.get("learning_candidate") or {},
+        "raw_output_saved": False,
+        "identity_policy": "application_engine_not_identity",
+        "network_access": network_access,
+        "response_metadata": response_metadata or {},
+        "data_policy": {
+            "send_private_training_files": False,
+            "send_selected_memory_and_recent_chat_summaries": True,
+            "store_hidden_chain_of_thought": False,
+        },
+    }
+
+
 def _call_openai_responses_chat(
     *,
     chat_context: dict[str, Any],
@@ -955,10 +1036,7 @@ def _call_openai_responses_chat(
             "error": str(exc)[:500],
         }
 
-    payload = {
-        "task": "Generate one live chat turn for the hired local AI talent.",
-        "local_talent_context": _compact_chat_context_for_live_llm(chat_context),
-    }
+    payload = _live_chat_payload(chat_context)
     try:
         client = OpenAI()
         response = client.responses.create(
@@ -1018,28 +1096,289 @@ def _call_openai_responses_chat(
     }
 
 
+def _call_openai_compatible_chat(
+    *,
+    chat_context: dict[str, Any],
+    runtime_config: dict[str, Any],
+    model: str,
+    max_output_tokens: int = 900,
+) -> dict[str, Any]:
+    env_var, api_key = _first_env_value(runtime_config.get("secret_env_vars", []))
+    base_url = str(runtime_config.get("base_url") or runtime_config.get("model_path") or "").rstrip("/")
+    local_endpoint = base_url.startswith(("http://localhost", "http://127.0.0.1"))
+    if not base_url:
+        return {
+            "schema": "ai-talent-live-llm-result/v1",
+            "engine": runtime_config.get("engine"),
+            "status": "unavailable",
+            "reason": "base_url_not_configured",
+            "model": model,
+        }
+    if runtime_config.get("secret_env_vars") and not api_key and not local_endpoint:
+        return {
+            "schema": "ai-talent-live-llm-result/v1",
+            "engine": runtime_config.get("engine"),
+            "status": "unavailable",
+            "reason": "provider_api_key_not_set",
+            "required_env_vars": runtime_config.get("secret_env_vars", []),
+            "model": model,
+        }
+    headers = {}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": _live_chat_instructions(chat_context["agent"]["name"])},
+            {"role": "user", "content": json.dumps(_live_chat_payload(chat_context), ensure_ascii=False)},
+        ],
+        "temperature": 0.2,
+        "max_tokens": max_output_tokens,
+    }
+    try:
+        response = _request_json(
+            url=f"{base_url}/chat/completions",
+            payload=payload,
+            headers=headers,
+        )
+    except Exception as exc:
+        return {
+            "schema": "ai-talent-live-llm-result/v1",
+            "engine": runtime_config.get("engine"),
+            "status": "unavailable",
+            "reason": "openai_compatible_chat_call_failed",
+            "model": model,
+            "error_type": type(exc).__name__,
+            "error": str(exc)[:800],
+        }
+    text = ""
+    choices = response.get("choices") or []
+    if choices:
+        message = choices[0].get("message", {}) if isinstance(choices[0], dict) else {}
+        text = str(message.get("content") or choices[0].get("text") or "")
+    return _parsed_live_text_result(
+        engine=str(runtime_config.get("engine")),
+        model=model,
+        output_text=text,
+        network_access=str(runtime_config.get("network_access")),
+        response_metadata={
+            "provider": runtime_config.get("openclaw_provider_id") or runtime_config.get("service"),
+            "base_url": base_url,
+            "api_key_env": env_var,
+            "usage": response.get("usage"),
+        },
+    )
+
+
+def _call_anthropic_messages_chat(
+    *,
+    chat_context: dict[str, Any],
+    runtime_config: dict[str, Any],
+    model: str,
+    max_output_tokens: int = 900,
+) -> dict[str, Any]:
+    env_var, api_key = _first_env_value(runtime_config.get("secret_env_vars", ["ANTHROPIC_API_KEY"]))
+    if not api_key:
+        return {
+            "schema": "ai-talent-live-llm-result/v1",
+            "engine": runtime_config.get("engine"),
+            "status": "unavailable",
+            "reason": "provider_api_key_not_set",
+            "required_env_vars": runtime_config.get("secret_env_vars", ["ANTHROPIC_API_KEY"]),
+            "model": model,
+        }
+    base_url = str(runtime_config.get("base_url") or "https://api.anthropic.com/v1").rstrip("/")
+    payload = {
+        "model": model,
+        "max_tokens": max_output_tokens,
+        "system": _live_chat_instructions(chat_context["agent"]["name"]),
+        "messages": [
+            {
+                "role": "user",
+                "content": json.dumps(_live_chat_payload(chat_context), ensure_ascii=False),
+            }
+        ],
+    }
+    try:
+        response = _request_json(
+            url=f"{base_url}/messages",
+            payload=payload,
+            headers={
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+            },
+        )
+    except Exception as exc:
+        return {
+            "schema": "ai-talent-live-llm-result/v1",
+            "engine": runtime_config.get("engine"),
+            "status": "unavailable",
+            "reason": "anthropic_messages_call_failed",
+            "model": model,
+            "error_type": type(exc).__name__,
+            "error": str(exc)[:800],
+        }
+    parts = response.get("content") or []
+    text = "\n".join(str(part.get("text", "")) for part in parts if isinstance(part, dict))
+    return _parsed_live_text_result(
+        engine=str(runtime_config.get("engine")),
+        model=model,
+        output_text=text,
+        network_access=str(runtime_config.get("network_access")),
+        response_metadata={"provider": "anthropic", "api_key_env": env_var, "usage": response.get("usage")},
+    )
+
+
+def _call_gemini_generate_content_chat(
+    *,
+    chat_context: dict[str, Any],
+    runtime_config: dict[str, Any],
+    model: str,
+    max_output_tokens: int = 900,
+) -> dict[str, Any]:
+    env_var, api_key = _first_env_value(runtime_config.get("secret_env_vars", ["GEMINI_API_KEY", "GOOGLE_API_KEY"]))
+    if not api_key:
+        return {
+            "schema": "ai-talent-live-llm-result/v1",
+            "engine": runtime_config.get("engine"),
+            "status": "unavailable",
+            "reason": "provider_api_key_not_set",
+            "required_env_vars": runtime_config.get("secret_env_vars", ["GEMINI_API_KEY", "GOOGLE_API_KEY"]),
+            "model": model,
+        }
+    base_url = str(runtime_config.get("base_url") or "https://generativelanguage.googleapis.com/v1beta").rstrip("/")
+    prompt = (
+        _live_chat_instructions(chat_context["agent"]["name"])
+        + "\n\n"
+        + json.dumps(_live_chat_payload(chat_context), ensure_ascii=False)
+    )
+    payload = {
+        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+        "generationConfig": {"temperature": 0.2, "maxOutputTokens": max_output_tokens},
+    }
+    try:
+        response = _request_json(
+            url=f"{base_url}/models/{model}:generateContent?key={api_key}",
+            payload=payload,
+            headers={},
+        )
+    except Exception as exc:
+        return {
+            "schema": "ai-talent-live-llm-result/v1",
+            "engine": runtime_config.get("engine"),
+            "status": "unavailable",
+            "reason": "gemini_generate_content_call_failed",
+            "model": model,
+            "error_type": type(exc).__name__,
+            "error": str(exc)[:800],
+        }
+    candidates = response.get("candidates") or []
+    parts = candidates[0].get("content", {}).get("parts", []) if candidates else []
+    text = "\n".join(str(part.get("text", "")) for part in parts if isinstance(part, dict))
+    return _parsed_live_text_result(
+        engine=str(runtime_config.get("engine")),
+        model=model,
+        output_text=text,
+        network_access=str(runtime_config.get("network_access")),
+        response_metadata={"provider": "google", "api_key_env": env_var, "usage": response.get("usageMetadata")},
+    )
+
+
+def _call_ollama_chat(
+    *,
+    chat_context: dict[str, Any],
+    runtime_config: dict[str, Any],
+    model: str,
+    max_output_tokens: int = 900,
+) -> dict[str, Any]:
+    base_url = str(runtime_config.get("base_url") or runtime_config.get("model_path") or "http://localhost:11434").rstrip("/")
+    payload = {
+        "model": model,
+        "stream": False,
+        "messages": [
+            {"role": "system", "content": _live_chat_instructions(chat_context["agent"]["name"])},
+            {"role": "user", "content": json.dumps(_live_chat_payload(chat_context), ensure_ascii=False)},
+        ],
+        "options": {"temperature": 0.2, "num_predict": max_output_tokens},
+    }
+    try:
+        response = _request_json(url=f"{base_url}/api/chat", payload=payload, headers={})
+    except Exception as exc:
+        return {
+            "schema": "ai-talent-live-llm-result/v1",
+            "engine": runtime_config.get("engine"),
+            "status": "unavailable",
+            "reason": "ollama_chat_call_failed",
+            "model": model,
+            "error_type": type(exc).__name__,
+            "error": str(exc)[:800],
+        }
+    text = str(response.get("message", {}).get("content") or response.get("response") or "")
+    return _parsed_live_text_result(
+        engine=str(runtime_config.get("engine")),
+        model=model,
+        output_text=text,
+        network_access=str(runtime_config.get("network_access")),
+        response_metadata={"provider": "ollama", "base_url": base_url},
+    )
+
+
 def _invoke_live_chat_llm(
     *,
     chat_context: dict[str, Any],
     runtime_config: dict[str, Any],
     model: str | None,
 ) -> dict[str, Any]:
-    if runtime_config.get("engine") != "openai_chatgpt_codex":
-        return {
-            "schema": "ai-talent-live-llm-result/v1",
-            "engine": runtime_config.get("engine"),
-            "status": "unavailable",
-            "reason": "live_chat_requires_openai_chatgpt_codex_engine",
-            "identity_policy": runtime_config.get("identity_policy"),
-        }
+    engine = runtime_config.get("engine")
     selected_model = (
         model
         or runtime_config.get("model")
+        or runtime_config.get("openclaw_model")
         or os.environ.get("AI22B_OPENAI_MODEL")
         or os.environ.get("OPENAI_MODEL")
         or DEFAULT_OPENAI_CHAT_MODEL
     )
-    return _call_openai_responses_chat(chat_context=chat_context, model=selected_model)
+    if (
+        runtime_config.get("openclaw_model") == selected_model
+        and runtime_config.get("openclaw_provider_id")
+        and str(selected_model).startswith(f"{runtime_config['openclaw_provider_id']}/")
+    ):
+        selected_model = str(selected_model).split("/", 1)[1]
+    api_protocol = runtime_config.get("api_protocol")
+    if engine == "openai_chatgpt_codex":
+        return _call_openai_responses_chat(chat_context=chat_context, model=selected_model)
+    if api_protocol == "openai_chat_completions":
+        return _call_openai_compatible_chat(
+            chat_context=chat_context,
+            runtime_config=runtime_config,
+            model=selected_model,
+        )
+    if api_protocol == "anthropic_messages":
+        return _call_anthropic_messages_chat(
+            chat_context=chat_context,
+            runtime_config=runtime_config,
+            model=selected_model,
+        )
+    if api_protocol == "gemini_generate_content":
+        return _call_gemini_generate_content_chat(
+            chat_context=chat_context,
+            runtime_config=runtime_config,
+            model=selected_model,
+        )
+    if api_protocol == "ollama_chat":
+        return _call_ollama_chat(
+            chat_context=chat_context,
+            runtime_config=runtime_config,
+            model=selected_model,
+        )
+    return {
+        "schema": "ai-talent-live-llm-result/v1",
+        "engine": engine,
+        "status": "unavailable",
+        "reason": "live_chat_provider_protocol_not_configured",
+        "api_protocol": api_protocol,
+        "identity_policy": runtime_config.get("identity_policy"),
+    }
 
 
 def _draft_chat_reply_from_live_llm(

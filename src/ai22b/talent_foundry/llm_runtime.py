@@ -21,8 +21,11 @@ EXTERNAL_API_ENGINES = {
     "google_gemini_api",
     "mistral_api",
     "openrouter_api",
+    "openclaw_openai_compatible",
+    "openclaw_manifest_only",
 }
 LOCAL_HTTP_ENGINES = {"ollama_local_http", "lm_studio_local_http"}
+LOCAL_FILE_ENGINES = {"bigram_local", "transformers_local", "llama_cpp_local"}
 
 
 def build_llm_runtime_config(
@@ -31,6 +34,7 @@ def build_llm_runtime_config(
     model_path: str | None = None,
     model: str | None = None,
     service: str | None = None,
+    provider_config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     compatible_engines = [
         "deterministic_local",
@@ -42,17 +46,26 @@ def build_llm_runtime_config(
         "google_gemini_api",
         "mistral_api",
         "openrouter_api",
+        "openclaw_openai_compatible",
+        "openclaw_manifest_only",
         "ollama_local_http",
         "lm_studio_local_http",
     ]
     if engine not in compatible_engines:
         raise ValueError(f"Unsupported LLM runtime engine: {engine}")
 
+    manifest_only = engine == "openclaw_manifest_only"
+    configured_base_url = model_path or (provider_config or {}).get("base_url")
+    openclaw_local_http = engine == "openclaw_openai_compatible" and str(configured_base_url or "").startswith(
+        ("http://localhost", "http://127.0.0.1")
+    )
     codex_bridge = engine == "openai_chatgpt_codex"
-    external_api = engine in EXTERNAL_API_ENGINES
-    local_http = engine in LOCAL_HTTP_ENGINES
+    local_http = engine in LOCAL_HTTP_ENGINES or openclaw_local_http
+    external_api = engine in EXTERNAL_API_ENGINES and not local_http and not manifest_only
     if codex_bridge:
         network_access = "codex_host_managed_data_minimized"
+    elif manifest_only:
+        network_access = "disabled_until_provider_plugin_configured"
     elif external_api:
         network_access = "external_api_selected_data_minimized"
     elif local_http:
@@ -65,8 +78,14 @@ def build_llm_runtime_config(
         "engine": engine,
         "model": model,
         "model_path": model_path,
-        "local_only": not external_api,
+        "local_only": not external_api or local_http,
         "network_access": network_access,
+        "openclaw_provider_id": (provider_config or {}).get("openclaw_provider_id"),
+        "openclaw_model": (provider_config or {}).get("openclaw_model"),
+        "api_protocol": (provider_config or {}).get("api_protocol"),
+        "base_url": configured_base_url,
+        "secret_env_vars": (provider_config or {}).get("secret_env_vars", []),
+        "provider_status": (provider_config or {}).get("status"),
         "identity_policy": "application_engine_not_identity",
         "private_reasoning_trace": "do_not_store",
         "compatible_engines": compatible_engines,
@@ -91,7 +110,7 @@ def invoke_llm_application_engine(
     engine = runtime_config["engine"]
     model_path = runtime_config.get("model_path")
     model = runtime_config.get("model")
-    if engine in {"bigram_local", "transformers_local", "llama_cpp_local"} and not model_path:
+    if engine in LOCAL_FILE_ENGINES and not model_path:
         return {
             "schema": RUNTIME_RESULT_SCHEMA,
             "engine": engine,
@@ -100,7 +119,7 @@ def invoke_llm_application_engine(
             "identity_policy": runtime_config["identity_policy"],
             "network_access": runtime_config["network_access"],
         }
-    if model_path and not Path(model_path).exists():
+    if engine in LOCAL_FILE_ENGINES and model_path and not Path(model_path).exists():
         return {
             "schema": RUNTIME_RESULT_SCHEMA,
             "engine": engine,
@@ -346,6 +365,10 @@ def _invoke_configured_adapter_manifest(
             "local_http_only": is_local_http,
         },
         "model": runtime_config.get("model"),
+        "openclaw_provider_id": runtime_config.get("openclaw_provider_id"),
+        "openclaw_model": runtime_config.get("openclaw_model"),
+        "api_protocol": runtime_config.get("api_protocol"),
+        "base_url_recorded": bool(runtime_config.get("base_url")),
         "draft": (
             f"{agent['name']} is ready to use {engine} as the selected LLM adapter. "
             f"Paideia keeps identity and learned routes in local records; the adapter supplies language generation for: {task}"

@@ -407,6 +407,81 @@ class TalentFoundryMemorySubstrateChatTests(unittest.TestCase):
             any(node.get("source") == "learning_ledger_chat_turn" for node in substrate.get("nodes", []))
         )
 
+    def test_live_llm_chat_routes_openclaw_provider_model_to_generic_adapter(self) -> None:
+        from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
+        from ai22b.talent_foundry.memory_substrate import run_chat_turn_from_employment
+        from ai22b.talent_foundry.registry import hire_installed_agent
+        from ai22b.talent_foundry.training_run import materialize_training_blueprint
+
+        captured: dict[str, object] = {}
+
+        def fake_openai_compatible_chat(
+            *,
+            chat_context: dict,
+            runtime_config: dict,
+            model: str,
+            max_output_tokens: int = 900,
+        ) -> dict:
+            captured["model"] = model
+            captured["runtime_config"] = runtime_config
+            captured["context"] = chat_context
+            return {
+                "schema": "ai-talent-live-llm-result/v1",
+                "engine": runtime_config["engine"],
+                "status": "completed",
+                "model": model,
+                "assistant_reply": "보스, OpenClaw provider/model 선택값으로 연결된 LLM 응답입니다.",
+                "reviewable_reasoning_summary": [
+                    {"step": "provider route", "summary": "OpenRouter provider/model 값을 generic adapter로 전달했습니다."}
+                ],
+                "learning_candidate": {
+                    "lesson": "OpenClaw provider/model routing can use the local memory substrate.",
+                    "reusable_principle": "Provider selection changes the language engine, not the talent identity.",
+                    "memory_tags": ["openclaw_provider_model", "live_llm"],
+                    "confidence": 0.9,
+                },
+            }
+
+        blueprint = create_agent_training_blueprint(
+            owner="蹂댁뒪",
+            request="OpenClaw provider/model 호환 채팅을 검증한다.",
+            talent_name="openclaw-junior",
+            gender="male",
+            domain="securities_research",
+            role_model_id="graham_value_investing",
+            agent_surface="cli-console",
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            run = materialize_training_blueprint(blueprint, output_dir=Path(tmp) / "openclaw_junior")
+            artifacts = {key: Path(value) for key, value in run["artifacts"].items()}
+            hiring = hire_installed_agent(
+                artifacts["installed_agent_manifest"],
+                employer="蹂댁뒪",
+                role="OpenClaw 호환 리서치 에이전트",
+                llm_service="openrouter/meta-llama/llama-3.1-8b",
+                record_name="employment_record_openrouter.json",
+            )
+            with patch(
+                "ai22b.talent_foundry.memory_substrate._call_openai_compatible_chat",
+                side_effect=fake_openai_compatible_chat,
+            ):
+                chat = run_chat_turn_from_employment(
+                    hiring["employment_record"],
+                    message="OpenClaw provider/model로 대화해줘",
+                    output_path=Path(tmp) / "openclaw_live_chat.json",
+                    llm_mode="live",
+                    learn_from_chat=True,
+                )
+
+        runtime_config = captured["runtime_config"]
+        self.assertEqual(captured["model"], "meta-llama/llama-3.1-8b")
+        self.assertEqual(runtime_config["openclaw_provider_id"], "openrouter")
+        self.assertEqual(runtime_config["openclaw_model"], "openrouter/meta-llama/llama-3.1-8b")
+        self.assertEqual(runtime_config["api_protocol"], "openai_chat_completions")
+        self.assertEqual(chat["reply_generation_mode"], "live_openai_responses")
+        self.assertIn("OpenClaw provider/model", chat["assistant_answer"])
+
     def test_live_llm_failure_fallback_does_not_promote_bad_chat_learning(self) -> None:
         from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
         from ai22b.talent_foundry.memory_substrate import run_chat_turn_from_employment
