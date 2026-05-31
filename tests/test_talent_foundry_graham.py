@@ -1003,6 +1003,76 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertTrue(arcee_ready["results"][0]["ready_for_live_llm"])
         self.assertEqual(arcee_ready["results"][0]["checks"][0]["id"], "env:OPENCLAW_LIVE_ARCEE_KEY")
 
+    def test_openclaw_provider_auth_doctor_separates_api_key_oauth_and_local_server_paths(self) -> None:
+        from ai22b.talent_foundry.cli import main as cli_main
+        from ai22b.talent_foundry.openclaw_provider_auth import doctor_openclaw_provider_auth
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            config_path = tmp_path / ".openclaw" / "openclaw.json"
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "agents": {"defaults": {"model": {"primary": "qwen-oauth/qwen3-coder-plus"}}},
+                        "models": {
+                            "providers": {
+                                "qwen-oauth": {"accessToken": "do-not-store-qwen-token"},
+                                "arcee": {"apiKey": "do-not-store-arcee-key"},
+                            }
+                        },
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            output = tmp_path / "provider_auth_doctor.json"
+            cli_output = tmp_path / "provider_auth_doctor_cli.json"
+            with patch.dict(os.environ, {"OPENCLAW_LIVE_ARCEE_KEY": "test-arcee-key"}, clear=False):
+                doctor = doctor_openclaw_provider_auth(
+                    providers=["arcee", "qwen-oauth", "lmstudio"],
+                    openclaw_config_path=config_path,
+                    output_path=output,
+                )
+                cli_result = cli_main(
+                    [
+                        "doctor-openclaw-provider-auth",
+                        "--provider",
+                        "qwen-oauth",
+                        "--openclaw-config",
+                        str(config_path),
+                        "--output",
+                        str(cli_output),
+                    ]
+                )
+            output_exists = output.exists()
+            cli_output_exists = cli_output.exists()
+
+        by_id = {item["provider_id"]: item for item in doctor["results"]}
+        rendered = json.dumps(doctor, ensure_ascii=False)
+
+        self.assertEqual(doctor["schema"], "ai22b-openclaw-provider-auth-doctor/v1")
+        self.assertEqual(doctor["status"], "ready_for_owner_review")
+        self.assertTrue(output_exists)
+        self.assertEqual(cli_result, 0)
+        self.assertTrue(cli_output_exists)
+        self.assertEqual(by_id["arcee"]["auth_kind"], "api_key_environment")
+        self.assertEqual(by_id["arcee"]["auth_status"], "ready_for_paideia_live_llm")
+        self.assertEqual(by_id["qwen-oauth"]["auth_kind"], "openclaw_oauth_or_account_session")
+        self.assertEqual(by_id["qwen-oauth"]["auth_status"], "ready_for_openclaw_gateway_review")
+        self.assertTrue(by_id["qwen-oauth"]["openclaw_gateway_recommended"])
+        self.assertEqual(by_id["lmstudio"]["auth_kind"], "local_server_endpoint")
+        self.assertEqual(by_id["lmstudio"]["auth_status"], "ready_for_local_server_probe")
+        self.assertFalse(doctor["policy"]["secret_values_stored"])
+        self.assertFalse(doctor["policy"]["absolute_local_paths_stored"])
+        self.assertEqual(doctor["openclaw_config"]["path"], "<redacted-local-path>")
+        self.assertIn("qwen-oauth", doctor["openclaw_config"]["provider_hints"])
+        self.assertNotIn("do-not-store-qwen-token", rendered)
+        self.assertNotIn("do-not-store-arcee-key", rendered)
+        self.assertNotIn("test-arcee-key", rendered)
+        self.assertNotIn(str(config_path), rendered)
+
     def test_openclaw_gateway_llm_doctor_validates_static_config_and_live_probe_contract(self) -> None:
         from ai22b.talent_foundry.cli import main as cli_main
         from ai22b.talent_foundry.llm_runtime import build_llm_runtime_config
@@ -1195,12 +1265,14 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             native_handoff = json.loads(Path(bundle["artifacts"]["openclaw_native_handoff"]).read_text(encoding="utf-8"))
             env_template = Path(bundle["artifacts"]["openclaw_env_template"]).read_text(encoding="utf-8")
             bridge_kit = json.loads(Path(bundle["artifacts"]["bridge_setup_kit"]).read_text(encoding="utf-8"))
+            bridge_provider_auth = json.loads(Path(bundle["artifacts"]["bridge_provider_auth_doctor"]).read_text(encoding="utf-8"))
             bridge_channel_plan = json.loads(Path(bundle["artifacts"]["bridge_channel_plugin_plan"]).read_text(encoding="utf-8"))
             bridge_channel_pairing = json.loads(
                 Path(bundle["artifacts"]["bridge_channel_pairing_doctor"]).read_text(encoding="utf-8")
             )
             bridge_smoke_tests = json.loads(Path(bundle["artifacts"]["bridge_smoke_tests"]).read_text(encoding="utf-8"))
             provider_doctor = json.loads(Path(bundle["artifacts"]["provider_doctor"]).read_text(encoding="utf-8"))
+            provider_auth_doctor = json.loads(Path(bundle["artifacts"]["provider_auth_doctor"]).read_text(encoding="utf-8"))
             channel_doctor = json.loads(Path(bundle["artifacts"]["channel_doctor"]).read_text(encoding="utf-8"))
             channel_pairing_doctor = json.loads(Path(bundle["artifacts"]["channel_pairing_doctor"]).read_text(encoding="utf-8"))
             config_review = json.loads(
@@ -1321,12 +1393,16 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertEqual(bridge_kit["selection"]["providers"], ["arcee"])
         self.assertEqual(set(bridge_kit["selection"]["channels"]), {"bluebubbles", "webchat"})
         self.assertEqual(bundle["readiness"]["bridge_setup_kit"]["status"], "ready_for_owner_review")
+        self.assertEqual(provider_auth_doctor["schema"], "ai22b-openclaw-provider-auth-doctor/v1")
+        self.assertIn("provider_auth_summary", bundle["readiness"])
+        self.assertEqual(bridge_provider_auth["schema"], "ai22b-openclaw-provider-auth-doctor/v1")
         self.assertIn("bluebubbles", {item["channel_id"] for item in bridge_channel_plan["channels"]})
         self.assertIn("bluebubbles", {item["channel_id"] for item in bridge_channel_pairing["results"]})
         self.assertEqual(channel_pairing_doctor["schema"], "ai22b-openclaw-channel-pairing-doctor/v1")
         self.assertIn("channel_pairing_summary", bundle["readiness"])
         self.assertIn("webchat", bridge_smoke_tests["payloads"])
         self.assertIn("build-openclaw-bridge-setup-kit", bundle["next_commands"]["build_bridge_setup_kit"])
+        self.assertIn("doctor-openclaw-provider-auth", bundle["next_commands"]["doctor_provider_auth"])
         self.assertIn("doctor-openclaw-channel-pairing", bundle["next_commands"]["doctor_channel_pairing"])
         self.assertEqual(native_handoff["schema"], "ai22b-openclaw-native-handoff/v1")
         self.assertEqual(native_handoff["native_openclaw_selection"]["model"], "arcee/trinity-large-thinking")
@@ -1425,6 +1501,7 @@ class GrahamTalentFoundryTests(unittest.TestCase):
 
             env_template = Path(kit["artifacts"]["env_template"]).read_text(encoding="utf-8")
             provider_plan = json.loads(Path(kit["artifacts"]["provider_plugin_plan"]).read_text(encoding="utf-8"))
+            provider_auth = json.loads(Path(kit["artifacts"]["provider_auth_doctor"]).read_text(encoding="utf-8"))
             channel_plan = json.loads(Path(kit["artifacts"]["channel_plugin_plan"]).read_text(encoding="utf-8"))
             channel_pairing = json.loads(Path(kit["artifacts"]["channel_pairing_doctor"]).read_text(encoding="utf-8"))
             smoke_tests = json.loads(Path(kit["artifacts"]["smoke_tests"]).read_text(encoding="utf-8"))
@@ -1453,7 +1530,11 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertIn("WHATSAPP_SESSION_DIR", env_template)
         self.assertNotIn("do-not-store-telegram-token", env_template)
         self.assertNotIn("do-not-store-whatsapp-session", json.dumps(kit, ensure_ascii=False))
+        self.assertEqual(provider_auth["schema"], "ai22b-openclaw-provider-auth-doctor/v1")
+        self.assertEqual(provider_auth["summary"]["provider_count"], 2)
         self.assertEqual(provider_by_id["qwen-oauth"]["adapter_path"], "openclaw_provider_plugin_or_oauth_required")
+        self.assertEqual(provider_by_id["qwen-oauth"]["auth_kind"], "openclaw_oauth_or_account_session")
+        self.assertTrue(provider_by_id["qwen-oauth"]["openclaw_gateway_recommended"])
         self.assertEqual(provider_by_id["arcee"]["adapter_path"], "paideia_live_adapter")
         self.assertEqual(channel_by_id["telegram"]["direct_raw_ingress_ready"], True)
         self.assertEqual(channel_by_id["whatsapp"]["connector_status"], "external_plugin_required_qr_pairing")
@@ -1463,6 +1544,7 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             "qr_session_pairing",
         )
         self.assertIn("doctor-openclaw-channel-pairing", kit["next_commands"]["doctor_channel_pairing"])
+        self.assertIn("doctor-openclaw-provider-auth", kit["next_commands"]["doctor_provider_auth"])
         self.assertIn("telegram", smoke_tests["payloads"])
         self.assertIn("telegram", smoke_tests["platform_events"])
         self.assertIn("run-openclaw-channel-gateway-server", smoke_tests["commands"]["start_gateway"])

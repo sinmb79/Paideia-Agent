@@ -71,6 +71,7 @@ from ai22b.talent_foundry.openclaw_native_handoff import (
     prepare_openclaw_native_config,
 )
 from ai22b.talent_foundry.openclaw_parity import audit_openclaw_parity
+from ai22b.talent_foundry.openclaw_provider_auth import doctor_openclaw_provider_auth
 from ai22b.talent_foundry.openclaw_runtime_bundle import build_openclaw_runtime_bundle
 from ai22b.talent_foundry.openclaw_selection_doctor import doctor_openclaw_selection, render_openclaw_selection_summary
 from ai22b.talent_foundry.openclaw_support_matrix import build_openclaw_support_matrix
@@ -157,6 +158,14 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     doctor_provider_connectors.add_argument("--provider", action="append", default=[])
     doctor_provider_connectors.add_argument("--output", required=True)
+
+    doctor_provider_auth = subparsers.add_parser(
+        "doctor-openclaw-provider-auth",
+        help="Doctor OpenClaw provider API key, OAuth/plugin, local server, and Gateway auth readiness.",
+    )
+    doctor_provider_auth.add_argument("--provider", action="append", default=[])
+    doctor_provider_auth.add_argument("--openclaw-config")
+    doctor_provider_auth.add_argument("--output", required=True)
 
     list_channel_connectors = subparsers.add_parser(
         "list-openclaw-channel-connectors",
@@ -963,6 +972,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "doctor-openclaw-provider-connectors":
         doctor_openclaw_provider_connectors(
             providers=args.provider or None,
+            output_path=Path(args.output),
+        )
+        print(str(Path(args.output)))
+        return 0
+
+    if args.command == "doctor-openclaw-provider-auth":
+        doctor_openclaw_provider_auth(
+            providers=args.provider or None,
+            openclaw_config_path=Path(args.openclaw_config) if args.openclaw_config else None,
             output_path=Path(args.output),
         )
         print(str(Path(args.output)))

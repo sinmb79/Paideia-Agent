@@ -154,7 +154,7 @@ ai22b-talent-foundry onboard
 
 This wizard uses config detection, QuickStart/Advanced mode, Model/Auth, Workspace, Gateway/Channels, Skills, Education Path, Runtime, Agent Identity, Health Check, and Finish steps.
 
-This sample first selects the LLM service and chat surface, then lets that selected LLM act as the curriculum researcher for the Graham-inspired securities research track. Each onboarding run now also writes an OpenClaw runtime bundle with provider/channel doctors, a channel pairing doctor for QR/session/local-bridge readiness, a reviewable `openclaw_config_patch.json`, WebChat/channel gateway setup files, a bridge setup kit with plugin plans and smoke-test payloads, native OpenClaw handoff commands, and a Gateway LLM doctor when `openclaw_gateway_http` is selected.
+This sample first selects the LLM service and chat surface, then lets that selected LLM act as the curriculum researcher for the Graham-inspired securities research track. Each onboarding run now also writes an OpenClaw runtime bundle with provider/channel doctors, a provider auth doctor for API-key/OAuth/local-server/Gateway readiness, a channel pairing doctor for QR/session/local-bridge readiness, a reviewable `openclaw_config_patch.json`, WebChat/channel gateway setup files, a bridge setup kit with plugin plans and smoke-test payloads, native OpenClaw handoff commands, and a Gateway LLM doctor when `openclaw_gateway_http` is selected.
 
 List available role models:
 
@@ -378,6 +378,12 @@ ai22b-talent-foundry list-openclaw-provider-connectors `
 
 ai22b-talent-foundry doctor-openclaw-provider-connectors `
   --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\provider_connector_doctor.json"
+
+ai22b-talent-foundry doctor-openclaw-provider-auth `
+  --provider qwen-oauth `
+  --provider arcee `
+  --openclaw-config "$env:USERPROFILE\.openclaw\openclaw.json" `
+  --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\provider_auth_doctor.json"
 ```
 
 External API adapters require the user's own keys before live use. Local model adapters prefer localhost or local files. Chat surfaces include `codex-bridge-chat`, `cli-console`, `dataflow-job`, a disabled `openclaw-style-gateway`, and OpenClaw channel manifests such as `openclaw-channel-telegram`, `openclaw-channel-discord`, `openclaw-channel-slack`, `openclaw-channel-whatsapp`, `openclaw-channel-signal`, `openclaw-channel-microsoft-teams`, `openclaw-channel-google-chat`, `openclaw-channel-imessage`, `openclaw-channel-matrix`, `openclaw-channel-mattermost`, and `openclaw-channel-webchat`.
@@ -385,6 +391,8 @@ External API adapters require the user's own keys before live use. Local model a
 The support matrix is the installer-facing summary: it marks every OpenClaw provider and channel as Paideia direct-ready, OpenClaw Gateway-ready, local-server ready, or plugin/OAuth/bridge required. It also records the exact next doctor commands for the Graham Junior quickstart, provider readiness, channel flow, Gateway LLM bridge, and parity audit. Every onboarding run now writes `openclaw_support_matrix.json` and embeds the selected provider/channel support level into `onboarding_session.json`, so the user can see whether the chosen LLM/chat path is direct, Gateway-routed, local-server based, or plugin-owned. `doctor-openclaw-selection` is the pre-onboarding check for one exact provider/model plus chat-channel combination; it performs no external network calls and stores no secrets. Pass `--bridge-setup-dir <dir>` to also write the env template, provider plugin/OAuth plan, channel plugin plan, deny-by-default access config, and smoke-test payloads for that exact selection. The guided console now writes `openclaw_selection_doctor.json`, `OPENCLAW_SELECTION_SUMMARY.md`, and an `openclaw_bridge_setup/` kit before raising the talent, then prints a short terminal preview with the provider, LLM health, channel support levels, bridge setup kit path, and summary path.
 
 The provider catalog follows OpenClaw's canonical `provider/model` IDs where possible, including `lmstudio/*`, `zai/*`, `kilocode/*`, `gmi/*`, `novita/*`, `huggingface/*`, `ollama-cloud/*`, `arcee/*`, `chutes/*`, `qianfan/*`, `stepfun/*`, `volcengine-plan/*`, and `xiaomi/*`. The provider connector doctor separates Paideia live adapters from OpenClaw provider-plugin surfaces such as Bedrock, Copilot, Qwen OAuth, Gemini CLI OAuth, media generation providers, and other OAuth/custom-runner integrations. `audit-openclaw-parity` compares Paideia's local catalog against the checked OpenClaw provider/channel documentation snapshot and fails when a supported provider or channel is missing. Secret values are never serialized.
+
+`doctor-openclaw-provider-auth` is the LLM-side equivalent of the channel pairing doctor. It separates direct API-key providers, local model servers, Codex host bridge use, OpenClaw OAuth/account-session providers, cloud profile providers, and media/custom-runner plugins. When a provider must remain OpenClaw-owned, the doctor points the user toward `openclaw onboard`, model auth review, Gateway startup, and `doctor-openclaw-gateway-llm`. It records only env-var presence, redacted config hints, and readiness categories; secret values and local config paths are not serialized.
 
 When a user enters an OpenClaw `provider/model` that Paideia cannot call directly because it needs an OpenClaw provider plugin, OAuth profile, media tool, or custom runner, Paideia now auto-routes that selector through `openclaw_gateway_http`. The original selector is preserved as `openclaw_model`, so OpenClaw can own the provider auth and backend call while Paideia contributes the local talent context and Reasoning Ledger.
 
@@ -428,7 +436,7 @@ The bundle writes:
 - `openclaw_config_patch.json`: a review-first `openclaw.json` patch with the selected `provider/model`, `models.providers`, `agents.list`, gateway URL, enabled channels, `channels.modelByChannel`, `bindings[]`, and `gateway.http.endpoints.chatCompletions.enabled=true` for OpenAI-compatible Gateway clients.
 - `openclaw_native_handoff.json`: a native OpenClaw handoff plan with `openclaw setup --workspace`, `openclaw doctor`, `openclaw channels add --channel <id> --help`, and `openclaw gateway run` commands for owners who want OpenClaw itself to own provider auth, channel plugins, gateway sessions, and platform delivery.
 - `openclaw.env.example.ps1`: a local PowerShell environment template. It lists secret variable names but never writes secret values.
-- `openclaw_provider_doctor.json`, `openclaw_channel_doctor.json`, `openclaw_channel_pairing_doctor.json`, `openclaw_gateway_llm_doctor.json` when applicable, and `llm_service_health.json`: readiness checks for model auth, channel bridge requirements, QR/session/local-bridge readiness, OpenClaw Gateway HTTP LLM compatibility, and local/remote runtime status.
+- `openclaw_provider_doctor.json`, `openclaw_provider_auth_doctor.json`, `openclaw_channel_doctor.json`, `openclaw_channel_pairing_doctor.json`, `openclaw_gateway_llm_doctor.json` when applicable, and `llm_service_health.json`: readiness checks for model auth, provider API-key/OAuth/local-server/Gateway readiness, channel bridge requirements, QR/session/local-bridge readiness, OpenClaw Gateway HTTP LLM compatibility, and local/remote runtime status.
 - `openclaw_gateway_config.json` and `openclaw_channel_access_config.json`: loopback gateway and deny-by-default channel access setup.
 - `openclaw_bridge_setup/`: provider/channel plugin plans, deny-by-default access config, env template, and smoke-test payloads generated from the hired runtime selection.
 - `openclaw_existing_config_review.json`: OpenClaw-style existing config detection with `keep`, `modify`, or `reset` semantics. `modify` writes a redacted merge preview; `reset` writes a plan only and never deletes or overwrites the config.
@@ -473,7 +481,7 @@ ai22b-talent-foundry build-openclaw-bridge-setup-kit `
   --output-dir "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_bridge_setup"
 ```
 
-This writes `openclaw_bridge_setup_kit.json`, `openclaw_bridge.env.example.ps1`, `openclaw_provider_plugin_plan.json`, `openclaw_channel_plugin_plan.json`, `openclaw_channel_pairing_doctor.json`, `openclaw_bridge_channel_access_config.json`, `openclaw_bridge_smoke_tests.json`, and `smoke_test_payloads/*.json`. It stores no provider keys, bot tokens, QR sessions, local path values, or private training files.
+This writes `openclaw_bridge_setup_kit.json`, `openclaw_bridge.env.example.ps1`, `openclaw_provider_plugin_plan.json`, `openclaw_provider_auth_doctor.json`, `openclaw_channel_plugin_plan.json`, `openclaw_channel_pairing_doctor.json`, `openclaw_bridge_channel_access_config.json`, `openclaw_bridge_smoke_tests.json`, and `smoke_test_payloads/*.json`. It stores no provider keys, bot tokens, QR sessions, local path values, or private training files.
 
 OpenClaw-style channels can now be routed through a local Paideia gateway envelope. The core returns a sendable outbound envelope; actual platform plugins remain responsible for bot tokens, pairing, and final delivery.
 

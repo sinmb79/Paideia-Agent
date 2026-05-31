@@ -26,6 +26,7 @@ from ai22b.talent_foundry.openclaw_compat import (
 )
 from ai22b.talent_foundry.openclaw_channel_pairing import doctor_openclaw_channel_pairing
 from ai22b.talent_foundry.openclaw_gateway_llm import doctor_openclaw_gateway_llm
+from ai22b.talent_foundry.openclaw_provider_auth import doctor_openclaw_provider_auth
 from ai22b.talent_foundry.provider_connectors import doctor_openclaw_provider_connectors
 
 
@@ -819,6 +820,7 @@ def build_openclaw_runtime_bundle(
     gateway_config_path = output_dir / "openclaw_gateway_config.json"
     access_config_path = output_dir / "openclaw_channel_access_config.json"
     provider_doctor_path = output_dir / "openclaw_provider_doctor.json"
+    provider_auth_doctor_path = output_dir / "openclaw_provider_auth_doctor.json"
     channel_connector_catalog_path = output_dir / "openclaw_channel_connectors.json"
     channel_doctor_path = output_dir / "openclaw_channel_doctor.json"
     channel_pairing_doctor_path = output_dir / "openclaw_channel_pairing_doctor.json"
@@ -829,6 +831,11 @@ def build_openclaw_runtime_bundle(
     native_handoff_path = output_dir / "openclaw_native_handoff.json"
     env_template_path = output_dir / "openclaw.env.example.ps1"
     manifest_path = output_dir / "openclaw_runtime_bundle.json"
+    selected_existing_config_path = (
+        existing_openclaw_config_path.expanduser().resolve()
+        if existing_openclaw_config_path is not None
+        else _default_openclaw_config_path().expanduser()
+    )
 
     gateway_config = build_openclaw_gateway_config(
         employment_record_path,
@@ -844,6 +851,11 @@ def build_openclaw_runtime_bundle(
     provider_doctor = doctor_openclaw_provider_connectors(
         providers=[provider_id],
         output_path=provider_doctor_path,
+    )
+    provider_auth_doctor = doctor_openclaw_provider_auth(
+        providers=[provider_id],
+        openclaw_config_path=selected_existing_config_path,
+        output_path=provider_auth_doctor_path,
     )
     channel_connector_catalog = build_openclaw_channel_connector_catalog(
         channels=selected_channels,
@@ -914,11 +926,6 @@ def build_openclaw_runtime_bundle(
             port=port,
         ),
     )
-    selected_existing_config_path = (
-        existing_openclaw_config_path.expanduser().resolve()
-        if existing_openclaw_config_path is not None
-        else _default_openclaw_config_path().expanduser()
-    )
     existing_config_review = _review_existing_openclaw_config(
         existing_config_path=selected_existing_config_path,
         config_action=config_action,
@@ -947,6 +954,7 @@ def build_openclaw_runtime_bundle(
         "gateway_config": str(gateway_config_path),
         "channel_access_config": str(access_config_path),
         "provider_doctor": str(provider_doctor_path),
+        "provider_auth_doctor": str(provider_auth_doctor_path),
         "channel_connector_catalog": str(channel_connector_catalog_path),
         "channel_doctor": str(channel_doctor_path),
         "channel_pairing_doctor": str(channel_pairing_doctor_path),
@@ -954,6 +962,7 @@ def build_openclaw_runtime_bundle(
         "bridge_setup_kit": bridge_setup_kit["artifacts"]["manifest"],
         "bridge_env_template": bridge_setup_kit["artifacts"]["env_template"],
         "bridge_provider_plugin_plan": bridge_setup_kit["artifacts"]["provider_plugin_plan"],
+        "bridge_provider_auth_doctor": bridge_setup_kit["artifacts"]["provider_auth_doctor"],
         "bridge_channel_plugin_plan": bridge_setup_kit["artifacts"]["channel_plugin_plan"],
         "bridge_channel_pairing_doctor": bridge_setup_kit["artifacts"]["channel_pairing_doctor"],
         "bridge_channel_access_config": bridge_setup_kit["artifacts"]["channel_access_config"],
@@ -993,6 +1002,7 @@ def build_openclaw_runtime_bundle(
         "readiness": {
             "llm_service_health": llm_health,
             "provider_doctor_summary": provider_doctor["summary"],
+            "provider_auth_summary": provider_auth_doctor["summary"],
             "channel_connector_summary": channel_connector_catalog["summary"],
             "channel_doctor_summary": channel_doctor["summary"],
             "channel_pairing_summary": channel_pairing_doctor["summary"],
@@ -1006,6 +1016,7 @@ def build_openclaw_runtime_bundle(
             "bridge_setup_kit": {
                 "status": bridge_setup_kit["status"],
                 "provider_summary": bridge_setup_kit["readiness"]["provider_summary"],
+                "provider_auth_summary": bridge_setup_kit["readiness"]["provider_auth_summary"],
                 "channel_summary": bridge_setup_kit["readiness"]["channel_summary"],
                 "channel_pairing_summary": bridge_setup_kit["readiness"]["channel_pairing_summary"],
                 "secret_values_stored": bridge_setup_kit["readiness"]["secret_values_stored"],
@@ -1017,6 +1028,12 @@ def build_openclaw_runtime_bundle(
             "doctor_provider": (
                 "ai22b-talent-foundry doctor-openclaw-provider-connectors "
                 f"--provider {provider_id} --output {provider_doctor_path}"
+            ),
+            "doctor_provider_auth": (
+                "ai22b-talent-foundry doctor-openclaw-provider-auth "
+                f"--provider {provider_id} "
+                f"--openclaw-config {selected_existing_config_path} "
+                f"--output {provider_auth_doctor_path}"
             ),
             "doctor_channels": (
                 "ai22b-talent-foundry doctor-openclaw-channel-connectors "

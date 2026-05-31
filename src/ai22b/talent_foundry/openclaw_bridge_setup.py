@@ -9,6 +9,7 @@ from ai22b.talent_foundry.channel_connectors import doctor_openclaw_channel_conn
 from ai22b.talent_foundry.channel_ingress import build_openclaw_channel_access_config
 from ai22b.talent_foundry.openclaw_compat import find_openclaw_channel, find_openclaw_provider
 from ai22b.talent_foundry.openclaw_channel_pairing import doctor_openclaw_channel_pairing
+from ai22b.talent_foundry.openclaw_provider_auth import doctor_openclaw_provider_auth
 from ai22b.talent_foundry.openclaw_runtime_bundle import OPENCLAW_REFERENCE_URLS
 from ai22b.talent_foundry.provider_connectors import doctor_openclaw_provider_connectors
 
@@ -143,6 +144,10 @@ def _build_provider_plan(provider_doctor: dict[str, Any]) -> dict[str, Any]:
         },
         "source_docs_checked": OPENCLAW_REFERENCE_URLS,
     }
+
+
+def _provider_auth_map(provider_auth: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return {str(item["provider_id"]): item for item in provider_auth.get("results", [])}
 
 
 def _build_channel_plan(channel_doctor: dict[str, Any]) -> dict[str, Any]:
@@ -327,9 +332,16 @@ def build_openclaw_bridge_setup_kit(
     selected_channels = _normalize_channels(channels, manifest_source)
 
     provider_doctor = doctor_openclaw_provider_connectors(providers=selected_providers)
+    provider_auth_doctor = doctor_openclaw_provider_auth(providers=selected_providers)
     channel_doctor = doctor_openclaw_channel_connectors(channels=selected_channels)
     channel_pairing_doctor = doctor_openclaw_channel_pairing(channels=selected_channels)
     provider_plan = _build_provider_plan(provider_doctor)
+    provider_auth_by_id = _provider_auth_map(provider_auth_doctor)
+    for provider in provider_plan["providers"]:
+        auth = provider_auth_by_id.get(str(provider["provider_id"]), {})
+        provider["auth_kind"] = auth.get("auth_kind")
+        provider["auth_status"] = auth.get("auth_status")
+        provider["openclaw_gateway_recommended"] = auth.get("openclaw_gateway_recommended")
     channel_plan = _build_channel_plan(channel_doctor)
     smoke_tests = _build_smoke_tests(
         channels=selected_channels,
@@ -342,6 +354,7 @@ def build_openclaw_bridge_setup_kit(
     channel_envs = _env_vars_from_doctor(channel_doctor)
     env_template_path = output_dir / "openclaw_bridge.env.example.ps1"
     provider_plan_path = output_dir / "openclaw_provider_plugin_plan.json"
+    provider_auth_doctor_path = output_dir / "openclaw_provider_auth_doctor.json"
     channel_plan_path = output_dir / "openclaw_channel_plugin_plan.json"
     channel_pairing_doctor_path = output_dir / "openclaw_channel_pairing_doctor.json"
     access_config_path = output_dir / "openclaw_bridge_channel_access_config.json"
@@ -360,6 +373,7 @@ def build_openclaw_bridge_setup_kit(
         ),
     )
     _write_json(provider_plan_path, provider_plan)
+    _write_json(provider_auth_doctor_path, provider_auth_doctor)
     _write_json(channel_plan_path, channel_plan)
     _write_json(channel_pairing_doctor_path, channel_pairing_doctor)
     _write_json(smoke_tests_path, smoke_tests)
@@ -386,6 +400,7 @@ def build_openclaw_bridge_setup_kit(
         },
         "readiness": {
             "provider_summary": provider_doctor["summary"],
+            "provider_auth_summary": provider_auth_doctor["summary"],
             "channel_summary": channel_doctor["summary"],
             "channel_pairing_summary": channel_pairing_doctor["summary"],
             "access_policy": access_config["default_policy"],
@@ -395,6 +410,7 @@ def build_openclaw_bridge_setup_kit(
             "manifest": str(manifest_path),
             "env_template": str(env_template_path),
             "provider_plugin_plan": str(provider_plan_path),
+            "provider_auth_doctor": str(provider_auth_doctor_path),
             "channel_plugin_plan": str(channel_plan_path),
             "channel_pairing_doctor": str(channel_pairing_doctor_path),
             "channel_access_config": str(access_config_path),
@@ -406,6 +422,11 @@ def build_openclaw_bridge_setup_kit(
                 "ai22b-talent-foundry doctor-openclaw-provider-connectors "
                 + " ".join(f"--provider {provider}" for provider in selected_providers)
                 + f" --output {output_dir / 'provider_doctor.json'}"
+            ),
+            "doctor_provider_auth": (
+                "ai22b-talent-foundry doctor-openclaw-provider-auth "
+                + " ".join(f"--provider {provider}" for provider in selected_providers)
+                + f" --output {provider_auth_doctor_path}"
             ),
             "doctor_channels": (
                 "ai22b-talent-foundry doctor-openclaw-channel-connectors "
