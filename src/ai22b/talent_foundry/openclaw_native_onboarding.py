@@ -132,6 +132,7 @@ def build_openclaw_native_onboarding_runbook_from_bundle(
             "Detect existing OpenClaw config",
             "Match OpenClaw's first-run behavior: keep, review/update, or reset only after owner review.",
             [
+                "ai22b-talent-foundry doctor-openclaw-installed-runtime --output openclaw_installed_runtime_doctor.json",
                 "openclaw doctor",
                 "openclaw status --deep",
                 f"Review Paideia config review artifact: {_ps_quote(existing_review or '<existing_config_review.json>')}",

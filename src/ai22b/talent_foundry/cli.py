@@ -75,6 +75,7 @@ from ai22b.talent_foundry.openclaw_native_handoff import (
     doctor_openclaw_native_handoff,
     prepare_openclaw_native_config,
 )
+from ai22b.talent_foundry.openclaw_installed_runtime import doctor_openclaw_installed_runtime
 from ai22b.talent_foundry.openclaw_native_onboarding import build_openclaw_native_onboarding_runbook
 from ai22b.talent_foundry.openclaw_onboarding_menu import build_openclaw_onboarding_menu
 from ai22b.talent_foundry.openclaw_parity import audit_openclaw_parity
@@ -360,6 +361,18 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Run an offline channel-flow dry run through the hired Paideia agent.",
     )
     doctor_runtime_preflight.add_argument("--timeout-seconds", type=int, default=20)
+
+    doctor_installed_runtime = subparsers.add_parser(
+        "doctor-openclaw-installed-runtime",
+        help="Read-only doctor for the locally installed OpenClaw CLI, config, Gateway, model, and channel status.",
+    )
+    doctor_installed_runtime.add_argument("--output", required=True)
+    doctor_installed_runtime.add_argument("--timeout-seconds", type=int, default=20)
+    doctor_installed_runtime.add_argument(
+        "--probe-gateway",
+        action="store_true",
+        help="Allow OpenClaw gateway status to run its RPC probe. Provider/channel probes are still not run.",
+    )
 
     doctor_gateway_llm = subparsers.add_parser(
         "doctor-openclaw-gateway-llm",
@@ -1236,6 +1249,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             probe_chat=args.probe_chat,
             run_channel_flow=args.run_channel_flow,
             timeout_seconds=args.timeout_seconds,
+        )
+        print(str(Path(args.output)))
+        return 0
+
+    if args.command == "doctor-openclaw-installed-runtime":
+        doctor_openclaw_installed_runtime(
+            output_path=Path(args.output),
+            timeout_seconds=args.timeout_seconds,
+            probe_gateway=args.probe_gateway,
         )
         print(str(Path(args.output)))
         return 0

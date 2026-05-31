@@ -6,6 +6,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 class TalentFoundryTests(unittest.TestCase):
@@ -1695,10 +1696,97 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("build-agent-program", {command["id"] for command in manifest["commands"]})
         self.assertIn("build-openclaw-onboarding-menu", {command["id"] for command in manifest["commands"]})
         self.assertIn("build-openclaw-native-onboarding-runbook", {command["id"] for command in manifest["commands"]})
+        self.assertIn("doctor-openclaw-installed-runtime", {command["id"] for command in manifest["commands"]})
         self.assertIn("build-paideia-agent-kit", {command["id"] for command in manifest["commands"]})
         self.assertIn("doctor-agent-program", {command["id"] for command in manifest["commands"]})
         self.assertIn("migrate-agent-assets", {command["id"] for command in manifest["commands"]})
         self.assertIn("run-agent-program-chat", {command["id"] for command in manifest["commands"]})
+
+    def test_openclaw_installed_runtime_doctor_redacts_and_summarizes_local_cli(self) -> None:
+        from ai22b.talent_foundry.openclaw_installed_runtime import doctor_openclaw_installed_runtime
+
+        class Completed:
+            def __init__(self, stdout: str, stderr: str = "", returncode: int = 0) -> None:
+                self.stdout = stdout
+                self.stderr = stderr
+                self.returncode = returncode
+
+        def fake_run(command: list[str], **_kwargs: object) -> Completed:
+            args = command[1:]
+            if args == ["--version"]:
+                return Completed("OpenClaw 2026.5.20 (test)\n")
+            if args == ["config", "file"]:
+                return Completed(r"C:\Users\sinmb\.openclaw\openclaw.json")
+            if args == ["config", "validate", "--json"]:
+                return Completed(json.dumps({"valid": True, "path": r"C:\Users\sinmb\.openclaw\openclaw.json"}))
+            if args == ["models", "status", "--json"]:
+                return Completed(
+                    json.dumps(
+                        {
+                            "defaultModel": "openai/gpt-5.5",
+                            "resolvedDefault": "openai/gpt-5.5",
+                            "allowed": ["openai/gpt-5.5"],
+                            "auth": {
+                                "missingProvidersInUse": [],
+                                "runtimeAuthRoutes": [
+                                    {
+                                        "provider": "openai",
+                                        "runtime": "codex",
+                                        "authProvider": "openai-codex",
+                                        "status": "usable",
+                                    }
+                                ],
+                                "providers": [
+                                    {
+                                        "provider": "openai",
+                                        "env": {"value": "sk-proj-secretsecretsecretsecret", "source": "env"},
+                                        "label": "boss@example.com",
+                                    }
+                                ],
+                            },
+                        }
+                    )
+                )
+            if args == ["channels", "status", "--json"]:
+                return Completed(
+                    json.dumps(
+                        {
+                            "gatewayReachable": False,
+                            "configuredChannels": ["telegram"],
+                            "config": {"path": r"C:\Users\sinmb\.openclaw\openclaw.json"},
+                        }
+                    ),
+                    stderr="Gateway target: ws://127.0.0.1:18789",
+                )
+            if args == ["gateway", "status", "--json", "--no-probe"]:
+                return Completed(
+                    json.dumps(
+                        {
+                            "service": {"runtime": {"status": "stopped"}},
+                            "gateway": {"bindHost": "127.0.0.1", "port": 18789},
+                        }
+                    )
+                )
+            return Completed("", "unexpected", 1)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "openclaw_installed_runtime_doctor.json"
+            with patch("shutil.which", return_value=r"C:\Users\sinmb\AppData\Roaming\npm\openclaw.cmd"), patch(
+                "subprocess.run",
+                side_effect=fake_run,
+            ):
+                doctor = doctor_openclaw_installed_runtime(output_path=output)
+            saved = json.loads(output.read_text(encoding="utf-8"))
+
+        serialized = json.dumps(saved, ensure_ascii=False)
+        self.assertEqual(doctor["schema"], "ai22b-openclaw-installed-runtime-doctor/v1")
+        self.assertEqual(doctor["status"], "ready_for_gateway_start")
+        self.assertEqual(saved["summary"]["default_model"], "openai/gpt-5.5")
+        self.assertEqual(saved["summary"]["configured_channels"], ["telegram"])
+        self.assertFalse(saved["policy"]["secret_values_stored"])
+        self.assertNotIn("sk-proj-secret", serialized)
+        self.assertNotIn("boss@example.com", serialized)
+        self.assertNotIn(r"C:\Users\sinmb", serialized)
 
     def test_build_agent_program_creates_paideia_center_manifest(self) -> None:
         from ai22b.talent_foundry.agent_program import build_agent_program
@@ -1719,6 +1807,9 @@ class TalentFoundryTests(unittest.TestCase):
             native_onboarding_script_exists = (
                 program_path.parent / "build_openclaw_native_onboarding_runbook.ps1"
             ).exists()
+            installed_runtime_doctor_exists = (
+                program_path.parent / "doctor_openclaw_installed_runtime.ps1"
+            ).exists()
             smoke_plan_script_exists = (program_path.parent / "build_openclaw_live_smoke_plan.ps1").exists()
             smoke_sequence_script_exists = (program_path.parent / "run_openclaw_smoke_sequence.ps1").exists()
             webchat_script_exists = (program_path.parent / "start_openclaw_webchat.ps1").exists()
@@ -1736,6 +1827,7 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertTrue(menu_script_exists)
         self.assertTrue(runtime_script_exists)
         self.assertTrue(native_onboarding_script_exists)
+        self.assertTrue(installed_runtime_doctor_exists)
         self.assertTrue(smoke_plan_script_exists)
         self.assertTrue(smoke_sequence_script_exists)
         self.assertTrue(webchat_script_exists)
@@ -1746,6 +1838,10 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(
             program["entrypoints"]["openclaw_native_onboarding_runbook_script"],
             "build_openclaw_native_onboarding_runbook.ps1",
+        )
+        self.assertEqual(
+            program["entrypoints"]["openclaw_installed_runtime_doctor_script"],
+            "doctor_openclaw_installed_runtime.ps1",
         )
         self.assertEqual(program["entrypoints"]["openclaw_live_smoke_plan_script"], "build_openclaw_live_smoke_plan.ps1")
         self.assertEqual(program["entrypoints"]["openclaw_smoke_sequence_script"], "run_openclaw_smoke_sequence.ps1")
@@ -1784,6 +1880,7 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("refresh_openclaw_onboarding_menu.ps1", manifest["files"])
         self.assertIn("build_openclaw_runtime_bundle.ps1", manifest["files"])
         self.assertIn("build_openclaw_native_onboarding_runbook.ps1", manifest["files"])
+        self.assertIn("doctor_openclaw_installed_runtime.ps1", manifest["files"])
         self.assertIn("build_openclaw_live_smoke_plan.ps1", manifest["files"])
         self.assertIn("run_openclaw_smoke_sequence.ps1", manifest["files"])
         self.assertIn("start_openclaw_webchat.ps1", manifest["files"])
@@ -1798,11 +1895,16 @@ class TalentFoundryTests(unittest.TestCase):
             manifest["entrypoints"]["build_openclaw_native_onboarding_runbook"],
             "build_openclaw_native_onboarding_runbook.ps1",
         )
+        self.assertEqual(
+            manifest["entrypoints"]["doctor_openclaw_installed_runtime"],
+            "doctor_openclaw_installed_runtime.ps1",
+        )
         self.assertEqual(manifest["entrypoints"]["build_openclaw_live_smoke_plan"], "build_openclaw_live_smoke_plan.ps1")
         self.assertEqual(manifest["entrypoints"]["run_openclaw_smoke_sequence"], "run_openclaw_smoke_sequence.ps1")
         self.assertEqual(manifest["entrypoints"]["start_openclaw_webchat"], "start_openclaw_webchat.ps1")
         self.assertIn("run_openclaw_smoke_sequence.ps1", install_readme)
         self.assertIn("build_openclaw_native_onboarding_runbook.ps1", install_readme)
+        self.assertIn("doctor_openclaw_installed_runtime.ps1", install_readme)
         self.assertIn("start_openclaw_webchat.ps1", install_readme)
         self.assertIn("/api/runtime", install_readme)
         self.assertEqual(openclaw_menu["schema"], "ai22b-openclaw-onboarding-menu/v1")
@@ -1816,6 +1918,10 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(
             manifest["runtime_bootstrap"]["native_openclaw_onboarding_runbook"],
             "build_openclaw_native_onboarding_runbook.ps1",
+        )
+        self.assertEqual(
+            manifest["runtime_bootstrap"]["installed_openclaw_doctor"],
+            "doctor_openclaw_installed_runtime.ps1",
         )
         self.assertFalse(manifest["runtime_bootstrap"]["secret_values_stored"])
         self.assertIn("All OpenClaw Providers", openclaw_menu_markdown)

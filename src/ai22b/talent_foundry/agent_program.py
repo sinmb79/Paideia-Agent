@@ -33,6 +33,7 @@ DEFAULT_OPENCLAW_MENU_FILE = "openclaw_onboarding_menu.json"
 DEFAULT_OPENCLAW_MENU_MARKDOWN = "OPENCLAW_ONBOARDING_MENU.md"
 DEFAULT_OPENCLAW_RUNTIME_SCRIPT = "build_openclaw_runtime_bundle.ps1"
 DEFAULT_OPENCLAW_NATIVE_ONBOARDING_SCRIPT = "build_openclaw_native_onboarding_runbook.ps1"
+DEFAULT_OPENCLAW_INSTALLED_DOCTOR_SCRIPT = "doctor_openclaw_installed_runtime.ps1"
 DEFAULT_OPENCLAW_SMOKE_PLAN_SCRIPT = "build_openclaw_live_smoke_plan.ps1"
 DEFAULT_OPENCLAW_SMOKE_SEQUENCE_SCRIPT = "run_openclaw_smoke_sequence.ps1"
 DEFAULT_OPENCLAW_WEBCHAT_SCRIPT = "start_openclaw_webchat.ps1"
@@ -452,6 +453,38 @@ $ArgsList = @(
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 Write-Host "OpenClaw native onboarding runbook: $Output"
 Write-Host "Markdown guide: $MarkdownOutput"
+"""
+
+
+def _openclaw_installed_runtime_doctor_script() -> str:
+    return """param(
+    [string]$Output = ".\\openclaw_installed_runtime_doctor.json",
+    [switch]$ProbeGateway
+)
+
+$ErrorActionPreference = "Stop"
+[Console]::InputEncoding = [System.Text.UTF8Encoding]::new()
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
+$env:PYTHONIOENCODING = "utf-8"
+
+$RuntimeHelper = Join-Path $PSScriptRoot "paideia_runtime.ps1"
+if (Test-Path -LiteralPath $RuntimeHelper) {
+    . $RuntimeHelper
+    $PaideiaPython = Resolve-PaideiaPython
+} else {
+    $PaideiaPython = "python"
+}
+
+$ArgsList = @(
+    "-m", "ai22b.talent_foundry.cli",
+    "doctor-openclaw-installed-runtime",
+    "--output", $Output
+)
+if ($ProbeGateway) { $ArgsList += "--probe-gateway" }
+
+& $PaideiaPython @ArgsList
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+Write-Host "OpenClaw installed runtime doctor: $Output"
 """
 
 
@@ -966,6 +999,12 @@ Create the OpenClaw-native onboarding runbook. This mirrors OpenClaw's own setup
 powershell -ExecutionPolicy Bypass -File .\\build_openclaw_native_onboarding_runbook.ps1 -Channel webchat
 ```
 
+Check the installed OpenClaw CLI/config/Gateway/model/channel state without storing secrets:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\\doctor_openclaw_installed_runtime.ps1
+```
+
 Create the no-secret live smoke-test sequence before using a real Gateway, provider key, or external channel:
 
 ```powershell
@@ -1139,6 +1178,10 @@ def build_agent_program(
         _openclaw_native_onboarding_runbook_script(),
         encoding="utf-8",
     )
+    (output_path.parent / DEFAULT_OPENCLAW_INSTALLED_DOCTOR_SCRIPT).write_text(
+        _openclaw_installed_runtime_doctor_script(),
+        encoding="utf-8",
+    )
     (output_path.parent / DEFAULT_OPENCLAW_SMOKE_PLAN_SCRIPT).write_text(
         _openclaw_live_smoke_plan_script(),
         encoding="utf-8",
@@ -1295,6 +1338,7 @@ def build_agent_program(
             "openclaw_onboarding_menu_script": DEFAULT_OPENCLAW_MENU_SCRIPT,
             "openclaw_runtime_bundle_script": DEFAULT_OPENCLAW_RUNTIME_SCRIPT,
             "openclaw_native_onboarding_runbook_script": DEFAULT_OPENCLAW_NATIVE_ONBOARDING_SCRIPT,
+            "openclaw_installed_runtime_doctor_script": DEFAULT_OPENCLAW_INSTALLED_DOCTOR_SCRIPT,
             "openclaw_live_smoke_plan_script": DEFAULT_OPENCLAW_SMOKE_PLAN_SCRIPT,
             "openclaw_smoke_sequence_script": DEFAULT_OPENCLAW_SMOKE_SEQUENCE_SCRIPT,
             "openclaw_webchat_script": DEFAULT_OPENCLAW_WEBCHAT_SCRIPT,
@@ -1315,6 +1359,10 @@ def build_agent_program(
                 "--runtime-bundle openclaw_runtime_bundle/openclaw_runtime_bundle.json "
                 "--output OPENCLAW_NATIVE_ONBOARDING_RUNBOOK.json "
                 "--markdown-output OPENCLAW_NATIVE_ONBOARDING_RUNBOOK.md"
+            ),
+            "openclaw_installed_runtime_doctor_command": (
+                "ai22b-talent-foundry doctor-openclaw-installed-runtime "
+                "--output openclaw_installed_runtime_doctor.json"
             ),
             "openclaw_live_smoke_plan_command": (
                 "ai22b-talent-foundry build-openclaw-live-smoke-plan "
@@ -1358,6 +1406,7 @@ def build_agent_program(
             "openclaw_onboarding_menu_script": DEFAULT_OPENCLAW_MENU_SCRIPT,
             "openclaw_runtime_bundle_script": DEFAULT_OPENCLAW_RUNTIME_SCRIPT,
             "openclaw_native_onboarding_runbook_script": DEFAULT_OPENCLAW_NATIVE_ONBOARDING_SCRIPT,
+            "openclaw_installed_runtime_doctor_script": DEFAULT_OPENCLAW_INSTALLED_DOCTOR_SCRIPT,
             "openclaw_live_smoke_plan_script": DEFAULT_OPENCLAW_SMOKE_PLAN_SCRIPT,
             "openclaw_smoke_sequence_script": DEFAULT_OPENCLAW_SMOKE_SEQUENCE_SCRIPT,
             "openclaw_webchat_script": DEFAULT_OPENCLAW_WEBCHAT_SCRIPT,
@@ -1495,6 +1544,7 @@ def build_paideia_agent_install_kit(
             "refresh_openclaw_onboarding_menu": DEFAULT_OPENCLAW_MENU_SCRIPT,
             "build_openclaw_runtime_bundle": DEFAULT_OPENCLAW_RUNTIME_SCRIPT,
             "build_openclaw_native_onboarding_runbook": DEFAULT_OPENCLAW_NATIVE_ONBOARDING_SCRIPT,
+            "doctor_openclaw_installed_runtime": DEFAULT_OPENCLAW_INSTALLED_DOCTOR_SCRIPT,
             "build_openclaw_live_smoke_plan": DEFAULT_OPENCLAW_SMOKE_PLAN_SCRIPT,
             "run_openclaw_smoke_sequence": DEFAULT_OPENCLAW_SMOKE_SEQUENCE_SCRIPT,
             "start_openclaw_webchat": DEFAULT_OPENCLAW_WEBCHAT_SCRIPT,
@@ -1543,6 +1593,7 @@ def build_paideia_agent_install_kit(
             "git_install_mode": "runs pip install from the configured Git URL only when the user passes -InstallFromGit",
             "safe_openclaw_smoke_runner": DEFAULT_OPENCLAW_SMOKE_SEQUENCE_SCRIPT,
             "native_openclaw_onboarding_runbook": DEFAULT_OPENCLAW_NATIVE_ONBOARDING_SCRIPT,
+            "installed_openclaw_doctor": DEFAULT_OPENCLAW_INSTALLED_DOCTOR_SCRIPT,
             "secret_values_stored": False,
         },
         "status": "ready",
@@ -1569,6 +1620,7 @@ def doctor_agent_program(program_path: Path, *, output_path: Path | None = None)
         "openclaw_onboarding_menu_script",
         "openclaw_runtime_bundle_script",
         "openclaw_native_onboarding_runbook_script",
+        "openclaw_installed_runtime_doctor_script",
         "openclaw_live_smoke_plan_script",
         "openclaw_smoke_sequence_script",
         "openclaw_webchat_script",
