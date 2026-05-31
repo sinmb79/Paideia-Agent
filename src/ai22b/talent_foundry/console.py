@@ -539,6 +539,7 @@ def write_openclaw_style_config(
             "llm_model": normalized.get("llm_model"),
             "llm_model_path_recorded": bool(normalized.get("llm_model_path")),
             "selection_doctor": artifacts.get("openclaw_selection_doctor"),
+            "selection_bridge_setup_kit": artifacts.get("openclaw_selection_bridge_setup_kit"),
             "secret_storage": "env_or_user_managed_no_plaintext_saved",
         },
         "workspace": {
@@ -553,6 +554,8 @@ def write_openclaw_style_config(
         "channels": {
             "mode": normalized.get("channel_mode", "local_only"),
             "external_channels": "disabled_until_explicit_configuration",
+            "selection_channel_plugin_plan": artifacts.get("openclaw_selection_channel_plugin_plan"),
+            "selection_channel_access_config": artifacts.get("openclaw_selection_channel_access_config"),
         },
         "skills": {
             "mode": normalized.get("skills_mode", "quarantine_import_only"),
@@ -590,12 +593,14 @@ def run_console_session(
     normalized = _normalized_answers(answers)
     _write_json(answers_path, normalized)
     selection_doctor_path = output_dir / "openclaw_selection_doctor.json"
+    selection_bridge_setup_dir = output_dir / "openclaw_bridge_setup"
     selection_doctor = doctor_openclaw_selection(
         llm_service=normalized.get("llm_service") or None,
         llm_model=normalized.get("llm_model") or None,
         llm_model_path=normalized.get("llm_model_path") or None,
         chat_surface=normalized.get("chat_surface") or None,
         output_path=selection_doctor_path,
+        bridge_setup_dir=selection_bridge_setup_dir,
     )
     selection_summary_path = output_dir / "OPENCLAW_SELECTION_SUMMARY.md"
     render_openclaw_selection_summary(selection_doctor, output_path=selection_summary_path)
@@ -643,6 +648,8 @@ def run_console_session(
         "openclaw_gateway_config": onboarding["artifacts"]["openclaw_gateway_config"],
         "openclaw_channel_access_config": onboarding["artifacts"]["openclaw_channel_access_config"],
     }
+    for key, value in selection_doctor.get("artifacts", {}).items():
+        artifacts[f"openclaw_selection_{key}"] = str(value)
     if onboarding["artifacts"].get("openclaw_gateway_llm_doctor"):
         artifacts["openclaw_gateway_llm_doctor"] = onboarding["artifacts"]["openclaw_gateway_llm_doctor"]
     for key, value in (prefill_artifacts or {}).items():
@@ -855,6 +862,7 @@ def run_console_session(
             "status": selection_doctor["status"],
             "openclaw_selection": selection_doctor["openclaw_selection"],
             "support_matrix_summary": selection_doctor["support_matrix_summary"],
+            "artifacts": selection_doctor.get("artifacts", {}),
             "claim_boundary": selection_doctor["claim_boundary"],
         },
         "openclaw_selection_preview": {

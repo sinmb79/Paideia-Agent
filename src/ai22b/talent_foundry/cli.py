@@ -224,6 +224,10 @@ def _build_parser() -> argparse.ArgumentParser:
     selection_doctor.add_argument("--channel", action="append", default=[])
     selection_doctor.add_argument("--output", required=True)
     selection_doctor.add_argument("--summary-output")
+    selection_doctor.add_argument(
+        "--bridge-setup-dir",
+        help="Also write an OpenClaw bridge setup kit for the selected provider/channel path.",
+    )
     selection_doctor.add_argument("--refresh-docs", action="store_true")
     selection_doctor.add_argument("--docs-timeout", type=int, default=15)
 
@@ -1006,6 +1010,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             chat_surface=args.chat_surface,
             channels=args.channel or None,
             output_path=Path(args.output),
+            bridge_setup_dir=Path(args.bridge_setup_dir) if args.bridge_setup_dir else None,
             refresh_docs=args.refresh_docs,
             docs_timeout=args.docs_timeout,
         )

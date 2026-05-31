@@ -300,12 +300,20 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             support_matrix = json.loads(Path(session["artifacts"]["openclaw_support_matrix"]).read_text(encoding="utf-8"))
             selection_doctor = json.loads(Path(session["artifacts"]["openclaw_selection_doctor"]).read_text(encoding="utf-8"))
             selection_summary = Path(session["artifacts"]["openclaw_selection_summary"]).read_text(encoding="utf-8")
+            selection_bridge_kit = json.loads(
+                Path(session["artifacts"]["openclaw_selection_bridge_setup_kit"]).read_text(encoding="utf-8")
+            )
+            selection_channel_plan = json.loads(
+                Path(session["artifacts"]["openclaw_selection_channel_plugin_plan"]).read_text(encoding="utf-8")
+            )
 
         self.assertEqual(session["wizard"]["schema"], "ai22b-paideia-openclaw-style-onboarding/v1")
         self.assertEqual(config["schema"], "ai22b-paideia-openclaw-style-config/v1")
         self.assertIn("openclaw_selection_doctor.json", config["model_auth"]["selection_doctor"])
+        self.assertIn("openclaw_bridge_setup_kit.json", config["model_auth"]["selection_bridge_setup_kit"])
         self.assertEqual(config["gateway"]["mode"], "local_loopback")
         self.assertEqual(config["channels"]["external_channels"], "disabled_until_explicit_configuration")
+        self.assertIn("openclaw_channel_plugin_plan.json", config["channels"]["selection_channel_plugin_plan"])
         self.assertEqual(identity_payload["schema"], "ai-talent-agent-id-card-payload/v1")
         self.assertFalse(identity_payload["network_action_performed"])
         self.assertEqual(rollouts["schema"], "ai-talent-simulation-rollouts/v1")
@@ -325,8 +333,13 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertFalse(selection_doctor["claim_boundary"]["external_network_call_performed"])
         self.assertIn("# OpenClaw Selection Summary", selection_summary)
         self.assertIn("Status: `ready_for_onboarding`", selection_summary)
+        self.assertIn("Bridge Setup Kit", selection_summary)
         self.assertIn("OpenClaw selection: ready_for_onboarding", session["openclaw_selection_preview"]["lines"])
+        self.assertTrue(any("Bridge setup kit:" in line for line in session["openclaw_selection_preview"]["lines"]))
         self.assertTrue(session["openclaw_selection_preview"]["summary_path"].endswith("OPENCLAW_SELECTION_SUMMARY.md"))
+        self.assertEqual(selection_bridge_kit["schema"], "ai22b-openclaw-bridge-setup-kit/v1")
+        self.assertIn("webchat", selection_bridge_kit["selection"]["channels"])
+        self.assertEqual(selection_channel_plan["schema"], "ai22b-openclaw-channel-plugin-plan/v1")
         self.assertEqual(session["openclaw_runtime"]["selected_support"]["matrix_status"], "pass")
         self.assertFalse(llm_health["network_probe_performed"])
 
@@ -674,15 +687,18 @@ class GrahamTalentFoundryTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             output = Path(tmp) / "openclaw_selection_doctor.json"
+            bridge_setup_dir = Path(tmp) / "selection_bridge_setup"
             doctor = doctor_openclaw_selection(
                 llm_service="openclaw-gateway/openrouter/meta-llama/llama-3.1-8b",
                 llm_model_path="http://127.0.0.1:18789/v1",
                 chat_surface="openclaw-channel-webchat",
                 channels=["telegram"],
                 output_path=output,
+                bridge_setup_dir=bridge_setup_dir,
             )
             cli_output = Path(tmp) / "openclaw_selection_doctor_cli.json"
             cli_summary = Path(tmp) / "OPENCLAW_SELECTION_SUMMARY.md"
+            cli_bridge_setup_dir = Path(tmp) / "selection_bridge_setup_cli"
             cli_result = cli_main(
                 [
                     "doctor-openclaw-selection",
@@ -698,10 +714,15 @@ class GrahamTalentFoundryTests(unittest.TestCase):
                     str(cli_output),
                     "--summary-output",
                     str(cli_summary),
+                    "--bridge-setup-dir",
+                    str(cli_bridge_setup_dir),
                 ]
             )
             cli_doctor = json.loads(cli_output.read_text(encoding="utf-8"))
             cli_summary_text = cli_summary.read_text(encoding="utf-8")
+            cli_bridge_manifest_exists = (cli_bridge_setup_dir / "openclaw_bridge_setup_kit.json").exists()
+            bridge_kit = json.loads(Path(doctor["artifacts"]["bridge_setup_kit"]).read_text(encoding="utf-8"))
+            bridge_channel_plan = json.loads(Path(doctor["artifacts"]["channel_plugin_plan"]).read_text(encoding="utf-8"))
             manifest_provider_doctor = doctor_openclaw_selection(
                 llm_service="qwen-oauth/qwen3-coder-plus",
                 chat_surface="openclaw-channel-webchat",
@@ -722,12 +743,19 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertFalse(doctor["claim_boundary"]["secret_values_stored"])
         self.assertFalse(doctor["claim_boundary"]["external_network_call_performed"])
         self.assertIn("doctor-openclaw-gateway-llm", doctor["next_commands"]["gateway_llm_after_hire"])
+        self.assertIn("build-openclaw-bridge-setup-kit", doctor["next_commands"]["bridge_setup_kit"])
+        self.assertEqual(bridge_kit["schema"], "ai22b-openclaw-bridge-setup-kit/v1")
+        self.assertEqual(set(bridge_kit["selection"]["channels"]), {"telegram", "webchat"})
+        self.assertIn("telegram", {item["channel_id"] for item in bridge_channel_plan["channels"]})
         self.assertIn("OpenClaw selection: ready_for_onboarding", preview_lines)
         self.assertIn("Provider: openrouter (paideia_direct_or_openclaw_gateway_ready)", preview_lines)
+        self.assertTrue(any("Bridge setup kit:" in line for line in preview_lines))
         self.assertEqual(cli_result, 0)
         self.assertEqual(cli_doctor["schema"], "ai22b-openclaw-selection-doctor/v1")
         self.assertEqual(cli_doctor["openclaw_selection"]["provider_id"], "openrouter")
+        self.assertTrue(cli_bridge_manifest_exists)
         self.assertIn("OpenClaw Selection Summary", cli_summary_text)
+        self.assertIn("Bridge Setup Kit", cli_summary_text)
         self.assertIn("paideia_direct_or_openclaw_gateway_ready", cli_summary_text)
         self.assertEqual(manifest_provider_doctor["status"], "needs_openclaw_provider_plugin")
         self.assertEqual(manifest_provider_doctor["selected_llm_service"]["service_id"], "openclaw_gateway_http")

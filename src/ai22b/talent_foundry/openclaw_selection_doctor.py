@@ -92,6 +92,7 @@ def doctor_openclaw_selection(
     chat_surface: str | None = None,
     channels: list[str] | None = None,
     output_path: Path | None = None,
+    bridge_setup_dir: Path | None = None,
     refresh_docs: bool = False,
     docs_timeout: int = 15,
 ) -> dict[str, Any]:
@@ -123,6 +124,24 @@ def doctor_openclaw_selection(
         channel_support=channel_support,
         llm_health=llm_health,
     )
+    artifacts: dict[str, str] = {}
+    if bridge_setup_dir is not None:
+        from ai22b.talent_foundry.openclaw_bridge_setup import build_openclaw_bridge_setup_kit
+
+        bridge_setup = build_openclaw_bridge_setup_kit(
+            output_dir=bridge_setup_dir,
+            providers=[provider_id] if provider_id else None,
+            channels=selected_channel_ids or None,
+        )
+        artifacts = {
+            "bridge_setup_kit": bridge_setup["artifacts"]["manifest"],
+            "bridge_setup_dir": str(bridge_setup_dir),
+            "bridge_env_template": bridge_setup["artifacts"]["env_template"],
+            "provider_plugin_plan": bridge_setup["artifacts"]["provider_plugin_plan"],
+            "channel_plugin_plan": bridge_setup["artifacts"]["channel_plugin_plan"],
+            "channel_access_config": bridge_setup["artifacts"]["channel_access_config"],
+            "bridge_smoke_tests": bridge_setup["artifacts"]["smoke_tests"],
+        }
     doctor = {
         "schema": OPENCLAW_SELECTION_DOCTOR_SCHEMA,
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -135,6 +154,7 @@ def doctor_openclaw_selection(
             "provider_support": provider_support,
             "channels": channel_support,
         },
+        "artifacts": artifacts,
         "support_matrix_summary": {
             "schema": support_matrix.get("schema"),
             "status": support_matrix.get("status"),
@@ -217,10 +237,22 @@ def render_openclaw_selection_summary(
             f"- Scope: {claim_boundary.get('what_this_checks')}",
             f"- Not checked: {claim_boundary.get('what_this_does_not_check')}",
             "",
-            "## Next Commands",
-            "",
         ]
     )
+    artifacts = doctor.get("artifacts") or {}
+    if artifacts:
+        lines.extend(
+            [
+                "## Bridge Setup Kit",
+                "",
+                f"- Manifest: `{artifacts.get('bridge_setup_kit')}`",
+                f"- Env template: `{artifacts.get('bridge_env_template')}`",
+                f"- Channel plugin plan: `{artifacts.get('channel_plugin_plan')}`",
+                f"- Smoke tests: `{artifacts.get('bridge_smoke_tests')}`",
+                "",
+            ]
+        )
+    lines.extend(["## Next Commands", ""])
     for key, command in next_commands.items():
         lines.extend(
             [
@@ -247,13 +279,17 @@ def build_openclaw_selection_console_preview(doctor: dict[str, Any]) -> list[str
         support = item.get("support") or {}
         channel_bits.append(f"{item.get('channel_id')}={support.get('support_level') or 'unknown'}")
     llm_health = doctor.get("llm_service_health", {})
-    return [
+    lines = [
         f"OpenClaw selection: {doctor.get('status')}",
         f"Provider: {selection.get('provider_id') or 'not resolved'} ({provider_support.get('support_level') or 'unknown'})",
         f"LLM health: {llm_health.get('status')}",
         f"Channels: {', '.join(channel_bits) if channel_bits else 'none selected'}",
         "Safety: no secret values stored; no external network call performed.",
     ]
+    artifacts = doctor.get("artifacts") or {}
+    if artifacts.get("bridge_setup_kit"):
+        lines.append(f"Bridge setup kit: {artifacts['bridge_setup_kit']}")
+    return lines
 
 
 def _next_commands(
@@ -279,6 +315,11 @@ def _next_commands(
             "ai22b-talent-foundry start-console "
             f"--output-dir runs\\console_onboarding"
         ),
+        "bridge_setup_kit": (
+            "ai22b-talent-foundry build-openclaw-bridge-setup-kit "
+            f"--provider {provider_id or '<provider>'} "
+            f"{channel_args} --output-dir openclaw_bridge_setup"
+        ).replace("  ", " ").strip(),
     }
     if selected_llm_service.get("engine") == "openclaw_gateway_http":
         commands["gateway_llm_after_hire"] = (
