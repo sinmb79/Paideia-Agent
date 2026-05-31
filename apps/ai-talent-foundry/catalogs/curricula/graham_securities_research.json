@@ -1,0 +1,156 @@
+{
+  "schema": "ai-talent-curriculum-manifest/v1",
+  "curriculum_id": "graham_securities_research",
+  "domain": "securities_research",
+  "role_model_id": "graham_value_investing",
+  "language": "ko",
+  "major_defaults": {
+    "university": "Financial economics, accounting, statistics, and securities analysis",
+    "graduate_school": "Securities analysis, value investing, behavioral finance, and financial economics",
+    "doctoral_project": "Local-first securities research agent with evidence-first value-investing reasoning and safety guardrails"
+  },
+  "process_replication": {
+    "mode": "education_first_assessment_driven",
+    "not_a_shortcut": "Do not inject Graham's interpreted personality or worldview. The talent must encounter materials, assignments, exams, failures, and feedback before any reasoning habit is recorded.",
+    "historical_facts_policy": "Use verified facts as hard anchors; label unknown transcript/course details as not_yet_sourced; use modern replacements only when clearly marked.",
+    "reasoning_kibo_policy": "Reasoning kibo entries accumulate from yearly learning data, assignments, exams, feedback, and later hired-agent work, not from role-model keywords."
+  },
+  "historical_path_evidence": [
+    {
+      "stage": "undergraduate",
+      "claim": "Columbia College 1914, salutatorian.",
+      "evidence_level": "verified_public_source",
+      "source_id": "columbia_c250_graham"
+    },
+    {
+      "stage": "undergraduate",
+      "claim": "Offered teaching positions in Greek and Latin philosophy, English, and mathematics before graduation.",
+      "evidence_level": "verified_public_source",
+      "source_id": "columbia_c250_graham"
+    },
+    {
+      "stage": "business_school_teaching",
+      "claim": "Graham and Dodd began teaching a reason-based approach at Columbia Business School in 1928.",
+      "evidence_level": "verified_public_source",
+      "source_id": "columbia_heilbrunn_value_history"
+    },
+    {
+      "stage": "exact_course_transcript",
+      "claim": "Exact term-by-term course list and grades are not yet sourced in this release.",
+      "evidence_level": "not_yet_sourced",
+      "source_id": "requires_archive_or_boss_provided_material"
+    }
+  ],
+  "material_policy": {
+    "public_open_materials": "allowed_when_license_allows_local_use",
+    "public_data": "allowed_with_source_citation",
+    "user_provided_private_materials": "allowed_only_from_local_private_curriculum_dir",
+    "copyrighted_textbooks": "metadata_only_unless_boss_provides_a_lawful_local_copy",
+    "public_release": "never_include_private_materials_or_full_copyrighted_texts"
+  },
+  "public_sources": [
+    {
+      "id": "columbia_c250_graham",
+      "title": "Benjamin Graham profile",
+      "provider": "Columbia C250",
+      "url": "https://c250.columbia.edu/c250_celebrates/your_columbians/benjamin_graham.html",
+      "use": "role-model fact source"
+    },
+    {
+      "id": "columbia_heilbrunn_value_history",
+      "title": "Value Investing History",
+      "provider": "Columbia Business School Heilbrunn Center",
+      "url": "https://business.columbia.edu/heilbrunn/about/valueinvestinghistory",
+      "use": "value-investing tradition source"
+    },
+    {
+      "id": "yale_econ_252",
+      "title": "Financial Markets",
+      "provider": "Yale Open Courses",
+      "url": "https://oyc.yale.edu/economics/econ-252",
+      "use": "financial markets curriculum reference"
+    },
+    {
+      "id": "mit_15_401",
+      "title": "Finance Theory I",
+      "provider": "MIT OpenCourseWare",
+      "url": "https://ocw.mit.edu/courses/15-401-finance-theory-i-fall-2008/",
+      "use": "finance theory curriculum reference"
+    },
+    {
+      "id": "sec_edgar_apis",
+      "title": "EDGAR APIs",
+      "provider": "U.S. Securities and Exchange Commission",
+      "url": "https://www.sec.gov/search-filings/edgar-application-programming-interfaces",
+      "use": "company filings and facts data"
+    },
+    {
+      "id": "fred_api",
+      "title": "FRED API",
+      "provider": "Federal Reserve Bank of St. Louis",
+      "url": "https://fred.stlouisfed.org/docs/api/fred/overview.html",
+      "use": "macroeconomic data"
+    }
+  ],
+  "stages": [
+    {
+      "id": "high_school_foundation",
+      "label": "High-school foundation",
+      "courses": ["Korean reading and argumentation", "English financial reading", "Mathematics I/II", "Probability and statistics", "Economics basics", "Ethics and civic responsibility"],
+      "assessments": ["csat_like_verbal_quant", "reading_summary_exam", "basic_statistics_exam"]
+    },
+    {
+      "id": "graham_columbia_liberal_core",
+      "label": "Graham historical Columbia liberal core",
+      "evidence_grade": "mixed_verified_and_reconstructed",
+      "courses": ["Greek and Latin philosophy", "English composition and rhetoric", "Mathematics honors preparation", "Classical translation drill", "Logic and argumentation"],
+      "assessments": ["classical_reasoning_exam", "english_argument_essay", "mathematics_honors_exam"],
+      "note": "The public source verifies the fields in which Graham was offered teaching posts, not a complete transcript."
+    },
+    {
+      "id": "university_core",
+      "label": "University core",
+      "courses": ["Financial accounting", "Corporate finance", "Microeconomics", "Macroeconomics", "Statistics", "Investment theory", "Financial statement analysis", "Python for financial data"],
+      "assessments": ["accounting_exam", "finance_theory_exam", "sec_filing_parsing_project"]
+    },
+    {
+      "id": "graduate_specialization",
+      "label": "Graduate specialization",
+      "courses": ["Security analysis", "Value investing seminar", "Behavioral finance", "Portfolio risk", "Econometrics", "Research writing", "Financial regulation and compliance"],
+      "assessments": ["valuation_case_report", "margin_of_safety_oral", "market_history_oral"]
+    },
+    {
+      "id": "doctoral_research",
+      "label": "Doctoral research",
+      "courses": ["Evidence synthesis", "Agent dataflow research operations", "Reproducible valuation notebooks", "Safety and non-advisory financial communication"],
+      "assessments": ["doctoral_dissertation", "doctoral_defense", "local_agent_employment_review"]
+    }
+  ],
+  "assessment_ladder": {
+    "required_for_hiring": [
+      "csat_like_verbal_quant",
+      "classical_reasoning_exam",
+      "english_argument_essay",
+      "mathematics_honors_exam",
+      "accounting_exam",
+      "security_analysis_report",
+      "valuation_case_report",
+      "market_history_oral",
+      "doctoral_dissertation",
+      "doctoral_defense"
+    ],
+    "record_policy": "Every assessment result must be reflected in assessment_transcript.json and summarized in the hiring dossier."
+  },
+  "restricted_reading_plan": [
+    {
+      "title": "Security Analysis",
+      "reading_goal": "learn balance-sheet discipline and margin-of-safety reasoning",
+      "ingestion": "metadata_only_or_user_provided_local_copy"
+    },
+    {
+      "title": "The Intelligent Investor",
+      "reading_goal": "learn investor psychology, defensive research habits, and Mr. Market metaphor as a historical concept",
+      "ingestion": "metadata_only_or_user_provided_local_copy"
+    }
+  ]
+}

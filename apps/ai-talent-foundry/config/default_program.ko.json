@@ -1,0 +1,55 @@
+{
+  "program_id": "ai-talent-foundry.default.ko",
+  "name": "AI 인재양성 기본 프로그램",
+  "language": "ko",
+  "local_first": true,
+  "governance": {
+    "education_committee": {
+      "name": "AI 인재 교육위원회",
+      "responsibilities": [
+        "연령별 교육과정 설계",
+        "평가 기준 수립",
+        "전공 트랙 승인"
+      ]
+    },
+    "home_care": {
+      "name": "위탁가정 기반 가정교육",
+      "responsibilities": [
+        "생활습관 형성",
+        "애착과 정서 안정",
+        "실패 후 회복 지도"
+      ]
+    },
+    "oversight_committee": {
+      "name": "성장 감독위원회",
+      "responsibilities": [
+        "과도한 스트레스 방지",
+        "평가 기록 감사",
+        "고용 전 적합성 검토"
+      ]
+    }
+  },
+  "assessment_gates": [
+    {
+      "id": "school_exam",
+      "name": "학교 정기시험",
+      "purpose": "기초 학습 성취 확인"
+    },
+    {
+      "id": "csat",
+      "name": "수능형 종합평가",
+      "purpose": "대학 진학 전 종합 사고력 확인"
+    },
+    {
+      "id": "university_graduation",
+      "name": "대학 졸업시험",
+      "purpose": "전공 기초와 프로젝트 수행 능력 확인"
+    },
+    {
+      "id": "doctoral_defense",
+      "name": "박사논문 심사",
+      "purpose": "독립 연구와 고유 추론기풍 검증"
+    }
+  ]
+}
+

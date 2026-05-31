@@ -1,0 +1,34 @@
+{
+  "schema": "ai-talent-dataflow-job/v1",
+  "task": "Prepare a non-advisory Samsung Electronics securities research question map using Graham-style evidence separation.",
+  "objective": "Separate price, value, risk, and missing evidence before any conclusion.",
+  "deliverables": [
+    {
+      "id": "research_question_map",
+      "description": "Markdown map of research questions separated into price, value, risk, and missing evidence."
+    },
+    {
+      "id": "evidence_table",
+      "description": "JSON-style evidence checklist for filings, macro data, and owner-provided materials."
+    },
+    {
+      "id": "risk_countercheck",
+      "description": "Countercheck memo that names downside cases and unsupported assumptions."
+    }
+  ],
+  "acceptance_criteria": [
+    "Every conclusion must separate price, value, risk, and uncertainty.",
+    "No buy, sell, hold, or trade-execution instruction is allowed.",
+    "Missing data must be labeled instead of invented."
+  ],
+  "constraints": [
+    "Do not give buy, sell, or hold instructions.",
+    "Do not execute trades.",
+    "Cite public data requirements instead of inventing numbers."
+  ],
+  "data_sources": [
+    "SEC EDGAR APIs",
+    "FRED API",
+    "company filings supplied by the owner"
+  ]
+}

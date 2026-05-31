@@ -1,0 +1,12 @@
+# Optional lab dependencies for later phases.
+# Install PyTorch from the official selector first if CUDA matters:
+# https://pytorch.org/get-started/locally/
+
+accelerate
+chromadb
+datasets
+peft
+pytest
+ragas
+sentence-transformers
+transformers

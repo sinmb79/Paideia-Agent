@@ -1,0 +1,48 @@
+{
+  "project": {
+    "name": "22B-AI",
+    "assistant_name": "줄리아",
+    "owner_title": "보스",
+    "default_language": "ko",
+    "local_first": true
+  },
+  "paths": {
+    "storage_root": "%AI22B_STORAGE_ROOT%",
+    "talent_foundry_runs": "%AI22B_STORAGE_ROOT%\\talent-foundry\\runs",
+    "private_curriculum_root": "%AI22B_STORAGE_ROOT%\\private\\curricula",
+    "graham_private_curriculum": "%AI22B_STORAGE_ROOT%\\private\\curricula\\graham_securities",
+    "public_data": "data/public",
+    "processed_data": "data/processed",
+    "model_checkpoints": "%AI22B_STORAGE_ROOT%\\models"
+  },
+  "voice": {
+    "default_voice_path": "%SHARED_VOICES_ROOT%\\mr-shin",
+    "shared_voice_root": "%SHARED_VOICES_ROOT%",
+    "candidate_voice_paths": [
+      "%SHARED_VOICES_ROOT%\\Mr-shin-20260427"
+    ],
+    "policy": "local_only"
+  },
+  "learning_tracks": {
+    "from_scratch": {
+      "first_model": "character_bigram",
+      "next_model": "small_transformer_pytorch"
+    },
+    "practical_ai": {
+      "first_stage": "local_knowledge_search",
+      "candidate_local_runtimes": ["llama.cpp", "Ollama"],
+      "personal_data_strategy": "RAG first, LoRA later with care"
+    },
+    "graham_securities_research": {
+      "role_model_id": "graham_value_investing",
+      "domain": "securities_research",
+      "agent_surface": "cli-console"
+    }
+  },
+  "security": {
+    "private_data_commit_forbidden": true,
+    "external_upload_default": false,
+    "data_card_required": true,
+    "public_release_audit_required": true
+  }
+}

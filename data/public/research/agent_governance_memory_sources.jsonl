@@ -1,0 +1,6 @@
+{"title":"Hermes Agent","url":"https://github.com/NousResearch/hermes-agent","used_for":"experience-based skill and memory loop comparison"}
+{"title":"OpenClaw README","url":"https://github.com/openclaw/openclaw/blob/main/README.md","used_for":"gateway, multi-channel, sandbox, and security-default comparison"}
+{"title":"OpenHands README","url":"https://github.com/OpenHands/OpenHands/blob/main/README.md","used_for":"agent SDK and local runtime comparison"}
+{"title":"Generative Agents: Interactive Simulacra of Human Behavior","url":"https://arxiv.org/abs/2304.03442","used_for":"observation, memory, reflection, and planning pattern"}
+{"title":"From Storage to Experience: A Survey on the Evolution of LLM Agent Memory Mechanisms","url":"https://arxiv.org/abs/2605.06716","used_for":"storage-reflection-experience memory model"}
+{"title":"How Memory Management Impacts LLM Agents","url":"https://arxiv.org/abs/2505.16067","used_for":"experience-following risks, error propagation, and memory quality labels"}

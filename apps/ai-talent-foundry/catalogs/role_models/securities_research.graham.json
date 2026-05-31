@@ -1,0 +1,99 @@
+{
+  "schema": "ai-talent-role-model/v1",
+  "role_model_id": "graham_value_investing",
+  "domain": "securities_research",
+  "display_name": "Benjamin Graham process-replication securities research track",
+  "inspiration_mode": "learning_process_replication_not_personality_injection",
+  "public_identity": {
+    "name": "Benjamin Graham",
+    "birth_date": "1894-05-09",
+    "birth_time": null,
+    "birth_place": "London, England",
+    "notes": [
+      "Used only as a public historical process seed.",
+      "The raised AI talent must not claim to be Benjamin Graham."
+    ]
+  },
+  "emulation_policy": {
+    "mode": "learning_path_replication_not_trait_injection",
+    "purpose": "Recreate the educational pressure, coursework, exams, reports, and feedback loop around Graham's path as far as the sources allow.",
+    "saju_role": "symbolic_initial_condition_generator_only",
+    "forbidden_preloads": [
+      "personality_keywords",
+      "worldview_keywords",
+      "investment_style_as_identity",
+      "deterministic_life_prediction"
+    ],
+    "required_outputs": [
+      "process_emulation_plan.json",
+      "curriculum_manifest.json",
+      "assessment_transcript.json",
+      "reasoning_kibo.jsonl",
+      "hiring_dossier.json"
+    ]
+  },
+  "source_facts": [
+    {
+      "fact": "Benjamin Graham was born in London on May 9, 1894 and later became a Columbia-linked value investing figure.",
+      "source": "Columbia C250",
+      "url": "https://c250.columbia.edu/c250_celebrates/your_columbians/benjamin_graham.html"
+    },
+    {
+      "fact": "The Graham and Dodd tradition is treated as a foundation of value investing education at Columbia Business School.",
+      "source": "Columbia Business School Heilbrunn Center",
+      "url": "https://business.columbia.edu/heilbrunn/about/valueinvestinghistory"
+    }
+  ],
+  "historical_education_evidence": [
+    {
+      "claim": "Columbia College class of 1914; salutatorian.",
+      "evidence_level": "verified_public_source",
+      "source": "Columbia C250",
+      "url": "https://c250.columbia.edu/c250_celebrates/your_columbians/benjamin_graham.html"
+    },
+    {
+      "claim": "Before graduation, Graham was offered teaching positions in Greek and Latin philosophy, English, and mathematics.",
+      "evidence_level": "verified_public_source",
+      "source": "Columbia C250",
+      "url": "https://c250.columbia.edu/c250_celebrates/your_columbians/benjamin_graham.html"
+    },
+    {
+      "claim": "Exact Columbia undergraduate course transcript and term-by-term grades are not included in the current public-source bundle.",
+      "evidence_level": "not_yet_sourced",
+      "source": "requires_archive_or_user_supplied_material",
+      "url": null
+    },
+    {
+      "claim": "Graham and Dodd began teaching a reason-based approach at Columbia Business School in 1928.",
+      "evidence_level": "verified_public_source",
+      "source": "Columbia Business School Heilbrunn Center",
+      "url": "https://business.columbia.edu/heilbrunn/about/valueinvestinghistory"
+    }
+  ],
+  "education_process_template": {
+    "undergraduate_environment": "Columbia-connected liberal, quantitative, language, and mathematics pressure.",
+    "verified_strengths_to_simulate_as_exams": ["Greek and Latin philosophy", "English", "mathematics"],
+    "wall_street_entry_context": "Support family after graduation, then learn from real securities work.",
+    "modern_ai_replacement_policy": "When exact historical courses are unavailable, use clearly labeled modern equivalents and keep them separate from verified historical facts."
+  },
+  "copyright_policy": {
+    "public_repo_policy": "metadata_and_reading_plan_only",
+    "restricted_titles": [
+      {
+        "title": "Security Analysis",
+        "authors": ["Benjamin Graham", "David Dodd"],
+        "policy": "metadata_only_bring_your_own_copy"
+      },
+      {
+        "title": "The Intelligent Investor",
+        "authors": ["Benjamin Graham"],
+        "policy": "metadata_only_bring_your_own_copy"
+      },
+      {
+        "title": "The Interpretation of Financial Statements",
+        "authors": ["Benjamin Graham"],
+        "policy": "metadata_only_bring_your_own_copy"
+      }
+    ]
+  }
+}
