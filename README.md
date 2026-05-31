@@ -456,6 +456,16 @@ ai22b-talent-foundry doctor-openclaw-employment-runtime `
   --summary-output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\OPENCLAW_EMPLOYMENT_RUNTIME.md"
 ```
 
+For an operator-ready live validation checklist, build a smoke plan. The plan performs no network calls by itself. It writes the exact sequence for offline context verification, runtime bundle creation, static preflight, OpenClaw Gateway probing, live LLM chat, and OpenClaw channel message smoke tests:
+
+```powershell
+ai22b-talent-foundry build-openclaw-live-smoke-plan `
+  --employment-record "<employment_record.json>" `
+  --channel webchat `
+  --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_live_smoke_plan.json" `
+  --markdown-output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\OPENCLAW_LIVE_SMOKE_PLAN.md"
+```
+
 The bundle writes:
 
 - `openclaw_config_patch.json`: a review-first `openclaw.json` patch with the selected `provider/model`, `models.providers`, `agents.list`, gateway URL, enabled channels, `channels.modelByChannel`, `bindings[]`, and `gateway.http.endpoints.chatCompletions.enabled=true` for OpenAI-compatible Gateway clients.

@@ -70,6 +70,7 @@ from ai22b.talent_foundry.openclaw_employment_runtime import (
     render_openclaw_employment_runtime_summary,
 )
 from ai22b.talent_foundry.openclaw_gateway_llm import doctor_openclaw_gateway_llm
+from ai22b.talent_foundry.openclaw_live_smoke_plan import build_openclaw_live_smoke_plan
 from ai22b.talent_foundry.openclaw_native_handoff import (
     doctor_openclaw_native_handoff,
     prepare_openclaw_native_config,
@@ -305,6 +306,18 @@ def _build_parser() -> argparse.ArgumentParser:
     employment_runtime_doctor.add_argument("--summary-output")
     employment_runtime_doctor.add_argument("--refresh-docs", action="store_true")
     employment_runtime_doctor.add_argument("--docs-timeout", type=int, default=15)
+
+    live_smoke_plan = subparsers.add_parser(
+        "build-openclaw-live-smoke-plan",
+        help="Write a no-secret LLM plus channel live smoke-test sequence for a hired Paideia agent.",
+    )
+    live_smoke_plan.add_argument("--employment-record", required=True)
+    live_smoke_plan.add_argument("--runtime-bundle")
+    live_smoke_plan.add_argument("--channel", action="append", default=[])
+    live_smoke_plan.add_argument("--output", required=True)
+    live_smoke_plan.add_argument("--markdown-output")
+    live_smoke_plan.add_argument("--refresh-docs", action="store_true")
+    live_smoke_plan.add_argument("--docs-timeout", type=int, default=15)
 
     doctor_runtime_preflight = subparsers.add_parser(
         "doctor-openclaw-runtime-preflight",
@@ -1175,6 +1188,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         if args.summary_output:
             render_openclaw_employment_runtime_summary(doctor, output_path=Path(args.summary_output))
+        print(str(Path(args.output)))
+        return 0
+
+    if args.command == "build-openclaw-live-smoke-plan":
+        build_openclaw_live_smoke_plan(
+            Path(args.employment_record),
+            runtime_bundle_path=Path(args.runtime_bundle) if args.runtime_bundle else None,
+            channels=args.channel or None,
+            output_path=Path(args.output),
+            markdown_output_path=Path(args.markdown_output) if args.markdown_output else None,
+            refresh_docs=args.refresh_docs,
+            docs_timeout=args.docs_timeout,
+        )
         print(str(Path(args.output)))
         return 0
 

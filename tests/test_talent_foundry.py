@@ -1527,6 +1527,7 @@ class TalentFoundryTests(unittest.TestCase):
                 "doctor-bundle",
                 "install-package",
                 "hire-installed",
+                "build-openclaw-live-smoke-plan",
                 "run-hired-workspace-agent",
                 "run-hired-agent-job",
                 "run-hired-agent-job-cycle",

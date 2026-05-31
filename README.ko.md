@@ -412,3 +412,15 @@ ai22b-talent-foundry hire-installed `
   --role "Research agent" `
   --openclaw-config "$env:USERPROFILE\.openclaw\openclaw.json"
 ```
+
+## OpenClaw 라이브 스모크 플랜
+
+고용된 에이전트를 실제 OpenClaw Gateway, LLM, 채팅 채널과 연결하기 전에는 `build-openclaw-live-smoke-plan`으로 검증 순서를 먼저 뽑습니다. 이 명령 자체는 네트워크 호출을 하지 않고, 오프라인 컨텍스트 확인, 런타임 번들 생성, 정적 preflight, Gateway probe, live LLM chat, 채널 메시지 smoke test 명령을 한 파일로 정리합니다.
+
+```powershell
+ai22b-talent-foundry build-openclaw-live-smoke-plan `
+  --employment-record "<employment_record.json>" `
+  --channel webchat `
+  --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_live_smoke_plan.json" `
+  --markdown-output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\OPENCLAW_LIVE_SMOKE_PLAN.md"
+```
