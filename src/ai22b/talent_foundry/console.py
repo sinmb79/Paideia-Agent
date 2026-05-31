@@ -13,6 +13,7 @@ from ai22b.talent_foundry.onboarding_choices import (
     DEFAULT_LLM_SERVICE_ID,
     LLM_SERVICE_CATALOG,
 )
+from ai22b.talent_foundry.openclaw_selection_doctor import doctor_openclaw_selection
 from ai22b.talent_foundry.role_models import list_role_models, summarize_role_model
 from ai22b.talent_foundry.registry import (
     assemble_hired_agent_team,
@@ -509,6 +510,7 @@ def build_openclaw_style_wizard(
             "local_only": True,
             "external_registration_performed": False,
         },
+        "selection_doctor": artifacts.get("openclaw_selection_doctor"),
     }
 
 
@@ -531,6 +533,8 @@ def write_openclaw_style_config(
         "model_auth": {
             "llm_service": normalized.get("llm_service"),
             "llm_model": normalized.get("llm_model"),
+            "llm_model_path_recorded": bool(normalized.get("llm_model_path")),
+            "selection_doctor": artifacts.get("openclaw_selection_doctor"),
             "secret_storage": "env_or_user_managed_no_plaintext_saved",
         },
         "workspace": {
@@ -581,6 +585,14 @@ def run_console_session(
     answers_path = output_dir / "console_answers.json"
     normalized = _normalized_answers(answers)
     _write_json(answers_path, normalized)
+    selection_doctor_path = output_dir / "openclaw_selection_doctor.json"
+    selection_doctor = doctor_openclaw_selection(
+        llm_service=normalized.get("llm_service") or None,
+        llm_model=normalized.get("llm_model") or None,
+        llm_model_path=normalized.get("llm_model_path") or None,
+        chat_surface=normalized.get("chat_surface") or None,
+        output_path=selection_doctor_path,
+    )
 
     onboarding_dir = output_dir / "onboarding"
     onboarding_output = onboarding_dir / "onboarding_session.json"
@@ -607,6 +619,7 @@ def run_console_session(
     artifacts = {
         "console_session": str(output_path),
         "answers": str(answers_path),
+        "openclaw_selection_doctor": str(selection_doctor_path),
         "onboarding_session": onboarding["artifacts"]["onboarding_session"],
         "employment_record": onboarding["artifacts"]["employment_record"],
         "employment_goal": onboarding["artifacts"]["employment_goal"],
@@ -633,6 +646,14 @@ def run_console_session(
         "status": onboarding["llm_service_health"]["status"],
         "network_probe_performed": onboarding["llm_service_health"]["network_probe_performed"],
         "secret_values_stored": onboarding["llm_service_health"]["secret_values_stored"],
+    }
+    post_hire_extensions["openclaw_selection_doctor"] = {
+        "schema": selection_doctor["schema"],
+        "status": selection_doctor["status"],
+        "provider_id": selection_doctor["openclaw_selection"]["provider_id"],
+        "channel_count": len(selection_doctor["openclaw_selection"]["channels"]),
+        "secret_values_stored": selection_doctor["claim_boundary"]["secret_values_stored"],
+        "external_network_call_performed": selection_doctor["claim_boundary"]["external_network_call_performed"],
     }
     if normalized.get("talent_source") == "owner_self_extension":
         private_dir = normalized.get("private_curriculum_dir")
@@ -821,6 +842,13 @@ def run_console_session(
             "employment": onboarding["employment"],
         },
         "openclaw_runtime": onboarding.get("openclaw_runtime"),
+        "openclaw_selection_doctor": {
+            "schema": selection_doctor["schema"],
+            "status": selection_doctor["status"],
+            "openclaw_selection": selection_doctor["openclaw_selection"],
+            "support_matrix_summary": selection_doctor["support_matrix_summary"],
+            "claim_boundary": selection_doctor["claim_boundary"],
+        },
         "local_policy": onboarding["local_policy"],
         "post_hire_extensions": post_hire_extensions,
         "artifacts": artifacts,

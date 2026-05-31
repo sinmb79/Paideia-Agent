@@ -285,9 +285,11 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             provider_doctor = json.loads(Path(session["artifacts"]["openclaw_provider_doctor"]).read_text(encoding="utf-8"))
             channel_doctor = json.loads(Path(session["artifacts"]["openclaw_channel_doctor"]).read_text(encoding="utf-8"))
             support_matrix = json.loads(Path(session["artifacts"]["openclaw_support_matrix"]).read_text(encoding="utf-8"))
+            selection_doctor = json.loads(Path(session["artifacts"]["openclaw_selection_doctor"]).read_text(encoding="utf-8"))
 
         self.assertEqual(session["wizard"]["schema"], "ai22b-paideia-openclaw-style-onboarding/v1")
         self.assertEqual(config["schema"], "ai22b-paideia-openclaw-style-config/v1")
+        self.assertIn("openclaw_selection_doctor.json", config["model_auth"]["selection_doctor"])
         self.assertEqual(config["gateway"]["mode"], "local_loopback")
         self.assertEqual(config["channels"]["external_channels"], "disabled_until_explicit_configuration")
         self.assertEqual(identity_payload["schema"], "ai-talent-agent-id-card-payload/v1")
@@ -303,6 +305,10 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertEqual(channel_doctor["schema"], "ai22b-openclaw-channel-connector-doctor/v1")
         self.assertEqual(support_matrix["schema"], "ai22b-openclaw-support-matrix/v1")
         self.assertEqual(support_matrix["status"], "pass")
+        self.assertEqual(selection_doctor["schema"], "ai22b-openclaw-selection-doctor/v1")
+        self.assertEqual(selection_doctor["status"], "ready_for_onboarding")
+        self.assertEqual(session["openclaw_selection_doctor"]["status"], "ready_for_onboarding")
+        self.assertFalse(selection_doctor["claim_boundary"]["external_network_call_performed"])
         self.assertEqual(session["openclaw_runtime"]["selected_support"]["matrix_status"], "pass")
         self.assertFalse(llm_health["network_probe_performed"])
 
