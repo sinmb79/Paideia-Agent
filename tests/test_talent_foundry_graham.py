@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 import threading
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 from urllib.request import Request, urlopen
 
 
@@ -560,6 +562,132 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertFalse(gateway["security"]["external_send_performed_by_core"])
         self.assertTrue(channel_run_exists)
         self.assertGreater(len(gateway["outbound"]["text"]), 5)
+
+    def test_channel_delivery_dry_run_parses_telegram_discord_and_config(self) -> None:
+        from ai22b.talent_foundry.channel_delivery import (
+            build_openclaw_channel_delivery_config,
+            send_openclaw_channel_outbound,
+        )
+
+        telegram_run = {
+            "schema": "ai22b-openclaw-channel-run/v1",
+            "outbound": {
+                "channel_id": "telegram",
+                "conversation_id": "agent:main:telegram:group:-1001234567890:topic:42",
+                "reply_to_message_id": "openclaw_msg_test",
+                "text": "Telegram dry-run reply",
+            },
+        }
+        discord_run = {
+            "schema": "ai22b-openclaw-channel-run/v1",
+            "outbound": {
+                "channel_id": "discord",
+                "conversation_id": "agent:main:discord:channel:123456:thread:987654",
+                "reply_to_message_id": "openclaw_msg_test",
+                "text": "Discord dry-run reply",
+            },
+        }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            config_path = Path(tmp) / "delivery_config.json"
+            telegram_path = Path(tmp) / "telegram_delivery.json"
+            config = build_openclaw_channel_delivery_config(output_path=config_path)
+            telegram = send_openclaw_channel_outbound(
+                telegram_run,
+                mode="dry-run",
+                output_path=telegram_path,
+            )
+            discord = send_openclaw_channel_outbound(
+                discord_run,
+                mode="dry-run",
+                delivery_method="bot",
+                token_env_var="PAIDEIA_TEST_DISCORD_TOKEN",
+            )
+            config_exists = config_path.exists()
+            telegram_delivery_exists = telegram_path.exists()
+
+        self.assertEqual(config["schema"], "ai22b-openclaw-channel-delivery-config/v1")
+        self.assertTrue(config_exists)
+        self.assertEqual(telegram["status"], "prepared_not_sent")
+        self.assertFalse(telegram["network_call_performed"])
+        self.assertEqual(telegram["payload"]["chat_id"], "-1001234567890")
+        self.assertEqual(telegram["payload"]["message_thread_id"], 42)
+        self.assertTrue(telegram_delivery_exists)
+        self.assertEqual(discord["endpoint"], "https://discord.com/api/v10/channels/<channel_id>/messages")
+        self.assertEqual(discord["payload"]["content"], "Discord dry-run reply")
+        self.assertTrue(discord["target_valid"])
+        self.assertFalse(discord["auth"]["token_present"])
+
+    def test_channel_delivery_live_slack_uses_chat_post_message_without_storing_token(self) -> None:
+        from ai22b.talent_foundry.channel_delivery import send_openclaw_channel_outbound
+
+        captured: dict[str, object] = {}
+        slack_run = {
+            "schema": "ai22b-openclaw-channel-run/v1",
+            "outbound": {
+                "channel_id": "slack",
+                "conversation_id": "agent:main:slack:channel:C123456:thread:1717171717.000100",
+                "reply_to_message_id": "openclaw_msg_test",
+                "text": "Slack live adapter test",
+            },
+        }
+
+        def fake_request_json(*, url: str, payload: dict, headers: dict, timeout: int = 60) -> dict:
+            captured["url"] = url
+            captured["payload"] = payload
+            captured["headers"] = headers
+            return {"ok": True, "channel": payload["channel"], "ts": "1717171718.000200"}
+
+        with patch.dict(os.environ, {"SLACK_BOT_TOKEN": "xoxb-test-token"}), patch(
+            "ai22b.talent_foundry.channel_delivery._request_json",
+            side_effect=fake_request_json,
+        ):
+            delivery = send_openclaw_channel_outbound(slack_run, mode="live")
+
+        self.assertEqual(delivery["status"], "sent")
+        self.assertTrue(delivery["network_call_performed"])
+        self.assertEqual(captured["url"], "https://slack.com/api/chat.postMessage")
+        self.assertEqual(captured["payload"]["channel"], "C123456")
+        self.assertEqual(captured["payload"]["thread_ts"], "1717171717.000100")
+        self.assertEqual(captured["headers"], {"Authorization": "Bearer xoxb-test-token"})
+        self.assertEqual(delivery["headers"], {"Authorization": "<redacted>"})
+        self.assertTrue(delivery["auth"]["token_present"])
+        self.assertFalse(delivery["security"]["secret_values_stored"])
+
+    def test_channel_delivery_live_telegram_uses_send_message_without_storing_token(self) -> None:
+        from ai22b.talent_foundry.channel_delivery import send_openclaw_channel_outbound
+
+        captured: dict[str, object] = {}
+        telegram_run = {
+            "schema": "ai22b-openclaw-channel-run/v1",
+            "outbound": {
+                "channel_id": "telegram",
+                "conversation_id": "agent:main:telegram:group:-1001234567890:topic:42",
+                "reply_to_message_id": "openclaw_msg_test",
+                "text": "Telegram live adapter test",
+            },
+        }
+
+        def fake_request_json(*, url: str, payload: dict, headers: dict, timeout: int = 60) -> dict:
+            captured["url"] = url
+            captured["payload"] = payload
+            captured["headers"] = headers
+            return {"ok": True, "result": {"message_id": 123}}
+
+        with patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": "telegram-test-token"}), patch(
+            "ai22b.talent_foundry.channel_delivery._request_json",
+            side_effect=fake_request_json,
+        ):
+            delivery = send_openclaw_channel_outbound(telegram_run, mode="live")
+
+        self.assertEqual(delivery["status"], "sent")
+        self.assertEqual(captured["url"], "https://api.telegram.org/bottelegram-test-token/sendMessage")
+        self.assertEqual(captured["payload"]["chat_id"], "-1001234567890")
+        self.assertEqual(captured["payload"]["message_thread_id"], 42)
+        self.assertEqual(captured["headers"], {})
+        self.assertEqual(delivery["endpoint"], "https://api.telegram.org/bot<redacted>/sendMessage")
+        self.assertNotIn("telegram-test-token", json.dumps(delivery, ensure_ascii=False))
+        self.assertFalse(delivery["security"]["secret_values_stored"])
 
     def test_owner_self_extension_blueprint_uses_private_local_track_without_role_model(self) -> None:
         from ai22b.talent_foundry.blueprint import create_agent_training_blueprint

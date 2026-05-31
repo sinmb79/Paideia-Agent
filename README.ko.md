@@ -121,6 +121,20 @@ ai22b-talent-foundry run-openclaw-channel-gateway-server `
 
 이 서버는 `POST /openclaw/channel-message`를 받아 Paideia 인재에게 전달하고, 원래 들어온 채널/세션으로 되돌려 보낼 outbound envelope를 반환합니다. 실제 플랫폼 토큰, 페어링, 허용목록, 최종 전송은 채널 플러그인이 담당합니다.
 
+반환된 outbound envelope는 기본 dry-run delivery adapter로 먼저 검토할 수 있습니다.
+
+```powershell
+ai22b-talent-foundry build-openclaw-channel-delivery-config `
+  --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\channel_delivery_config.json"
+
+ai22b-talent-foundry send-openclaw-channel-outbound `
+  --channel-run "<channel_run.json>" `
+  --mode dry-run `
+  --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\channel_delivery_dry_run.json"
+```
+
+`--mode live`를 명시하고 필요한 환경변수(`TELEGRAM_BOT_TOKEN`, `SLACK_BOT_TOKEN`, `DISCORD_WEBHOOK_URL` 또는 `DISCORD_BOT_TOKEN`)가 있을 때만 외부 전송을 시도합니다. 토큰 값은 산출물에 저장하지 않습니다.
+
 Hopper Junior 예시:
 
 ```powershell

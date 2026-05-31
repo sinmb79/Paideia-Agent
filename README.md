@@ -337,6 +337,20 @@ ai22b-talent-foundry run-openclaw-channel-gateway-server `
 
 The server exposes `GET /health`, `GET /openclaw/gateway-config`, and `POST /openclaw/channel-message`. By default it returns a channel-specific outbound envelope and does not send to Telegram/Discord/Slack itself; platform plugins keep control of tokens, pairing, allowlists, and final delivery. This follows OpenClaw's deterministic routing pattern: reply to the origin channel/session rather than letting the model choose a destination.
 
+To inspect or send the returned outbound envelope, use the dry-run-first delivery adapter:
+
+```powershell
+ai22b-talent-foundry build-openclaw-channel-delivery-config `
+  --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\channel_delivery_config.json"
+
+ai22b-talent-foundry send-openclaw-channel-outbound `
+  --channel-run "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\channel-gateway\telegram_20260531_000000_000000.json" `
+  --mode dry-run `
+  --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\telegram_delivery_dry_run.json"
+```
+
+`--mode live` performs the external API call only when the required environment variables are present: `TELEGRAM_BOT_TOKEN` for Telegram `sendMessage`, `SLACK_BOT_TOKEN` for Slack `chat.postMessage`, or `DISCORD_WEBHOOK_URL`/`DISCORD_BOT_TOKEN` for Discord webhook or bot delivery. Secret values are never written to delivery artifacts.
+
 For a browser chat test without any external channel token, start the local WebChat loopback server and open the printed URL:
 
 ```powershell

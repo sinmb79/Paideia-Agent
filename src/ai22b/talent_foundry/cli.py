@@ -23,6 +23,10 @@ from ai22b.talent_foundry.channel_gateway import (
     run_openclaw_channel_message,
 )
 from ai22b.talent_foundry.channel_gateway_server import run_openclaw_channel_gateway_server
+from ai22b.talent_foundry.channel_delivery import (
+    build_openclaw_channel_delivery_config,
+    send_openclaw_channel_outbound,
+)
 from ai22b.talent_foundry.cohort import create_specialist_cohort
 from ai22b.talent_foundry.console import collect_console_answers, run_console_session
 from ai22b.talent_foundry.distribution import (
@@ -152,6 +156,26 @@ def _build_parser() -> argparse.ArgumentParser:
     run_channel_gateway_server.add_argument("--live-llm", action="store_true")
     run_channel_gateway_server.add_argument("--llm-model")
     run_channel_gateway_server.add_argument("--learn-from-chat", action="store_true")
+
+    build_channel_delivery_config = subparsers.add_parser(
+        "build-openclaw-channel-delivery-config",
+        help="Write a local delivery config for OpenClaw-style outbound channel envelopes.",
+    )
+    build_channel_delivery_config.add_argument("--channel", action="append", default=[])
+    build_channel_delivery_config.add_argument("--output", required=True)
+
+    send_channel_outbound = subparsers.add_parser(
+        "send-openclaw-channel-outbound",
+        help="Dry-run or live-send an OpenClaw-style outbound channel envelope.",
+    )
+    send_channel_outbound.add_argument("--channel-run", required=True)
+    send_channel_outbound.add_argument("--mode", choices=["dry-run", "live"], default="dry-run")
+    send_channel_outbound.add_argument("--target-id")
+    send_channel_outbound.add_argument("--thread-id")
+    send_channel_outbound.add_argument("--token-env")
+    send_channel_outbound.add_argument("--webhook-url-env")
+    send_channel_outbound.add_argument("--delivery-method", choices=["auto", "webhook", "bot"], default="auto")
+    send_channel_outbound.add_argument("--output", required=True)
 
     run_webchat_server = subparsers.add_parser(
         "run-openclaw-webchat-server",
@@ -672,6 +696,28 @@ def main(argv: Sequence[str] | None = None) -> int:
             llm_model=args.llm_model,
             learn_from_chat=args.learn_from_chat,
         )
+        return 0
+
+    if args.command == "build-openclaw-channel-delivery-config":
+        build_openclaw_channel_delivery_config(
+            channels=args.channel or None,
+            output_path=Path(args.output),
+        )
+        print(str(Path(args.output)))
+        return 0
+
+    if args.command == "send-openclaw-channel-outbound":
+        send_openclaw_channel_outbound(
+            Path(args.channel_run),
+            mode=args.mode,
+            target_id=args.target_id,
+            thread_id=args.thread_id,
+            token_env_var=args.token_env,
+            webhook_url_env_var=args.webhook_url_env,
+            delivery_method=args.delivery_method,
+            output_path=Path(args.output),
+        )
+        print(str(Path(args.output)))
         return 0
 
     if args.command == "run-openclaw-webchat-server":
