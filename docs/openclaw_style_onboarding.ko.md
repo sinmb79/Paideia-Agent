@@ -107,6 +107,15 @@ ai22b-talent-foundry translate-openclaw-platform-event `
 
 이 access config를 gateway 서버의 `--access-config`에 넘기면 `/openclaw/platform-event/telegram`, `/openclaw/platform-event/discord`, `/openclaw/platform-event/slack`으로 들어오는 raw event가 표준 envelope로 번역된 뒤, 허용된 sender/conversation만 실제 Paideia 채팅 런타임으로 라우팅됩니다.
 
+전체 OpenClaw 채널 중 어떤 것은 직접 adapter가 있고, 어떤 것은 플러그인/브리지가 필요합니다. 이를 설치 전 확인하려면 다음 doctor를 실행합니다.
+
+```powershell
+ai22b-talent-foundry list-openclaw-channel-connectors --output channel_connectors.json
+ai22b-talent-foundry doctor-openclaw-channel-connectors --output channel_connector_doctor.json
+```
+
+이 doctor는 26개 OpenClaw 채널을 모두 표시하고, Telegram/Discord/Slack/WebChat처럼 바로 연결 가능한 항목과 WhatsApp QR pairing, Signal signal-cli, Matrix bot, iMessage macOS bridge처럼 별도 준비가 필요한 항목을 분리합니다. 비밀값은 저장하지 않고 환경변수 존재 여부만 기록합니다.
+
 outbound envelope는 곧바로 외부로 보내기보다 먼저 dry-run delivery로 검토합니다.
 
 ```powershell

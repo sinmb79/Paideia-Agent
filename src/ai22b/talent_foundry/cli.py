@@ -31,6 +31,10 @@ from ai22b.talent_foundry.channel_ingress import (
     build_openclaw_channel_access_config,
     translate_openclaw_platform_event,
 )
+from ai22b.talent_foundry.channel_connectors import (
+    build_openclaw_channel_connector_catalog,
+    doctor_openclaw_channel_connectors,
+)
 from ai22b.talent_foundry.cohort import create_specialist_cohort
 from ai22b.talent_foundry.console import collect_console_answers, run_console_session
 from ai22b.talent_foundry.distribution import (
@@ -121,6 +125,20 @@ def _build_parser() -> argparse.ArgumentParser:
         help="List OpenClaw-compatible LLM providers and chat channels supported by Paideia onboarding.",
     )
     list_openclaw_compat.add_argument("--output")
+
+    list_channel_connectors = subparsers.add_parser(
+        "list-openclaw-channel-connectors",
+        help="List OpenClaw channel connector readiness across direct adapters and plugin-required channels.",
+    )
+    list_channel_connectors.add_argument("--channel", action="append", default=[])
+    list_channel_connectors.add_argument("--output")
+
+    doctor_channel_connectors = subparsers.add_parser(
+        "doctor-openclaw-channel-connectors",
+        help="Doctor OpenClaw channel connector readiness without storing secrets.",
+    )
+    doctor_channel_connectors.add_argument("--channel", action="append", default=[])
+    doctor_channel_connectors.add_argument("--output", required=True)
 
     build_gateway_config = subparsers.add_parser(
         "build-openclaw-gateway-config",
@@ -678,6 +696,25 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(str(output_path))
         else:
             print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.command == "list-openclaw-channel-connectors":
+        result = build_openclaw_channel_connector_catalog(channels=args.channel or None)
+        if args.output:
+            output_path = Path(args.output)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+            print(str(output_path))
+        else:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.command == "doctor-openclaw-channel-connectors":
+        doctor_openclaw_channel_connectors(
+            channels=args.channel or None,
+            output_path=Path(args.output),
+        )
+        print(str(Path(args.output)))
         return 0
 
     if args.command == "build-openclaw-gateway-config":

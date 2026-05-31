@@ -16,6 +16,8 @@ DEFAULT_PUBLIC_PROGRAM_MANIFEST_NAME = "ai_talent_foundry_public_manifest.json"
 REQUIRED_INSTALLER_COMMANDS = [
     "list-role-models",
     "list-openclaw-compat",
+    "list-openclaw-channel-connectors",
+    "doctor-openclaw-channel-connectors",
     "build-openclaw-gateway-config",
     "run-openclaw-channel-message",
     "run-openclaw-channel-gateway-server",
@@ -108,6 +110,8 @@ def _commands() -> list[dict[str, str]]:
     purposes = {
         "list-role-models": "List role-model process templates available for a talent track.",
         "list-openclaw-compat": "List OpenClaw-compatible LLM provider and chat channel catalogs.",
+        "list-openclaw-channel-connectors": "List readiness for every OpenClaw chat channel, including direct Paideia adapters and plugin-required channels.",
+        "doctor-openclaw-channel-connectors": "Doctor OpenClaw chat channel readiness without storing secret values.",
         "build-openclaw-gateway-config": "Build a local loopback OpenClaw-style channel gateway config for a hired agent.",
         "run-openclaw-channel-message": "Route one OpenClaw channel message envelope through Paideia chat and return a reply envelope.",
         "run-openclaw-channel-gateway-server": "Start a local HTTP channel gateway that external OpenClaw-style channel plugins can post normalized messages to.",

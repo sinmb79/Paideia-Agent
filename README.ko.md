@@ -138,6 +138,18 @@ ai22b-talent-foundry translate-openclaw-platform-event `
 
 gateway 서버를 `--access-config`와 함께 실행하면 `/openclaw/platform-event/telegram`, `/discord`, `/slack` 경로로 들어온 raw event도 처리합니다. 허용목록에 없는 sender/conversation은 403으로 차단됩니다.
 
+OpenClaw 전체 채널의 준비 상태는 connector catalog/doctor로 확인합니다.
+
+```powershell
+ai22b-talent-foundry list-openclaw-channel-connectors `
+  --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\channel_connectors.json"
+
+ai22b-talent-foundry doctor-openclaw-channel-connectors `
+  --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\channel_connector_doctor.json"
+```
+
+Telegram, Discord, Slack, WebChat은 Paideia 직접 adapter가 있고, 나머지 OpenClaw 채널은 normalized gateway envelope를 사용할 수 있습니다. 다만 WhatsApp QR pairing, signal-cli, Matrix bot, Bot Framework, 지역 플랫폼 토큰처럼 raw platform bridge가 필요한 항목은 doctor가 별도 준비 단계로 표시합니다.
+
 반환된 outbound envelope는 기본 dry-run delivery adapter로 먼저 검토할 수 있습니다.
 
 ```powershell

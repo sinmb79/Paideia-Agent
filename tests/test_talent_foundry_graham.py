@@ -336,6 +336,18 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             output = Path(tmp) / "openclaw_compat.json"
             self.assertEqual(cli_main(["list-openclaw-compat", "--output", str(output)]), 0)
             data = json.loads(output.read_text(encoding="utf-8"))
+            connectors_output = Path(tmp) / "channel_connectors.json"
+            doctor_output = Path(tmp) / "channel_doctor.json"
+            self.assertEqual(
+                cli_main(["list-openclaw-channel-connectors", "--output", str(connectors_output)]),
+                0,
+            )
+            self.assertEqual(
+                cli_main(["doctor-openclaw-channel-connectors", "--channel", "telegram", "--output", str(doctor_output)]),
+                0,
+            )
+            connectors = json.loads(connectors_output.read_text(encoding="utf-8"))
+            channel_doctor = json.loads(doctor_output.read_text(encoding="utf-8"))
 
         provider_ids = {item["provider_id"] for item in data["model_providers"]["providers"]}
         all_provider_ids = provider_ids | set(data["model_providers"]["manifest_only_providers"])
@@ -362,6 +374,38 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertIn("webchat", channel_ids)
         self.assertIn("https://docs.openclaw.ai/providers/index", data["model_providers"]["source_urls"])
         self.assertIn("https://docs.openclaw.ai/channels", data["chat_channels"]["source_urls"])
+        self.assertEqual(connectors["schema"], "ai22b-openclaw-channel-connector-catalog/v1")
+        self.assertGreaterEqual(connectors["summary"]["channel_count"], 26)
+        self.assertEqual(channel_doctor["schema"], "ai22b-openclaw-channel-connector-doctor/v1")
+        self.assertEqual(channel_doctor["results"][0]["channel_id"], "telegram")
+
+    def test_channel_connector_catalog_covers_every_openclaw_channel(self) -> None:
+        from ai22b.talent_foundry.channel_connectors import (
+            build_openclaw_channel_connector_catalog,
+            doctor_openclaw_channel_connectors,
+        )
+        from ai22b.talent_foundry.openclaw_compat import openclaw_channel_manifest
+
+        catalog = build_openclaw_channel_connector_catalog()
+        doctor = doctor_openclaw_channel_connectors(channels=["telegram", "whatsapp", "matrix", "webchat"])
+
+        manifest_ids = {item["channel_id"] for item in openclaw_channel_manifest()["channels"]}
+        catalog_ids = {item["channel_id"] for item in catalog["channels"]}
+        by_id = {item["channel_id"]: item for item in catalog["channels"]}
+        doctor_by_id = {item["channel_id"]: item for item in doctor["results"]}
+
+        self.assertEqual(catalog["schema"], "ai22b-openclaw-channel-connector-catalog/v1")
+        self.assertEqual(manifest_ids, catalog_ids)
+        self.assertEqual(catalog["summary"]["generic_normalized_gateway_ready_count"], len(manifest_ids))
+        self.assertTrue(by_id["telegram"]["direct_raw_ingress_ready"])
+        self.assertTrue(by_id["telegram"]["direct_delivery_ready"])
+        self.assertEqual(by_id["whatsapp"]["connector_status"], "external_plugin_required_qr_pairing")
+        self.assertEqual(by_id["matrix"]["connector_status"], "external_plugin_required")
+        self.assertEqual(by_id["signal"]["connector_status"], "local_bridge_required")
+        self.assertEqual(by_id["webchat"]["connector_status"], "paideia_loopback_ready")
+        self.assertFalse(doctor_by_id["whatsapp"]["ready_for_live_delivery"])
+        self.assertTrue(doctor_by_id["webchat"]["ready_for_live_delivery"])
+        self.assertFalse(doctor["secret_values_stored"])
 
     def test_openclaw_channel_gateway_routes_message_to_paideia_chat(self) -> None:
         from ai22b.talent_foundry.blueprint import create_agent_training_blueprint

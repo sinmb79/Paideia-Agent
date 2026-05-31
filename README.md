@@ -354,6 +354,18 @@ ai22b-talent-foundry translate-openclaw-platform-event `
 
 The HTTP gateway also accepts `POST /openclaw/platform-event/telegram`, `/discord`, and `/slack` when started with `--access-config`. Unlisted senders or conversations receive a `403` translation result instead of being routed into the talent.
 
+To see how every OpenClaw channel maps into Paideia, generate the connector readiness catalog:
+
+```powershell
+ai22b-talent-foundry list-openclaw-channel-connectors `
+  --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\channel_connectors.json"
+
+ai22b-talent-foundry doctor-openclaw-channel-connectors `
+  --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\channel_connector_doctor.json"
+```
+
+Telegram, Discord, Slack, and WebChat have direct Paideia adapters. All other OpenClaw channels remain selectable and can use the normalized gateway envelope today, while raw platform integration is marked with the required bridge/plugin setup such as WhatsApp QR pairing, signal-cli, Matrix bot credentials, Bot Framework, or regional platform tokens.
+
 To inspect or send the returned outbound envelope, use the dry-run-first delivery adapter:
 
 ```powershell
