@@ -71,6 +71,7 @@ from ai22b.talent_foundry.openclaw_native_handoff import (
 )
 from ai22b.talent_foundry.openclaw_parity import audit_openclaw_parity
 from ai22b.talent_foundry.openclaw_runtime_bundle import build_openclaw_runtime_bundle
+from ai22b.talent_foundry.openclaw_support_matrix import build_openclaw_support_matrix
 from ai22b.talent_foundry.program import create_talent_plan
 from ai22b.talent_foundry.program_manifest import build_public_program_manifest
 from ai22b.talent_foundry.provider_connectors import (
@@ -197,6 +198,18 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Fetch the current OpenClaw docs before comparing provider/channel coverage.",
     )
     audit_openclaw_parity_command.add_argument("--docs-timeout", type=int, default=15)
+
+    support_matrix_command = subparsers.add_parser(
+        "build-openclaw-support-matrix",
+        help="Write a one-file OpenClaw provider/channel support matrix for onboarding and installer review.",
+    )
+    support_matrix_command.add_argument("--output", required=True)
+    support_matrix_command.add_argument(
+        "--refresh-docs",
+        action="store_true",
+        help="Fetch current OpenClaw docs before calculating parity summary.",
+    )
+    support_matrix_command.add_argument("--docs-timeout", type=int, default=15)
 
     import_openclaw_config_command = subparsers.add_parser(
         "import-openclaw-config",
@@ -957,6 +970,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(str(Path(args.output)))
         if args.fail_on_missing and result["status"] != "pass":
             return 1
+        return 0
+
+    if args.command == "build-openclaw-support-matrix":
+        build_openclaw_support_matrix(
+            output_path=Path(args.output),
+            refresh_docs=args.refresh_docs,
+            docs_timeout=args.docs_timeout,
+        )
+        print(str(Path(args.output)))
         return 0
 
     if args.command == "import-openclaw-config":

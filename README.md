@@ -347,6 +347,9 @@ ai22b-talent-foundry audit-openclaw-parity `
   --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_parity_live_docs.json" `
   --fail-on-missing
 
+ai22b-talent-foundry build-openclaw-support-matrix `
+  --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_support_matrix.json"
+
 ai22b-talent-foundry list-openclaw-provider-connectors `
   --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\provider_connectors.json"
 
@@ -355,6 +358,8 @@ ai22b-talent-foundry doctor-openclaw-provider-connectors `
 ```
 
 External API adapters require the user's own keys before live use. Local model adapters prefer localhost or local files. Chat surfaces include `codex-bridge-chat`, `cli-console`, `dataflow-job`, a disabled `openclaw-style-gateway`, and OpenClaw channel manifests such as `openclaw-channel-telegram`, `openclaw-channel-discord`, `openclaw-channel-slack`, `openclaw-channel-whatsapp`, `openclaw-channel-signal`, `openclaw-channel-microsoft-teams`, `openclaw-channel-google-chat`, `openclaw-channel-imessage`, `openclaw-channel-matrix`, `openclaw-channel-mattermost`, and `openclaw-channel-webchat`.
+
+The support matrix is the installer-facing summary: it marks every OpenClaw provider and channel as Paideia direct-ready, OpenClaw Gateway-ready, local-server ready, or plugin/OAuth/bridge required. It also records the exact next doctor commands for the Graham Junior quickstart, provider readiness, channel flow, Gateway LLM bridge, and parity audit.
 
 The provider catalog follows OpenClaw's canonical `provider/model` IDs where possible, including `lmstudio/*`, `zai/*`, `kilocode/*`, `gmi/*`, `novita/*`, `huggingface/*`, `ollama-cloud/*`, `arcee/*`, `chutes/*`, `qianfan/*`, `stepfun/*`, `volcengine-plan/*`, and `xiaomi/*`. The provider connector doctor separates Paideia live adapters from OpenClaw provider-plugin surfaces such as Bedrock, Copilot, Qwen OAuth, Gemini CLI OAuth, media generation providers, and other OAuth/custom-runner integrations. `audit-openclaw-parity` compares Paideia's local catalog against the checked OpenClaw provider/channel documentation snapshot and fails when a supported provider or channel is missing. Secret values are never serialized.
 

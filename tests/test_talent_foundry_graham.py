@@ -589,6 +589,38 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertIn("microsoft-teams", _channel_ids_from_doc_texts([sample_channel_docs]))
         self.assertIn("bluebubbles", _channel_ids_from_doc_texts([sample_channel_docs]))
 
+    def test_openclaw_support_matrix_summarizes_onboarding_readiness(self) -> None:
+        from ai22b.talent_foundry.cli import main as cli_main
+        from ai22b.talent_foundry.openclaw_support_matrix import build_openclaw_support_matrix
+
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "openclaw_support_matrix.json"
+            matrix = build_openclaw_support_matrix(output_path=output)
+            cli_output = Path(tmp) / "openclaw_support_matrix_cli.json"
+            cli_result = cli_main(["build-openclaw-support-matrix", "--output", str(cli_output)])
+            cli_matrix = json.loads(cli_output.read_text(encoding="utf-8"))
+
+        provider_by_id = {item["provider_id"]: item for item in matrix["provider_support"]}
+        channel_by_id = {item["channel_id"]: item for item in matrix["channel_support"]}
+
+        self.assertEqual(matrix["schema"], "ai22b-openclaw-support-matrix/v1")
+        self.assertEqual(matrix["status"], "pass")
+        self.assertEqual(matrix["coverage"]["providers"]["parity_missing_count"], 0)
+        self.assertEqual(matrix["coverage"]["channels"]["parity_missing_count"], 0)
+        self.assertGreaterEqual(matrix["coverage"]["providers"]["paideia_direct_adapter_ready_count"], 35)
+        self.assertGreaterEqual(matrix["coverage"]["channels"]["normalized_gateway_ready_count"], 26)
+        self.assertTrue(provider_by_id["openrouter"]["openclaw_gateway_route_ready"])
+        self.assertEqual(provider_by_id["openrouter"]["support_level"], "paideia_direct_or_openclaw_gateway_ready")
+        self.assertEqual(provider_by_id["qwen-oauth"]["support_level"], "openclaw_plugin_or_oauth_required")
+        self.assertEqual(channel_by_id["telegram"]["support_level"], "paideia_direct_flow_ready")
+        self.assertEqual(channel_by_id["webchat"]["support_level"], "loopback_chat_ready")
+        self.assertEqual(channel_by_id["whatsapp"]["support_level"], "normalized_gateway_ready_plugin_delivery_required")
+        self.assertIn("run-graham-junior-quickstart", matrix["operator_paths"]["first_sample_agent"])
+        self.assertFalse(matrix["claim_boundary"]["secret_values_stored"])
+        self.assertEqual(cli_result, 0)
+        self.assertEqual(cli_matrix["schema"], "ai22b-openclaw-support-matrix/v1")
+        self.assertEqual(cli_matrix["status"], "pass")
+
     def test_channel_connector_catalog_covers_every_openclaw_channel(self) -> None:
         from ai22b.talent_foundry.channel_connectors import (
             build_openclaw_channel_connector_catalog,
