@@ -76,6 +76,16 @@ ai22b-talent-foundry run-openclaw-channel-message `
   --output telegram_channel_run.json
 ```
 
+채널 연결을 한 번에 점검하려면 flow doctor를 실행합니다. 이 명령은 inbound channel envelope를 Paideia chat runtime에 통과시키고, Telegram/Discord/Slack은 외부 전송 없이 dry-run outbound payload까지 만듭니다.
+
+```powershell
+ai22b-talent-foundry doctor-openclaw-channel-flow `
+  --employment-record "<employment_record.json>" `
+  --channel telegram `
+  --channel webchat `
+  --output openclaw_channel_flow_doctor.json
+```
+
 실제 채널 플러그인이 붙을 때는 단발 명령 대신 HTTP gateway 서버를 띄웁니다.
 
 ```powershell

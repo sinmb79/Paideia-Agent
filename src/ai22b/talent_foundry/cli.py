@@ -62,6 +62,7 @@ from ai22b.talent_foundry.onboarding_choices import (
 from ai22b.talent_foundry.openclaw_config_import import import_openclaw_config
 from ai22b.talent_foundry.openclaw_compat import openclaw_channel_manifest, openclaw_provider_manifest
 from ai22b.talent_foundry.openclaw_bridge_setup import build_openclaw_bridge_setup_kit
+from ai22b.talent_foundry.openclaw_channel_flow import doctor_openclaw_channel_flow
 from ai22b.talent_foundry.openclaw_gateway_llm import doctor_openclaw_gateway_llm
 from ai22b.talent_foundry.openclaw_native_handoff import (
     doctor_openclaw_native_handoff,
@@ -166,6 +167,22 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     doctor_channel_connectors.add_argument("--channel", action="append", default=[])
     doctor_channel_connectors.add_argument("--output", required=True)
+
+    doctor_channel_flow = subparsers.add_parser(
+        "doctor-openclaw-channel-flow",
+        help="Dry-run an OpenClaw channel message through Paideia chat and outbound delivery preparation.",
+    )
+    doctor_channel_flow.add_argument("--employment-record", required=True)
+    doctor_channel_flow.add_argument("--channel", action="append", default=[])
+    doctor_channel_flow.add_argument("--message", default="Paideia OpenClaw channel dry-run smoke test.")
+    doctor_channel_flow.add_argument("--sender-id", default="paideia-channel-doctor")
+    doctor_channel_flow.add_argument("--conversation-id")
+    doctor_channel_flow.add_argument("--output", required=True)
+    doctor_channel_flow.add_argument("--output-dir")
+    doctor_channel_flow.add_argument("--llm-mode", choices=["offline", "auto", "live"], default="offline")
+    doctor_channel_flow.add_argument("--live-llm", action="store_true")
+    doctor_channel_flow.add_argument("--llm-model")
+    doctor_channel_flow.add_argument("--learn-from-chat", action="store_true")
 
     audit_openclaw_parity_command = subparsers.add_parser(
         "audit-openclaw-parity",
@@ -871,6 +888,23 @@ def main(argv: Sequence[str] | None = None) -> int:
         doctor_openclaw_channel_connectors(
             channels=args.channel or None,
             output_path=Path(args.output),
+        )
+        print(str(Path(args.output)))
+        return 0
+
+    if args.command == "doctor-openclaw-channel-flow":
+        llm_mode = "live" if args.live_llm else args.llm_mode
+        doctor_openclaw_channel_flow(
+            Path(args.employment_record),
+            channels=args.channel or None,
+            message=args.message,
+            sender_id=args.sender_id,
+            conversation_id=args.conversation_id,
+            output_path=Path(args.output),
+            output_dir=Path(args.output_dir) if args.output_dir else None,
+            llm_mode=llm_mode,
+            llm_model=args.llm_model,
+            learn_from_chat=args.learn_from_chat,
         )
         print(str(Path(args.output)))
         return 0

@@ -965,6 +965,7 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertFalse(config_review["secret_values_stored"])
         self.assertFalse(config_review["destructive_reset_performed"])
         self.assertIn("run-openclaw-channel-gateway-server", bundle["next_commands"]["run_channel_gateway"])
+        self.assertIn("doctor-openclaw-channel-flow", bundle["next_commands"]["doctor_channel_flow"])
         self.assertIn("openclaw gateway run", bundle["next_commands"]["openclaw_native_gateway"])
         self.assertEqual(cli_result, 0)
         self.assertTrue(cli_manifest_exists)
@@ -1265,6 +1266,69 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertFalse(channel_run["security"]["external_send_performed_by_core"])
         self.assertTrue(chat_turn_exists)
         self.assertGreater(len(channel_run["outbound"]["text"]), 5)
+
+    def test_openclaw_channel_flow_doctor_dry_runs_chat_and_delivery_preparation(self) -> None:
+        from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
+        from ai22b.talent_foundry.cli import main as cli_main
+        from ai22b.talent_foundry.openclaw_channel_flow import doctor_openclaw_channel_flow
+        from ai22b.talent_foundry.registry import hire_installed_agent
+        from ai22b.talent_foundry.training_run import materialize_training_blueprint
+
+        blueprint = create_agent_training_blueprint(
+            owner="Boss",
+            request="Dry-run OpenClaw channel flow through Paideia chat and delivery preparation.",
+            talent_name="channel-flow-junior",
+            gender="male",
+            domain="securities_research",
+            role_model_id="graham_value_investing",
+            agent_surface="openclaw-channel-telegram",
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            run = materialize_training_blueprint(blueprint, output_dir=Path(tmp) / "channel_flow_junior")
+            artifacts = {key: Path(value) for key, value in run["artifacts"].items()}
+            hiring = hire_installed_agent(
+                artifacts["installed_agent_manifest"],
+                employer="Boss",
+                role="OpenClaw channel flow test agent",
+                chat_surface="telegram",
+                record_name="employment_record_channel_flow.json",
+            )
+            output = Path(tmp) / "channel_flow_doctor.json"
+            report = doctor_openclaw_channel_flow(
+                hiring["employment_record"],
+                channels=["telegram", "webchat"],
+                output_path=output,
+            )
+            cli_output = Path(tmp) / "channel_flow_doctor_cli.json"
+            cli_result = cli_main(
+                [
+                    "doctor-openclaw-channel-flow",
+                    "--employment-record",
+                    str(hiring["employment_record"]),
+                    "--channel",
+                    "telegram",
+                    "--output",
+                    str(cli_output),
+                ]
+            )
+            output_exists = output.exists()
+            cli_output_exists = cli_output.exists()
+            telegram_delivery = json.loads(Path(report["channels"][0]["delivery_dry_run"]).read_text(encoding="utf-8"))
+
+        self.assertEqual(report["schema"], "ai22b-openclaw-channel-flow-doctor/v1")
+        self.assertEqual(report["status"], "pass")
+        self.assertEqual(report["summary"]["channel_count"], 2)
+        self.assertEqual(report["summary"]["reply_ready_count"], 2)
+        self.assertTrue(output_exists)
+        self.assertEqual(cli_result, 0)
+        self.assertTrue(cli_output_exists)
+        self.assertEqual(report["channels"][0]["channel_id"], "telegram")
+        self.assertTrue(report["channels"][0]["delivery"]["target_valid"])
+        self.assertFalse(report["channels"][0]["delivery"]["network_call_performed"])
+        self.assertEqual(telegram_delivery["schema"], "ai22b-openclaw-channel-delivery-run/v1")
+        self.assertEqual(telegram_delivery["mode"], "dry-run")
+        self.assertFalse(report["security"]["secret_values_stored"])
 
     def test_openclaw_webchat_server_routes_browser_message_locally(self) -> None:
         from ai22b.talent_foundry.blueprint import create_agent_training_blueprint

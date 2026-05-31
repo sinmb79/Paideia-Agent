@@ -129,6 +129,16 @@ ai22b-talent-foundry run-openclaw-channel-gateway-server `
   --port 8722
 ```
 
+채널 연결을 한 번에 점검하려면 flow doctor를 실행합니다. 이 명령은 Paideia chat runtime을 실제로 통과시킨 뒤, Telegram/Discord/Slack은 외부 전송 없이 dry-run outbound payload까지 생성합니다.
+
+```powershell
+ai22b-talent-foundry doctor-openclaw-channel-flow `
+  --employment-record "<employment_record.json>" `
+  --channel telegram `
+  --channel webchat `
+  --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_channel_flow_doctor.json"
+```
+
 이 서버는 `POST /openclaw/channel-message`를 받아 Paideia 인재에게 전달하고, 원래 들어온 채널/세션으로 되돌려 보낼 outbound envelope를 반환합니다. 실제 플랫폼 토큰, 페어링, 허용목록, 최종 전송은 채널 플러그인이 담당합니다.
 
 실제 플랫폼 webhook/event payload는 먼저 deny-by-default ingress layer에서 표준 envelope로 번역합니다.

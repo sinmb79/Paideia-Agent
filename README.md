@@ -452,6 +452,16 @@ ai22b-talent-foundry run-openclaw-channel-message `
   --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\telegram_channel_run.json"
 ```
 
+To verify the full local channel path in one step, run the channel flow doctor. It sends a dry-run message through Paideia chat, prepares channel-specific outbound payloads for Telegram/Discord/Slack when selected, and performs no external network delivery:
+
+```powershell
+ai22b-talent-foundry doctor-openclaw-channel-flow `
+  --employment-record "<employment_record.json>" `
+  --channel telegram `
+  --channel webchat `
+  --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_channel_flow_doctor.json"
+```
+
 External channel plugins can post normalized OpenClaw-style messages to a local HTTP gateway:
 
 ```powershell

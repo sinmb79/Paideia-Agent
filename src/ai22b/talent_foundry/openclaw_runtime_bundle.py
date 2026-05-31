@@ -989,6 +989,12 @@ def build_openclaw_runtime_bundle(
                 + " ".join(f"--channel {channel}" for channel in selected_channels)
                 + f" --output {channel_doctor_path}"
             ),
+            "doctor_channel_flow": (
+                "ai22b-talent-foundry doctor-openclaw-channel-flow "
+                f"--employment-record {employment_record_path} "
+                + " ".join(f"--channel {channel}" for channel in selected_channels)
+                + f" --output {output_dir / 'openclaw_channel_flow_doctor.json'}"
+            ),
             "run_channel_gateway": (
                 "ai22b-talent-foundry run-openclaw-channel-gateway-server "
                 f"--employment-record {employment_record_path} "
