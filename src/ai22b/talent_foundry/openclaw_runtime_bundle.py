@@ -822,6 +822,7 @@ def build_openclaw_runtime_bundle(
     channel_doctor_path = output_dir / "openclaw_channel_doctor.json"
     llm_health_path = output_dir / "llm_service_health.json"
     gateway_llm_doctor_path = output_dir / "openclaw_gateway_llm_doctor.json"
+    bridge_setup_dir = output_dir / "openclaw_bridge_setup"
     config_patch_path = output_dir / "openclaw_config_patch.json"
     native_handoff_path = output_dir / "openclaw_native_handoff.json"
     env_template_path = output_dir / "openclaw.env.example.ps1"
@@ -861,6 +862,16 @@ def build_openclaw_runtime_bundle(
             channels=delivery_channels,
             output_path=delivery_config_path,
         )
+
+    from ai22b.talent_foundry.openclaw_bridge_setup import build_openclaw_bridge_setup_kit
+
+    bridge_setup_kit = build_openclaw_bridge_setup_kit(
+        output_dir=bridge_setup_dir,
+        providers=[provider_id],
+        channels=selected_channels,
+        bind_host=bind_host,
+        port=port,
+    )
 
     provider_envs = _provider_env_vars(provider_doctor)
     channel_envs = _channel_env_vars(channel_doctor)
@@ -933,6 +944,13 @@ def build_openclaw_runtime_bundle(
         "channel_connector_catalog": str(channel_connector_catalog_path),
         "channel_doctor": str(channel_doctor_path),
         "llm_service_health": str(llm_health_path),
+        "bridge_setup_kit": bridge_setup_kit["artifacts"]["manifest"],
+        "bridge_env_template": bridge_setup_kit["artifacts"]["env_template"],
+        "bridge_provider_plugin_plan": bridge_setup_kit["artifacts"]["provider_plugin_plan"],
+        "bridge_channel_plugin_plan": bridge_setup_kit["artifacts"]["channel_plugin_plan"],
+        "bridge_channel_access_config": bridge_setup_kit["artifacts"]["channel_access_config"],
+        "bridge_smoke_tests": bridge_setup_kit["artifacts"]["smoke_tests"],
+        "bridge_smoke_test_payloads_dir": bridge_setup_kit["artifacts"]["smoke_test_payloads_dir"],
     }
     if gateway_llm_doctor is not None:
         artifacts["gateway_llm_doctor"] = str(gateway_llm_doctor_path)
@@ -975,6 +993,12 @@ def build_openclaw_runtime_bundle(
                 "exists": existing_config_review["exists"],
                 "requested_action": existing_config_review["requested_action"],
                 "destructive_reset_performed": existing_config_review["destructive_reset_performed"],
+            },
+            "bridge_setup_kit": {
+                "status": bridge_setup_kit["status"],
+                "provider_summary": bridge_setup_kit["readiness"]["provider_summary"],
+                "channel_summary": bridge_setup_kit["readiness"]["channel_summary"],
+                "secret_values_stored": bridge_setup_kit["readiness"]["secret_values_stored"],
             },
             "secret_values_stored": False,
         },
@@ -1028,6 +1052,11 @@ def build_openclaw_runtime_bundle(
                 f"{_relative_or_name(Path(artifacts['openclaw_config_patch']), output_dir)} and "
                 f"{_relative_or_name(Path(artifacts['existing_openclaw_config_review']), output_dir)} before applying to OpenClaw."
             ),
+            "build_bridge_setup_kit": (
+                "ai22b-talent-foundry build-openclaw-bridge-setup-kit "
+                f"--runtime-bundle {manifest_path} "
+                f"--output-dir {bridge_setup_dir}"
+            ),
             "openclaw_native_setup": native_handoff["operator_commands"]["setup_workspace"],
             "openclaw_native_gateway": native_handoff["operator_commands"]["run_gateway"],
             "rebuild_with_channel_model": (
@@ -1045,6 +1074,7 @@ def build_openclaw_runtime_bundle(
         "notes": [
             "Review openclaw_config_patch.json before merging into an existing OpenClaw config.",
             "Review openclaw_native_handoff.json when you want OpenClaw itself to own provider auth, channel plugins, gateway sessions, and platform delivery.",
+            "Review openclaw_bridge_setup/openclaw_bridge_setup_kit.json when you want a single provider/channel setup checklist with smoke-test payloads.",
             "Existing OpenClaw config review follows Keep/Modify/Reset semantics and never overwrites the config.",
             "Set secrets in the local shell using openclaw.env.example.ps1; real values are never written.",
             "Channel access config starts deny-by-default and needs allowlisted senders or conversations before raw platform events are routed.",

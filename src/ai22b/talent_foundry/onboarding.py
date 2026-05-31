@@ -219,6 +219,12 @@ def run_agent_onboarding(
         "openclaw_support_matrix": str(openclaw_support_matrix_path),
         "openclaw_gateway_config": openclaw_runtime_bundle["artifacts"]["gateway_config"],
         "openclaw_channel_access_config": openclaw_runtime_bundle["artifacts"]["channel_access_config"],
+        "openclaw_bridge_setup_kit": openclaw_runtime_bundle["artifacts"]["bridge_setup_kit"],
+        "openclaw_bridge_env_template": openclaw_runtime_bundle["artifacts"]["bridge_env_template"],
+        "openclaw_bridge_provider_plugin_plan": openclaw_runtime_bundle["artifacts"]["bridge_provider_plugin_plan"],
+        "openclaw_bridge_channel_plugin_plan": openclaw_runtime_bundle["artifacts"]["bridge_channel_plugin_plan"],
+        "openclaw_bridge_channel_access_config": openclaw_runtime_bundle["artifacts"]["bridge_channel_access_config"],
+        "openclaw_bridge_smoke_tests": openclaw_runtime_bundle["artifacts"]["bridge_smoke_tests"],
         "onboarding_session": str(output_path),
     }
     if openclaw_runtime_bundle["artifacts"].get("gateway_llm_doctor"):

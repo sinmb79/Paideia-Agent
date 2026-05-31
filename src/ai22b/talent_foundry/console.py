@@ -647,6 +647,12 @@ def run_console_session(
         "openclaw_support_matrix": onboarding["artifacts"]["openclaw_support_matrix"],
         "openclaw_gateway_config": onboarding["artifacts"]["openclaw_gateway_config"],
         "openclaw_channel_access_config": onboarding["artifacts"]["openclaw_channel_access_config"],
+        "openclaw_bridge_setup_kit": onboarding["artifacts"]["openclaw_bridge_setup_kit"],
+        "openclaw_bridge_env_template": onboarding["artifacts"]["openclaw_bridge_env_template"],
+        "openclaw_bridge_provider_plugin_plan": onboarding["artifacts"]["openclaw_bridge_provider_plugin_plan"],
+        "openclaw_bridge_channel_plugin_plan": onboarding["artifacts"]["openclaw_bridge_channel_plugin_plan"],
+        "openclaw_bridge_channel_access_config": onboarding["artifacts"]["openclaw_bridge_channel_access_config"],
+        "openclaw_bridge_smoke_tests": onboarding["artifacts"]["openclaw_bridge_smoke_tests"],
     }
     for key, value in selection_doctor.get("artifacts", {}).items():
         artifacts[f"openclaw_selection_{key}"] = str(value)
