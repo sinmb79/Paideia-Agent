@@ -43,8 +43,10 @@ def _write_text_response(handler: BaseHTTPRequestHandler, status: int, text: str
     handler.wfile.write(body)
 
 
-def _webchat_html(agent_name: str) -> str:
+def _webchat_html(agent_name: str, *, default_llm_mode: str, default_llm_model: str | None) -> str:
     escaped_agent_name = escape(agent_name)
+    escaped_default_llm_mode = escape(default_llm_mode)
+    escaped_default_llm_model = escape(default_llm_model or "")
     return f"""<!doctype html>
 <html lang="ko">
 <head>
@@ -70,6 +72,9 @@ def _webchat_html(agent_name: str) -> str:
     .msg {{ border: 1px solid #2b3a44; border-radius: 8px; padding: 12px; line-height: 1.55; white-space: pre-wrap; }}
     .user {{ align-self: flex-end; background: #17324a; max-width: 78%; }}
     .assistant {{ align-self: flex-start; background: #182420; max-width: 86%; }}
+    #controls {{ display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 8px; align-items: center; }}
+    label {{ color: #b7c7d0; font-size: 12px; display: flex; flex-direction: column; gap: 4px; }}
+    select, input {{ border-radius: 8px; border: 1px solid #2b3a44; background: #0d1115; color: inherit; padding: 9px; }}
     form {{ display: flex; gap: 8px; }}
     textarea {{ flex: 1; resize: vertical; min-height: 48px; max-height: 160px; border-radius: 8px; border: 1px solid #2b3a44; background: #0d1115; color: inherit; padding: 10px; }}
     button {{ border-radius: 8px; border: 1px solid #567; background: #e7f2ff; color: #101418; padding: 0 18px; font-weight: 700; }}
@@ -87,6 +92,18 @@ def _webchat_html(agent_name: str) -> str:
       <summary>OpenClaw smoke plan</summary>
       <ol id="smoke"></ol>
     </details>
+    <section id="controls" aria-label="LLM runtime controls">
+      <label>Mode
+        <select id="llm-mode">
+          <option value="offline">offline</option>
+          <option value="auto">auto</option>
+          <option value="live">live</option>
+        </select>
+      </label>
+      <label>Model override
+        <input id="llm-model" value="{escaped_default_llm_model}" placeholder="provider/model" />
+      </label>
+    </section>
     <section id="chat" aria-live="polite"></section>
     <form id="form">
       <textarea id="message" placeholder="Type a message for the local Paideia agent"></textarea>
@@ -98,9 +115,12 @@ def _webchat_html(agent_name: str) -> str:
     const form = document.querySelector("#form");
     const textarea = document.querySelector("#message");
     const send = document.querySelector("#send");
+    const llmMode = document.querySelector("#llm-mode");
+    const llmModel = document.querySelector("#llm-model");
     const runtime = document.querySelector("#runtime");
     const smoke = document.querySelector("#smoke");
     const conversationId = "webchat-" + Math.random().toString(16).slice(2);
+    llmMode.value = "{escaped_default_llm_mode}";
     function addMessage(kind, text) {{
       const div = document.createElement("div");
       div.className = "msg " + kind;
@@ -125,10 +145,16 @@ def _webchat_html(agent_name: str) -> str:
         const chatRuntime = data.runtime_selection.chat;
         metric("Provider", llm.openclaw_provider_id || llm.service_id);
         metric("Model", llm.openclaw_model || llm.selected_model);
+        metric("Runtime path", data.live_smoke_plan.selection.live_runtime_path);
         metric("Chat surface", chatRuntime.surface_id);
+        metric("Chat channel", data.webchat_controls.selected_chat_channel);
         metric("Network", llm.network_access);
         metric("Plan status", data.live_smoke_plan.status);
         metric("Secrets", data.security.secret_values_stored ? "stored" : "not stored");
+        llmMode.value = data.webchat_controls.default_llm_mode || llmMode.value;
+        if (!llmModel.value && data.webchat_controls.default_llm_model_override) {{
+          llmModel.value = data.webchat_controls.default_llm_model_override;
+        }}
         for (const step of data.live_smoke_plan.operator_sequence) {{
           const li = document.createElement("li");
           li.textContent = step;
@@ -149,7 +175,13 @@ def _webchat_html(agent_name: str) -> str:
         const response = await fetch("/api/message", {{
           method: "POST",
           headers: {{ "Content-Type": "application/json" }},
-          body: JSON.stringify({{ message: text, conversation_id: conversationId, sender_id: "webchat-user" }})
+          body: JSON.stringify({{
+            message: text,
+            conversation_id: conversationId,
+            sender_id: "webchat-user",
+            llm_mode: llmMode.value,
+            llm_model: llmModel.value.trim()
+          }})
         }});
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "request failed");
@@ -168,7 +200,13 @@ def _webchat_html(agent_name: str) -> str:
 """
 
 
-def _runtime_payload(employment_record_path: Path, employment: dict[str, Any]) -> dict[str, Any]:
+def _runtime_payload(
+    employment_record_path: Path,
+    employment: dict[str, Any],
+    *,
+    llm_mode: str,
+    llm_model: str | None,
+) -> dict[str, Any]:
     runtime_selection = build_runtime_selection_snapshot(employment, channels=["webchat"])
     live_smoke_plan = _smoke_plan_payload(employment_record_path)
     return {
@@ -181,6 +219,15 @@ def _runtime_payload(employment_record_path: Path, employment: dict[str, Any]) -
             "operator_sequence": live_smoke_plan["operator_sequence"],
             "commands": live_smoke_plan["commands"],
             "policy": live_smoke_plan["policy"],
+            "selection": live_smoke_plan["selection"],
+        },
+        "webchat_controls": {
+            "available_llm_modes": ["offline", "auto", "live"],
+            "default_llm_mode": llm_mode,
+            "default_llm_model_override": llm_model,
+            "selected_chat_channel": "webchat",
+            "message_endpoint": "/api/message",
+            "live_requires_operator_opt_in": True,
         },
         "security": {
             "secret_values_stored": False,
@@ -249,7 +296,16 @@ def make_openclaw_webchat_server(
                 )
                 return
             if path == "/api/runtime":
-                _write_json_response(self, 200, _runtime_payload(employment_record_path, employment))
+                _write_json_response(
+                    self,
+                    200,
+                    _runtime_payload(
+                        employment_record_path,
+                        employment,
+                        llm_mode=llm_mode,
+                        llm_model=llm_model,
+                    ),
+                )
                 return
             if path == "/api/smoke-plan":
                 _write_json_response(self, 200, _smoke_plan_payload(employment_record_path))
@@ -258,7 +314,11 @@ def make_openclaw_webchat_server(
                 _write_text_response(
                     self,
                     200,
-                    _webchat_html(employment["agent"]["name"]),
+                    _webchat_html(
+                        employment["agent"]["name"],
+                        default_llm_mode=llm_mode,
+                        default_llm_model=llm_model,
+                    ),
                     "text/html; charset=utf-8",
                 )
                 return
@@ -288,6 +348,15 @@ def make_openclaw_webchat_server(
             if not message:
                 _write_json_response(self, 400, {"error": "message_required"})
                 return
+            requested_llm_mode = str(payload.get("llm_mode") or llm_mode).strip().casefold()
+            if requested_llm_mode not in {"offline", "auto", "live"}:
+                _write_json_response(
+                    self,
+                    400,
+                    {"error": "invalid_llm_mode", "allowed": ["offline", "auto", "live"]},
+                )
+                return
+            requested_llm_model = str(payload.get("llm_model") or llm_model or "").strip() or None
             timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
             run_path = output_dir / f"webchat_{timestamp}.json"
             try:
@@ -298,8 +367,8 @@ def make_openclaw_webchat_server(
                     sender_id=str(payload.get("sender_id") or "webchat-user"),
                     conversation_id=str(payload.get("conversation_id") or "webchat"),
                     output_path=run_path,
-                    llm_mode=llm_mode,
-                    llm_model=llm_model,
+                    llm_mode=requested_llm_mode,
+                    llm_model=requested_llm_model,
                     learn_from_chat=learn_from_chat,
                     metadata={"external_platform_event": False, "webchat_request": True},
                 )
@@ -315,8 +384,14 @@ def make_openclaw_webchat_server(
                     "reply_text": run["outbound"]["text"],
                     "channel_run": run,
                     "channel_run_path": str(run_path),
+                    "runtime_request": {
+                        "llm_mode": requested_llm_mode,
+                        "llm_model_override": requested_llm_model,
+                        "chat_channel": "webchat",
+                    },
                     "security": {
                         "external_send_performed_by_core": False,
+                        "live_llm_network_requested": requested_llm_mode in {"auto", "live"},
                         "private_training_files_sent_to_channel": False,
                     },
                 },

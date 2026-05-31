@@ -1045,7 +1045,7 @@ Start a local browser chat surface without any external channel token:
 powershell -ExecutionPolicy Bypass -File .\\start_openclaw_webchat.ps1 -Port 8722
 ```
 
-Open the printed `http://127.0.0.1:8722/` URL. The WebChat page exposes `/api/runtime` and `/api/smoke-plan` so the selected provider, model, channel route, and live smoke sequence are visible without storing provider keys, bot tokens, OAuth refresh tokens, or QR session material.
+Open the printed `http://127.0.0.1:8722/` URL. The WebChat page exposes `/api/runtime` and `/api/smoke-plan` so the selected provider, model, channel route, live runtime path, and live smoke sequence are visible without storing provider keys, bot tokens, OAuth refresh tokens, or QR session material. The browser chat can send each message in `offline`, `auto`, or `live` mode and can pass an optional OpenClaw-style `provider/model` override.
 
 ## Onboarding Choices
 

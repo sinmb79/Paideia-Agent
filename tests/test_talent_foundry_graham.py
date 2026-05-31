@@ -2390,6 +2390,8 @@ class GrahamTalentFoundryTests(unittest.TestCase):
                         "message": "Can you answer through local WebChat?",
                         "conversation_id": "webchat-test",
                         "sender_id": "boss-browser",
+                        "llm_mode": "offline",
+                        "llm_model": "openrouter/meta-llama/llama-3.1-8b",
                     }
                 ).encode("utf-8")
                 request = Request(
@@ -2413,16 +2415,25 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertEqual(runtime["runtime_selection"]["llm"]["openclaw_provider_id"], "openrouter")
         self.assertEqual(runtime["runtime_selection"]["llm"]["openclaw_model"], "openrouter/meta-llama/llama-3.1-8b")
         self.assertEqual(runtime["runtime_selection"]["chat"]["openclaw_channels"][0]["channel_id"], "webchat")
+        self.assertEqual(runtime["webchat_controls"]["available_llm_modes"], ["offline", "auto", "live"])
+        self.assertEqual(runtime["webchat_controls"]["default_llm_mode"], "offline")
+        self.assertEqual(runtime["webchat_controls"]["selected_chat_channel"], "webchat")
+        self.assertEqual(runtime["live_smoke_plan"]["selection"]["live_runtime_path"], "openclaw_gateway_http")
         self.assertFalse(runtime["security"]["secret_values_stored"])
         self.assertFalse(runtime["security"]["external_network_call_performed"])
         self.assertIn("gateway_live_probe", runtime["live_smoke_plan"]["operator_sequence"])
         self.assertEqual(smoke_plan["schema"], "ai22b-openclaw-live-smoke-plan/v1")
         self.assertIn("live_channel_message_smoke", smoke_plan["operator_sequence"])
         self.assertIn("OpenClaw smoke plan", html)
+        self.assertIn("llm-mode", html)
+        self.assertIn("Runtime path", html)
         self.assertEqual(webchat["schema"], "ai22b-openclaw-webchat-response/v1")
         self.assertEqual(webchat["status"], "reply_ready")
         self.assertEqual(webchat["channel_run"]["outbound"]["channel_id"], "webchat")
+        self.assertEqual(webchat["runtime_request"]["llm_mode"], "offline")
+        self.assertEqual(webchat["runtime_request"]["llm_model_override"], "openrouter/meta-llama/llama-3.1-8b")
         self.assertFalse(webchat["security"]["external_send_performed_by_core"])
+        self.assertFalse(webchat["security"]["live_llm_network_requested"])
         self.assertTrue(channel_run_exists)
         self.assertGreater(len(webchat["reply_text"]), 5)
 
