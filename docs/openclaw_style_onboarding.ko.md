@@ -50,6 +50,9 @@ ai22b-talent-foundry onboard --answers examples\graham_junior_onboarding.answers
 - `paideia_onboarding_config.json`: OpenClaw식 설정 요약
 - `agent_id_card_payload.json`: 외부 등록 전 검토할 Agent ID Card payload
 - `simulation_rollouts.json`: 병렬 episode rollout 계획
+- `simulation_rollout_execution.json`: rollout 에피소드 실행 결과와 Reasoning Ledger 승격/격리 결과
+- `llm_service_health.json`: 선택한 LLM 서비스의 키/모델/로컬 서버 준비 상태 점검 결과
+- `owner_self_extension_manifest.json`: owner self-extension 선택 시 로컬 비공개 자료의 해시/상대경로 manifest
 - `onboarding/onboarding_session.json`: 실제 육성, 설치, 고용, 첫 목표 사이클 기록
 
 Agent ID Card payload만 별도로 만들 수도 있습니다.

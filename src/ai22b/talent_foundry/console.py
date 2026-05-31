@@ -21,7 +21,8 @@ from ai22b.talent_foundry.registry import (
     run_hired_projection_swarm_cycle,
     run_hired_team_cycle,
 )
-from ai22b.talent_foundry.simulation_rollouts import build_simulation_rollouts
+from ai22b.talent_foundry.self_extension import build_owner_self_extension_manifest
+from ai22b.talent_foundry.simulation_rollouts import build_simulation_rollouts, run_simulation_rollouts
 
 
 CONSOLE_SESSION_SCHEMA = "ai-talent-guided-console-session/v1"
@@ -603,8 +604,47 @@ def run_console_session(
         "employment_record": onboarding["artifacts"]["employment_record"],
         "employment_goal": onboarding["artifacts"]["employment_goal"],
         "first_goal_cycle": onboarding["artifacts"]["first_goal_cycle"],
+        "llm_service_health": onboarding["artifacts"]["llm_service_health"],
     }
     status = onboarding["status"]
+    post_hire_extensions["llm_service_health"] = {
+        "schema": onboarding["llm_service_health"]["schema"],
+        "service_id": onboarding["llm_service_health"]["service_id"],
+        "status": onboarding["llm_service_health"]["status"],
+        "network_probe_performed": onboarding["llm_service_health"]["network_probe_performed"],
+        "secret_values_stored": onboarding["llm_service_health"]["secret_values_stored"],
+    }
+    if normalized.get("talent_source") == "owner_self_extension":
+        private_dir = normalized.get("private_curriculum_dir")
+        if private_dir and Path(private_dir).expanduser().exists():
+            owner_manifest_path = output_dir / "owner_self_extension_manifest.json"
+            owner_manifest = build_owner_self_extension_manifest(
+                Path(private_dir),
+                output_path=owner_manifest_path,
+            )
+            artifacts["owner_self_extension_manifest"] = str(owner_manifest_path)
+            post_hire_extensions["owner_self_extension"] = {
+                "schema": owner_manifest["schema"],
+                "status": "local_private_manifest_created",
+                "file_count": owner_manifest["scan"]["file_count"],
+                "public_release_safe_by_default": owner_manifest["policy"]["public_release_safe_by_default"],
+                "absolute_path_stored": owner_manifest["source"]["absolute_path_stored"],
+            }
+        else:
+            owner_todo_path = output_dir / "owner_self_extension.todo.json"
+            owner_todo = {
+                "schema": "ai22b-owner-self-extension-todo/v1",
+                "status": "waiting_for_private_source_dir",
+                "expected_input": "Set private_curriculum_dir to a local folder containing owner-approved files.",
+                "policy": {
+                    "local_only": True,
+                    "public_release_safe": True,
+                    "private_data_upload": "forbidden_without_explicit_owner_approval",
+                },
+            }
+            _write_json(owner_todo_path, owner_todo)
+            artifacts["owner_self_extension_todo"] = str(owner_todo_path)
+            post_hire_extensions["owner_self_extension"] = owner_todo
     if normalized.get("agent_id_card_mode") != "skip":
         agent_id_card_path = output_dir / "agent_id_card_payload.json"
         payload = build_agent_id_card_payload(
@@ -628,11 +668,23 @@ def run_console_session(
             or f"{normalized['talent_name']} first simulation rollout",
             output_path=simulation_path,
         )
+        simulation_execution_path = output_dir / "simulation_rollout_execution.json"
+        simulation_execution = run_simulation_rollouts(
+            Path(onboarding["artifacts"]["employment_record"]),
+            rollout_path=simulation_path,
+            workspace_dir=output_dir / "simulation_rollout_workspace",
+            output_path=simulation_execution_path,
+            reviewed_by=normalized["owner"],
+        )
         artifacts["simulation_rollouts"] = str(simulation_path)
+        artifacts["simulation_rollout_execution"] = str(simulation_execution_path)
         post_hire_extensions["simulation_rollouts"] = {
             "schema": simulation["schema"],
+            "execution_schema": simulation_execution["schema"],
             "episode_count": simulation["summary"]["episode_count"],
             "promotion_candidate_count": simulation["summary"]["promotion_candidate_count"],
+            "promoted_count": simulation_execution["summary"]["promoted_count"],
+            "quarantined_count": simulation_execution["summary"]["quarantined_count"],
             "not_separate_consciousnesses": simulation["control_model"]["not_separate_consciousnesses"],
         }
     if normalized.get("post_hire_mode") == "projection_swarm":

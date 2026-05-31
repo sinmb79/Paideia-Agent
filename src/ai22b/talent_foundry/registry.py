@@ -245,6 +245,8 @@ def _route_active_memory_for_employment(
 
 def _run_source(event: dict[str, Any]) -> str:
     schema = event.get("schema")
+    if schema == "ai-talent-simulation-episode-run/v1":
+        return "simulation_rollout"
     if schema == "ai-talent-workspace-agent-run/v1":
         return "workspace_agent_run"
     if schema == "ai-talent-hired-agent-job-run/v1":

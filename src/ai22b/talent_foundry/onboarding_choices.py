@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 from copy import deepcopy
+from pathlib import Path
 from typing import Any
 
 
@@ -173,6 +175,18 @@ EXTERNAL_API_ENGINES = {
     "openrouter_api",
 }
 LOCAL_HTTP_ENGINES = {"ollama_local_http", "lm_studio_local_http"}
+LLM_HEALTH_SCHEMA = "ai22b-paideia-llm-service-health/v1"
+SERVICE_SECRET_ENV_VARS = {
+    "openai_chatgpt_codex": ["OPENAI_API_KEY"],
+    "anthropic_claude_api": ["ANTHROPIC_API_KEY"],
+    "google_gemini_api": ["GEMINI_API_KEY"],
+    "mistral_api": ["MISTRAL_API_KEY"],
+    "openrouter_api": ["OPENROUTER_API_KEY"],
+}
+LOCAL_HTTP_DEFAULT_URLS = {
+    "ollama_local": "http://localhost:11434",
+    "lm_studio_local": "http://localhost:1234/v1",
+}
 
 
 def _catalog_by_id(catalog: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
@@ -225,6 +239,87 @@ def resolve_chat_surface(chat_surface: str | None = None) -> dict[str, Any]:
     if requested not in by_id:
         raise ValueError(f"Unsupported chat surface: {requested}")
     return deepcopy(by_id[requested])
+
+
+def build_llm_service_health(llm_service: dict[str, Any]) -> dict[str, Any]:
+    service_id = str(llm_service.get("service_id") or llm_service.get("id") or "")
+    engine = str(llm_service.get("engine") or "")
+    selected_model = llm_service.get("selected_model")
+    selected_model_path = llm_service.get("selected_model_path")
+    checks: list[dict[str, Any]] = []
+
+    for env_var in SERVICE_SECRET_ENV_VARS.get(service_id, []):
+        present = bool(os.environ.get(env_var))
+        checks.append(
+            {
+                "id": f"env:{env_var}",
+                "kind": "environment_secret",
+                "passed": present,
+                "secret_value_stored": False,
+                "message": "configured" if present else f"{env_var} is not set in this shell.",
+            }
+        )
+
+    if engine in LOCAL_HTTP_ENGINES:
+        checks.append(
+            {
+                "id": "local_model_name",
+                "kind": "local_model_selection",
+                "passed": bool(selected_model),
+                "message": "model selected" if selected_model else "local model name was not provided",
+            }
+        )
+        checks.append(
+            {
+                "id": "local_http_url",
+                "kind": "local_server_manifest",
+                "passed": bool(selected_model_path or LOCAL_HTTP_DEFAULT_URLS.get(service_id)),
+                "url": selected_model_path or LOCAL_HTTP_DEFAULT_URLS.get(service_id),
+                "network_probe_performed": False,
+                "message": "URL recorded for later local probe; no network call performed.",
+            }
+        )
+
+    if engine in {"bigram_local", "transformers_local", "llama_cpp_local"}:
+        path = Path(str(selected_model_path)).expanduser() if selected_model_path else None
+        checks.append(
+            {
+                "id": "local_model_path",
+                "kind": "local_filesystem",
+                "passed": bool(path and path.exists()),
+                "path_recorded": bool(selected_model_path),
+                "absolute_path_public_safe": False,
+                "message": "local model path exists" if path and path.exists() else "local model path is missing or not set",
+            }
+        )
+
+    if service_id == "openai_chatgpt_codex":
+        # Codex bridge can still prepare local context without a live API key.
+        live_secret = next((check for check in checks if check["id"] == "env:OPENAI_API_KEY"), None)
+        status = "ready_for_codex_bridge" if live_secret and not live_secret["passed"] else "ready_for_live_or_bridge"
+    elif engine in EXTERNAL_API_ENGINES:
+        status = "configured_no_network_probe" if checks and all(check["passed"] for check in checks) else "needs_secret"
+    elif engine in LOCAL_HTTP_ENGINES:
+        status = "configured_manifest_only" if all(check["passed"] for check in checks) else "needs_local_model_or_server"
+    elif engine in {"deterministic_local"}:
+        status = "ready_offline"
+    else:
+        status = "configured" if checks and all(check["passed"] for check in checks) else "needs_model_path"
+
+    return {
+        "schema": LLM_HEALTH_SCHEMA,
+        "service_id": service_id,
+        "engine": engine,
+        "selected_model": selected_model,
+        "selected_model_path_recorded": bool(selected_model_path),
+        "status": status,
+        "network_probe_performed": False,
+        "secret_values_stored": False,
+        "checks": checks,
+        "operator_note": (
+            "The selected LLM is an application engine only. Paideia identity and growth records stay in local artifacts."
+        ),
+    }
 
 
 def build_researcher_intake(

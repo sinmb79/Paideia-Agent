@@ -9,6 +9,7 @@ from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
 from ai22b.talent_foundry.onboarding_choices import (
     DEFAULT_CHAT_SURFACE_ID,
     DEFAULT_LLM_SERVICE_ID,
+    build_llm_service_health,
     build_researcher_intake,
     resolve_chat_surface,
     resolve_llm_service,
@@ -83,6 +84,9 @@ def run_agent_onboarding(
         llm_model_path=llm_model_path,
     )
     selected_chat_surface = resolve_chat_surface(chat_surface)
+    llm_health = build_llm_service_health(selected_llm_service)
+    llm_health_path = output_dir / "llm_service_health.json"
+    _write_json(llm_health_path, llm_health)
 
     blueprint = create_agent_training_blueprint(
         owner=owner,
@@ -163,6 +167,7 @@ def run_agent_onboarding(
         "first_learning_update": str(learning_update_path),
         "first_goal_cycle": str(first_goal_cycle_path),
         "researcher_intake": str(researcher_intake_path),
+        "llm_service_health": str(llm_health_path),
         "onboarding_session": str(output_path),
     }
     status = (
@@ -180,6 +185,7 @@ def run_agent_onboarding(
         "track": track,
         "selected_llm_service": selected_llm_service,
         "selected_chat_surface": selected_chat_surface,
+        "llm_service_health": llm_health,
         "researcher_mode": researcher_intake["researcher_contract"],
         "employment": {
             "relationship": "owner_raised_ai_talent_hired_as_local_agent",
@@ -198,6 +204,7 @@ def run_agent_onboarding(
         },
         "stages": [
             _stage("choose_llm_service", "completed"),
+            _stage("llm_service_health", llm_health["status"], llm_health_path),
             _stage("choose_chat_surface", "completed"),
             _stage("researcher_intake", "completed", researcher_intake_path),
             _stage("blueprint", "completed", Path(training_run["artifacts"]["training_blueprint"])),

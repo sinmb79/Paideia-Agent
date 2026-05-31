@@ -154,3 +154,28 @@ ai22b-talent-foundry onboard-agent `
 - [OpenClaw식 온보딩](docs/openclaw_style_onboarding.ko.md)
 - [Tesla 기판 벤치마킹](docs/tesla_board_benchmark.ko.md)
 - [기존 22B-AI 시스템 통합](docs/legacy_system_integration.ko.md)
+
+## 이번 보완 개발
+
+- 온보딩은 선택한 LLM에 대해 `llm_service_health.json`을 생성합니다. API 키가 필요한지, 로컬 모델 경로가 빠졌는지, Codex bridge만 준비된 상태인지 확인하며 비밀값은 저장하지 않습니다.
+- `ingest-owner-self-extension` 명령은 보스가 승인한 로컬 자료 폴더를 스캔해 상대경로, 해시, 파일 크기, 분류, 짧은 키워드만 저장합니다. 기본값은 본문을 저장하지 않으므로 공개 저장소에 올릴 데이터와 분리됩니다.
+- `run-simulation-rollouts` 명령은 채용된 에이전트가 여러 스트레스 상황을 시뮬레이션으로 연습한 뒤, 검증된 에피소드만 Reasoning Ledger에 승격합니다. 검토가 필요한 에피소드는 격리되어 보스의 리뷰를 기다립니다.
+
+```powershell
+ai22b-talent-foundry check-llm-service `
+  --llm-service ollama_local `
+  --llm-model "llama3.1:8b" `
+  --llm-model-path "http://localhost:11434" `
+  --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\llm_service_health.json"
+
+ai22b-talent-foundry ingest-owner-self-extension `
+  --source-dir "C:\path\to\owner-approved-materials" `
+  --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\owner_self_extension_manifest.json"
+
+ai22b-talent-foundry run-simulation-rollouts `
+  --employment-record "<employment_record.json>" `
+  --rollouts "<simulation_rollouts.json>" `
+  --workspace "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\simulation_rollout_workspace" `
+  --reviewed-by "보스" `
+  --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\simulation_rollout_execution.json"
+```

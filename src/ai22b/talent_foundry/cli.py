@@ -39,14 +39,18 @@ from ai22b.talent_foundry.memory_substrate import run_chat_turn_from_employment
 from ai22b.talent_foundry.onboarding import run_agent_onboarding
 from ai22b.talent_foundry.onboarding_choices import (
     DEFAULT_CHAT_SURFACE_ID,
+    build_llm_service_health,
     chat_surface_ids,
     llm_service_ids,
+    resolve_llm_service,
 )
 from ai22b.talent_foundry.program import create_talent_plan
 from ai22b.talent_foundry.program_manifest import build_public_program_manifest
 from ai22b.talent_foundry.records import build_career_records
 from ai22b.talent_foundry.role_models import list_role_models, summarize_role_model
 from ai22b.talent_foundry.skill_migration import migrate_external_agent_assets
+from ai22b.talent_foundry.self_extension import build_owner_self_extension_manifest
+from ai22b.talent_foundry.simulation_rollouts import run_simulation_rollouts
 from ai22b.talent_foundry.registry import (
     assign_hired_goal,
     assemble_hired_agent_team,
@@ -132,6 +136,25 @@ def _build_parser() -> argparse.ArgumentParser:
     onboard_wizard.add_argument("--answers", help="JSON file with console answers for non-interactive runs.")
     onboard_wizard.add_argument("--output-dir", default=str(DEFAULT_RUN_DIR / "console_onboarding"))
     onboard_wizard.add_argument("--output")
+
+    llm_health = subparsers.add_parser(
+        "check-llm-service",
+        help="Write a no-network health manifest for a selected LLM service.",
+    )
+    llm_health.add_argument("--llm-service", choices=llm_service_ids())
+    llm_health.add_argument("--llm-engine")
+    llm_health.add_argument("--llm-model")
+    llm_health.add_argument("--llm-model-path")
+    llm_health.add_argument("--output", required=True)
+
+    ingest_owner = subparsers.add_parser(
+        "ingest-owner-self-extension",
+        help="Create a local-only metadata manifest for owner self-extension materials.",
+    )
+    ingest_owner.add_argument("--source-dir", required=True)
+    ingest_owner.add_argument("--output", required=True)
+    ingest_owner.add_argument("--include-review-snippets", action="store_true")
+    ingest_owner.add_argument("--max-files", type=int, default=200)
 
     onboard = subparsers.add_parser(
         "onboard-agent",
@@ -368,6 +391,16 @@ def _build_parser() -> argparse.ArgumentParser:
     record_hired_learning.add_argument("--status", default="verified")
     record_hired_learning.add_argument("--output")
 
+    run_simulation_rollouts_command = subparsers.add_parser(
+        "run-simulation-rollouts",
+        help="Execute simulation rollout episodes and merge reviewed learning into a hired agent.",
+    )
+    run_simulation_rollouts_command.add_argument("--employment-record", required=True)
+    run_simulation_rollouts_command.add_argument("--rollouts", required=True)
+    run_simulation_rollouts_command.add_argument("--workspace", required=True)
+    run_simulation_rollouts_command.add_argument("--reviewed-by", default="보스")
+    run_simulation_rollouts_command.add_argument("--output", required=True)
+
     assign_hired_goal_command = subparsers.add_parser(
         "assign-hired-goal",
         help="Assign a long-running objective to a hired local AI talent.",
@@ -571,6 +604,30 @@ def main(argv: Sequence[str] | None = None) -> int:
             mode=mode,
         )
         print(str(output_path))
+        return 0
+
+    if args.command == "check-llm-service":
+        selected = resolve_llm_service(
+            llm_service=args.llm_service,
+            llm_engine=args.llm_engine,
+            llm_model=args.llm_model,
+            llm_model_path=args.llm_model_path,
+        )
+        health = build_llm_service_health(selected)
+        output_path = Path(args.output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(json.dumps(health, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(str(output_path))
+        return 0
+
+    if args.command == "ingest-owner-self-extension":
+        build_owner_self_extension_manifest(
+            Path(args.source_dir),
+            output_path=Path(args.output),
+            include_review_snippets=args.include_review_snippets,
+            max_files=args.max_files,
+        )
+        print(str(Path(args.output)))
         return 0
 
     if args.command == "onboard-agent":
@@ -974,6 +1031,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             else Path(args.employment_record).parent / "post_hire_learning_update.json"
         )
         print(str(output_path))
+        return 0
+
+    if args.command == "run-simulation-rollouts":
+        run_simulation_rollouts(
+            Path(args.employment_record),
+            rollout_path=Path(args.rollouts),
+            workspace_dir=Path(args.workspace),
+            output_path=Path(args.output),
+            reviewed_by=args.reviewed_by,
+        )
+        print(str(Path(args.output)))
         return 0
 
     if args.command == "assign-hired-goal":

@@ -284,6 +284,45 @@ Supported initial LLM services include:
 
 External API adapters are manifest-ready and require the user's own keys before live use. Local model adapters prefer localhost or local files. Supported initial chat surfaces include `codex-bridge-chat`, `cli-console`, `dataflow-job`, and a disabled `openclaw-style-gateway` adapter manifest.
 
+Every onboarding run now writes `llm_service_health.json`. This file records whether the chosen provider is ready for bridge mode, needs an API key, needs a local model path, or is only a manifest until the local server is running. It never stores secret values and does not perform a network probe.
+
+You can run the same check directly:
+
+```powershell
+ai22b-talent-foundry check-llm-service `
+  --llm-service ollama_local `
+  --llm-model "llama3.1:8b" `
+  --llm-model-path "http://localhost:11434" `
+  --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\llm_service_health.json"
+```
+
+## Owner Self-Extension
+
+For the "copy myself as an agent" path, Paideia can scan owner-approved local files and create a private manifest without ingesting full contents into the public repo:
+
+```powershell
+ai22b-talent-foundry ingest-owner-self-extension `
+  --source-dir "C:\path\to\owner-approved-materials" `
+  --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\owner_self_extension_manifest.json"
+```
+
+The default manifest stores relative paths, file sizes, hashes, extension/category counts, and short keyword samples. It avoids absolute source paths and full file bodies. Use `--include-review-snippets` only for a local review artifact that must never be committed publicly.
+
+## Simulation Rollout Execution
+
+Paideia's swarm idea is implemented as parent-controlled simulation rollouts. A hired agent can rehearse multiple stressful episodes, then merge only reviewed summaries and procedural cues back into the local Reasoning Ledger:
+
+```powershell
+ai22b-talent-foundry run-simulation-rollouts `
+  --employment-record "<employment_record.json>" `
+  --rollouts "<simulation_rollouts.json>" `
+  --workspace "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\simulation_rollout_workspace" `
+  --reviewed-by "Boss" `
+  --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\simulation_rollout_execution.json"
+```
+
+Promotion candidates receive verified quality labels and can update the Reasoning Ledger. Review-required episodes are quarantined until the owner or reviewer approves them.
+
 ## Hiring Dossier
 
 The hiring dossier is the resume-like record for a raised AI talent. It explains who the candidate is, what curriculum it completed, which exams and reports it passed, what its transcript says, which papers/projects were produced, what guardrails apply, and whether it is ready to be hired as a local agent.

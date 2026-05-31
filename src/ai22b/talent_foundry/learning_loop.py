@@ -69,6 +69,12 @@ def _summarize_event(source: str, event: dict[str, Any]) -> str:
         )
     if source == "chat_turn":
         return f"채팅 학습 경험: {event.get('lesson', event.get('message_summary', 'conversation_after_hire'))}"
+    if source == "simulation_rollout":
+        return (
+            "simulation rollout experience: "
+            f"{event.get('scenario_id')} practiced {event.get('expected_learning_signal')} "
+            f"under {event.get('stressors', [])}"
+        )
     return str(event)[:240]
 
 
@@ -104,6 +110,16 @@ def _skills_from_event(source: str, event: dict[str, Any]) -> list[str]:
         skills.append("natural_dialogue_style")
     if source == "workspace_agent_run" or "trace.jsonl" in text or "result_summary" in text:
         skills.append("workspace_artifact_trace")
+    if source == "simulation_rollout" or "simulation_rollout_after_hire" in text:
+        skills.append("simulation_stress_rehearsal")
+    if "source_conflict" in text or "evidence_reconciliation" in text:
+        skills.append("conflicting_evidence_reconciliation")
+    if "missing_context" in text or "clarifying_question_before_action" in text:
+        skills.append("clarifying_before_action")
+    if "social_repair" in text or "repair_before_explanation" in text:
+        skills.append("conversation_repair")
+    if "risk_boundary" in text or "safe_refusal_with_alternative" in text:
+        skills.append("risk_boundary_response")
     return list(dict.fromkeys(skills))
 
 

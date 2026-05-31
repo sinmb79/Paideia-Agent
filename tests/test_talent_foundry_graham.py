@@ -208,6 +208,10 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             config = json.loads(Path(session["artifacts"]["paideia_onboarding_config"]).read_text(encoding="utf-8"))
             identity_payload = json.loads(Path(session["artifacts"]["agent_id_card_payload"]).read_text(encoding="utf-8"))
             rollouts = json.loads(Path(session["artifacts"]["simulation_rollouts"]).read_text(encoding="utf-8"))
+            rollout_execution = json.loads(
+                Path(session["artifacts"]["simulation_rollout_execution"]).read_text(encoding="utf-8")
+            )
+            llm_health = json.loads(Path(session["artifacts"]["llm_service_health"]).read_text(encoding="utf-8"))
 
         self.assertEqual(session["wizard"]["schema"], "ai22b-paideia-openclaw-style-onboarding/v1")
         self.assertEqual(config["schema"], "ai22b-paideia-openclaw-style-config/v1")
@@ -217,6 +221,74 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertFalse(identity_payload["network_action_performed"])
         self.assertEqual(rollouts["schema"], "ai-talent-simulation-rollouts/v1")
         self.assertGreaterEqual(rollouts["summary"]["episode_count"], 4)
+        self.assertEqual(rollout_execution["schema"], "ai-talent-simulation-rollout-execution/v1")
+        self.assertGreaterEqual(rollout_execution["summary"]["promoted_count"], 3)
+        self.assertGreaterEqual(rollout_execution["summary"]["quarantined_count"], 1)
+        self.assertEqual(llm_health["schema"], "ai22b-paideia-llm-service-health/v1")
+        self.assertFalse(llm_health["network_probe_performed"])
+
+    def test_owner_self_extension_manifest_redacts_paths_and_content_by_default(self) -> None:
+        from ai22b.talent_foundry.self_extension import build_owner_self_extension_manifest
+
+        with tempfile.TemporaryDirectory() as tmp:
+            source_dir = Path(tmp) / "private_owner_materials"
+            source_dir.mkdir()
+            (source_dir / "preferences.md").write_text("보스 rule: keep work local and verify results.", encoding="utf-8")
+            (source_dir / "script.py").write_text("def helper():\n    return 'workflow'\n", encoding="utf-8")
+            output = Path(tmp) / "manifest.json"
+
+            manifest = build_owner_self_extension_manifest(source_dir, output_path=output)
+            rendered = json.dumps(manifest, ensure_ascii=False)
+
+        self.assertEqual(manifest["schema"], "ai22b-owner-self-extension-manifest/v1")
+        self.assertEqual(manifest["scan"]["file_count"], 2)
+        self.assertFalse(manifest["source"]["absolute_path_stored"])
+        self.assertNotIn(str(source_dir), rendered)
+        self.assertNotIn("keep work local", rendered)
+        self.assertIn("owner_preference", {signal for item in manifest["items"] for signal in item["learning_signals"]})
+
+    def test_cli_ingest_owner_self_extension_and_llm_health(self) -> None:
+        from ai22b.talent_foundry.cli import main as cli_main
+
+        with tempfile.TemporaryDirectory() as tmp:
+            source_dir = Path(tmp) / "owner"
+            source_dir.mkdir()
+            (source_dir / "note.md").write_text("workflow memory and project preference", encoding="utf-8")
+            owner_manifest = Path(tmp) / "owner_manifest.json"
+            health_path = Path(tmp) / "llm_health.json"
+
+            self.assertEqual(
+                cli_main(
+                    [
+                        "ingest-owner-self-extension",
+                        "--source-dir",
+                        str(source_dir),
+                        "--output",
+                        str(owner_manifest),
+                    ]
+                ),
+                0,
+            )
+            self.assertEqual(
+                cli_main(
+                    [
+                        "check-llm-service",
+                        "--llm-service",
+                        "bigram_local",
+                        "--llm-model-path",
+                        str(Path(tmp) / "missing_bigram.json"),
+                        "--output",
+                        str(health_path),
+                    ]
+                ),
+                0,
+            )
+            owner_data = json.loads(owner_manifest.read_text(encoding="utf-8"))
+            health = json.loads(health_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(owner_data["scan"]["file_count"], 1)
+        self.assertEqual(health["status"], "needs_model_path")
+        self.assertFalse(health["network_probe_performed"])
 
     def test_owner_self_extension_blueprint_uses_private_local_track_without_role_model(self) -> None:
         from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
