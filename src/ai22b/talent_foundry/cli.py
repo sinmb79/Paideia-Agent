@@ -70,6 +70,7 @@ from ai22b.talent_foundry.openclaw_native_handoff import (
     doctor_openclaw_native_handoff,
     prepare_openclaw_native_config,
 )
+from ai22b.talent_foundry.openclaw_onboarding_menu import build_openclaw_onboarding_menu
 from ai22b.talent_foundry.openclaw_parity import audit_openclaw_parity
 from ai22b.talent_foundry.openclaw_provider_auth import doctor_openclaw_provider_auth
 from ai22b.talent_foundry.openclaw_runtime_bundle import build_openclaw_runtime_bundle
@@ -229,6 +230,15 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Fetch current OpenClaw docs before calculating parity summary.",
     )
     support_matrix_command.add_argument("--docs-timeout", type=int, default=15)
+
+    onboarding_menu = subparsers.add_parser(
+        "build-openclaw-onboarding-menu",
+        help="Write a first-run OpenClaw provider/model and chat-channel selection menu for Paideia onboarding.",
+    )
+    onboarding_menu.add_argument("--output", required=True)
+    onboarding_menu.add_argument("--markdown-output")
+    onboarding_menu.add_argument("--refresh-docs", action="store_true")
+    onboarding_menu.add_argument("--docs-timeout", type=int, default=15)
 
     selection_doctor = subparsers.add_parser(
         "doctor-openclaw-selection",
@@ -1074,6 +1084,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "build-openclaw-support-matrix":
         build_openclaw_support_matrix(
             output_path=Path(args.output),
+            refresh_docs=args.refresh_docs,
+            docs_timeout=args.docs_timeout,
+        )
+        print(str(Path(args.output)))
+        return 0
+
+    if args.command == "build-openclaw-onboarding-menu":
+        build_openclaw_onboarding_menu(
+            output_path=Path(args.output),
+            markdown_output_path=Path(args.markdown_output) if args.markdown_output else None,
             refresh_docs=args.refresh_docs,
             docs_timeout=args.docs_timeout,
         )

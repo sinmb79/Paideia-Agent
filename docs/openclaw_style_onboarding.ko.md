@@ -50,7 +50,13 @@ Paideia는 OpenClaw처럼 `provider/model` 선택을 지원합니다. 예를 들
 
 ```powershell
 ai22b-talent-foundry list-openclaw-compat --output openclaw_compat.json
+
+ai22b-talent-foundry build-openclaw-onboarding-menu `
+  --output openclaw_onboarding_menu.json `
+  --markdown-output OPENCLAW_ONBOARDING_MENU.md
 ```
+
+터미널 온보딩은 추천 provider/channel만 먼저 보여주고, 전체 OpenClaw provider/channel 목록은 `OPENCLAW_ONBOARDING_MENU.md`에 저장합니다. 그래도 입력칸에는 `openrouter/meta-llama/llama-3.1-70b`, `qwen-oauth/qwen3-coder-plus`, `openclaw-channel-zalo-personal`처럼 OpenClaw식 selector를 직접 넣을 수 있습니다.
 
 현재 직접 호출 가능한 계열은 OpenAI/Codex, Anthropic Messages, Gemini generateContent, OpenAI-compatible provider(OpenRouter, Mistral, DeepSeek, Groq, GMI, NovitaAI, Hugging Face Inference, Kilo Gateway, xAI, Perplexity, Together, Fireworks, DeepInfra, Arcee, Chutes, Qianfan, StepFun, Volcengine/Doubao, Xiaomi MiMo, vLLM, SGLang 등), Ollama/Ollama Cloud, Synthetic, MiniMax, Inferrs입니다. Bedrock, Copilot, Gemini CLI, Vertex, ComfyUI, Qwen OAuth, 미디어 생성 provider 등 provider별 플러그인/OAuth/custom runner가 필요한 항목은 온보딩 manifest에는 표시하지만 live 호출은 provider plugin 설정 전까지 비활성으로 둡니다.
 

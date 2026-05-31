@@ -1689,6 +1689,7 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(manifest["schema"], "ai-talent-foundry-public-program-manifest/v1")
         self.assertIn("audit-release", {command["id"] for command in manifest["commands"]})
         self.assertIn("build-agent-program", {command["id"] for command in manifest["commands"]})
+        self.assertIn("build-openclaw-onboarding-menu", {command["id"] for command in manifest["commands"]})
         self.assertIn("build-paideia-agent-kit", {command["id"] for command in manifest["commands"]})
         self.assertIn("doctor-agent-program", {command["id"] for command in manifest["commands"]})
         self.assertIn("migrate-agent-assets", {command["id"] for command in manifest["commands"]})

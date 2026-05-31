@@ -251,6 +251,10 @@ ai22b-talent-foundry audit-openclaw-parity `
 ai22b-talent-foundry build-openclaw-support-matrix `
   --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_support_matrix.json"
 
+ai22b-talent-foundry build-openclaw-onboarding-menu `
+  --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_onboarding_menu.json" `
+  --markdown-output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\OPENCLAW_ONBOARDING_MENU.md"
+
 ai22b-talent-foundry doctor-openclaw-selection `
   --llm-service "openclaw-gateway/openrouter/meta-llama/llama-3.1-8b" `
   --llm-model-path "http://127.0.0.1:18789/v1" `
@@ -284,7 +288,7 @@ ai22b-talent-foundry doctor-openclaw-channel-pairing `
   --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\channel_pairing_doctor.json"
 ```
 
-`build-openclaw-support-matrix`는 설치자가 보는 한 장짜리 지원범위 표입니다. OpenClaw provider와 channel을 Paideia 직접 지원, OpenClaw Gateway 준비, 로컬 서버 준비, 플러그인/OAuth/bridge 필요 항목으로 나누고 Graham Junior quickstart, provider doctor, channel flow doctor, Gateway LLM doctor, parity audit 명령을 함께 기록합니다. 이제 모든 온보딩 실행은 `openclaw_support_matrix.json`을 자동으로 만들고, 사용자가 고른 provider/channel 지원 등급을 `onboarding_session.json` 안에 함께 저장합니다. `doctor-openclaw-selection`은 온보딩 전에 특정 provider/model과 채팅 채널 조합을 미리 확인하는 명령이며, 외부 네트워크 호출과 비밀값 저장을 하지 않습니다. `--bridge-setup-dir <dir>`을 붙이면 해당 선택 조합에 맞는 env 템플릿, provider plugin/OAuth 계획, channel plugin 계획, 기본 차단 접근제어, smoke-test payload까지 함께 생성합니다. guided console은 인재 육성 전에 `openclaw_selection_doctor.json`, `OPENCLAW_SELECTION_SUMMARY.md`, `openclaw_bridge_setup/` kit를 먼저 생성하고, 터미널에도 provider, LLM health, channel support level, bridge setup kit path, summary path를 짧게 출력합니다.
+`build-openclaw-support-matrix`는 설치자가 보는 한 장짜리 지원범위 표입니다. OpenClaw provider와 channel을 Paideia 직접 지원, OpenClaw Gateway 준비, 로컬 서버 준비, 플러그인/OAuth/bridge 필요 항목으로 나누고 Graham Junior quickstart, provider doctor, channel flow doctor, Gateway LLM doctor, parity audit 명령을 함께 기록합니다. `build-openclaw-onboarding-menu`는 이 전체 matrix를 첫 실행 선택 메뉴로 바꿉니다. 터미널에는 추천 선택지만 짧게 보여주고, `OPENCLAW_ONBOARDING_MENU.md`에는 모든 OpenClaw provider/channel을 남깁니다. 이제 모든 온보딩 실행은 `openclaw_support_matrix.json`, `openclaw_onboarding_menu.json`, markdown menu를 자동으로 만들고, 사용자가 고른 provider/channel 지원 등급을 `onboarding_session.json` 안에 함께 저장합니다. `doctor-openclaw-selection`은 온보딩 전에 특정 provider/model과 채팅 채널 조합을 미리 확인하는 명령이며, 외부 네트워크 호출과 비밀값 저장을 하지 않습니다. `--bridge-setup-dir <dir>`을 붙이면 해당 선택 조합에 맞는 env 템플릿, provider plugin/OAuth 계획, channel plugin 계획, 기본 차단 접근제어, smoke-test payload까지 함께 생성합니다. guided console은 인재 육성 전에 `openclaw_selection_doctor.json`, `OPENCLAW_SELECTION_SUMMARY.md`, `openclaw_bridge_setup/` kit를 먼저 생성하고, 터미널에도 provider, LLM health, channel support level, bridge setup kit path, summary path를 짧게 출력합니다.
 
 `audit-openclaw-parity`는 Paideia의 로컬 provider/channel catalog가 확인된 OpenClaw 공식 문서 snapshot을 빠짐없이 덮는지 검사합니다. `--refresh-docs`를 붙이면 현재 OpenClaw 공식 문서를 다시 가져와 drift를 계산하고, 새 provider/channel 문서 URL이 생겼는데 Paideia 매핑에 없으면 unknown doc slug로 보고해 조용히 누락되지 않게 합니다. provider doctor는 OpenClaw Provider directory의 `provider/model` 항목을 Paideia live adapter, 로컬 서버, OpenClaw 플러그인/OAuth/custom runner 필요 항목으로 나눕니다. API 키 값은 저장하지 않고 환경변수 이름과 준비 여부만 기록합니다.
 

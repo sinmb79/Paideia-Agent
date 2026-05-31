@@ -759,6 +759,7 @@ class GrahamTalentFoundryTests(unittest.TestCase):
 
     def test_openclaw_support_matrix_summarizes_onboarding_readiness(self) -> None:
         from ai22b.talent_foundry.cli import main as cli_main
+        from ai22b.talent_foundry.openclaw_onboarding_menu import build_openclaw_onboarding_menu
         from ai22b.talent_foundry.openclaw_support_matrix import build_openclaw_support_matrix
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -767,6 +768,26 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             cli_output = Path(tmp) / "openclaw_support_matrix_cli.json"
             cli_result = cli_main(["build-openclaw-support-matrix", "--output", str(cli_output)])
             cli_matrix = json.loads(cli_output.read_text(encoding="utf-8"))
+            menu_output = Path(tmp) / "openclaw_onboarding_menu.json"
+            menu_markdown = Path(tmp) / "OPENCLAW_ONBOARDING_MENU.md"
+            menu = build_openclaw_onboarding_menu(
+                output_path=menu_output,
+                markdown_output_path=menu_markdown,
+            )
+            cli_menu_output = Path(tmp) / "openclaw_onboarding_menu_cli.json"
+            cli_menu_markdown = Path(tmp) / "OPENCLAW_ONBOARDING_MENU_CLI.md"
+            cli_menu_result = cli_main(
+                [
+                    "build-openclaw-onboarding-menu",
+                    "--output",
+                    str(cli_menu_output),
+                    "--markdown-output",
+                    str(cli_menu_markdown),
+                ]
+            )
+            cli_menu = json.loads(cli_menu_output.read_text(encoding="utf-8"))
+            cli_menu_markdown_exists = cli_menu_markdown.exists()
+            menu_markdown_text = menu_markdown.read_text(encoding="utf-8")
 
         provider_by_id = {item["provider_id"]: item for item in matrix["provider_support"]}
         channel_by_id = {item["channel_id"]: item for item in matrix["channel_support"]}
@@ -791,6 +812,21 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertEqual(cli_result, 0)
         self.assertEqual(cli_matrix["schema"], "ai22b-openclaw-support-matrix/v1")
         self.assertEqual(cli_matrix["status"], "pass")
+        self.assertEqual(menu["schema"], "ai22b-openclaw-onboarding-menu/v1")
+        self.assertEqual(menu["status"], "pass")
+        self.assertEqual(menu["llm_selection"]["counts"]["total"], 69)
+        self.assertEqual(menu["chat_selection"]["counts"]["total"], 29)
+        self.assertTrue(menu["llm_selection"]["accepts_freeform_provider_model"])
+        self.assertTrue(menu["chat_selection"]["accepts_freeform_openclaw_channel"])
+        self.assertIn("qwen-oauth/qwen3-coder-plus", menu["llm_selection"]["provider_model_examples"])
+        self.assertIn("openclaw-channel-zalo-personal", menu["chat_selection"]["chat_surface_examples"])
+        self.assertIn("qwen-oauth", {item["provider_id"] for item in menu["llm_selection"]["full_provider_support"]})
+        self.assertIn("zalo-personal", {item["channel_id"] for item in menu["chat_selection"]["full_channel_support"]})
+        self.assertIn("Paideia OpenClaw Onboarding Menu", menu_markdown_text)
+        self.assertIn("qwen-oauth", menu_markdown_text)
+        self.assertEqual(cli_menu_result, 0)
+        self.assertEqual(cli_menu["schema"], "ai22b-openclaw-onboarding-menu/v1")
+        self.assertTrue(cli_menu_markdown_exists)
 
     def test_openclaw_selection_doctor_previews_provider_model_and_channel_path(self) -> None:
         from ai22b.talent_foundry.cli import main as cli_main
@@ -1760,11 +1796,19 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             health = json.loads(Path(session["artifacts"]["llm_service_health"]).read_text(encoding="utf-8"))
             import_manifest = json.loads(Path(session["artifacts"]["openclaw_import_manifest"]).read_text(encoding="utf-8"))
             redacted = Path(session["artifacts"]["openclaw_import_redacted_snapshot"]).read_text(encoding="utf-8")
+            menu = json.loads(Path(session["artifacts"]["openclaw_onboarding_menu"]).read_text(encoding="utf-8"))
+            menu_markdown = Path(session["artifacts"]["openclaw_onboarding_menu_markdown"]).read_text(encoding="utf-8")
 
         self.assertEqual(session["prefill"]["schema"], "ai22b-paideia-openclaw-config-prefill/v1")
         self.assertEqual(session["prefill"]["import_status"], "import_ready")
         self.assertEqual(session["answers"]["llm_service"], "arcee/trinity-large-thinking")
         self.assertEqual(session["answers"]["chat_surface"], "openclaw-channel-telegram")
+        self.assertEqual(session["openclaw_onboarding_menu"]["schema"], "ai22b-openclaw-onboarding-menu/v1")
+        self.assertEqual(session["openclaw_onboarding_menu"]["provider_count"], 69)
+        self.assertEqual(session["openclaw_onboarding_menu"]["channel_count"], 29)
+        self.assertIn("OPENCLAW_ONBOARDING_MENU.md", session["openclaw_onboarding_menu"]["markdown_path"])
+        self.assertEqual(menu["status"], "pass")
+        self.assertIn("openclaw-channel-telegram", menu_markdown)
         self.assertEqual(health["openclaw_provider_id"], "arcee")
         self.assertEqual(health["openclaw_model"], "arcee/trinity-large-thinking")
         self.assertEqual(import_manifest["detected"]["channel_ids"], ["telegram"])

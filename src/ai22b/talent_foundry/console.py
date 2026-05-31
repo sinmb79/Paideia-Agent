@@ -18,6 +18,7 @@ from ai22b.talent_foundry.openclaw_selection_doctor import (
     doctor_openclaw_selection,
     render_openclaw_selection_summary,
 )
+from ai22b.talent_foundry.openclaw_onboarding_menu import build_openclaw_onboarding_menu
 from ai22b.talent_foundry.role_models import list_role_models, summarize_role_model
 from ai22b.talent_foundry.registry import (
     assemble_hired_agent_team,
@@ -338,9 +339,39 @@ def _question_choices(question_id: str) -> list[dict[str, str]]:
             {"id": "custom_role_model", "label": "Custom sourced role-model template"},
         ]
     if question_id == "llm_service":
-        return [{"id": item["id"], "label": item.get("label", item["id"])} for item in LLM_SERVICE_CATALOG]
+        recommended = {
+            "openai_chatgpt_codex",
+            "openclaw_gateway_http",
+            "openrouter_api",
+            "anthropic_claude_api",
+            "google_gemini_api",
+            "ollama_local",
+            "lm_studio_local",
+            "deterministic_local",
+        }
+        return [
+            {"id": item["id"], "label": item.get("label", item["id"])}
+            for item in LLM_SERVICE_CATALOG
+            if item["id"] in recommended
+        ]
     if question_id == "chat_surface":
-        return [{"id": item["id"], "label": item.get("label", item["id"])} for item in CHAT_SURFACE_CATALOG]
+        recommended = {
+            "codex-bridge-chat",
+            "openclaw-channel-webchat",
+            "openclaw-channel-telegram",
+            "openclaw-channel-discord",
+            "openclaw-channel-slack",
+            "openclaw-channel-whatsapp",
+            "openclaw-channel-signal",
+            "openclaw-channel-imessage",
+            "openclaw-channel-matrix",
+            "cli-console",
+        }
+        return [
+            {"id": item["id"], "label": item.get("label", item["id"])}
+            for item in CHAT_SURFACE_CATALOG
+            if item["id"] in recommended
+        ]
     if question_id == "domain":
         return [{"id": domain, "label": domain} for domain in _domain_choices()]
     if question_id == "role_model_id":
@@ -435,6 +466,14 @@ def _format_choice_block(choices: list[dict[str, str]]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _manual_choice_hint(question_id: str) -> str:
+    if question_id == "llm_service":
+        return "  직접 입력도 가능합니다: openrouter/meta-llama/llama-3.1-70b, qwen-oauth/qwen3-coder-plus 등"
+    if question_id == "chat_surface":
+        return "  직접 입력도 가능합니다: openclaw-channel-telegram, openclaw-channel-zalo-personal 등"
+    return ""
+
+
 def _questions_for_mode(mode: str | None) -> list[dict[str, Any]]:
     if mode == "advanced":
         return questions_with_choices()
@@ -464,6 +503,9 @@ def collect_console_answers(
         step = question.get("step", "setup")
         print(f"\n[{step}] {question['label']}")
         choice_block = _format_choice_block(choices)
+        manual_hint = _manual_choice_hint(question["id"])
+        if manual_hint:
+            choice_block += manual_hint + "\n"
         raw = input_func(f"{choice_block}{question['prompt']}{suffix}: ")
         value = _choice_id_from_raw(raw, choices) if raw.strip() else str(default or "")
         answers[question["id"]] = value
@@ -515,6 +557,7 @@ def build_openclaw_style_wizard(
             "external_registration_performed": False,
         },
         "selection_doctor": artifacts.get("openclaw_selection_doctor"),
+        "onboarding_menu": artifacts.get("openclaw_onboarding_menu_markdown"),
     }
 
 
@@ -592,6 +635,12 @@ def run_console_session(
     answers_path = output_dir / "console_answers.json"
     normalized = _normalized_answers(answers)
     _write_json(answers_path, normalized)
+    openclaw_menu_path = output_dir / "openclaw_onboarding_menu.json"
+    openclaw_menu_markdown_path = output_dir / "OPENCLAW_ONBOARDING_MENU.md"
+    openclaw_menu = build_openclaw_onboarding_menu(
+        output_path=openclaw_menu_path,
+        markdown_output_path=openclaw_menu_markdown_path,
+    )
     selection_doctor_path = output_dir / "openclaw_selection_doctor.json"
     selection_bridge_setup_dir = output_dir / "openclaw_bridge_setup"
     selection_doctor = doctor_openclaw_selection(
@@ -631,6 +680,8 @@ def run_console_session(
     artifacts = {
         "console_session": str(output_path),
         "answers": str(answers_path),
+        "openclaw_onboarding_menu": str(openclaw_menu_path),
+        "openclaw_onboarding_menu_markdown": str(openclaw_menu_markdown_path),
         "openclaw_selection_doctor": str(selection_doctor_path),
         "openclaw_selection_summary": str(selection_summary_path),
         "onboarding_session": onboarding["artifacts"]["onboarding_session"],
@@ -853,6 +904,15 @@ def run_console_session(
         "questions": questions_with_choices(),
         "llm_service_catalog": LLM_SERVICE_CATALOG,
         "chat_surface_catalog": CHAT_SURFACE_CATALOG,
+        "openclaw_onboarding_menu": {
+            "schema": openclaw_menu["schema"],
+            "status": openclaw_menu["status"],
+            "provider_count": openclaw_menu["llm_selection"]["counts"]["total"],
+            "channel_count": openclaw_menu["chat_selection"]["counts"]["total"],
+            "recommended_llm_choice_count": len(openclaw_menu["llm_selection"]["recommended_choices"]),
+            "recommended_chat_choice_count": len(openclaw_menu["chat_selection"]["recommended_choices"]),
+            "markdown_path": str(openclaw_menu_markdown_path),
+        },
         "role_model_catalog": _role_model_summaries(),
         "prefill": prefill_metadata or {"source": "none"},
         "answers": normalized,
