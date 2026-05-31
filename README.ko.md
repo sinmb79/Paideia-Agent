@@ -141,6 +141,17 @@ ai22b-talent-foundry translate-openclaw-platform-event `
 
 gateway 서버를 `--access-config`와 함께 실행하면 `/openclaw/platform-event/telegram`, `/discord`, `/slack` 경로로 들어온 raw event도 처리합니다. 허용목록에 없는 sender/conversation은 403으로 차단됩니다.
 
+import나 runtime bundle 이후 실제 연결 준비를 한 번에 점검하려면 bridge setup kit를 생성합니다. 이 명령은 provider 환경변수 템플릿, OpenClaw provider plugin/OAuth 계획, channel bridge 계획, 기본 차단 접근제어, smoke test payload를 함께 만듭니다.
+
+```powershell
+ai22b-talent-foundry build-openclaw-bridge-setup-kit `
+  --import-manifest "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_import\paideia_openclaw_config_import.json" `
+  --provider qwen-oauth `
+  --channel webchat `
+  --channel telegram `
+  --output-dir "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_bridge_setup"
+```
+
 OpenClaw 전체 채널의 준비 상태는 connector catalog/doctor로 확인합니다.
 
 ```powershell
@@ -161,7 +172,7 @@ provider doctor는 OpenClaw Provider directory의 `provider/model` 항목을 Pai
 
 OpenClaw식 key resolution도 반영합니다. Paideia는 `OPENCLAW_LIVE_<PROVIDER>_KEY`, `<PROVIDER>_API_KEYS`, `<PROVIDER>_API_KEY`, 그리고 `ARCEEAI_API_KEY`, `VOLCANO_ENGINE_API_KEY`, `DASHSCOPE_API_KEY`, `XIAOMI_TOKEN_PLAN_API_KEY` 같은 provider별 환경변수를 확인합니다. 쉼표/세미콜론 key list가 있으면 첫 번째 non-empty key를 live smoke test에 사용합니다.
 
-Telegram, Discord, Slack, WebChat은 Paideia 직접 adapter가 있고, BlueBubbles는 신규 iMessage 경로용 macOS 서버 플러그인 요구사항으로 표시됩니다. 나머지 OpenClaw 채널은 normalized gateway envelope를 사용할 수 있지만 WhatsApp QR pairing, signal-cli, Matrix bot, Bot Framework, 지역 플랫폼 토큰처럼 raw platform bridge가 필요한 항목은 doctor가 별도 준비 단계로 표시합니다.
+Telegram, Discord, Slack, WebChat은 Paideia 직접 adapter가 있습니다. 현재 OpenClaw iMessage 지원은 `imessage`/`imsg` 경로가 기준이며, `bluebubbles`는 기존 설정을 옮기기 위한 legacy migration 대상으로만 표시합니다. 나머지 OpenClaw 채널은 normalized gateway envelope를 사용할 수 있지만 WhatsApp QR pairing, signal-cli, Matrix bot, Bot Framework, 지역 플랫폼 토큰처럼 raw platform bridge가 필요한 항목은 doctor가 별도 준비 단계로 표시합니다.
 
 반환된 outbound envelope는 기본 dry-run delivery adapter로 먼저 검토할 수 있습니다.
 

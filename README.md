@@ -352,6 +352,19 @@ The bundle writes:
 - `openclaw_gateway_config.json` and `openclaw_channel_access_config.json`: loopback gateway and deny-by-default channel access setup.
 - `openclaw_existing_config_review.json`: OpenClaw-style existing config detection with `keep`, `modify`, or `reset` semantics. `modify` writes a redacted merge preview; `reset` writes a plan only and never deletes or overwrites the config.
 
+If the owner wants the next step after import or runtime bundling, build the bridge setup kit. It turns selected providers and channels into a practical checklist: env template, provider plugin/OAuth plan, channel bridge plan, deny-by-default access config, and local smoke-test payloads.
+
+```powershell
+ai22b-talent-foundry build-openclaw-bridge-setup-kit `
+  --import-manifest "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_import\paideia_openclaw_config_import.json" `
+  --provider qwen-oauth `
+  --channel webchat `
+  --channel telegram `
+  --output-dir "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_bridge_setup"
+```
+
+This writes `openclaw_bridge_setup_kit.json`, `openclaw_bridge.env.example.ps1`, `openclaw_provider_plugin_plan.json`, `openclaw_channel_plugin_plan.json`, `openclaw_bridge_channel_access_config.json`, `openclaw_bridge_smoke_tests.json`, and `smoke_test_payloads/*.json`. It stores no provider keys, bot tokens, QR sessions, or private training files.
+
 OpenClaw-style channels can now be routed through a local Paideia gateway envelope. The core returns a sendable outbound envelope; actual platform plugins remain responsible for bot tokens, pairing, and final delivery.
 
 ```powershell
@@ -411,7 +424,7 @@ ai22b-talent-foundry doctor-openclaw-channel-connectors `
   --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\channel_connector_doctor.json"
 ```
 
-Telegram, Discord, Slack, and WebChat have direct Paideia adapters. BlueBubbles is represented as the recommended new iMessage path through its macOS server plugin, while legacy `imessage` remains a separate bridge requirement. All other OpenClaw channels remain selectable and can use the normalized gateway envelope today, while raw platform integration is marked with the required bridge/plugin setup such as WhatsApp QR pairing, signal-cli, Matrix bot credentials, Bot Framework, or regional platform tokens.
+Telegram, Discord, Slack, and WebChat have direct Paideia adapters. Current OpenClaw iMessage support runs through the bundled `imessage`/`imsg` path; `bluebubbles` is kept only as a migration target for older configs. All other OpenClaw channels remain selectable and can use the normalized gateway envelope today, while raw platform integration is marked with the required bridge/plugin setup such as WhatsApp QR pairing, signal-cli, Matrix bot credentials, Bot Framework, or regional platform tokens.
 
 To inspect or send the returned outbound envelope, use the dry-run-first delivery adapter:
 

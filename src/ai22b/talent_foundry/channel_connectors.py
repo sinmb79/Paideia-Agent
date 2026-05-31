@@ -15,11 +15,11 @@ OPENCLAW_CHANNEL_CONNECTOR_DOCTOR_SCHEMA = "ai22b-openclaw-channel-connector-doc
 
 CHANNEL_CONNECTOR_OVERRIDES: dict[str, dict[str, Any]] = {
     "bluebubbles": {
-        "connector_status": "bundled_plugin_required_macos_server",
-        "ingress": "normalized_gateway_after_bluebubbles_plugin",
-        "delivery": "bluebubbles_rest_api_plugin",
-        "required_env_vars": ["BLUEBUBBLES_SERVER_URL", "BLUEBUBBLES_PASSWORD"],
-        "setup": "Run the BlueBubbles macOS server, configure its REST credentials in an external plugin, and allowlist chats.",
+        "connector_status": "legacy_openclaw_config_migration_required",
+        "ingress": "migrate_to_imessage_imsg_then_normalized_gateway",
+        "delivery": "migrate_to_imessage_imsg",
+        "required_env_vars": [],
+        "setup": "Current OpenClaw removed BlueBubbles support. Migrate old channels.bluebubbles settings to channels.imessage, verify imsg on the Messages Mac, then use the imessage bridge.",
     },
     "discord": {
         "connector_status": "paideia_direct_ingress_delivery_ready",
@@ -85,11 +85,11 @@ CHANNEL_CONNECTOR_OVERRIDES: dict[str, dict[str, Any]] = {
         "setup": "Configure a Google Chat app or webhook and map spaces to allowlisted conversations.",
     },
     "imessage": {
-        "connector_status": "legacy_macos_bridge_required",
-        "ingress": "normalized_gateway_after_imsg_bridge",
-        "delivery": "imsg_bridge",
-        "required_env_vars": ["IMSG_BRIDGE_HOST"],
-        "setup": "Legacy path only: prefer BlueBubbles for new iMessage setups, or run imsg on a signed-in Mac and expose only allowlisted chats.",
+        "connector_status": "openclaw_bundled_imsg_bridge_required",
+        "ingress": "normalized_gateway_after_imsg_json_rpc_bridge",
+        "delivery": "imsg_json_rpc_bridge",
+        "required_env_vars": ["IMSG_CLI_PATH", "IMSG_REMOTE_HOST"],
+        "setup": "Install and verify imsg on the Mac where Messages.app is signed in, enable channels.imessage, run openclaw channels status --probe --channel imessage, then allowlist chats.",
     },
     "irc": {
         "connector_status": "local_bridge_required",

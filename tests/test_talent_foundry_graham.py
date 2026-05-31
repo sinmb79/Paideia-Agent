@@ -455,7 +455,8 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertEqual(catalog["schema"], "ai22b-openclaw-channel-connector-catalog/v1")
         self.assertEqual(manifest_ids, catalog_ids)
         self.assertEqual(catalog["summary"]["generic_normalized_gateway_ready_count"], len(manifest_ids))
-        self.assertEqual(by_id["bluebubbles"]["connector_status"], "bundled_plugin_required_macos_server")
+        self.assertEqual(by_id["bluebubbles"]["connector_status"], "legacy_openclaw_config_migration_required")
+        self.assertEqual(by_id["imessage"]["connector_status"], "openclaw_bundled_imsg_bridge_required")
         self.assertTrue(by_id["telegram"]["direct_raw_ingress_ready"])
         self.assertTrue(by_id["telegram"]["direct_delivery_ready"])
         self.assertEqual(by_id["whatsapp"]["connector_status"], "external_plugin_required_qr_pairing")
@@ -597,7 +598,11 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertEqual(config_patch["openclaw_json_patch"]["models"]["arcee"]["model"], "arcee/trinity-large-thinking")
         self.assertIn("bluebubbles", config_patch["openclaw_json_patch"]["channels"])
         self.assertIn("OPENCLAW_LIVE_ARCEE_KEY", env_template)
-        self.assertIn("BLUEBUBBLES_SERVER_URL", env_template)
+        self.assertNotIn("BLUEBUBBLES_SERVER_URL", env_template)
+        self.assertEqual(
+            next(item for item in channel_doctor["results"] if item["channel_id"] == "bluebubbles")["connector_status"],
+            "legacy_openclaw_config_migration_required",
+        )
         self.assertNotIn("test-arcee-key", env_template)
         self.assertIn("<redacted>", merge_preview)
         self.assertNotIn("do-not-store-this-key", merge_preview)
@@ -612,6 +617,80 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertEqual(reset_bundle["readiness"]["existing_openclaw_config"]["status"], "reset_plan_written")
         self.assertIn("destructive_reset_performed", reset_plan)
         self.assertNotIn("do-not-store-this-key", reset_plan)
+
+    def test_openclaw_bridge_setup_kit_exports_env_plans_and_smoke_tests(self) -> None:
+        from ai22b.talent_foundry.cli import main as cli_main
+        from ai22b.talent_foundry.openclaw_bridge_setup import build_openclaw_bridge_setup_kit
+        from ai22b.talent_foundry.openclaw_config_import import import_openclaw_config
+
+        with tempfile.TemporaryDirectory() as tmp:
+            config_path = Path(tmp) / ".openclaw" / "openclaw.json"
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "models": {"default": {"provider": "arcee", "model": "arcee/trinity-large-thinking"}},
+                        "channels": {
+                            "telegram": {"botToken": "do-not-store-telegram-token"},
+                            "whatsapp": {"sessionDir": "do-not-store-whatsapp-session"},
+                            "webchat": {"enabled": True},
+                        },
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            import_dir = Path(tmp) / "import"
+            imported = import_openclaw_config(config_path, output_dir=import_dir)
+            kit_dir = Path(tmp) / "bridge_kit"
+            kit = build_openclaw_bridge_setup_kit(
+                output_dir=kit_dir,
+                providers=["qwen-oauth"],
+                import_manifest_path=Path(imported["artifacts"]["manifest"]),
+                bind_host="127.0.0.1",
+                port=9888,
+            )
+
+            env_template = Path(kit["artifacts"]["env_template"]).read_text(encoding="utf-8")
+            provider_plan = json.loads(Path(kit["artifacts"]["provider_plugin_plan"]).read_text(encoding="utf-8"))
+            channel_plan = json.loads(Path(kit["artifacts"]["channel_plugin_plan"]).read_text(encoding="utf-8"))
+            smoke_tests = json.loads(Path(kit["artifacts"]["smoke_tests"]).read_text(encoding="utf-8"))
+            cli_dir = Path(tmp) / "bridge_kit_cli"
+            cli_result = cli_main(
+                [
+                    "build-openclaw-bridge-setup-kit",
+                    "--provider",
+                    "arcee",
+                    "--channel",
+                    "telegram",
+                    "--output-dir",
+                    str(cli_dir),
+                ]
+            )
+            cli_manifest_exists = (cli_dir / "openclaw_bridge_setup_kit.json").exists()
+
+        provider_by_id = {item["provider_id"]: item for item in provider_plan["providers"]}
+        channel_by_id = {item["channel_id"]: item for item in channel_plan["channels"]}
+
+        self.assertEqual(kit["schema"], "ai22b-openclaw-bridge-setup-kit/v1")
+        self.assertEqual(set(kit["selection"]["providers"]), {"qwen-oauth", "arcee"})
+        self.assertEqual(set(kit["selection"]["channels"]), {"telegram", "whatsapp", "webchat"})
+        self.assertIn("OPENCLAW_LIVE_ARCEE_KEY", env_template)
+        self.assertIn("TELEGRAM_BOT_TOKEN", env_template)
+        self.assertIn("WHATSAPP_SESSION_DIR", env_template)
+        self.assertNotIn("do-not-store-telegram-token", env_template)
+        self.assertNotIn("do-not-store-whatsapp-session", json.dumps(kit, ensure_ascii=False))
+        self.assertEqual(provider_by_id["qwen-oauth"]["adapter_path"], "openclaw_provider_plugin_or_oauth_required")
+        self.assertEqual(provider_by_id["arcee"]["adapter_path"], "paideia_live_adapter")
+        self.assertEqual(channel_by_id["telegram"]["direct_raw_ingress_ready"], True)
+        self.assertEqual(channel_by_id["whatsapp"]["connector_status"], "external_plugin_required_qr_pairing")
+        self.assertIn("telegram", smoke_tests["payloads"])
+        self.assertIn("telegram", smoke_tests["platform_events"])
+        self.assertIn("run-openclaw-channel-gateway-server", smoke_tests["commands"]["start_gateway"])
+        self.assertIn("translate-openclaw-platform-event", smoke_tests["commands"]["translate_supported_platform_event"])
+        self.assertEqual(cli_result, 0)
+        self.assertTrue(cli_manifest_exists)
 
     def test_import_openclaw_config_maps_provider_model_channels_and_redacts_secrets(self) -> None:
         from ai22b.talent_foundry.cli import main as cli_main

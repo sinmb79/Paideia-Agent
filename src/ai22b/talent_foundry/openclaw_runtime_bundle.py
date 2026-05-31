@@ -40,6 +40,8 @@ OPENCLAW_REFERENCE_URLS = [
     "https://docs.openclaw.ai/channels",
     "https://docs.openclaw.ai/channels/channel-routing",
     "https://docs.openclaw.ai/gateway/config-channels",
+    "https://docs.openclaw.ai/announcements/bluebubbles-imessage",
+    "https://docs.openclaw.ai/channels/bluebubbles",
 ]
 
 CONFIG_ACTIONS = {"keep", "modify", "reset"}

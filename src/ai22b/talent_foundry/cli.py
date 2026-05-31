@@ -61,6 +61,7 @@ from ai22b.talent_foundry.onboarding_choices import (
 )
 from ai22b.talent_foundry.openclaw_config_import import import_openclaw_config
 from ai22b.talent_foundry.openclaw_compat import openclaw_channel_manifest, openclaw_provider_manifest
+from ai22b.talent_foundry.openclaw_bridge_setup import build_openclaw_bridge_setup_kit
 from ai22b.talent_foundry.openclaw_runtime_bundle import build_openclaw_runtime_bundle
 from ai22b.talent_foundry.program import create_talent_plan
 from ai22b.talent_foundry.program_manifest import build_public_program_manifest
@@ -178,6 +179,18 @@ def _build_parser() -> argparse.ArgumentParser:
     build_runtime_bundle.add_argument("--existing-openclaw-config")
     build_runtime_bundle.add_argument("--config-action", choices=["keep", "modify", "reset"], default="modify")
     build_runtime_bundle.add_argument("--output-dir", required=True)
+
+    build_bridge_setup_kit = subparsers.add_parser(
+        "build-openclaw-bridge-setup-kit",
+        help="Build provider/channel setup artifacts, env templates, and smoke tests for OpenClaw-compatible bridges.",
+    )
+    build_bridge_setup_kit.add_argument("--provider", action="append", default=[])
+    build_bridge_setup_kit.add_argument("--channel", action="append", default=[])
+    build_bridge_setup_kit.add_argument("--import-manifest")
+    build_bridge_setup_kit.add_argument("--runtime-bundle")
+    build_bridge_setup_kit.add_argument("--bind-host", default="127.0.0.1")
+    build_bridge_setup_kit.add_argument("--port", type=int, default=8722)
+    build_bridge_setup_kit.add_argument("--output-dir", required=True)
 
     build_gateway_config = subparsers.add_parser(
         "build-openclaw-gateway-config",
@@ -798,6 +811,19 @@ def main(argv: Sequence[str] | None = None) -> int:
             config_action=args.config_action,
         )
         print(str(Path(bundle["artifacts"]["manifest"])))
+        return 0
+
+    if args.command == "build-openclaw-bridge-setup-kit":
+        kit = build_openclaw_bridge_setup_kit(
+            output_dir=Path(args.output_dir),
+            providers=args.provider or None,
+            channels=args.channel or None,
+            import_manifest_path=Path(args.import_manifest) if args.import_manifest else None,
+            runtime_bundle_path=Path(args.runtime_bundle) if args.runtime_bundle else None,
+            bind_host=args.bind_host,
+            port=args.port,
+        )
+        print(str(Path(kit["artifacts"]["manifest"])))
         return 0
 
     if args.command == "build-openclaw-gateway-config":

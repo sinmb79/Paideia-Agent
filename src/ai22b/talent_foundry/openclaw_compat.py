@@ -516,7 +516,7 @@ def openclaw_secret_env_candidates(provider_id: str, explicit: list[str] | None 
 
 
 OPENCLAW_CHANNELS: list[dict[str, Any]] = [
-    {"channel_id": "bluebubbles", "label": "BlueBubbles", "transport": "BlueBubbles macOS server REST API"},
+    {"channel_id": "bluebubbles", "label": "BlueBubbles migration", "transport": "legacy config migration to imessage/imsg"},
     {"channel_id": "discord", "label": "Discord", "transport": "Discord Bot API + Gateway"},
     {"channel_id": "slack", "label": "Slack", "transport": "Bolt SDK"},
     {"channel_id": "telegram", "label": "Telegram", "transport": "Bot API via grammY"},
@@ -524,7 +524,7 @@ OPENCLAW_CHANNELS: list[dict[str, Any]] = [
     {"channel_id": "signal", "label": "Signal", "transport": "signal-cli"},
     {"channel_id": "microsoft-teams", "label": "Microsoft Teams", "transport": "Bot Framework"},
     {"channel_id": "google-chat", "label": "Google Chat", "transport": "HTTP webhook"},
-    {"channel_id": "imessage", "label": "iMessage legacy", "transport": "legacy macOS imsg bridge"},
+    {"channel_id": "imessage", "label": "iMessage", "transport": "bundled imsg JSON-RPC bridge"},
     {"channel_id": "irc", "label": "IRC", "transport": "IRC server"},
     {"channel_id": "line", "label": "LINE", "transport": "LINE Messaging API"},
     {"channel_id": "matrix", "label": "Matrix", "transport": "Matrix protocol"},
@@ -595,7 +595,12 @@ def openclaw_channel_manifest() -> dict[str, Any]:
         "gateway_model": "openclaw_gateway_channel",
         "channels": deepcopy(OPENCLAW_CHANNELS),
         "default_policy": "disabled_until_explicit_gateway_configuration",
-        "source_urls": ["https://docs.openclaw.ai/channels"],
+        "source_urls": [
+            "https://docs.openclaw.ai/channels",
+            "https://docs.openclaw.ai/gateway/config-channels",
+            "https://docs.openclaw.ai/announcements/bluebubbles-imessage",
+            "https://docs.openclaw.ai/channels/bluebubbles",
+        ],
     }
 
 
