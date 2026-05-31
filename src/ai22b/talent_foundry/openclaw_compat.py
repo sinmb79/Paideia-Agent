@@ -6,6 +6,7 @@ from typing import Any
 
 OPENCLAW_PROVIDER_CATALOG_SCHEMA = "ai22b-openclaw-provider-catalog/v1"
 OPENCLAW_CHANNEL_CATALOG_SCHEMA = "ai22b-openclaw-channel-catalog/v1"
+OPENCLAW_CATALOG_SOURCE_VERSION = "official_openclaw_docs_checked_2026-05-31"
 
 
 OPENCLAW_MODEL_PROVIDERS: list[dict[str, Any]] = [
@@ -76,7 +77,7 @@ OPENCLAW_MODEL_PROVIDERS: list[dict[str, Any]] = [
         "status": "ready_when_local_server_running",
     },
     {
-        "provider_id": "lm-studio",
+        "provider_id": "lmstudio",
         "service_id": "lm_studio_local",
         "label": "LM Studio local models",
         "engine": "lm_studio_local_http",
@@ -85,6 +86,50 @@ OPENCLAW_MODEL_PROVIDERS: list[dict[str, Any]] = [
         "secret_env_vars": [],
         "aliases": ["lm-studio", "lm_studio", "lmstudio"],
         "status": "ready_when_local_server_running",
+    },
+    {
+        "provider_id": "gmi",
+        "service_id": "gmi_api",
+        "label": "GMI Cloud",
+        "engine": "openclaw_openai_compatible",
+        "api_protocol": "openai_chat_completions",
+        "base_url": "https://api.gmi-serving.com/v1",
+        "secret_env_vars": ["GMI_API_KEY"],
+        "aliases": ["gmi", "gmi-cloud", "gmicloud"],
+        "status": "ready_when_key_configured",
+    },
+    {
+        "provider_id": "novita",
+        "service_id": "novita_api",
+        "label": "NovitaAI",
+        "engine": "openclaw_openai_compatible",
+        "api_protocol": "openai_chat_completions",
+        "base_url": "https://api.novita.ai/openai/v1",
+        "secret_env_vars": ["NOVITA_API_KEY"],
+        "aliases": ["novita", "novita-ai", "novitaai"],
+        "status": "ready_when_key_configured",
+    },
+    {
+        "provider_id": "huggingface",
+        "service_id": "huggingface_api",
+        "label": "Hugging Face Inference Providers",
+        "engine": "openclaw_openai_compatible",
+        "api_protocol": "openai_chat_completions",
+        "base_url": "https://router.huggingface.co/v1",
+        "secret_env_vars": ["HUGGINGFACE_HUB_TOKEN", "HF_TOKEN"],
+        "aliases": ["huggingface", "huggingface-inference", "hf"],
+        "status": "ready_when_key_configured",
+    },
+    {
+        "provider_id": "kilocode",
+        "service_id": "kilocode_gateway",
+        "label": "Kilo Gateway",
+        "engine": "openclaw_openai_compatible",
+        "api_protocol": "openai_chat_completions",
+        "base_url": "https://api.kilo.ai/api/gateway",
+        "secret_env_vars": ["KILOCODE_API_KEY"],
+        "aliases": ["kilocode", "kilo-gateway", "kilo_gateway"],
+        "status": "ready_when_key_configured",
     },
     {
         "provider_id": "deepseek",
@@ -197,14 +242,36 @@ OPENCLAW_MODEL_PROVIDERS: list[dict[str, Any]] = [
         "status": "ready_when_key_configured",
     },
     {
-        "provider_id": "z-ai",
+        "provider_id": "zai",
         "service_id": "z_ai_api",
         "label": "Z.AI / GLM",
         "engine": "openclaw_openai_compatible",
         "api_protocol": "openai_chat_completions",
         "base_url": "https://open.bigmodel.cn/api/paas/v4",
         "secret_env_vars": ["ZAI_API_KEY", "ZHIPUAI_API_KEY"],
-        "aliases": ["z-ai", "glm", "zhipu"],
+        "aliases": ["zai", "z-ai", "z_ai", "glm", "zhipu"],
+        "status": "ready_when_key_configured",
+    },
+    {
+        "provider_id": "synthetic",
+        "service_id": "synthetic_api",
+        "label": "Synthetic",
+        "engine": "openclaw_anthropic_compatible",
+        "api_protocol": "anthropic_messages",
+        "base_url": "https://api.synthetic.new/anthropic",
+        "secret_env_vars": ["SYNTHETIC_API_KEY"],
+        "aliases": ["synthetic"],
+        "status": "ready_when_key_configured",
+    },
+    {
+        "provider_id": "ollama-cloud",
+        "service_id": "ollama_cloud",
+        "label": "Ollama Cloud",
+        "engine": "ollama_cloud_http",
+        "api_protocol": "ollama_chat",
+        "base_url": "https://ollama.com",
+        "secret_env_vars": ["OLLAMA_API_KEY"],
+        "aliases": ["ollama-cloud", "ollama_cloud"],
         "status": "ready_when_key_configured",
     },
     {
@@ -282,35 +349,47 @@ OPENCLAW_MANIFEST_ONLY_PROVIDERS = [
     "anthropic-vertex",
     "arcee-ai",
     "azure-speech",
+    "byteplus-plan",
     "byteplus",
     "chutes",
     "claude-max-api-proxy",
     "cloudflare-ai-gateway",
     "comfyui",
     "deepgram",
+    "ds4",
     "elevenlabs",
     "fal",
     "github-copilot",
     "google-gemini-cli",
     "google-vertex",
     "gradium",
-    "huggingface-inference",
     "inferrs",
     "inworld",
-    "kilo-gateway",
+    "kimi",
     "minimax",
+    "minimax-portal",
     "opencode",
     "opencode-go",
+    "pixverse",
     "qianfan",
+    "qwen-oauth",
     "runway",
     "senseaudio",
     "stepfun",
-    "synthetic",
+    "stepfun-plan",
     "tencent-tokenhub",
-    "volcengine-doubao",
+    "volcengine",
+    "volcengine-plan",
     "vydra",
-    "xiaomi-mimo",
+    "xiaomi",
+    "xiaomi-token-plan",
 ]
+
+OPENCLAW_MANIFEST_ONLY_PROVIDER_ALIASES: dict[str, list[str]] = {
+    "tencent-tokenhub": ["tencent-cloud-tokenhub"],
+    "volcengine": ["volcengine-doubao"],
+    "xiaomi": ["xiaomi-mimo"],
+}
 
 
 OPENCLAW_CHANNELS: list[dict[str, Any]] = [
@@ -346,11 +425,19 @@ OPENCLAW_CHANNELS: list[dict[str, Any]] = [
 def openclaw_provider_manifest() -> dict[str, Any]:
     return {
         "schema": OPENCLAW_PROVIDER_CATALOG_SCHEMA,
+        "source_version": OPENCLAW_CATALOG_SOURCE_VERSION,
         "selection_model": "provider/model",
         "providers": deepcopy(OPENCLAW_MODEL_PROVIDERS),
         "manifest_only_providers": list(OPENCLAW_MANIFEST_ONLY_PROVIDERS),
+        "manifest_only_provider_aliases": deepcopy(OPENCLAW_MANIFEST_ONLY_PROVIDER_ALIASES),
+        "source_urls": [
+            "https://docs.openclaw.ai/providers/index",
+            "https://docs.openclaw.ai/concepts/model-providers",
+        ],
         "notes": [
             "Providers with api_protocol=openai_chat_completions use Paideia's generic OpenAI-compatible adapter.",
+            "Providers with api_protocol=anthropic_messages use Paideia's Anthropic-compatible adapter shape.",
+            "Providers with api_protocol=ollama_chat use Paideia's Ollama-native adapter shape.",
             "Manifest-only providers are represented for onboarding/config parity and need provider-specific plugins before live calls.",
         ],
     }
@@ -359,9 +446,11 @@ def openclaw_provider_manifest() -> dict[str, Any]:
 def openclaw_channel_manifest() -> dict[str, Any]:
     return {
         "schema": OPENCLAW_CHANNEL_CATALOG_SCHEMA,
+        "source_version": OPENCLAW_CATALOG_SOURCE_VERSION,
         "gateway_model": "openclaw_gateway_channel",
         "channels": deepcopy(OPENCLAW_CHANNELS),
         "default_policy": "disabled_until_explicit_gateway_configuration",
+        "source_urls": ["https://docs.openclaw.ai/channels"],
     }
 
 
@@ -413,7 +502,11 @@ def openclaw_llm_service_entries() -> list[dict[str, Any]]:
                 "api_protocol": "manifest_only",
                 "base_url": None,
                 "secret_env_vars": [],
-                "aliases": [provider_id, provider_id.replace("-", "_")],
+                "aliases": [
+                    provider_id,
+                    provider_id.replace("-", "_"),
+                    *OPENCLAW_MANIFEST_ONLY_PROVIDER_ALIASES.get(provider_id, []),
+                ],
             }
         )
     return entries
@@ -468,7 +561,14 @@ def find_openclaw_provider(identifier: str) -> dict[str, Any] | None:
         if value in ids:
             return deepcopy(provider)
     for provider_id in OPENCLAW_MANIFEST_ONLY_PROVIDERS:
-        ids = {provider_id.casefold(), provider_id.replace("-", "_").casefold(), f"openclaw_{provider_id.replace('-', '_')}"}
+        aliases = OPENCLAW_MANIFEST_ONLY_PROVIDER_ALIASES.get(provider_id, [])
+        ids = {
+            provider_id.casefold(),
+            provider_id.replace("-", "_").casefold(),
+            f"openclaw_{provider_id.replace('-', '_')}",
+            *{alias.casefold() for alias in aliases},
+            *{alias.replace("-", "_").casefold() for alias in aliases},
+        }
         if value in ids:
             return {
                 "provider_id": provider_id,
@@ -478,7 +578,7 @@ def find_openclaw_provider(identifier: str) -> dict[str, Any] | None:
                 "api_protocol": "manifest_only",
                 "base_url": None,
                 "secret_env_vars": [],
-                "aliases": [provider_id, provider_id.replace("-", "_")],
+                "aliases": [provider_id, provider_id.replace("-", "_"), *aliases],
                 "status": "manifest_only_needs_provider_plugin",
             }
     return None

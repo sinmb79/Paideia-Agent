@@ -1292,6 +1292,18 @@ def _call_ollama_chat(
     max_output_tokens: int = 900,
 ) -> dict[str, Any]:
     base_url = str(runtime_config.get("base_url") or runtime_config.get("model_path") or "http://localhost:11434").rstrip("/")
+    local_endpoint = base_url.startswith(("http://localhost", "http://127.0.0.1"))
+    env_var, api_key = _first_env_value(runtime_config.get("secret_env_vars", []))
+    if runtime_config.get("secret_env_vars") and not api_key and not local_endpoint:
+        return {
+            "schema": "ai-talent-live-llm-result/v1",
+            "engine": runtime_config.get("engine"),
+            "status": "unavailable",
+            "reason": "provider_api_key_not_set",
+            "required_env_vars": runtime_config.get("secret_env_vars", []),
+            "model": model,
+        }
+    headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
     payload = {
         "model": model,
         "stream": False,
@@ -1302,7 +1314,7 @@ def _call_ollama_chat(
         "options": {"temperature": 0.2, "num_predict": max_output_tokens},
     }
     try:
-        response = _request_json(url=f"{base_url}/api/chat", payload=payload, headers={})
+        response = _request_json(url=f"{base_url}/api/chat", payload=payload, headers=headers)
     except Exception as exc:
         return {
             "schema": "ai-talent-live-llm-result/v1",
@@ -1319,7 +1331,7 @@ def _call_ollama_chat(
         model=model,
         output_text=text,
         network_access=str(runtime_config.get("network_access")),
-        response_metadata={"provider": "ollama", "base_url": base_url},
+        response_metadata={"provider": runtime_config.get("openclaw_provider_id") or "ollama", "base_url": base_url, "api_key_env": env_var},
     )
 
 

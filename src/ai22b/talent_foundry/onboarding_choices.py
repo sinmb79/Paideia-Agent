@@ -133,7 +133,7 @@ LLM_SERVICE_CATALOG: list[dict[str, Any]] = [
         "requires": ["local LM Studio server"],
         "researcher_fit": "local_private_model",
         "privacy_note": "Localhost-only adapter; no external API by default.",
-        "openclaw_provider_id": "lm-studio",
+        "openclaw_provider_id": "lmstudio",
         "api_protocol": "openai_chat_completions",
         "base_url": "http://localhost:1234/v1",
         "secret_env_vars": [],
@@ -218,6 +218,8 @@ EXTERNAL_API_ENGINES = {
     "mistral_api",
     "openrouter_api",
     "openclaw_openai_compatible",
+    "openclaw_anthropic_compatible",
+    "ollama_cloud_http",
     "openclaw_manifest_only",
 }
 LOCAL_HTTP_ENGINES = {"ollama_local_http", "lm_studio_local_http"}

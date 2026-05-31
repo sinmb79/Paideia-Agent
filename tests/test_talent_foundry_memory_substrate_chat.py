@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -481,6 +482,62 @@ class TalentFoundryMemorySubstrateChatTests(unittest.TestCase):
         self.assertEqual(runtime_config["api_protocol"], "openai_chat_completions")
         self.assertEqual(chat["reply_generation_mode"], "live_openai_responses")
         self.assertIn("OpenClaw provider/model", chat["assistant_answer"])
+
+    def test_ollama_cloud_provider_uses_ollama_native_chat_with_bearer_token(self) -> None:
+        from ai22b.talent_foundry.memory_substrate import _call_ollama_chat
+
+        captured: dict[str, object] = {}
+
+        def fake_request_json(*, url: str, payload: dict, headers: dict, timeout: int = 60) -> dict:
+            captured["url"] = url
+            captured["payload"] = payload
+            captured["headers"] = headers
+            return {
+                "message": {
+                    "content": json.dumps(
+                        {
+                            "assistant_reply": "보스, Ollama Cloud 경로로 응답했습니다.",
+                            "reviewable_reasoning_summary": [
+                                {"step": "provider route", "summary": "Ollama native /api/chat endpoint를 사용했습니다."}
+                            ],
+                            "learning_candidate": {
+                                "lesson": "Ollama Cloud can use the same native chat shape as local Ollama with explicit auth.",
+                                "reusable_principle": "Provider identity changes endpoint/auth, not the local talent identity.",
+                                "memory_tags": ["ollama_cloud", "openclaw_provider_model"],
+                                "confidence": 0.9,
+                            },
+                        },
+                        ensure_ascii=False,
+                    )
+                },
+                "usage": {"eval_count": 1},
+            }
+
+        runtime_config = {
+            "engine": "ollama_cloud_http",
+            "openclaw_provider_id": "ollama-cloud",
+            "api_protocol": "ollama_chat",
+            "base_url": "https://ollama.com",
+            "secret_env_vars": ["OLLAMA_API_KEY"],
+            "network_access": "external_api_selected_data_minimized",
+        }
+        chat_context = {"agent": {"name": "ollama-cloud-junior"}}
+
+        with patch.dict(os.environ, {"OLLAMA_API_KEY": "test-ollama-cloud-key"}), patch(
+            "ai22b.talent_foundry.memory_substrate._request_json",
+            side_effect=fake_request_json,
+        ):
+            result = _call_ollama_chat(
+                chat_context=chat_context,
+                runtime_config=runtime_config,
+                model="kimi-k2.6",
+            )
+
+        self.assertEqual(captured["url"], "https://ollama.com/api/chat")
+        self.assertEqual(captured["headers"], {"Authorization": "Bearer test-ollama-cloud-key"})
+        self.assertEqual(captured["payload"]["model"], "kimi-k2.6")
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["response_metadata"]["provider"], "ollama-cloud")
 
     def test_live_llm_failure_fallback_does_not_promote_bad_chat_learning(self) -> None:
         from ai22b.talent_foundry.blueprint import create_agent_training_blueprint

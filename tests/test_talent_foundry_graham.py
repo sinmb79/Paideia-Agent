@@ -157,6 +157,12 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertIn("openrouter_api", llm_service_ids())
         self.assertIn("deepseek_api", llm_service_ids())
         self.assertIn("groq_api", llm_service_ids())
+        self.assertIn("gmi_api", llm_service_ids())
+        self.assertIn("novita_api", llm_service_ids())
+        self.assertIn("huggingface_api", llm_service_ids())
+        self.assertIn("kilocode_gateway", llm_service_ids())
+        self.assertIn("ollama_cloud", llm_service_ids())
+        self.assertIn("synthetic_api", llm_service_ids())
         self.assertIn("openclaw-channel-telegram", chat_surface_ids())
         self.assertIn("openclaw-channel-whatsapp", chat_surface_ids())
         questions = questions_with_choices()
@@ -186,6 +192,17 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         local_vllm = resolve_llm_service(llm_service="vllm/Qwen3-8B")
         self.assertEqual(local_vllm["service_id"], "vllm_local")
         self.assertEqual(local_vllm["network_access"], "localhost_only")
+
+        kilo = resolve_llm_service(llm_service="kilocode/kilo/auto")
+        self.assertEqual(kilo["service_id"], "kilocode_gateway")
+        self.assertEqual(kilo["selected_model"], "kilo/auto")
+        self.assertEqual(kilo["openclaw_provider_id"], "kilocode")
+        self.assertEqual(kilo["api_protocol"], "openai_chat_completions")
+
+        ollama_cloud = resolve_llm_service(llm_service="ollama-cloud/kimi-k2.6")
+        self.assertEqual(ollama_cloud["service_id"], "ollama_cloud")
+        self.assertEqual(ollama_cloud["api_protocol"], "ollama_chat")
+        self.assertEqual(ollama_cloud["network_access"], "external_api_selected_data_minimized")
 
     def test_openclaw_style_onboarding_questions_are_step_based(self) -> None:
         from ai22b.talent_foundry.console import WIZARD_STEPS, questions_with_choices
@@ -319,13 +336,30 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             data = json.loads(output.read_text(encoding="utf-8"))
 
         provider_ids = {item["provider_id"] for item in data["model_providers"]["providers"]}
+        all_provider_ids = provider_ids | set(data["model_providers"]["manifest_only_providers"])
         channel_ids = {item["channel_id"] for item in data["chat_channels"]["channels"]}
         self.assertIn("openai", provider_ids)
         self.assertIn("openrouter", provider_ids)
         self.assertIn("ollama", provider_ids)
+        self.assertIn("lmstudio", provider_ids)
+        self.assertIn("zai", provider_ids)
+        self.assertIn("gmi", provider_ids)
+        self.assertIn("novita", provider_ids)
+        self.assertIn("huggingface", provider_ids)
+        self.assertIn("kilocode", provider_ids)
+        self.assertIn("ollama-cloud", provider_ids)
+        self.assertIn("volcengine", all_provider_ids)
+        self.assertIn("volcengine-plan", all_provider_ids)
+        self.assertIn("byteplus-plan", all_provider_ids)
+        self.assertIn("qwen-oauth", all_provider_ids)
+        self.assertIn("pixverse", all_provider_ids)
+        self.assertIn("ds4", all_provider_ids)
         self.assertIn("discord", channel_ids)
         self.assertIn("telegram", channel_ids)
         self.assertIn("whatsapp", channel_ids)
+        self.assertIn("webchat", channel_ids)
+        self.assertIn("https://docs.openclaw.ai/providers/index", data["model_providers"]["source_urls"])
+        self.assertIn("https://docs.openclaw.ai/channels", data["chat_channels"]["source_urls"])
 
     def test_openclaw_channel_gateway_routes_message_to_paideia_chat(self) -> None:
         from ai22b.talent_foundry.blueprint import create_agent_training_blueprint

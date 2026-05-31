@@ -52,7 +52,9 @@ Paideia는 OpenClaw처럼 `provider/model` 선택을 지원합니다. 예를 들
 ai22b-talent-foundry list-openclaw-compat --output openclaw_compat.json
 ```
 
-현재 직접 호출 가능한 계열은 OpenAI/Codex, Anthropic Messages, Gemini generateContent, OpenAI-compatible provider(OpenRouter, Mistral, DeepSeek, Groq, xAI, Perplexity, Together, Fireworks, DeepInfra, vLLM, SGLang 등), Ollama입니다. Bedrock, Copilot Proxy, Gemini CLI, Vertex, ComfyUI 등 provider별 플러그인이 필요한 항목은 온보딩 manifest에는 표시하지만 live 호출은 provider plugin 설정 전까지 비활성으로 둡니다.
+현재 직접 호출 가능한 계열은 OpenAI/Codex, Anthropic Messages, Gemini generateContent, OpenAI-compatible provider(OpenRouter, Mistral, DeepSeek, Groq, GMI, NovitaAI, Hugging Face Inference, Kilo Gateway, xAI, Perplexity, Together, Fireworks, DeepInfra, vLLM, SGLang 등), Ollama/Ollama Cloud, Synthetic입니다. Bedrock, Copilot Proxy, Gemini CLI, Vertex, ComfyUI, Volcengine/BytePlus plan, Qwen OAuth 등 provider별 플러그인이 필요한 항목은 온보딩 manifest에는 표시하지만 live 호출은 provider plugin 설정 전까지 비활성으로 둡니다.
+
+OpenClaw의 canonical provider ID를 우선 사용합니다. 예를 들어 LM Studio는 `lmstudio/*`, Z.AI는 `zai/*`, Kilo Gateway는 `kilocode/*`, Ollama Cloud는 `ollama-cloud/*` 형식을 사용합니다. 기존 사용자가 헷갈리지 않도록 `lm-studio`, `z-ai`, `kilo-gateway` 같은 별칭도 계속 해석합니다.
 
 채팅 표면도 OpenClaw channel 이름을 노출합니다. `openclaw-channel-telegram`, `openclaw-channel-discord`, `openclaw-channel-slack`, `openclaw-channel-whatsapp`, `openclaw-channel-signal`, `openclaw-channel-matrix`, `openclaw-channel-webchat` 같은 항목은 Gateway/페어링/허용목록 검토 전까지 manifest-only 상태입니다.
 

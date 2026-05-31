@@ -277,7 +277,8 @@ Paideia now mirrors OpenClaw's `provider/model` selection style. Built-in direct
 - `openrouter_api`
 - `ollama_local`
 - `lm_studio_local`
-- OpenAI-compatible OpenClaw providers such as `deepseek_api`, `groq_api`, `xai_api`, `perplexity_api`, `together_ai`, `fireworks_api`, `deepinfra_api`, `cerebras_api`, `moonshot_api`, `qwen_api`, `z_ai_api`, `venice_api`, `nvidia_api`, `vllm_local`, `sglang_local`, `litellm_gateway`, and `vercel_ai_gateway`
+- OpenAI-compatible OpenClaw providers such as `deepseek_api`, `groq_api`, `gmi_api`, `novita_api`, `huggingface_api`, `kilocode_gateway`, `xai_api`, `perplexity_api`, `together_ai`, `fireworks_api`, `deepinfra_api`, `cerebras_api`, `moonshot_api`, `qwen_api`, `z_ai_api`, `venice_api`, `nvidia_api`, `vllm_local`, `sglang_local`, `litellm_gateway`, and `vercel_ai_gateway`
+- OpenClaw-compatible native/proxy providers such as `ollama_cloud` and `synthetic_api`
 - `deterministic_local`
 - `bigram_local`
 - `transformers_local`
@@ -301,6 +302,8 @@ ai22b-talent-foundry list-openclaw-compat `
 ```
 
 External API adapters require the user's own keys before live use. Local model adapters prefer localhost or local files. Chat surfaces include `codex-bridge-chat`, `cli-console`, `dataflow-job`, a disabled `openclaw-style-gateway`, and OpenClaw channel manifests such as `openclaw-channel-telegram`, `openclaw-channel-discord`, `openclaw-channel-slack`, `openclaw-channel-whatsapp`, `openclaw-channel-signal`, `openclaw-channel-microsoft-teams`, `openclaw-channel-google-chat`, `openclaw-channel-imessage`, `openclaw-channel-matrix`, `openclaw-channel-mattermost`, and `openclaw-channel-webchat`.
+
+The provider catalog follows OpenClaw's canonical `provider/model` IDs where possible, including `lmstudio/*`, `zai/*`, `kilocode/*`, `gmi/*`, `novita/*`, `huggingface/*`, and `ollama-cloud/*`. Provider-specific plugin-only surfaces such as `volcengine-plan`, `byteplus-plan`, `qwen-oauth`, `pixverse`, and `ds4` remain visible in onboarding as manifest-only entries until a concrete plugin is configured.
 
 OpenClaw-style channels can now be routed through a local Paideia gateway envelope. The core returns a sendable outbound envelope; actual platform plugins remain responsible for bot tokens, pairing, and final delivery.
 
