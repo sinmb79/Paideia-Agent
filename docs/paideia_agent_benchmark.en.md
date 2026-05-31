@@ -44,6 +44,7 @@ Paideia adapts this as:
 
 - per-talent install kits,
 - `doctor-agent-program`,
+- `build_openclaw_native_onboarding_runbook.ps1` for a no-secret OpenClaw-native onboarding sequence,
 - `run_openclaw_smoke_sequence.ps1` for a safe installed-kit OpenClaw smoke run,
 - preservation of not-yet-cataloged OpenClaw `provider/model` and `openclaw-channel-*` selectors as Gateway-owned routes,
 - local storage outside the source tree,

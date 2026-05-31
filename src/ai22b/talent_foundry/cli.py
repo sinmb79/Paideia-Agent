@@ -75,6 +75,7 @@ from ai22b.talent_foundry.openclaw_native_handoff import (
     doctor_openclaw_native_handoff,
     prepare_openclaw_native_config,
 )
+from ai22b.talent_foundry.openclaw_native_onboarding import build_openclaw_native_onboarding_runbook
 from ai22b.talent_foundry.openclaw_onboarding_menu import build_openclaw_onboarding_menu
 from ai22b.talent_foundry.openclaw_parity import audit_openclaw_parity
 from ai22b.talent_foundry.openclaw_provider_auth import doctor_openclaw_provider_auth
@@ -299,6 +300,14 @@ def _build_parser() -> argparse.ArgumentParser:
     build_runtime_bundle.add_argument("--existing-openclaw-config")
     build_runtime_bundle.add_argument("--config-action", choices=["keep", "modify", "reset"], default="modify")
     build_runtime_bundle.add_argument("--output-dir", required=True)
+
+    native_onboarding_runbook = subparsers.add_parser(
+        "build-openclaw-native-onboarding-runbook",
+        help="Write an OpenClaw-style onboard/model/gateway/channel/agent-add runbook for a runtime bundle.",
+    )
+    native_onboarding_runbook.add_argument("--runtime-bundle", required=True)
+    native_onboarding_runbook.add_argument("--output", required=True)
+    native_onboarding_runbook.add_argument("--markdown-output")
 
     employment_runtime_doctor = subparsers.add_parser(
         "doctor-openclaw-employment-runtime",
@@ -1180,6 +1189,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             config_action=args.config_action,
         )
         print(str(Path(bundle["artifacts"]["manifest"])))
+        return 0
+
+    if args.command == "build-openclaw-native-onboarding-runbook":
+        build_openclaw_native_onboarding_runbook(
+            Path(args.runtime_bundle),
+            output_path=Path(args.output),
+            markdown_output_path=Path(args.markdown_output) if args.markdown_output else None,
+        )
+        print(str(Path(args.output)))
         return 0
 
     if args.command == "doctor-openclaw-employment-runtime":

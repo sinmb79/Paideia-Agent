@@ -61,16 +61,27 @@ def _load_bundle_artifact(bundle_path: Path, bundle: dict[str, Any], key: str) -
         return path, None, f"{type(exc).__name__}: {str(exc)[:400]}"
 
 
-def _artifact_check(bundle_path: Path, bundle: dict[str, Any], key: str, schema: str | None = None) -> dict[str, Any]:
+def _artifact_check(
+    bundle_path: Path,
+    bundle: dict[str, Any],
+    key: str,
+    schema: str | None = None,
+    *,
+    required: bool = True,
+) -> dict[str, Any]:
     path, data, error = _load_bundle_artifact(bundle_path, bundle, key)
     schema_ok = bool(data) and (schema is None or data.get("schema") == schema)
+    passed = bool(data) and schema_ok
+    if not required and error in {"artifact_not_declared", "artifact_missing"}:
+        passed = True
     return {
         "id": f"artifact:{key}",
-        "passed": bool(data) and schema_ok,
+        "passed": passed,
         "artifact": key,
         "path": str(path) if path else None,
         "schema": data.get("schema") if data else None,
         "expected_schema": schema,
+        "required": required,
         "error": error,
     }
 
@@ -190,6 +201,13 @@ def doctor_openclaw_runtime_preflight(
     artifact_checks = [
         _artifact_check(runtime_bundle_path, bundle, "openclaw_config_patch", "ai22b-openclaw-config-patch/v1"),
         _artifact_check(runtime_bundle_path, bundle, "openclaw_native_handoff", "ai22b-openclaw-native-handoff/v1"),
+        _artifact_check(
+            runtime_bundle_path,
+            bundle,
+            "openclaw_native_onboarding_runbook",
+            "ai22b-openclaw-native-onboarding-runbook/v1",
+            required=False,
+        ),
         _artifact_check(runtime_bundle_path, bundle, "provider_auth_doctor", "ai22b-openclaw-provider-auth-doctor/v1"),
         _artifact_check(runtime_bundle_path, bundle, "channel_pairing_doctor", "ai22b-openclaw-channel-pairing-doctor/v1"),
         _artifact_check(runtime_bundle_path, bundle, "gateway_config", "ai22b-openclaw-channel-gateway-config/v1"),

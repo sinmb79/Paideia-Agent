@@ -389,6 +389,12 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             )
             llm_health = json.loads(Path(session["artifacts"]["llm_service_health"]).read_text(encoding="utf-8"))
             openclaw_runtime = json.loads(Path(session["artifacts"]["openclaw_runtime_bundle"]).read_text(encoding="utf-8"))
+            native_runbook = json.loads(
+                Path(session["artifacts"]["openclaw_native_onboarding_runbook"]).read_text(encoding="utf-8")
+            )
+            native_runbook_markdown = Path(
+                session["artifacts"]["openclaw_native_onboarding_runbook_markdown"]
+            ).read_text(encoding="utf-8")
             runtime_bridge_kit = json.loads(Path(session["artifacts"]["openclaw_bridge_setup_kit"]).read_text(encoding="utf-8"))
             provider_doctor = json.loads(Path(session["artifacts"]["openclaw_provider_doctor"]).read_text(encoding="utf-8"))
             channel_doctor = json.loads(Path(session["artifacts"]["openclaw_channel_doctor"]).read_text(encoding="utf-8"))
@@ -420,6 +426,10 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertGreaterEqual(rollout_execution["summary"]["quarantined_count"], 1)
         self.assertEqual(llm_health["schema"], "ai22b-paideia-llm-service-health/v1")
         self.assertEqual(openclaw_runtime["schema"], "ai22b-openclaw-runtime-bundle/v1")
+        self.assertEqual(native_runbook["schema"], "ai22b-openclaw-native-onboarding-runbook/v1")
+        self.assertIn("run_openclaw_onboard", {step["id"] for step in native_runbook["steps"]})
+        self.assertIn("openclaw onboard", native_runbook_markdown)
+        self.assertIn("openclaw agents add", native_runbook_markdown)
         self.assertEqual(runtime_bridge_kit["schema"], "ai22b-openclaw-bridge-setup-kit/v1")
         self.assertIn("webchat", runtime_bridge_kit["selection"]["channels"])
         self.assertEqual(provider_doctor["schema"], "ai22b-openclaw-provider-connector-doctor/v1")

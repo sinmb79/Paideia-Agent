@@ -32,6 +32,7 @@ DEFAULT_OPENCLAW_MENU_SCRIPT = "refresh_openclaw_onboarding_menu.ps1"
 DEFAULT_OPENCLAW_MENU_FILE = "openclaw_onboarding_menu.json"
 DEFAULT_OPENCLAW_MENU_MARKDOWN = "OPENCLAW_ONBOARDING_MENU.md"
 DEFAULT_OPENCLAW_RUNTIME_SCRIPT = "build_openclaw_runtime_bundle.ps1"
+DEFAULT_OPENCLAW_NATIVE_ONBOARDING_SCRIPT = "build_openclaw_native_onboarding_runbook.ps1"
 DEFAULT_OPENCLAW_SMOKE_PLAN_SCRIPT = "build_openclaw_live_smoke_plan.ps1"
 DEFAULT_OPENCLAW_SMOKE_SEQUENCE_SCRIPT = "run_openclaw_smoke_sequence.ps1"
 DEFAULT_OPENCLAW_WEBCHAT_SCRIPT = "start_openclaw_webchat.ps1"
@@ -396,6 +397,61 @@ foreach ($Item in $Channel) {
 & $PaideiaPython @ArgsList
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 Write-Host "OpenClaw runtime bundle: $OutputDir\\openclaw_runtime_bundle.json"
+"""
+
+
+def _openclaw_native_onboarding_runbook_script() -> str:
+    return """param(
+    [string]$EmploymentRecord = ".\\employment_record.json",
+    [string]$RuntimeBundle = ".\\openclaw_runtime_bundle\\openclaw_runtime_bundle.json",
+    [string[]]$Channel = @("webchat"),
+    [string]$Output = ".\\OPENCLAW_NATIVE_ONBOARDING_RUNBOOK.json",
+    [string]$MarkdownOutput = ".\\OPENCLAW_NATIVE_ONBOARDING_RUNBOOK.md"
+)
+
+$ErrorActionPreference = "Stop"
+[Console]::InputEncoding = [System.Text.UTF8Encoding]::new()
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
+$env:PYTHONIOENCODING = "utf-8"
+
+$RuntimeHelper = Join-Path $PSScriptRoot "paideia_runtime.ps1"
+if (Test-Path -LiteralPath $RuntimeHelper) {
+    . $RuntimeHelper
+    $PaideiaPython = Resolve-PaideiaPython
+} else {
+    $PaideiaPython = "python"
+}
+
+if (-not (Test-Path -LiteralPath $RuntimeBundle)) {
+    $BundleDir = Split-Path -Parent $RuntimeBundle
+    if ([string]::IsNullOrWhiteSpace($BundleDir)) { $BundleDir = "." }
+    $RuntimeArgs = @(
+        "-m", "ai22b.talent_foundry.cli",
+        "build-openclaw-runtime-bundle",
+        "--employment-record", $EmploymentRecord,
+        "--output-dir", $BundleDir
+    )
+    foreach ($Item in $Channel) {
+        if (-not [string]::IsNullOrWhiteSpace($Item)) {
+            $RuntimeArgs += @("--channel", $Item)
+        }
+    }
+    & $PaideiaPython @RuntimeArgs
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+}
+
+$ArgsList = @(
+    "-m", "ai22b.talent_foundry.cli",
+    "build-openclaw-native-onboarding-runbook",
+    "--runtime-bundle", $RuntimeBundle,
+    "--output", $Output,
+    "--markdown-output", $MarkdownOutput
+)
+
+& $PaideiaPython @ArgsList
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+Write-Host "OpenClaw native onboarding runbook: $Output"
+Write-Host "Markdown guide: $MarkdownOutput"
 """
 
 
@@ -904,6 +960,12 @@ Build a reviewable OpenClaw runtime bundle from the installed employment record:
 powershell -ExecutionPolicy Bypass -File .\\build_openclaw_runtime_bundle.ps1 -Channel webchat
 ```
 
+Create the OpenClaw-native onboarding runbook. This mirrors OpenClaw's own setup order: `openclaw onboard`, model/auth, workspace, Gateway, channel pairing, `openclaw agents add`, preflight, and smoke tests.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\\build_openclaw_native_onboarding_runbook.ps1 -Channel webchat
+```
+
 Create the no-secret live smoke-test sequence before using a real Gateway, provider key, or external channel:
 
 ```powershell
@@ -1073,6 +1135,10 @@ def build_agent_program(
         _openclaw_runtime_bundle_script(),
         encoding="utf-8",
     )
+    (output_path.parent / DEFAULT_OPENCLAW_NATIVE_ONBOARDING_SCRIPT).write_text(
+        _openclaw_native_onboarding_runbook_script(),
+        encoding="utf-8",
+    )
     (output_path.parent / DEFAULT_OPENCLAW_SMOKE_PLAN_SCRIPT).write_text(
         _openclaw_live_smoke_plan_script(),
         encoding="utf-8",
@@ -1228,6 +1294,7 @@ def build_agent_program(
             "chat_script": DEFAULT_CHAT_SCRIPT,
             "openclaw_onboarding_menu_script": DEFAULT_OPENCLAW_MENU_SCRIPT,
             "openclaw_runtime_bundle_script": DEFAULT_OPENCLAW_RUNTIME_SCRIPT,
+            "openclaw_native_onboarding_runbook_script": DEFAULT_OPENCLAW_NATIVE_ONBOARDING_SCRIPT,
             "openclaw_live_smoke_plan_script": DEFAULT_OPENCLAW_SMOKE_PLAN_SCRIPT,
             "openclaw_smoke_sequence_script": DEFAULT_OPENCLAW_SMOKE_SEQUENCE_SCRIPT,
             "openclaw_webchat_script": DEFAULT_OPENCLAW_WEBCHAT_SCRIPT,
@@ -1242,6 +1309,12 @@ def build_agent_program(
             "openclaw_onboarding_menu_command": (
                 "ai22b-talent-foundry build-openclaw-onboarding-menu "
                 f"--output {DEFAULT_OPENCLAW_MENU_FILE} --markdown-output {DEFAULT_OPENCLAW_MENU_MARKDOWN}"
+            ),
+            "openclaw_native_onboarding_runbook_command": (
+                "ai22b-talent-foundry build-openclaw-native-onboarding-runbook "
+                "--runtime-bundle openclaw_runtime_bundle/openclaw_runtime_bundle.json "
+                "--output OPENCLAW_NATIVE_ONBOARDING_RUNBOOK.json "
+                "--markdown-output OPENCLAW_NATIVE_ONBOARDING_RUNBOOK.md"
             ),
             "openclaw_live_smoke_plan_command": (
                 "ai22b-talent-foundry build-openclaw-live-smoke-plan "
@@ -1284,6 +1357,7 @@ def build_agent_program(
             "start_chat_script": DEFAULT_CHAT_SCRIPT,
             "openclaw_onboarding_menu_script": DEFAULT_OPENCLAW_MENU_SCRIPT,
             "openclaw_runtime_bundle_script": DEFAULT_OPENCLAW_RUNTIME_SCRIPT,
+            "openclaw_native_onboarding_runbook_script": DEFAULT_OPENCLAW_NATIVE_ONBOARDING_SCRIPT,
             "openclaw_live_smoke_plan_script": DEFAULT_OPENCLAW_SMOKE_PLAN_SCRIPT,
             "openclaw_smoke_sequence_script": DEFAULT_OPENCLAW_SMOKE_SEQUENCE_SCRIPT,
             "openclaw_webchat_script": DEFAULT_OPENCLAW_WEBCHAT_SCRIPT,
@@ -1420,6 +1494,7 @@ def build_paideia_agent_install_kit(
             "start_chat": DEFAULT_CHAT_SCRIPT,
             "refresh_openclaw_onboarding_menu": DEFAULT_OPENCLAW_MENU_SCRIPT,
             "build_openclaw_runtime_bundle": DEFAULT_OPENCLAW_RUNTIME_SCRIPT,
+            "build_openclaw_native_onboarding_runbook": DEFAULT_OPENCLAW_NATIVE_ONBOARDING_SCRIPT,
             "build_openclaw_live_smoke_plan": DEFAULT_OPENCLAW_SMOKE_PLAN_SCRIPT,
             "run_openclaw_smoke_sequence": DEFAULT_OPENCLAW_SMOKE_SEQUENCE_SCRIPT,
             "start_openclaw_webchat": DEFAULT_OPENCLAW_WEBCHAT_SCRIPT,
@@ -1467,6 +1542,7 @@ def build_paideia_agent_install_kit(
             "source_repo_mode": "writes a local source path only when the user runs install_paideia_runtime.ps1 -SourceRepo",
             "git_install_mode": "runs pip install from the configured Git URL only when the user passes -InstallFromGit",
             "safe_openclaw_smoke_runner": DEFAULT_OPENCLAW_SMOKE_SEQUENCE_SCRIPT,
+            "native_openclaw_onboarding_runbook": DEFAULT_OPENCLAW_NATIVE_ONBOARDING_SCRIPT,
             "secret_values_stored": False,
         },
         "status": "ready",
@@ -1492,6 +1568,7 @@ def doctor_agent_program(program_path: Path, *, output_path: Path | None = None)
         "chat_script",
         "openclaw_onboarding_menu_script",
         "openclaw_runtime_bundle_script",
+        "openclaw_native_onboarding_runbook_script",
         "openclaw_live_smoke_plan_script",
         "openclaw_smoke_sequence_script",
         "openclaw_webchat_script",

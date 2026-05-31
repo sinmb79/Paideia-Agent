@@ -213,6 +213,8 @@ def run_agent_onboarding(
         "openclaw_runtime_bundle": openclaw_runtime_bundle["artifacts"]["manifest"],
         "openclaw_config_patch": openclaw_runtime_bundle["artifacts"]["openclaw_config_patch"],
         "openclaw_native_handoff": openclaw_runtime_bundle["artifacts"]["openclaw_native_handoff"],
+        "openclaw_native_onboarding_runbook": openclaw_runtime_bundle["artifacts"]["openclaw_native_onboarding_runbook"],
+        "openclaw_native_onboarding_runbook_markdown": openclaw_runtime_bundle["artifacts"]["openclaw_native_onboarding_runbook_markdown"],
         "openclaw_provider_doctor": openclaw_runtime_bundle["artifacts"]["provider_doctor"],
         "openclaw_channel_doctor": openclaw_runtime_bundle["artifacts"]["channel_doctor"],
         "openclaw_channel_connectors": openclaw_runtime_bundle["artifacts"]["channel_connector_catalog"],

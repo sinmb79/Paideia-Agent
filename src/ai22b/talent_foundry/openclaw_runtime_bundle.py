@@ -28,6 +28,9 @@ from ai22b.talent_foundry.openclaw_compat import (
 )
 from ai22b.talent_foundry.openclaw_channel_pairing import doctor_openclaw_channel_pairing
 from ai22b.talent_foundry.openclaw_gateway_llm import doctor_openclaw_gateway_llm
+from ai22b.talent_foundry.openclaw_native_onboarding import (
+    build_openclaw_native_onboarding_runbook_from_bundle,
+)
 from ai22b.talent_foundry.openclaw_provider_auth import doctor_openclaw_provider_auth
 from ai22b.talent_foundry.provider_connectors import doctor_openclaw_provider_connectors
 
@@ -40,6 +43,7 @@ OPENCLAW_CONFIG_RESET_PLAN_SCHEMA = "ai22b-openclaw-config-reset-plan/v1"
 OPENCLAW_NATIVE_HANDOFF_SCHEMA = "ai22b-openclaw-native-handoff/v1"
 
 OPENCLAW_REFERENCE_URLS = [
+    "https://docs.openclaw.ai/reference/wizard",
     "https://docs.openclaw.ai/start/wizard-cli-flow",
     "https://docs.openclaw.ai/configuration",
     "https://docs.openclaw.ai/providers",
@@ -824,6 +828,8 @@ def build_openclaw_runtime_bundle(
     bridge_setup_dir = output_dir / "openclaw_bridge_setup"
     config_patch_path = output_dir / "openclaw_config_patch.json"
     native_handoff_path = output_dir / "openclaw_native_handoff.json"
+    native_onboarding_runbook_path = output_dir / "openclaw_native_onboarding_runbook.json"
+    native_onboarding_runbook_markdown_path = output_dir / "OPENCLAW_NATIVE_ONBOARDING_RUNBOOK.md"
     env_template_path = output_dir / "openclaw.env.example.ps1"
     manifest_path = output_dir / "openclaw_runtime_bundle.json"
     selected_existing_config_path = (
@@ -944,6 +950,8 @@ def build_openclaw_runtime_bundle(
         "manifest": str(manifest_path),
         "openclaw_config_patch": str(config_patch_path),
         "openclaw_native_handoff": str(native_handoff_path),
+        "openclaw_native_onboarding_runbook": str(native_onboarding_runbook_path),
+        "openclaw_native_onboarding_runbook_markdown": str(native_onboarding_runbook_markdown_path),
         "openclaw_env_template": str(env_template_path),
         "existing_openclaw_config_review": existing_config_review["artifacts"]["review"],
         "gateway_config": str(gateway_config_path),
@@ -1079,6 +1087,12 @@ def build_openclaw_runtime_bundle(
                 f"{_relative_or_name(Path(artifacts['openclaw_config_patch']), output_dir)} and "
                 f"{_relative_or_name(Path(artifacts['existing_openclaw_config_review']), output_dir)} before applying to OpenClaw."
             ),
+            "build_openclaw_native_onboarding_runbook": (
+                "ai22b-talent-foundry build-openclaw-native-onboarding-runbook "
+                f"--runtime-bundle {manifest_path} "
+                f"--output {native_onboarding_runbook_path} "
+                f"--markdown-output {native_onboarding_runbook_markdown_path}"
+            ),
             "build_bridge_setup_kit": (
                 "ai22b-talent-foundry build-openclaw-bridge-setup-kit "
                 f"--runtime-bundle {manifest_path} "
@@ -1112,6 +1126,7 @@ def build_openclaw_runtime_bundle(
         "notes": [
             "Review openclaw_config_patch.json before merging into an existing OpenClaw config.",
             "Review openclaw_native_handoff.json when you want OpenClaw itself to own provider auth, channel plugins, gateway sessions, and platform delivery.",
+            "Review OPENCLAW_NATIVE_ONBOARDING_RUNBOOK.md for the OpenClaw-style onboard, model/auth, gateway, channel, agent-add, health, and smoke-test sequence.",
             "Review openclaw_bridge_setup/openclaw_bridge_setup_kit.json when you want a single provider/channel setup checklist with smoke-test payloads.",
             "Run doctor-openclaw-runtime-preflight before live use to check provider auth, channel pairing, native handoff, Gateway LLM readiness, and optional channel-flow dry runs together.",
             "Existing OpenClaw config review follows Keep/Modify/Reset semantics and never overwrites the config.",
@@ -1121,6 +1136,19 @@ def build_openclaw_runtime_bundle(
         "existing_openclaw_config_review": existing_config_review,
         "openclaw_native_handoff": native_handoff,
         "generated_gateway_config": gateway_config,
+    }
+    native_onboarding_runbook = build_openclaw_native_onboarding_runbook_from_bundle(
+        bundle,
+        runtime_bundle_path=manifest_path,
+        output_path=native_onboarding_runbook_path,
+        markdown_output_path=native_onboarding_runbook_markdown_path,
+    )
+    bundle["readiness"]["openclaw_native_onboarding_runbook"] = {
+        "schema": native_onboarding_runbook["schema"],
+        "status": native_onboarding_runbook["status"],
+        "step_count": len(native_onboarding_runbook["steps"]),
+        "openclaw_cli_detected": native_onboarding_runbook["openclaw_cli"]["detected_on_path"],
+        "secret_values_stored": native_onboarding_runbook["policy"]["secret_values_stored"],
     }
     if gateway_llm_doctor is None:
         bundle["next_commands"].pop("doctor_gateway_llm", None)

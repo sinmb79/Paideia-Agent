@@ -153,6 +153,12 @@ def build_openclaw_onboarding_menu(
                 "ai22b-talent-foundry build-openclaw-runtime-bundle "
                 "--employment-record <employment_record.json> --channel <channel> --output-dir openclaw_runtime_bundle"
             ),
+            "build_native_onboarding_runbook": (
+                "ai22b-talent-foundry build-openclaw-native-onboarding-runbook "
+                "--runtime-bundle openclaw_runtime_bundle/openclaw_runtime_bundle.json "
+                "--output OPENCLAW_NATIVE_ONBOARDING_RUNBOOK.json "
+                "--markdown-output OPENCLAW_NATIVE_ONBOARDING_RUNBOOK.md"
+            ),
             "runtime_preflight": (
                 "ai22b-talent-foundry doctor-openclaw-runtime-preflight "
                 "--runtime-bundle openclaw_runtime_bundle/openclaw_runtime_bundle.json --run-channel-flow "

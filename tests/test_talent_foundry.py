@@ -1694,6 +1694,7 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("audit-release", {command["id"] for command in manifest["commands"]})
         self.assertIn("build-agent-program", {command["id"] for command in manifest["commands"]})
         self.assertIn("build-openclaw-onboarding-menu", {command["id"] for command in manifest["commands"]})
+        self.assertIn("build-openclaw-native-onboarding-runbook", {command["id"] for command in manifest["commands"]})
         self.assertIn("build-paideia-agent-kit", {command["id"] for command in manifest["commands"]})
         self.assertIn("doctor-agent-program", {command["id"] for command in manifest["commands"]})
         self.assertIn("migrate-agent-assets", {command["id"] for command in manifest["commands"]})
@@ -1715,6 +1716,9 @@ class TalentFoundryTests(unittest.TestCase):
             chat_script_exists = (program_path.parent / "start_paideia_chat.ps1").exists()
             menu_script_exists = (program_path.parent / "refresh_openclaw_onboarding_menu.ps1").exists()
             runtime_script_exists = (program_path.parent / "build_openclaw_runtime_bundle.ps1").exists()
+            native_onboarding_script_exists = (
+                program_path.parent / "build_openclaw_native_onboarding_runbook.ps1"
+            ).exists()
             smoke_plan_script_exists = (program_path.parent / "build_openclaw_live_smoke_plan.ps1").exists()
             smoke_sequence_script_exists = (program_path.parent / "run_openclaw_smoke_sequence.ps1").exists()
             webchat_script_exists = (program_path.parent / "start_openclaw_webchat.ps1").exists()
@@ -1731,6 +1735,7 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertTrue(chat_script_exists)
         self.assertTrue(menu_script_exists)
         self.assertTrue(runtime_script_exists)
+        self.assertTrue(native_onboarding_script_exists)
         self.assertTrue(smoke_plan_script_exists)
         self.assertTrue(smoke_sequence_script_exists)
         self.assertTrue(webchat_script_exists)
@@ -1738,6 +1743,10 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(program["entrypoints"]["install_runtime_script"], "install_paideia_runtime.ps1")
         self.assertEqual(program["entrypoints"]["openclaw_onboarding_menu_script"], "refresh_openclaw_onboarding_menu.ps1")
         self.assertEqual(program["entrypoints"]["openclaw_runtime_bundle_script"], "build_openclaw_runtime_bundle.ps1")
+        self.assertEqual(
+            program["entrypoints"]["openclaw_native_onboarding_runbook_script"],
+            "build_openclaw_native_onboarding_runbook.ps1",
+        )
         self.assertEqual(program["entrypoints"]["openclaw_live_smoke_plan_script"], "build_openclaw_live_smoke_plan.ps1")
         self.assertEqual(program["entrypoints"]["openclaw_smoke_sequence_script"], "run_openclaw_smoke_sequence.ps1")
         self.assertEqual(program["entrypoints"]["openclaw_webchat_script"], "start_openclaw_webchat.ps1")
@@ -1774,6 +1783,7 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("doctor_paideia.ps1", manifest["files"])
         self.assertIn("refresh_openclaw_onboarding_menu.ps1", manifest["files"])
         self.assertIn("build_openclaw_runtime_bundle.ps1", manifest["files"])
+        self.assertIn("build_openclaw_native_onboarding_runbook.ps1", manifest["files"])
         self.assertIn("build_openclaw_live_smoke_plan.ps1", manifest["files"])
         self.assertIn("run_openclaw_smoke_sequence.ps1", manifest["files"])
         self.assertIn("start_openclaw_webchat.ps1", manifest["files"])
@@ -1784,10 +1794,15 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(manifest["entrypoints"]["openclaw_onboarding_menu"], "openclaw_onboarding_menu.json")
         self.assertEqual(manifest["entrypoints"]["openclaw_onboarding_menu_markdown"], "OPENCLAW_ONBOARDING_MENU.md")
         self.assertEqual(manifest["entrypoints"]["build_openclaw_runtime_bundle"], "build_openclaw_runtime_bundle.ps1")
+        self.assertEqual(
+            manifest["entrypoints"]["build_openclaw_native_onboarding_runbook"],
+            "build_openclaw_native_onboarding_runbook.ps1",
+        )
         self.assertEqual(manifest["entrypoints"]["build_openclaw_live_smoke_plan"], "build_openclaw_live_smoke_plan.ps1")
         self.assertEqual(manifest["entrypoints"]["run_openclaw_smoke_sequence"], "run_openclaw_smoke_sequence.ps1")
         self.assertEqual(manifest["entrypoints"]["start_openclaw_webchat"], "start_openclaw_webchat.ps1")
         self.assertIn("run_openclaw_smoke_sequence.ps1", install_readme)
+        self.assertIn("build_openclaw_native_onboarding_runbook.ps1", install_readme)
         self.assertIn("start_openclaw_webchat.ps1", install_readme)
         self.assertIn("/api/runtime", install_readme)
         self.assertEqual(openclaw_menu["schema"], "ai22b-openclaw-onboarding-menu/v1")
@@ -1798,6 +1813,10 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(manifest["runtime_bootstrap"]["helper"], "paideia_runtime.ps1")
         self.assertEqual(manifest["runtime_bootstrap"]["installer"], "install_paideia_runtime.ps1")
         self.assertEqual(manifest["runtime_bootstrap"]["safe_openclaw_smoke_runner"], "run_openclaw_smoke_sequence.ps1")
+        self.assertEqual(
+            manifest["runtime_bootstrap"]["native_openclaw_onboarding_runbook"],
+            "build_openclaw_native_onboarding_runbook.ps1",
+        )
         self.assertFalse(manifest["runtime_bootstrap"]["secret_values_stored"])
         self.assertIn("All OpenClaw Providers", openclaw_menu_markdown)
         self.assertTrue(hermes_adapter_exists)
@@ -1969,6 +1988,12 @@ class TalentFoundryTests(unittest.TestCase):
             channel_connectors = json.loads(
                 Path(bundle["artifacts"]["channel_connector_catalog"]).read_text(encoding="utf-8")
             )
+            native_runbook = json.loads(
+                Path(bundle["artifacts"]["openclaw_native_onboarding_runbook"]).read_text(encoding="utf-8")
+            )
+            native_runbook_markdown = Path(
+                bundle["artifacts"]["openclaw_native_onboarding_runbook_markdown"]
+            ).read_text(encoding="utf-8")
 
         self.assertEqual(employment["llm_service"]["engine"], "openclaw_gateway_http")
         self.assertTrue(employment["llm_service"]["openclaw_provider_unverified"])
@@ -1986,6 +2011,10 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(provider_auth["results"][0]["auth_kind"], "openclaw_gateway_owned_provider_or_plugin")
         self.assertTrue(provider_auth["results"][0]["openclaw_gateway_recommended"])
         self.assertTrue(channel_connectors["channels"][0]["external_openclaw_channel"])
+        self.assertEqual(native_runbook["schema"], "ai22b-openclaw-native-onboarding-runbook/v1")
+        self.assertEqual(native_runbook["selection"]["provider_id"], "future-provider")
+        self.assertIn("openclaw onboard", native_runbook_markdown)
+        self.assertIn("openclaw agents add", native_runbook_markdown)
         self.assertEqual(flow["status"], "pass")
         self.assertEqual(flow["channels"][0]["delivery"]["status"], "not_applicable")
         self.assertEqual(bridge_setup["readiness"]["provider_summary"]["provider_count"], 1)

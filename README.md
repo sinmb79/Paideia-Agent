@@ -252,12 +252,13 @@ The generated kit also includes OpenClaw-style runtime entrypoints that can be r
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\build_openclaw_runtime_bundle.ps1 -Channel webchat
+powershell -ExecutionPolicy Bypass -File .\build_openclaw_native_onboarding_runbook.ps1 -Channel webchat
 powershell -ExecutionPolicy Bypass -File .\build_openclaw_live_smoke_plan.ps1 -Channel webchat
 powershell -ExecutionPolicy Bypass -File .\run_openclaw_smoke_sequence.ps1 -Channel webchat
 powershell -ExecutionPolicy Bypass -File .\start_openclaw_webchat.ps1 -Port 8722
 ```
 
-`build_openclaw_live_smoke_plan.ps1` writes a no-secret operator sequence before any real provider key, Gateway, or external channel is used. `run_openclaw_smoke_sequence.ps1` executes the safe installed-kit checks in order: runtime bundle, smoke plan, offline context chat, static runtime preflight with channel-flow dry run, and offline channel-message routing. It skips Gateway/live LLM/live channel probes unless you add `-IncludeLive`. `start_openclaw_webchat.ps1` starts the local browser chat surface on `127.0.0.1` by default and exposes `/api/runtime` plus `/api/smoke-plan` for quick inspection.
+`build_openclaw_native_onboarding_runbook.ps1` mirrors OpenClaw's own setup order: `openclaw onboard`, model/auth, workspace, Gateway, channel pairing, `openclaw agents add`, preflight, and smoke tests. `build_openclaw_live_smoke_plan.ps1` writes a no-secret operator sequence before any real provider key, Gateway, or external channel is used. `run_openclaw_smoke_sequence.ps1` executes the safe installed-kit checks in order: runtime bundle, smoke plan, offline context chat, static runtime preflight with channel-flow dry run, and offline channel-message routing. It skips Gateway/live LLM/live channel probes unless you add `-IncludeLive`. `start_openclaw_webchat.ps1` starts the local browser chat surface on `127.0.0.1` by default and exposes `/api/runtime` plus `/api/smoke-plan` for quick inspection.
 
 ## Hermes/OpenClaw-Style Skill Migration
 
@@ -301,6 +302,7 @@ A Paideia Agent kit can include:
 - `start_paideia_chat.ps1`
 - `refresh_openclaw_onboarding_menu.ps1`
 - `build_openclaw_runtime_bundle.ps1`
+- `build_openclaw_native_onboarding_runbook.ps1`
 - `build_openclaw_live_smoke_plan.ps1`
 - `run_openclaw_smoke_sequence.ps1`
 - `start_openclaw_webchat.ps1`

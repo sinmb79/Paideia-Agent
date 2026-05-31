@@ -693,6 +693,8 @@ def run_console_session(
         "openclaw_runtime_bundle": onboarding["artifacts"]["openclaw_runtime_bundle"],
         "openclaw_config_patch": onboarding["artifacts"]["openclaw_config_patch"],
         "openclaw_native_handoff": onboarding["artifacts"]["openclaw_native_handoff"],
+        "openclaw_native_onboarding_runbook": onboarding["artifacts"]["openclaw_native_onboarding_runbook"],
+        "openclaw_native_onboarding_runbook_markdown": onboarding["artifacts"]["openclaw_native_onboarding_runbook_markdown"],
         "openclaw_provider_doctor": onboarding["artifacts"]["openclaw_provider_doctor"],
         "openclaw_channel_doctor": onboarding["artifacts"]["openclaw_channel_doctor"],
         "openclaw_channel_connectors": onboarding["artifacts"]["openclaw_channel_connectors"],
