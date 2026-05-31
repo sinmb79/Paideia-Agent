@@ -1,6 +1,8 @@
-# 22B Paideia
+# Paideia Agent
 
-22B Paideia is a local-first AI talent foundry and agent runtime. It is designed to raise an AI talent through staged education, assessments, memory formation, work experience, and review, then package that talent as an installable local agent.
+[English](README.md) | [한국어 설명문](README.ko.md)
+
+Paideia Agent is a local-first AI talent foundry and agent runtime. It is designed to raise an AI talent through staged education, assessments, memory formation, work experience, and review, then package that talent as an installable local agent.
 
 The project takes inspiration from modern agent systems such as [Hermes Agent](https://github.com/NousResearch/hermes-agent) and [OpenClaw](https://github.com/openclaw/openclaw), but its center of gravity is different: Paideia starts with education before agency. An agent is not just a prompt profile. It is the hired runtime form of a trained local AI talent.
 
@@ -227,7 +229,7 @@ Securities-research talents may help organize evidence, compare sources, draft r
 
 ## Documentation
 
-- [22B Paideia overview](docs/paideia_center.md)
+- [Paideia Agent overview](docs/paideia_center.md)
 - [Hermes/OpenClaw benchmark notes](docs/paideia_agent_benchmark.md)
 - [English benchmark summary](docs/paideia_agent_benchmark.en.md)
 - [Public release hygiene policy](docs/40_public_release_hygiene_ko.md)

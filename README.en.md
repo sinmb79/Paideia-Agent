@@ -1,4 +1,4 @@
-# 22B Paideia
+# Paideia Agent
 
 The English project documentation now lives in [README.md](README.md).
 

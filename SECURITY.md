@@ -1,6 +1,6 @@
 # Security Policy
 
-22B Paideia is local-first. Private data, local memories, generated agent kits, model checkpoints, voice assets, credentials, and personal runtime artifacts must not be committed to this repository.
+Paideia Agent is local-first. Private data, local memories, generated agent kits, model checkpoints, voice assets, credentials, and personal runtime artifacts must not be committed to this repository.
 
 ## Private By Default
 

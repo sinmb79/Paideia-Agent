@@ -1,6 +1,6 @@
-# 22B Paideia
+# Paideia Agent
 
-`22B Paideia`는 단일 에이전트 이름이 아니라, 보스의 컴퓨터에서 AI 인재를 길러내는 로컬 AI 교육센터/육성 프로그램입니다.
+`Paideia Agent`는 단일 에이전트 이름만이 아니라, 보스의 컴퓨터에서 AI 인재를 길러내는 로컬 AI 교육센터/육성 프로그램입니다.
 
 ## 이름의 의미
 
@@ -10,7 +10,7 @@
 
 ## 구성
 
-- `22B Paideia`: AI 교육센터/육성 프로그램.
+- `Paideia Agent`: AI 교육센터/육성 프로그램.
 - `AI talent`: Paideia에서 길러지는 개별 AI 인재. 예: sample talent, grham-쥬니어.
 - `Ariadne Thread`: 기억과 경험의 미로에서 길을 찾는 추론기보.
 - `Memory substrate`: 학습 데이터, 경험, 절차, 대화 발달을 담는 기억 기판.
@@ -45,7 +45,7 @@ previous checkpoint
 
 ## 에이전트화
 
-최종 에이전트는 `22B Paideia`가 길러낸 개별 AI 인재를 고용 가능한 실행체로 내보낸 것입니다. 따라서 에이전트 프로그램은 다음 구조를 따릅니다.
+최종 에이전트는 `Paideia Agent`가 길러낸 개별 AI 인재를 고용 가능한 실행체로 내보낸 것입니다. 따라서 에이전트 프로그램은 다음 구조를 따릅니다.
 
 ```text
 local education records

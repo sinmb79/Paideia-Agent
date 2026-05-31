@@ -419,12 +419,12 @@ def _build_parser() -> argparse.ArgumentParser:
 
     build_agent_program_command = subparsers.add_parser(
         "build-agent-program",
-        help="Build the 22B Paideia agent program manifest from a hired employment record.",
+        help="Build the Paideia Agent program manifest from a hired employment record.",
     )
     build_agent_program_command.add_argument("--employment-record", required=True)
     build_agent_program_command.add_argument("--output")
-    build_agent_program_command.add_argument("--name", default="22B Paideia")
-    build_agent_program_command.add_argument("--name-ko", default="22B 파이데이아")
+    build_agent_program_command.add_argument("--name", default="Paideia Agent")
+    build_agent_program_command.add_argument("--name-ko", default="Paideia Agent")
 
     build_paideia_agent_kit_command = subparsers.add_parser(
         "build-paideia-agent-kit",
@@ -432,12 +432,12 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     build_paideia_agent_kit_command.add_argument("--employment-record", required=True)
     build_paideia_agent_kit_command.add_argument("--output-dir", required=True)
-    build_paideia_agent_kit_command.add_argument("--name", default="22B Paideia")
-    build_paideia_agent_kit_command.add_argument("--name-ko", default="22B 파이데이아")
+    build_paideia_agent_kit_command.add_argument("--name", default="Paideia Agent")
+    build_paideia_agent_kit_command.add_argument("--name-ko", default="Paideia Agent")
 
     doctor_agent_program_command = subparsers.add_parser(
         "doctor-agent-program",
-        help="Doctor a 22B Paideia agent program before first run.",
+        help="Doctor a Paideia Agent program before first run.",
     )
     doctor_agent_program_command.add_argument("--program", required=True)
     doctor_agent_program_command.add_argument("--output")
@@ -457,7 +457,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     run_agent_program_chat_command = subparsers.add_parser(
         "run-agent-program-chat",
-        help="Chat through the 22B Paideia program using local education records and reasoning kibo.",
+        help="Chat through the Paideia Agent program using local education records and reasoning kibo.",
     )
     run_agent_program_chat_command.add_argument("--program", required=True)
     run_agent_program_chat_command.add_argument("--message", required=True)

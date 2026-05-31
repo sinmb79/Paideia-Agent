@@ -1,6 +1,6 @@
 # Paideia Agent Benchmark: Lessons From Hermes And OpenClaw
 
-This note summarizes which ideas 22B Paideia borrows from Hermes/OpenClaw-style agents and where it deliberately diverges.
+This note summarizes which ideas Paideia Agent borrows from Hermes/OpenClaw-style agents and where it deliberately diverges.
 
 ## Why Benchmark These Agent Runtimes
 
