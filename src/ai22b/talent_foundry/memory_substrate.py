@@ -4,6 +4,8 @@ import hashlib
 import json
 import os
 import re
+import shutil
+import subprocess
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
@@ -21,6 +23,31 @@ MEMORY_SUBSTRATE_SCHEMA = "ai-talent-memory-substrate/v1"
 CHAT_CONTEXT_SCHEMA = "ai-talent-chat-context/v1"
 CHAT_RUN_SCHEMA = "ai-talent-chat-run/v1"
 DEFAULT_OPENAI_CHAT_MODEL = "gpt-5.2"
+OPENCLAW_CLI_AGENT_CHANNELS = {
+    "telegram",
+    "whatsapp",
+    "discord",
+    "irc",
+    "googlechat",
+    "slack",
+    "signal",
+    "imessage",
+    "feishu",
+    "nostr",
+    "msteams",
+    "mattermost",
+    "nextcloud-talk",
+    "matrix",
+    "line",
+    "zalo",
+    "clickclack",
+    "zalouser",
+    "synology-chat",
+    "tlon",
+    "qa-channel",
+    "qqbot",
+    "twitch",
+}
 
 RESEARCH_BASIS = [
     {
@@ -765,10 +792,11 @@ def build_chat_context(
     substrate_path_name: str,
     language_development_program: dict[str, Any] | None = None,
     recent_chat_history: list[dict[str, Any]] | None = None,
+    openclaw_channels: list[str] | None = None,
 ) -> dict[str, Any]:
     agent = employment_record["agent"]
     active_route = memory_substrate.get("active_route") or activate_memory_route(memory_substrate, objective=message)
-    runtime_selection = build_runtime_selection_snapshot(employment_record)
+    runtime_selection = build_runtime_selection_snapshot(employment_record, channels=openclaw_channels)
     selected_llm = runtime_selection["llm"]
     selected_llm_name = selected_llm.get("label") or selected_llm.get("service_id") or selected_llm.get("engine")
     system_prompt = (
@@ -1024,6 +1052,136 @@ def _parsed_live_text_result(
             "store_hidden_chain_of_thought": False,
         },
     }
+
+
+def _redact_runtime_error(text: str) -> str:
+    if not text:
+        return text
+    home = str(Path.home())
+    profile = os.environ.get("USERPROFILE", "")
+    for path in {home, profile}:
+        if path:
+            text = text.replace(path, "~")
+    text = re.sub(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}", "<email-redacted>", text)
+    text = re.sub(r"\bsk-proj-[A-Za-z0-9_-]{8,}\b", "sk-proj-<redacted>", text)
+    text = re.sub(r"\bsk-[A-Za-z0-9_-]{8,}\b", "sk-<redacted>", text)
+    return text
+
+
+def _extract_openclaw_cli_reply(parsed: Any, stdout: str) -> str:
+    if isinstance(parsed, dict):
+        for key in (
+            "assistant_reply",
+            "reply",
+            "text",
+            "content",
+            "message",
+            "output",
+            "result",
+        ):
+            value = parsed.get(key)
+            if isinstance(value, str) and value.strip():
+                return value
+            if isinstance(value, dict):
+                nested = _extract_openclaw_cli_reply(value, "")
+                if nested:
+                    return nested
+        choices = parsed.get("choices")
+        if isinstance(choices, list) and choices:
+            return _extract_openclaw_cli_reply(choices[0], "")
+    return stdout.strip()
+
+
+def _call_openclaw_cli_local_chat(
+    *,
+    chat_context: dict[str, Any],
+    runtime_config: dict[str, Any],
+    model: str,
+) -> dict[str, Any]:
+    openclaw_binary = shutil.which("openclaw")
+    if not openclaw_binary:
+        return {
+            "schema": "ai-talent-live-llm-result/v1",
+            "engine": "openclaw_cli_local",
+            "status": "unavailable",
+            "reason": "openclaw_cli_not_found",
+            "model": model,
+        }
+    if not model:
+        return {
+            "schema": "ai-talent-live-llm-result/v1",
+            "engine": "openclaw_cli_local",
+            "status": "unavailable",
+            "reason": "openclaw_provider_model_required",
+            "model": model,
+        }
+    session_key = _stable_id("openclaw-cli-session", chat_context.get("agent", {}).get("name"), chat_context.get("language"))
+    payload = {
+        "task": "Generate one live chat turn for the hired local AI talent through OpenClaw CLI.",
+        "system": _live_chat_instructions(chat_context["agent"]["name"]),
+        "local_talent_context": _compact_chat_context_for_live_llm(chat_context),
+    }
+    command = [
+        openclaw_binary,
+        "agent",
+        "--local",
+        "--json",
+        "--model",
+        model,
+        "--message",
+        json.dumps(payload, ensure_ascii=False),
+        "--session-id",
+        session_key,
+    ]
+    channels = chat_context.get("runtime_selection", {}).get("chat", {}).get("openclaw_channels", [])
+    channel_id = str(channels[0].get("channel_id")) if channels and isinstance(channels[0], dict) else ""
+    if channel_id in OPENCLAW_CLI_AGENT_CHANNELS:
+        command.extend(["--channel", channel_id])
+    try:
+        completed = subprocess.run(
+            command,
+            capture_output=True,
+            check=False,
+            text=True,
+            timeout=120,
+        )
+    except Exception as exc:
+        return {
+            "schema": "ai-talent-live-llm-result/v1",
+            "engine": "openclaw_cli_local",
+            "status": "unavailable",
+            "reason": "openclaw_cli_agent_exception",
+            "model": model,
+            "error_type": type(exc).__name__,
+            "error": _redact_runtime_error(str(exc)[:800]),
+        }
+    if completed.returncode != 0:
+        return {
+            "schema": "ai-talent-live-llm-result/v1",
+            "engine": "openclaw_cli_local",
+            "status": "unavailable",
+            "reason": "openclaw_cli_agent_call_failed",
+            "model": model,
+            "error": _redact_runtime_error((completed.stderr or completed.stdout)[:800]),
+        }
+    parsed: Any = None
+    try:
+        parsed = json.loads(completed.stdout)
+    except json.JSONDecodeError:
+        parsed = None
+    return _parsed_live_text_result(
+        engine="openclaw_cli_local",
+        model=model,
+        output_text=_extract_openclaw_cli_reply(parsed, completed.stdout),
+        network_access=str(runtime_config.get("network_access")),
+        response_metadata={
+            "provider": "openclaw_cli_local",
+            "command": "openclaw agent --local --json",
+            "channel": channel_id if channel_id in OPENCLAW_CLI_AGENT_CHANNELS else None,
+            "session_id": session_key,
+            "usage": parsed.get("usage") if isinstance(parsed, dict) else None,
+        },
+    )
 
 
 def _call_openai_responses_chat(
@@ -1443,8 +1601,8 @@ def _invoke_live_chat_llm(
 ) -> dict[str, Any]:
     engine = runtime_config.get("engine")
     api_protocol = runtime_config.get("api_protocol")
-    if api_protocol == "openclaw_gateway_openai_chat_completions":
-        selected_model = model or runtime_config.get("model") or runtime_config.get("openclaw_model")
+    if api_protocol in {"openclaw_gateway_openai_chat_completions", "openclaw_cli_agent_local"}:
+        selected_model = model or runtime_config.get("openclaw_model") or runtime_config.get("model")
     else:
         selected_model = (
             model
@@ -1457,12 +1615,19 @@ def _invoke_live_chat_llm(
     if (
         runtime_config.get("openclaw_model") == selected_model
         and runtime_config.get("openclaw_provider_id")
-        and runtime_config.get("api_protocol") != "openclaw_gateway_openai_chat_completions"
+        and runtime_config.get("api_protocol")
+        not in {"openclaw_gateway_openai_chat_completions", "openclaw_cli_agent_local"}
         and str(selected_model).startswith(f"{runtime_config['openclaw_provider_id']}/")
     ):
         selected_model = str(selected_model).split("/", 1)[1]
     if engine == "openai_chatgpt_codex":
         return _call_openai_responses_chat(chat_context=chat_context, model=selected_model)
+    if api_protocol == "openclaw_cli_agent_local" or engine == "openclaw_cli_local":
+        return _call_openclaw_cli_local_chat(
+            chat_context=chat_context,
+            runtime_config=runtime_config,
+            model=selected_model,
+        )
     if api_protocol == "openclaw_gateway_openai_chat_completions":
         return _call_openclaw_gateway_chat(
             chat_context=chat_context,
@@ -2153,6 +2318,7 @@ def run_chat_turn_from_employment(
     llm_mode: str = "offline",
     llm_model: str | None = None,
     learn_from_chat: bool = False,
+    openclaw_channels: list[str] | None = None,
 ) -> dict[str, Any]:
     if llm_mode not in {"offline", "auto", "live"}:
         raise ValueError("llm_mode must be one of: offline, auto, live")
@@ -2194,6 +2360,7 @@ def run_chat_turn_from_employment(
         substrate_path_name=substrate_path.name,
         language_development_program=language_program,
         recent_chat_history=_recent_chat_history(chat_log_path),
+        openclaw_channels=openclaw_channels,
     )
     conversation_intent = _classify_conversation_intent(message)
     fallback_reasoning_summary = _reviewable_reasoning_summary(

@@ -783,14 +783,14 @@ def _build_parser() -> argparse.ArgumentParser:
         "--llm-mode",
         choices=["offline", "auto", "live"],
         default="offline",
-        help="offline keeps deterministic local fallback; live calls OpenAI Responses API; auto tries live when available.",
+        help="offline keeps deterministic local fallback; live uses the hired LLM adapter such as OpenAI, OpenClaw CLI, OpenClaw Gateway, or local servers; auto tries live when available.",
     )
     chat_hired_agent_command.add_argument(
         "--live-llm",
         action="store_true",
         help="Shortcut for --llm-mode live.",
     )
-    chat_hired_agent_command.add_argument("--llm-model", help="OpenAI model for --live-llm/--llm-mode live.")
+    chat_hired_agent_command.add_argument("--llm-model", help="Optional model override for --live-llm/--llm-mode live.")
     chat_hired_agent_command.add_argument(
         "--learn-from-chat",
         action="store_true",
@@ -1791,6 +1791,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "hire-installed":
         llm_service = args.llm_service
+        llm_model = args.llm_model
         chat_surface = args.chat_surface
         imported_openclaw_config = None
         if args.openclaw_config:
@@ -1798,7 +1799,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             import_dir = Path(args.openclaw_import_dir) if args.openclaw_import_dir else default_import_dir
             imported_openclaw_config = import_openclaw_config(Path(args.openclaw_config), output_dir=import_dir)
             imported_selection = imported_openclaw_config.get("paideia_selection", {})
-            llm_service = llm_service or imported_selection.get("llm_service")
+            if not llm_service and imported_selection.get("llm_service"):
+                llm_service = "openclaw_cli_local"
+                llm_model = llm_model or imported_selection.get("llm_service")
             chat_surface = chat_surface or imported_selection.get("chat_surface")
         hiring = hire_installed_agent(
             Path(args.installed_manifest),
@@ -1806,7 +1809,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             role=args.role,
             llm_service=llm_service,
             llm_engine=args.llm_engine,
-            llm_model=args.llm_model,
+            llm_model=llm_model,
             llm_model_path=args.llm_model_path,
             chat_surface=chat_surface,
             openclaw_config_import=imported_openclaw_config,

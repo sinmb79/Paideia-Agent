@@ -336,6 +336,7 @@ Paideia now mirrors OpenClaw's `provider/model` selection style. Built-in direct
 - `mistral_api`
 - `openrouter_api`
 - `openclaw_gateway_http` for an installed OpenClaw Gateway's OpenAI-compatible `/v1/chat/completions` endpoint
+- `openclaw_cli_local` for the installed `openclaw agent --local --model provider/model` runtime
 - `ollama_local`
 - `lm_studio_local`
 - OpenAI-compatible OpenClaw providers such as `deepseek_api`, `groq_api`, `gmi_api`, `novita_api`, `huggingface_api`, `kilocode_gateway`, `xai_api`, `perplexity_api`, `together_ai`, `fireworks_api`, `deepinfra_api`, `cerebras_api`, `moonshot_api`, `qwen_api`, `z_ai_api`, `venice_api`, `nvidia_api`, `arcee_api`, `chutes_api`, `qianfan_api`, `stepfun_api`, `stepfun_plan_api`, `volcengine_api`, `volcengine_plan_api`, `xiaomi_api`, `xiaomi_token_plan_api`, `vllm_local`, `sglang_local`, `litellm_gateway`, and `vercel_ai_gateway`
@@ -355,7 +356,7 @@ ai22b-talent-foundry hire-installed `
   --chat-surface codex-bridge-chat
 ```
 
-After hiring, the same selection can be used by the work runtime, not only by chat. Keep the default offline mode for deterministic/local smoke tests; add `--live-llm` only when the provider key, local server, or OpenClaw Gateway is ready:
+After hiring, the same selection can be used by the work runtime, not only by chat. Keep the default offline mode for deterministic/local smoke tests; add `--live-llm` only when the provider key, local server, installed OpenClaw CLI, or OpenClaw Gateway is ready:
 
 ```powershell
 ai22b-talent-foundry run-hired-agent `
@@ -367,6 +368,22 @@ ai22b-talent-foundry run-hired-agent-job `
   --employment-record "<employment_record.json>" `
   --job-spec "<job_spec.json>" `
   --workspace "$env:AI22B_STORAGE_ROOT\talent-foundry\workspaces\job-001" `
+  --llm-mode live
+```
+
+When you want Paideia to use the exact model/auth surface already supported by the installed OpenClaw CLI, choose `openclaw_cli_local`. Paideia passes the local talent context to `openclaw agent --local --json --model <provider/model>` and keeps raw provider keys, OAuth profiles, and channel sessions inside OpenClaw:
+
+```powershell
+ai22b-talent-foundry hire-installed `
+  --installed-manifest "<installed_agent_manifest.json>" `
+  --role "Research agent" `
+  --llm-service openclaw_cli_local `
+  --llm-model "openai/gpt-5.5" `
+  --chat-surface openclaw-channel-telegram
+
+ai22b-talent-foundry chat-hired-agent `
+  --employment-record "<employment_record.json>" `
+  --message "Summarize today's research task." `
   --llm-mode live
 ```
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -61,6 +62,26 @@ LLM_SERVICE_CATALOG: list[dict[str, Any]] = [
         "secret_env_vars": ["OPENCLAW_GATEWAY_TOKEN", "OPENCLAW_GATEWAY_PASSWORD"],
         "auth_optional_on_loopback": True,
         "aliases": ["openclaw", "openclaw-gateway", "openclaw_gateway", "openclaw_gateway_http"],
+    },
+    {
+        "id": "openclaw_cli_local",
+        "label": "OpenClaw CLI local agent bridge",
+        "engine": "openclaw_cli_local",
+        "status": "ready_when_openclaw_cli_and_provider_auth_configured",
+        "default_chat_mode": "live_when_openclaw_cli_configured",
+        "model_policy": (
+            "Use --llm-model as any OpenClaw provider/model accepted by "
+            "`openclaw agent --local --model`."
+        ),
+        "requires": [
+            "installed OpenClaw CLI",
+            "OpenClaw provider auth or provider API keys available to the shell",
+        ],
+        "researcher_fit": "openclaw_native_cli_provider_and_channel_bridge",
+        "privacy_note": "Sends selected Paideia memory summaries through the installed OpenClaw CLI local agent runtime.",
+        "api_protocol": "openclaw_cli_agent_local",
+        "secret_env_vars": [],
+        "aliases": ["openclaw-cli", "openclaw_cli", "openclaw_agent_local", "openclaw_cli_local"],
     },
     {
         "id": "deterministic_local",
@@ -250,6 +271,7 @@ EXTERNAL_API_ENGINES = {
     "openclaw_openai_compatible",
     "openclaw_anthropic_compatible",
     "openclaw_gateway_http",
+    "openclaw_cli_local",
     "ollama_cloud_http",
     "openclaw_manifest_only",
 }
@@ -293,9 +315,14 @@ def resolve_llm_service(
     gateway_agent_target: str | None = None
     auto_routed_manifest_provider = False
     gateway_prefixes = {"openclaw-gateway", "openclaw_gateway", "openclaw_gateway_http"}
+    cli_prefixes = {"openclaw-cli", "openclaw_cli", "openclaw_cli_local"}
     if "/" in requested and requested.split("/", 1)[0].casefold() in gateway_prefixes:
         _prefix, remainder = requested.split("/", 1)
         requested = "openclaw_gateway_http"
+        llm_model = llm_model or remainder
+    elif "/" in requested and requested.split("/", 1)[0].casefold() in cli_prefixes:
+        _prefix, remainder = requested.split("/", 1)
+        requested = "openclaw_cli_local"
         llm_model = llm_model or remainder
     elif requested.casefold() in {"openclaw", "openclaw/default"}:
         requested = "openclaw_gateway_http"
@@ -364,8 +391,17 @@ def resolve_llm_service(
         resolved["openclaw_model"] = provider_model
     elif resolved.get("engine") == "openclaw_gateway_http" and llm_model:
         resolved["openclaw_model"] = llm_model
+    elif resolved.get("engine") == "openclaw_cli_local" and llm_model:
+        resolved["openclaw_model"] = llm_model
     elif resolved.get("openclaw_provider_id") and llm_model:
         resolved["openclaw_model"] = f"{resolved['openclaw_provider_id']}/{llm_model}"
+    if resolved.get("engine") == "openclaw_cli_local" and llm_model and "/" in llm_model:
+        provider_id = normalize_openclaw_provider_id(llm_model.split("/", 1)[0])
+        provider = find_openclaw_provider(provider_id)
+        resolved["openclaw_provider_id"] = provider_id
+        resolved["openclaw_provider"] = provider or external_openclaw_provider_descriptor(provider_id)
+        if provider is None:
+            resolved["openclaw_provider_unverified"] = True
     if provider_from_model:
         resolved["openclaw_provider"] = provider_from_model
         if provider_from_model.get("external_openclaw_provider"):
@@ -378,7 +414,10 @@ def resolve_llm_service(
             if provider_from_model and provider_from_model.get("external_openclaw_provider")
             else "manifest_only_provider_requires_openclaw_plugin_or_oauth"
         )
-    if resolved.get("openclaw_provider_id") and resolved.get("engine") != "openclaw_gateway_http":
+    if resolved.get("openclaw_provider_id") and resolved.get("engine") not in {
+        "openclaw_gateway_http",
+        "openclaw_cli_local",
+    }:
         resolved["secret_env_vars"] = openclaw_secret_env_candidates(
             str(resolved["openclaw_provider_id"]),
             list(resolved.get("secret_env_vars", [])),
@@ -393,6 +432,8 @@ def resolve_llm_service(
         network_access = "codex_or_openai_data_minimized"
     elif engine == "openclaw_manifest_only":
         network_access = "disabled_until_provider_plugin_configured"
+    elif engine == "openclaw_cli_local":
+        network_access = "openclaw_cli_managed_provider_network_when_live"
     elif engine == "openclaw_gateway_http" and base_url.startswith(("http://localhost", "http://127.0.0.1")):
         network_access = "localhost_only"
     elif engine == "openclaw_openai_compatible" and base_url.startswith(("http://localhost", "http://127.0.0.1")):
@@ -500,6 +541,27 @@ def build_llm_service_health(llm_service: dict[str, Any]) -> dict[str, Any]:
             }
         )
 
+    if engine == "openclaw_cli_local":
+        checks.append(
+            {
+                "id": "openclaw_cli_on_path",
+                "kind": "installed_cli",
+                "passed": bool(shutil.which("openclaw")),
+                "binary_name": "openclaw",
+                "secret_value_stored": False,
+                "message": "OpenClaw CLI found on PATH" if shutil.which("openclaw") else "OpenClaw CLI was not found on PATH",
+            }
+        )
+        checks.append(
+            {
+                "id": "openclaw_provider_model_selector",
+                "kind": "provider_model_selection",
+                "passed": bool(selected_model or llm_service.get("openclaw_model")),
+                "model": selected_model or llm_service.get("openclaw_model"),
+                "message": "provider/model selector ready" if (selected_model or llm_service.get("openclaw_model")) else "Select an OpenClaw provider/model.",
+            }
+        )
+
     if engine in {"bigram_local", "transformers_local", "llama_cpp_local"}:
         path = Path(str(selected_model_path)).expanduser() if selected_model_path else None
         checks.append(
@@ -515,6 +577,8 @@ def build_llm_service_health(llm_service: dict[str, Any]) -> dict[str, Any]:
 
     if engine == "openclaw_manifest_only":
         status = "manifest_only_needs_provider_plugin"
+    elif engine == "openclaw_cli_local":
+        status = "ready_for_openclaw_cli_live" if checks and all(check["passed"] for check in checks) else "needs_openclaw_cli_or_model"
     elif engine == "openclaw_gateway_http":
         status = "configured_gateway_manifest_only" if all(check["passed"] for check in checks) else "needs_gateway_auth_or_url"
     elif service_id == "openai_chatgpt_codex":

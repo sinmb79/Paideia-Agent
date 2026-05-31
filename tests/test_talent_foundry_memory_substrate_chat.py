@@ -489,6 +489,98 @@ class TalentFoundryMemorySubstrateChatTests(unittest.TestCase):
         self.assertEqual(chat["reply_generation_mode"], "live_openai_responses")
         self.assertIn("OpenClaw provider/model", chat["assistant_answer"])
 
+    def test_live_llm_chat_can_use_installed_openclaw_cli_local_agent(self) -> None:
+        from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
+        from ai22b.talent_foundry.memory_substrate import run_chat_turn_from_employment
+        from ai22b.talent_foundry.registry import hire_installed_agent
+        from ai22b.talent_foundry.training_run import materialize_training_blueprint
+
+        captured: dict[str, object] = {}
+
+        class Completed:
+            def __init__(self, stdout: str, stderr: str = "", returncode: int = 0) -> None:
+                self.stdout = stdout
+                self.stderr = stderr
+                self.returncode = returncode
+
+        def fake_run(command: list[str], **_kwargs: object) -> Completed:
+            captured["command"] = command
+            captured["message_payload"] = json.loads(command[command.index("--message") + 1])
+            return Completed(
+                json.dumps(
+                    {
+                        "reply": json.dumps(
+                            {
+                                "assistant_reply": "보스, 설치된 OpenClaw CLI의 provider/model 경로로 답변했습니다.",
+                                "reviewable_reasoning_summary": [
+                                    {
+                                        "step": "OpenClaw CLI route",
+                                        "summary": "Paideia context was passed to openclaw agent --local.",
+                                    }
+                                ],
+                                "learning_candidate": {
+                                    "lesson": "OpenClaw CLI can act as the live LLM surface.",
+                                    "reusable_principle": "Keep Paideia identity local while OpenClaw owns provider execution.",
+                                    "memory_tags": ["openclaw_cli_local", "live_llm"],
+                                    "confidence": 0.9,
+                                },
+                            },
+                            ensure_ascii=False,
+                        )
+                    },
+                    ensure_ascii=False,
+                )
+            )
+
+        blueprint = create_agent_training_blueprint(
+            owner="보스",
+            request="OpenClaw CLI provider/model 호환 채팅을 검증한다.",
+            talent_name="openclaw-cli-junior",
+            gender="male",
+            domain="securities_research",
+            role_model_id="graham_value_investing",
+            agent_surface="cli-console",
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            run = materialize_training_blueprint(blueprint, output_dir=Path(tmp) / "openclaw_cli_junior")
+            artifacts = {key: Path(value) for key, value in run["artifacts"].items()}
+            hiring = hire_installed_agent(
+                artifacts["installed_agent_manifest"],
+                employer="보스",
+                role="OpenClaw CLI 호환 리서치 에이전트",
+                llm_service="openclaw_cli_local",
+                llm_model="openai/gpt-5.5",
+                chat_surface="openclaw-channel-telegram",
+                record_name="employment_record_openclaw_cli.json",
+            )
+            with patch("shutil.which", return_value=r"C:\Users\sinmb\AppData\Roaming\npm\openclaw.cmd"), patch(
+                "subprocess.run",
+                side_effect=fake_run,
+            ):
+                chat = run_chat_turn_from_employment(
+                    hiring["employment_record"],
+                    message="OpenClaw CLI로 대화해줘",
+                    output_path=Path(tmp) / "openclaw_cli_live_chat.json",
+                    llm_mode="live",
+                    learn_from_chat=True,
+                    openclaw_channels=["telegram"],
+                )
+
+        command = captured["command"]
+        self.assertIn("agent", command)
+        self.assertIn("--local", command)
+        self.assertIn("--json", command)
+        self.assertIn("--model", command)
+        self.assertIn("openai/gpt-5.5", command)
+        self.assertIn("--channel", command)
+        self.assertIn("telegram", command)
+        self.assertEqual(captured["message_payload"]["task"], "Generate one live chat turn for the hired local AI talent through OpenClaw CLI.")
+        self.assertEqual(chat["reply_generation_mode"], "live_openai_responses")
+        self.assertEqual(chat["llm_runtime_result"]["engine"], "openclaw_cli_local")
+        self.assertEqual(chat["llm_runtime_result"]["status"], "completed")
+        self.assertIn("OpenClaw CLI", chat["assistant_answer"])
+
     def test_ollama_cloud_provider_uses_ollama_native_chat_with_bearer_token(self) -> None:
         from ai22b.talent_foundry.memory_substrate import _call_ollama_chat
 

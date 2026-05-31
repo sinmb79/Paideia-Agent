@@ -2025,7 +2025,7 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertNotIn("source-arcee-key", redacted)
         self.assertNotIn("source-telegram-token", redacted)
 
-    def test_hire_installed_uses_openclaw_config_defaults_and_preserves_gateway_choices(self) -> None:
+    def test_hire_installed_uses_openclaw_config_defaults_and_preserves_cli_choices(self) -> None:
         from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
         from ai22b.talent_foundry.cli import main as cli_main
         from ai22b.talent_foundry.training_run import materialize_training_blueprint
@@ -2081,9 +2081,14 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             employment_record = json.loads(employment_record_text)
 
         self.assertEqual(result, 0)
-        self.assertEqual(employment_record["llm_service"]["service_id"], "openclaw_gateway_http")
+        self.assertEqual(employment_record["llm_service"]["service_id"], "openclaw_cli_local")
+        self.assertEqual(employment_record["llm_service"]["engine"], "openclaw_cli_local")
+        self.assertEqual(employment_record["llm_service"]["api_protocol"], "openclaw_cli_agent_local")
+        self.assertEqual(employment_record["llm_service"]["selected_model"], "future-openclaw/next-model")
         self.assertEqual(employment_record["llm_service"]["openclaw_model"], "future-openclaw/next-model")
         self.assertTrue(employment_record["llm_service"]["openclaw_provider_unverified"])
+        self.assertEqual(employment_record["llm_runtime"]["api_protocol"], "openclaw_cli_agent_local")
+        self.assertEqual(employment_record["llm_runtime"]["openclaw_model"], "future-openclaw/next-model")
         self.assertEqual(employment_record["chat_surface"]["id"], "openclaw-channel-futurechat")
         self.assertEqual(
             employment_record["runtime_selection"]["llm"]["openclaw_provider_id"],

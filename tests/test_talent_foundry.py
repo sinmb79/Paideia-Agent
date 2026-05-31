@@ -1788,6 +1788,26 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertNotIn("boss@example.com", serialized)
         self.assertNotIn(r"C:\Users\sinmb", serialized)
 
+    def test_openclaw_cli_local_service_preserves_provider_model_selector(self) -> None:
+        from ai22b.talent_foundry.onboarding_choices import build_llm_service_health, resolve_llm_service
+
+        with patch("shutil.which", return_value=r"C:\Users\sinmb\AppData\Roaming\npm\openclaw.cmd"):
+            service = resolve_llm_service(
+                llm_service="openclaw-cli/openai/gpt-5.5",
+                llm_model=None,
+            )
+            health = build_llm_service_health(service)
+
+        self.assertEqual(service["service_id"], "openclaw_cli_local")
+        self.assertEqual(service["engine"], "openclaw_cli_local")
+        self.assertEqual(service["api_protocol"], "openclaw_cli_agent_local")
+        self.assertEqual(service["selected_model"], "openai/gpt-5.5")
+        self.assertEqual(service["openclaw_model"], "openai/gpt-5.5")
+        self.assertEqual(service["openclaw_provider_id"], "openai")
+        self.assertEqual(service["network_access"], "openclaw_cli_managed_provider_network_when_live")
+        self.assertEqual(health["status"], "ready_for_openclaw_cli_live")
+        self.assertFalse(health["secret_values_stored"])
+
     def test_build_agent_program_creates_paideia_center_manifest(self) -> None:
         from ai22b.talent_foundry.agent_program import build_agent_program
         from ai22b.talent_foundry.demo import run_demo
@@ -4169,6 +4189,51 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(run["employment_context"]["employment_id"], employment_record["employment_id"])
         self.assertEqual(run["llm_runtime_result"]["identity_policy"], "application_engine_not_identity")
         self.assertEqual(run["run_status"], "completed")
+
+    def test_cli_hire_with_openclaw_config_defaults_to_installed_cli_bridge(self) -> None:
+        from ai22b.talent_foundry.cli import main as cli_main
+        from ai22b.talent_foundry.demo import run_demo
+
+        with tempfile.TemporaryDirectory() as tmp:
+            outputs = run_demo(output_dir=Path(tmp) / "runs")
+            openclaw_config = Path(tmp) / "openclaw.json"
+            openclaw_config.write_text(
+                json.dumps(
+                    {
+                        "agents": {"defaults": {"model": "openai/gpt-5.5"}},
+                        "channels": {"telegram": {"enabled": True}},
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            employment_record_path = outputs["installed_agent_manifest"].parent / "employment_record.json"
+
+            hire_exit = cli_main(
+                [
+                    "hire-installed",
+                    "--installed-manifest",
+                    str(outputs["installed_agent_manifest"]),
+                    "--employer",
+                    "Boss",
+                    "--role",
+                    "Securities research analyst",
+                    "--openclaw-config",
+                    str(openclaw_config),
+                ]
+            )
+            employment_record = json.loads(employment_record_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(hire_exit, 0)
+        self.assertEqual(employment_record["llm_service"]["service_id"], "openclaw_cli_local")
+        self.assertEqual(employment_record["llm_service"]["engine"], "openclaw_cli_local")
+        self.assertEqual(employment_record["llm_service"]["selected_model"], "openai/gpt-5.5")
+        self.assertEqual(employment_record["llm_service"]["openclaw_model"], "openai/gpt-5.5")
+        self.assertEqual(employment_record["llm_runtime"]["api_protocol"], "openclaw_cli_agent_local")
+        self.assertEqual(employment_record["llm_runtime"]["openclaw_model"], "openai/gpt-5.5")
+        self.assertEqual(employment_record["openclaw_config_import"]["status"], "import_ready")
+        self.assertFalse(employment_record["openclaw_config_import"]["secret_values_stored"])
 
     def test_dataflow_formatter_normalizes_job_and_blocks_investment_execution(self) -> None:
         from ai22b.talent_foundry.dataflow_runtime import format_dataflow_job

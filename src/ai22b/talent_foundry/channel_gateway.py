@@ -203,6 +203,7 @@ def run_openclaw_channel_message(
         llm_mode=llm_mode,
         llm_model=llm_model,
         learn_from_chat=learn_from_chat,
+        openclaw_channels=[channel_id],
     )
     answer = str(chat_turn.get("assistant_answer") or chat_turn.get("assistant_reply") or chat_turn.get("reply") or "")
     run = {

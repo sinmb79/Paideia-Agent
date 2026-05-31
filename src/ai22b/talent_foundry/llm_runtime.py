@@ -3,6 +3,9 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
+import shutil
+import subprocess
 from pathlib import Path
 from typing import Any
 import urllib.request
@@ -32,6 +35,7 @@ EXTERNAL_API_ENGINES = {
 }
 LOCAL_HTTP_ENGINES = {"ollama_local_http", "lm_studio_local_http"}
 LOCAL_FILE_ENGINES = {"bigram_local", "transformers_local", "llama_cpp_local"}
+OPENCLAW_CLI_ENGINES = {"openclaw_cli_local"}
 DEFAULT_OPENAI_APPLICATION_MODEL = "gpt-5.2"
 
 
@@ -56,6 +60,7 @@ def build_llm_runtime_config(
         "openclaw_openai_compatible",
         "openclaw_anthropic_compatible",
         "openclaw_gateway_http",
+        "openclaw_cli_local",
         "openclaw_manifest_only",
         "ollama_cloud_http",
         "ollama_local_http",
@@ -65,6 +70,7 @@ def build_llm_runtime_config(
         raise ValueError(f"Unsupported LLM runtime engine: {engine}")
 
     manifest_only = engine == "openclaw_manifest_only"
+    openclaw_cli = engine in OPENCLAW_CLI_ENGINES
     configured_base_url = model_path or (provider_config or {}).get("base_url")
     openclaw_local_http = engine == "openclaw_openai_compatible" and str(configured_base_url or "").startswith(
         ("http://localhost", "http://127.0.0.1")
@@ -79,6 +85,8 @@ def build_llm_runtime_config(
         network_access = "codex_host_managed_data_minimized"
     elif manifest_only:
         network_access = "disabled_until_provider_plugin_configured"
+    elif openclaw_cli:
+        network_access = "openclaw_cli_managed_provider_network_when_live"
     elif external_api:
         network_access = "external_api_selected_data_minimized"
     elif local_http:
@@ -91,7 +99,7 @@ def build_llm_runtime_config(
         "engine": engine,
         "model": model,
         "model_path": model_path,
-        "local_only": not external_api or local_http,
+        "local_only": (not external_api and not openclaw_cli) or local_http,
         "network_access": network_access,
         "openclaw_provider_id": (provider_config or {}).get("openclaw_provider_id"),
         "openclaw_model": (provider_config or {}).get("openclaw_model"),
@@ -162,7 +170,7 @@ def invoke_llm_application_engine(
         )
     if engine == "openai_chatgpt_codex":
         return _invoke_openai_chatgpt_codex_bridge(runtime_config, manifest=manifest, task=task)
-    if engine in (EXTERNAL_API_ENGINES - {"openai_chatgpt_codex"}) or engine in LOCAL_HTTP_ENGINES:
+    if engine in (EXTERNAL_API_ENGINES - {"openai_chatgpt_codex"}) or engine in LOCAL_HTTP_ENGINES or engine in OPENCLAW_CLI_ENGINES:
         return _invoke_configured_adapter_manifest(runtime_config, manifest=manifest, task=task)
 
     agent = manifest["agent"]
@@ -436,18 +444,29 @@ def _request_json(
 
 
 def _selected_runtime_model(runtime_config: dict[str, Any], model_override: str | None) -> str:
-    selected = (
-        model_override
-        or runtime_config.get("model")
-        or runtime_config.get("openclaw_model")
-        or os.environ.get("AI22B_OPENAI_MODEL")
-        or os.environ.get("OPENAI_MODEL")
-        or DEFAULT_OPENAI_APPLICATION_MODEL
-    )
+    if runtime_config.get("api_protocol") == "openclaw_cli_agent_local":
+        selected = (
+            model_override
+            or runtime_config.get("openclaw_model")
+            or runtime_config.get("model")
+            or os.environ.get("AI22B_OPENAI_MODEL")
+            or os.environ.get("OPENAI_MODEL")
+            or DEFAULT_OPENAI_APPLICATION_MODEL
+        )
+    else:
+        selected = (
+            model_override
+            or runtime_config.get("model")
+            or runtime_config.get("openclaw_model")
+            or os.environ.get("AI22B_OPENAI_MODEL")
+            or os.environ.get("OPENAI_MODEL")
+            or DEFAULT_OPENAI_APPLICATION_MODEL
+        )
     provider_id = runtime_config.get("openclaw_provider_id")
     if (
         provider_id
-        and runtime_config.get("api_protocol") != "openclaw_gateway_openai_chat_completions"
+        and runtime_config.get("api_protocol")
+        not in {"openclaw_gateway_openai_chat_completions", "openclaw_cli_agent_local"}
         and str(selected).startswith(f"{provider_id}/")
     ):
         return str(selected).split("/", 1)[1]
@@ -467,6 +486,117 @@ def _live_application_prompt(*, manifest: dict[str, Any], task: str) -> str:
         f"Major goal: {agent.get('major_goal')}\n"
         f"Procedural principles: {memory.get('procedural_principles', [])}\n"
         f"Task: {task}\n"
+    )
+
+
+def _redact_runtime_text(text: str) -> str:
+    if not text:
+        return text
+    home = str(Path.home())
+    profile = os.environ.get("USERPROFILE", "")
+    for path in {home, profile}:
+        if path:
+            text = text.replace(path, "~")
+    text = re.sub(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}", "<email-redacted>", text)
+    text = re.sub(r"\bsk-proj-[A-Za-z0-9_-]{8,}\b", "sk-proj-<redacted>", text)
+    text = re.sub(r"\bsk-[A-Za-z0-9_-]{8,}\b", "sk-<redacted>", text)
+    return text
+
+
+def _extract_openclaw_cli_text(parsed: Any, stdout: str) -> str:
+    if isinstance(parsed, dict):
+        for key in (
+            "assistant_reply",
+            "reply",
+            "text",
+            "content",
+            "message",
+            "output",
+            "result",
+        ):
+            value = parsed.get(key)
+            if isinstance(value, str) and value.strip():
+                return value
+            if isinstance(value, dict):
+                nested = _extract_openclaw_cli_text(value, "")
+                if nested:
+                    return nested
+        choices = parsed.get("choices")
+        if isinstance(choices, list) and choices:
+            return _extract_openclaw_cli_text(choices[0], "")
+    return stdout.strip()
+
+
+def _invoke_openclaw_cli_local_application_engine(
+    runtime_config: dict[str, Any],
+    *,
+    manifest: dict[str, Any],
+    task: str,
+    model: str,
+) -> dict[str, Any]:
+    openclaw_binary = shutil.which("openclaw")
+    if not openclaw_binary:
+        return _unavailable_live_result(runtime_config, reason="openclaw_cli_not_found", model=model)
+    if not model:
+        return _unavailable_live_result(runtime_config, reason="openclaw_provider_model_required", model=model)
+    payload = {
+        "task": "Generate one Paideia Agent work response using the installed OpenClaw local agent runtime.",
+        "system": _live_application_prompt(manifest=manifest, task=task),
+        "user_task": task,
+        "response_policy": {
+            "answer_language": "ko-KR",
+            "hidden_chain_of_thought": "forbidden",
+            "reviewable_reasoning_summary": "required",
+        },
+    }
+    command = [
+        openclaw_binary,
+        "agent",
+        "--local",
+        "--json",
+        "--model",
+        model,
+        "--message",
+        json.dumps(payload, ensure_ascii=False),
+        "--session-id",
+        f"paideia-work-{_prompt_fingerprint(manifest=manifest, task=task)}",
+    ]
+    try:
+        completed = subprocess.run(
+            command,
+            capture_output=True,
+            check=False,
+            text=True,
+            timeout=120,
+        )
+    except Exception as exc:
+        return _unavailable_live_result(
+            runtime_config,
+            reason="openclaw_cli_agent_exception",
+            model=model,
+            error=exc,
+        )
+    if completed.returncode != 0:
+        error = RuntimeError(_redact_runtime_text(completed.stderr or completed.stdout)[:800])
+        return _unavailable_live_result(
+            runtime_config,
+            reason="openclaw_cli_agent_call_failed",
+            model=model,
+            error=error,
+        )
+    parsed: Any = None
+    try:
+        parsed = json.loads(completed.stdout)
+    except json.JSONDecodeError:
+        parsed = None
+    return _completed_live_result(
+        runtime_config,
+        model=model,
+        draft=_extract_openclaw_cli_text(parsed, completed.stdout),
+        provider="openclaw_cli_local",
+        endpoint="openclaw agent --local",
+        auth_env=None,
+        usage=parsed.get("usage") if isinstance(parsed, dict) else None,
     )
 
 
@@ -571,6 +701,14 @@ def _invoke_live_application_engine(
         return _unavailable_live_result(
             runtime_config,
             reason="openclaw_provider_plugin_required",
+            model=model,
+        )
+
+    if api_protocol == "openclaw_cli_agent_local" or engine == "openclaw_cli_local":
+        return _invoke_openclaw_cli_local_application_engine(
+            runtime_config,
+            manifest=manifest,
+            task=task,
             model=model,
         )
 
