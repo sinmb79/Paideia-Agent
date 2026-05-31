@@ -62,7 +62,10 @@ from ai22b.talent_foundry.onboarding_choices import (
 from ai22b.talent_foundry.openclaw_config_import import import_openclaw_config
 from ai22b.talent_foundry.openclaw_compat import openclaw_channel_manifest, openclaw_provider_manifest
 from ai22b.talent_foundry.openclaw_bridge_setup import build_openclaw_bridge_setup_kit
-from ai22b.talent_foundry.openclaw_native_handoff import doctor_openclaw_native_handoff
+from ai22b.talent_foundry.openclaw_native_handoff import (
+    doctor_openclaw_native_handoff,
+    prepare_openclaw_native_config,
+)
 from ai22b.talent_foundry.openclaw_parity import audit_openclaw_parity
 from ai22b.talent_foundry.openclaw_runtime_bundle import build_openclaw_runtime_bundle
 from ai22b.talent_foundry.program import create_talent_plan
@@ -220,6 +223,22 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Run read-only OpenClaw CLI probes when the openclaw binary is on PATH.",
     )
     doctor_native_handoff.add_argument("--timeout-seconds", type=int, default=20)
+
+    prepare_native_config = subparsers.add_parser(
+        "prepare-openclaw-native-config",
+        help="Plan, write a reviewed copy, or owner-confirm apply a Paideia OpenClaw config merge.",
+    )
+    prepare_native_config.add_argument("--handoff", required=True)
+    prepare_native_config.add_argument("--output", required=True)
+    prepare_native_config.add_argument("--mode", choices=["plan", "write-copy", "apply"], default="plan")
+    prepare_native_config.add_argument("--target-config")
+    prepare_native_config.add_argument("--merged-output")
+    prepare_native_config.add_argument("--backup-dir")
+    prepare_native_config.add_argument(
+        "--confirm-apply",
+        action="store_true",
+        help="Required in apply mode before Paideia writes the selected OpenClaw config.",
+    )
 
     build_bridge_setup_kit = subparsers.add_parser(
         "build-openclaw-bridge-setup-kit",
@@ -874,6 +893,19 @@ def main(argv: Sequence[str] | None = None) -> int:
             output_path=Path(args.output),
             probe_openclaw=args.probe_openclaw,
             timeout_seconds=args.timeout_seconds,
+        )
+        print(str(Path(args.output)))
+        return 0
+
+    if args.command == "prepare-openclaw-native-config":
+        prepare_openclaw_native_config(
+            Path(args.handoff),
+            output_path=Path(args.output),
+            mode=args.mode,
+            target_config_path=Path(args.target_config) if args.target_config else None,
+            merged_output_path=Path(args.merged_output) if args.merged_output else None,
+            backup_dir=Path(args.backup_dir) if args.backup_dir else None,
+            confirm_apply=args.confirm_apply,
         )
         print(str(Path(args.output)))
         return 0

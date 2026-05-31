@@ -372,6 +372,27 @@ ai22b-talent-foundry doctor-openclaw-native-handoff `
   --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_runtime_bundle\openclaw_native_handoff_doctor.json"
 ```
 
+To prepare the actual OpenClaw config merge, use `prepare-openclaw-native-config`. The default `plan` mode writes only a redacted report. `write-copy` writes a local merged config copy only when `--merged-output` is explicit. `apply` writes the target OpenClaw config only when `--confirm-apply` is present and creates a backup first.
+
+```powershell
+ai22b-talent-foundry prepare-openclaw-native-config `
+  --handoff "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_runtime_bundle\openclaw_native_handoff.json" `
+  --mode plan `
+  --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_runtime_bundle\openclaw_native_config_merge.plan.json"
+
+ai22b-talent-foundry prepare-openclaw-native-config `
+  --handoff "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_runtime_bundle\openclaw_native_handoff.json" `
+  --mode write-copy `
+  --merged-output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_runtime_bundle\openclaw.merged.local.json" `
+  --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_runtime_bundle\openclaw_native_config_merge.copy.json"
+
+ai22b-talent-foundry prepare-openclaw-native-config `
+  --handoff "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_runtime_bundle\openclaw_native_handoff.json" `
+  --mode apply `
+  --confirm-apply `
+  --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_runtime_bundle\openclaw_native_config_merge.apply.json"
+```
+
 If the owner wants the next step after import or runtime bundling, build the bridge setup kit. It turns selected providers and channels into a practical checklist: env template, provider plugin/OAuth plan, channel bridge plan, deny-by-default access config, and local smoke-test payloads.
 
 ```powershell
@@ -576,6 +597,7 @@ Securities-research talents may help organize evidence, compare sources, draft r
 - [Research basis](docs/research_basis.md)
 - [OpenClaw-style onboarding](docs/openclaw_style_onboarding.ko.md)
 - [OpenClaw-style runtime bundle](docs/openclaw_runtime_bundle.ko.md)
+- [OpenClaw native config merge](docs/openclaw_native_config_merge.ko.md)
 - [Tesla-style dataflow board benchmark](docs/tesla_board_benchmark.md)
 - [Legacy 22B-AI system integration](docs/legacy_system_integration.md)
 - [Public release hygiene policy](docs/40_public_release_hygiene_ko.md)

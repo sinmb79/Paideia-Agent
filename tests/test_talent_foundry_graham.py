@@ -562,7 +562,10 @@ class GrahamTalentFoundryTests(unittest.TestCase):
     def test_openclaw_runtime_bundle_exports_config_patch_env_template_and_doctors(self) -> None:
         from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
         from ai22b.talent_foundry.cli import main as cli_main
-        from ai22b.talent_foundry.openclaw_native_handoff import doctor_openclaw_native_handoff
+        from ai22b.talent_foundry.openclaw_native_handoff import (
+            doctor_openclaw_native_handoff,
+            prepare_openclaw_native_config,
+        )
         from ai22b.talent_foundry.openclaw_runtime_bundle import build_openclaw_runtime_bundle
         from ai22b.talent_foundry.registry import hire_installed_agent
         from ai22b.talent_foundry.training_run import materialize_training_blueprint
@@ -670,6 +673,47 @@ class GrahamTalentFoundryTests(unittest.TestCase):
                 ]
             )
             cli_handoff_doctor_exists = cli_handoff_doctor_path.exists()
+            native_config_plan_path = Path(tmp) / "native_config_plan.json"
+            native_config_plan = prepare_openclaw_native_config(
+                Path(bundle["artifacts"]["openclaw_native_handoff"]),
+                output_path=native_config_plan_path,
+            )
+            native_config_copy_report_path = Path(tmp) / "native_config_copy_report.json"
+            native_config_copy_path = Path(tmp) / "openclaw_config.merged.local.json"
+            native_config_copy = prepare_openclaw_native_config(
+                Path(bundle["artifacts"]["openclaw_native_handoff"]),
+                output_path=native_config_copy_report_path,
+                mode="write-copy",
+                merged_output_path=native_config_copy_path,
+            )
+            apply_target_path = Path(tmp) / ".openclaw" / "openclaw.apply.json"
+            apply_target_path.write_text(existing_config_path.read_text(encoding="utf-8"), encoding="utf-8")
+            native_config_apply_report_path = Path(tmp) / "native_config_apply_report.json"
+            native_config_apply = prepare_openclaw_native_config(
+                Path(bundle["artifacts"]["openclaw_native_handoff"]),
+                output_path=native_config_apply_report_path,
+                mode="apply",
+                target_config_path=apply_target_path,
+                backup_dir=Path(tmp) / "openclaw_backups",
+                confirm_apply=True,
+            )
+            cli_native_config_plan_path = Path(tmp) / "native_config_plan_cli.json"
+            cli_native_config_plan_result = cli_main(
+                [
+                    "prepare-openclaw-native-config",
+                    "--handoff",
+                    str(bundle["artifacts"]["openclaw_native_handoff"]),
+                    "--output",
+                    str(cli_native_config_plan_path),
+                ]
+            )
+            cli_native_config_plan_exists = cli_native_config_plan_path.exists()
+            native_config_copy_text = native_config_copy_path.read_text(encoding="utf-8")
+            native_config_copy_exists = native_config_copy_path.exists()
+            native_config_copy_report_text = json.dumps(native_config_copy, ensure_ascii=False)
+            native_config_apply_report_text = json.dumps(native_config_apply, ensure_ascii=False)
+            native_config_apply_backup_exists = Path(native_config_apply["target_config"]["backup_path"]).exists()
+            applied_config = json.loads(apply_target_path.read_text(encoding="utf-8"))
 
         self.assertEqual(bundle["schema"], "ai22b-openclaw-runtime-bundle/v1")
         self.assertTrue(manifest_exists)
@@ -703,6 +747,24 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertFalse(handoff_doctor["secret_values_stored"])
         self.assertEqual(cli_handoff_doctor_result, 0)
         self.assertTrue(cli_handoff_doctor_exists)
+        self.assertEqual(native_config_plan["schema"], "ai22b-openclaw-native-config-merge/v1")
+        self.assertEqual(native_config_plan["status"], "planned")
+        self.assertFalse(native_config_plan["merge"]["direct_openclaw_config_write_performed"])
+        self.assertIn("arcee", native_config_plan["merge"]["merged_config_redacted_preview"]["models"]["providers"])
+        self.assertNotIn("do-not-store-this-key", json.dumps(native_config_plan, ensure_ascii=False))
+        self.assertEqual(native_config_copy["status"], "copy_written")
+        self.assertTrue(native_config_copy_exists)
+        self.assertIn("do-not-store-this-key", native_config_copy_text)
+        self.assertNotIn("do-not-store-this-key", native_config_copy_report_text)
+        self.assertNotIn("do-not-store-this-token", native_config_copy_report_text)
+        self.assertEqual(native_config_apply["status"], "applied")
+        self.assertTrue(native_config_apply_backup_exists)
+        self.assertTrue(native_config_apply["merge"]["direct_openclaw_config_write_performed"])
+        self.assertNotIn("do-not-store-this-key", native_config_apply_report_text)
+        self.assertEqual(applied_config["models"]["providers"]["arcee"]["model"], "arcee/trinity-large-thinking")
+        self.assertTrue(applied_config["channels"]["webchat"]["enabled"])
+        self.assertEqual(cli_native_config_plan_result, 0)
+        self.assertTrue(cli_native_config_plan_exists)
         self.assertEqual(bundle["selection"]["config_action"], "modify")
         self.assertEqual(config_review["status"], "modify_preview_written")
         self.assertEqual(

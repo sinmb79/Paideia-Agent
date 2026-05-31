@@ -139,6 +139,17 @@ ai22b-talent-foundry translate-openclaw-platform-event `
   --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\telegram_translation.json"
 ```
 
+## OpenClaw native 설정 병합
+
+`prepare-openclaw-native-config`는 Paideia의 `openclaw_native_handoff.json`과 `openclaw_config_patch.json`을 기존 OpenClaw 설정에 안전하게 합치는 명령입니다. 기본 `plan` 모드는 설정 파일을 쓰지 않고 secret이 제거된 병합 보고서만 만듭니다. `write-copy`는 `--merged-output`을 명시했을 때만 로컬 병합본을 만들며, `apply`는 `--confirm-apply`가 있을 때만 백업 후 실제 OpenClaw 설정에 씁니다.
+
+```powershell
+ai22b-talent-foundry prepare-openclaw-native-config `
+  --handoff "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_runtime_bundle\openclaw_native_handoff.json" `
+  --mode plan `
+  --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\openclaw_runtime_bundle\openclaw_native_config_merge.plan.json"
+```
+
 고용된 인재를 OpenClaw식 실행 환경으로 넘기려면 runtime bundle을 생성합니다. 이 번들은 선택된 `provider/model`, `models.providers`, `agents.list`, gateway URL, enabled channels, `channels.modelByChannel`, `bindings[]`를 담은 검토용 `openclaw_config_patch.json`과, 실제 OpenClaw CLI/gateway로 넘길 때 볼 수 있는 `openclaw_native_handoff.json`을 만듭니다.
 
 ```powershell
