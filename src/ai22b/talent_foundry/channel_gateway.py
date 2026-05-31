@@ -84,8 +84,10 @@ def build_openclaw_gateway_config(
             "mode": "local_loopback_openclaw_channel_gateway",
             "bind_host": bind_host,
             "port": port,
+            "server_command": "ai22b-talent-foundry run-openclaw-channel-gateway-server",
             "http_paths": {
                 "health": "/health",
+                "config": "/openclaw/gateway-config",
                 "message": "/openclaw/channel-message",
             },
         },
@@ -105,11 +107,13 @@ def build_openclaw_gateway_config(
             "pairing_or_bot_token_storage": "not_stored_by_paideia_core",
             "channel_plugins": "must_translate_platform_events_to_openclaw_channel_message_schema",
             "private_training_files_sent_to_channel": False,
+            "outbound_delivery": "return_envelope_by_default; platform plugins must explicitly send",
         },
         "message_contract": {
             "inbound_schema": OPENCLAW_CHANNEL_MESSAGE_SCHEMA,
             "outbound_schema": OPENCLAW_CHANNEL_RUN_SCHEMA,
             "core_behavior": "route channel message to Paideia memory-substrate chat and return a sendable reply envelope",
+            "routing_policy": "reply_to_origin_channel; model_does_not_choose_channel",
         },
     }
     if output_path is not None:

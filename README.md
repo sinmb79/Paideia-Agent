@@ -323,6 +323,20 @@ ai22b-talent-foundry run-openclaw-channel-message `
   --output "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\telegram_channel_run.json"
 ```
 
+External channel plugins can post normalized OpenClaw-style messages to a local HTTP gateway:
+
+```powershell
+ai22b-talent-foundry run-openclaw-channel-gateway-server `
+  --employment-record "<employment_record.json>" `
+  --channel telegram `
+  --channel discord `
+  --channel slack `
+  --port 8722 `
+  --output-dir "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\channel-gateway"
+```
+
+The server exposes `GET /health`, `GET /openclaw/gateway-config`, and `POST /openclaw/channel-message`. By default it returns a channel-specific outbound envelope and does not send to Telegram/Discord/Slack itself; platform plugins keep control of tokens, pairing, allowlists, and final delivery. This follows OpenClaw's deterministic routing pattern: reply to the origin channel/session rather than letting the model choose a destination.
+
 For a browser chat test without any external channel token, start the local WebChat loopback server and open the printed URL:
 
 ```powershell

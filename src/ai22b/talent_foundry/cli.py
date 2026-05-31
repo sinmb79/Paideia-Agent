@@ -22,6 +22,7 @@ from ai22b.talent_foundry.channel_gateway import (
     build_openclaw_gateway_config,
     run_openclaw_channel_message,
 )
+from ai22b.talent_foundry.channel_gateway_server import run_openclaw_channel_gateway_server
 from ai22b.talent_foundry.cohort import create_specialist_cohort
 from ai22b.talent_foundry.console import collect_console_answers, run_console_session
 from ai22b.talent_foundry.distribution import (
@@ -137,6 +138,20 @@ def _build_parser() -> argparse.ArgumentParser:
     run_channel_message.add_argument("--live-llm", action="store_true")
     run_channel_message.add_argument("--llm-model")
     run_channel_message.add_argument("--learn-from-chat", action="store_true")
+
+    run_channel_gateway_server = subparsers.add_parser(
+        "run-openclaw-channel-gateway-server",
+        help="Start a local OpenClaw-style HTTP channel gateway for external channel plugins.",
+    )
+    run_channel_gateway_server.add_argument("--employment-record", required=True)
+    run_channel_gateway_server.add_argument("--channel", action="append", default=[])
+    run_channel_gateway_server.add_argument("--bind-host", default="127.0.0.1")
+    run_channel_gateway_server.add_argument("--port", type=int, default=8722)
+    run_channel_gateway_server.add_argument("--output-dir")
+    run_channel_gateway_server.add_argument("--llm-mode", choices=["offline", "auto", "live"], default="offline")
+    run_channel_gateway_server.add_argument("--live-llm", action="store_true")
+    run_channel_gateway_server.add_argument("--llm-model")
+    run_channel_gateway_server.add_argument("--learn-from-chat", action="store_true")
 
     run_webchat_server = subparsers.add_parser(
         "run-openclaw-webchat-server",
@@ -643,6 +658,20 @@ def main(argv: Sequence[str] | None = None) -> int:
             learn_from_chat=args.learn_from_chat,
         )
         print(str(Path(args.output)))
+        return 0
+
+    if args.command == "run-openclaw-channel-gateway-server":
+        llm_mode = "live" if args.live_llm else args.llm_mode
+        run_openclaw_channel_gateway_server(
+            Path(args.employment_record),
+            channels=args.channel or None,
+            bind_host=args.bind_host,
+            port=args.port,
+            output_dir=Path(args.output_dir) if args.output_dir else None,
+            llm_mode=llm_mode,
+            llm_model=args.llm_model,
+            learn_from_chat=args.learn_from_chat,
+        )
         return 0
 
     if args.command == "run-openclaw-webchat-server":

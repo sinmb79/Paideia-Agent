@@ -76,6 +76,20 @@ ai22b-talent-foundry run-openclaw-channel-message `
   --output telegram_channel_run.json
 ```
 
+실제 채널 플러그인이 붙을 때는 단발 명령 대신 HTTP gateway 서버를 띄웁니다.
+
+```powershell
+ai22b-talent-foundry run-openclaw-channel-gateway-server `
+  --employment-record "<employment_record.json>" `
+  --channel telegram `
+  --channel discord `
+  --channel slack `
+  --port 8722 `
+  --output-dir channel_gateway_runs
+```
+
+플러그인은 `POST /openclaw/channel-message`로 channel, conversation/session key, sender, text를 넘기면 됩니다. Paideia는 모델이 채널을 임의로 고르게 하지 않고, OpenClaw의 routing 철학처럼 원래 들어온 채널/세션으로 답변 envelope를 되돌려줍니다.
+
 외부 채널 토큰 없이 브라우저에서 바로 대화하려면 로컬 WebChat 서버를 실행합니다.
 
 ```powershell

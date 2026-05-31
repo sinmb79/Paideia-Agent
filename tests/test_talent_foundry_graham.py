@@ -486,6 +486,81 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertTrue(channel_run_exists)
         self.assertGreater(len(webchat["reply_text"]), 5)
 
+    def test_openclaw_channel_gateway_server_accepts_external_plugin_envelope(self) -> None:
+        from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
+        from ai22b.talent_foundry.channel_gateway_server import make_openclaw_channel_gateway_server
+        from ai22b.talent_foundry.registry import hire_installed_agent
+        from ai22b.talent_foundry.training_run import materialize_training_blueprint
+
+        blueprint = create_agent_training_blueprint(
+            owner="Boss",
+            request="Route a Telegram plugin envelope through the Paideia OpenClaw channel gateway.",
+            talent_name="gateway-junior",
+            gender="male",
+            domain="securities_research",
+            role_model_id="graham_value_investing",
+            agent_surface="openclaw-channel-telegram",
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            run = materialize_training_blueprint(blueprint, output_dir=Path(tmp) / "gateway_junior")
+            artifacts = {key: Path(value) for key, value in run["artifacts"].items()}
+            hiring = hire_installed_agent(
+                artifacts["installed_agent_manifest"],
+                employer="Boss",
+                role="Local channel gateway test agent",
+                chat_surface="openclaw-channel-telegram",
+                record_name="employment_record_gateway.json",
+            )
+            output_dir = Path(tmp) / "gateway_runs"
+            server = make_openclaw_channel_gateway_server(
+                hiring["employment_record"],
+                channels=["telegram", "discord"],
+                port=0,
+                output_dir=output_dir,
+            )
+            host, port = server.server_address
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                with urlopen(f"http://{host}:{port}/health", timeout=10) as response:
+                    health = json.loads(response.read().decode("utf-8"))
+                body = json.dumps(
+                    {
+                        "schema": "ai22b-openclaw-channel-message/v1",
+                        "channel": {"channel_id": "telegram"},
+                        "conversation_id": "agent:main:telegram:group:-100123:topic:42",
+                        "sender": {"sender_id": "boss-telegram"},
+                        "message": {"text": "Answer this through the HTTP channel gateway."},
+                        "metadata": {"display_name": "Boss"},
+                    }
+                ).encode("utf-8")
+                request = Request(
+                    f"http://{host}:{port}/openclaw/channel-message",
+                    data=body,
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                with urlopen(request, timeout=10) as response:
+                    gateway = json.loads(response.read().decode("utf-8"))
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=2)
+
+            channel_run_exists = Path(gateway["channel_run_path"]).exists()
+
+        self.assertEqual(health["schema"], "ai22b-openclaw-channel-gateway-server/v1")
+        self.assertEqual(health["paths"]["message"], "/openclaw/channel-message")
+        self.assertEqual(gateway["schema"], "ai22b-openclaw-channel-gateway-response/v1")
+        self.assertEqual(gateway["status"], "reply_ready")
+        self.assertEqual(gateway["outbound"]["channel_id"], "telegram")
+        self.assertEqual(gateway["outbound"]["conversation_id"], "agent:main:telegram:group:-100123:topic:42")
+        self.assertEqual(gateway["outbound"]["send_policy"], "return_to_gateway_plugin_not_sent_by_paideia_core")
+        self.assertFalse(gateway["security"]["external_send_performed_by_core"])
+        self.assertTrue(channel_run_exists)
+        self.assertGreater(len(gateway["outbound"]["text"]), 5)
+
     def test_owner_self_extension_blueprint_uses_private_local_track_without_role_model(self) -> None:
         from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
 

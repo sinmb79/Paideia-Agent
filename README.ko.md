@@ -108,6 +108,19 @@ ai22b-talent-foundry run-openclaw-webchat-server `
 
 기본 바인딩은 `127.0.0.1`이며, 메시지는 OpenClaw식 `webchat` 채널 envelope를 거쳐 Paideia 인재의 로컬 기억/추론 자료를 읽고 답합니다.
 
+Telegram/Discord/Slack 같은 외부 채널 플러그인이 붙을 때는 로컬 channel gateway 서버를 실행합니다.
+
+```powershell
+ai22b-talent-foundry run-openclaw-channel-gateway-server `
+  --employment-record "<employment_record.json>" `
+  --channel telegram `
+  --channel discord `
+  --channel slack `
+  --port 8722
+```
+
+이 서버는 `POST /openclaw/channel-message`를 받아 Paideia 인재에게 전달하고, 원래 들어온 채널/세션으로 되돌려 보낼 outbound envelope를 반환합니다. 실제 플랫폼 토큰, 페어링, 허용목록, 최종 전송은 채널 플러그인이 담당합니다.
+
 Hopper Junior 예시:
 
 ```powershell
