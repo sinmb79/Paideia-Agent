@@ -135,6 +135,11 @@ def hire_installed_agent(
                 "language_development_program",
                 "language_development_program.json",
             ),
+            "developmental_ecology": installed_manifest["entrypoints"].get(
+                "developmental_ecology",
+                "developmental_ecology.json",
+            ),
+            "life_trace": installed_manifest["entrypoints"].get("life_trace", "life_trace.jsonl"),
             "chat_log": "employment_chat_log.jsonl",
             "last_chat": "last_hired_agent_chat.json",
             "run_log": "employment_run_log.jsonl",

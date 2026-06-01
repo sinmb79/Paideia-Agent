@@ -15,6 +15,7 @@ Most agent runtimes begin with an assistant and add tools, memory, channels, and
 - **Raise first, hire later**: a talent passes through growth records, courses, exams, reports, and review gates before becoming an agent.
 - **Memory substrate, not full transcript replay**: the runtime selects bounded summaries, learning records, and procedural cues instead of injecting every old conversation.
 - **Reasoning Ledger / Ariadne Thread**: a reviewable ledger of hypotheses, evidence, mistakes, corrected principles, study habits, and work patterns. It is not hidden chain-of-thought. The internal compatibility artifact is still named `reasoning_kibo.jsonl`.
+- **Developmental Ecology / Life Trace**: a synthetic record of family climate, peer conflict, ordinary conversation, stress recovery, school life, aesthetic exposure, and domain curiosity. It gives the chat runtime growth experiences to retrieve instead of relying on case-by-case scripted replies.
 - **Role-model process replication**: a role model contributes sourced learning conditions and curriculum pressure, not a preloaded personality or worldview.
 - **Local-first ownership**: the owner keeps private data, generated memories, voice assets, local curricula, and installed agent bundles on their own machine.
 - **Safe skill migration**: Hermes/OpenClaw/generic skills can be imported, but they are quarantined and disabled until reviewed.
@@ -62,7 +63,8 @@ All of these are **process templates**, not impersonation targets. The catalog s
 ```mermaid
 flowchart LR
     Owner["Owner request"] --> Blueprint["Growth blueprint"]
-    Blueprint --> Curriculum["Curriculum + simulations"]
+    Blueprint --> Ecology["Developmental ecology + life trace"]
+    Ecology --> Curriculum["Curriculum + simulations"]
     Curriculum --> Assessment["Exams, reports, feedback"]
     Assessment --> Kibo["Reasoning Ledger"]
     Assessment --> Dossier["Hiring dossier"]
@@ -151,6 +153,8 @@ Run the education-to-employment flow from a blueprint:
 ai22b-talent-foundry raise `
   --blueprint "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\agent_training_blueprint.json"
 ```
+
+`raise` now also writes `developmental_ecology.json`, `life_trace.jsonl`, and a memory substrate that links those growth records to chat. See [docs/developmental_ecology_v04.ko.md](docs/developmental_ecology_v04.ko.md).
 
 Create a non-Graham talent with a local Ollama-compatible LLM adapter selected during onboarding:
 

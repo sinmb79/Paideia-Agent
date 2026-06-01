@@ -46,6 +46,8 @@ GENERATED_FILES = set(REQUIRED_FILES) | {
     "specialist_cohort.json",
     "memory_substrate.json",
     "language_development_program.json",
+    "developmental_ecology.json",
+    "life_trace.jsonl",
     "last_agent_run.json",
     "last_agent_job_run.json",
     "last_agent_job_cycle.json",
@@ -133,6 +135,8 @@ def _bundle_manifest(files: list[str], *, include_cohort: bool) -> dict[str, Any
             "agent_manifest": "agent_manifest.json",
             "learning_ledger": "learning_ledger.json",
             "language_development_program": "language_development_program.json",
+            "developmental_ecology": "developmental_ecology.json" if "developmental_ecology.json" in files else None,
+            "life_trace": "life_trace.jsonl" if "life_trace.jsonl" in files else None,
             "memory_substrate": "memory_substrate.json" if "memory_substrate.json" in files else None,
             "hiring_dossier": "hiring_dossier.json",
             "hiring_dossier_markdown": "HIRING_DOSSIER.ko.md",
@@ -156,6 +160,8 @@ def _bundle_manifest(files: list[str], *, include_cohort: bool) -> dict[str, Any
             "run_specialist_team_cycle": "run_specialist_team_cycle.ps1",
             "hiring_dossier": "hiring_dossier.json",
             "hiring_dossier_markdown": "HIRING_DOSSIER.ko.md",
+            "developmental_ecology": "developmental_ecology.json" if "developmental_ecology.json" in files else None,
+            "life_trace": "life_trace.jsonl" if "life_trace.jsonl" in files else None,
         },
         "exclusion_policy": [
             ".env",
@@ -724,6 +730,8 @@ def create_agent_release_bundle(
     learning_ledger_path: Path,
     memory_substrate_path: Path | None = None,
     language_development_program_path: Path | None = None,
+    developmental_ecology_path: Path | None = None,
+    life_trace_path: Path | None = None,
     specialist_cohort_path: Path | None = None,
     hiring_dossier_path: Path | None = None,
     hiring_dossier_markdown_path: Path | None = None,
@@ -737,6 +745,8 @@ def create_agent_release_bundle(
         "agent_manifest": output_dir / "agent_manifest.json",
         "learning_ledger": output_dir / "learning_ledger.json",
         "language_development_program": output_dir / "language_development_program.json",
+        "developmental_ecology": output_dir / "developmental_ecology.json",
+        "life_trace": output_dir / "life_trace.jsonl",
         "hiring_dossier": output_dir / "hiring_dossier.json",
         "hiring_dossier_markdown": output_dir / "HIRING_DOSSIER.ko.md",
         "readme_ko": output_dir / "README.ko.md",
@@ -779,6 +789,14 @@ def create_agent_release_bundle(
     if memory_substrate_path is not None:
         paths["memory_substrate"] = output_dir / "memory_substrate.json"
         _copy_json(memory_substrate_path, paths["memory_substrate"])
+    if developmental_ecology_path is not None:
+        _copy_json(developmental_ecology_path, paths["developmental_ecology"])
+    else:
+        paths.pop("developmental_ecology")
+    if life_trace_path is not None:
+        paths["life_trace"].write_text(life_trace_path.read_text(encoding="utf-8"), encoding="utf-8")
+    else:
+        paths.pop("life_trace")
     if hiring_dossier_path is not None:
         _copy_json(hiring_dossier_path, paths["hiring_dossier"])
         if hiring_dossier_markdown_path is not None:
@@ -1115,6 +1133,10 @@ def install_agent_release_package(
     }
     if "memory_substrate.json" in installed_files:
         entrypoints["memory_substrate"] = "memory_substrate.json"
+    if "developmental_ecology.json" in installed_files:
+        entrypoints["developmental_ecology"] = "developmental_ecology.json"
+    if "life_trace.jsonl" in installed_files:
+        entrypoints["life_trace"] = "life_trace.jsonl"
     manifest = {
         "schema": INSTALLED_SCHEMA,
         "installed_at_utc": datetime.now(timezone.utc).isoformat(),

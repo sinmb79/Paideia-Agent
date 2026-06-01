@@ -36,17 +36,27 @@ class TalentFoundryMemorySubstrateChatTests(unittest.TestCase):
         self.assertEqual(substrate["agent"]["name"], "grham-쥬니어")
         self.assertGreater(substrate["source_counts"]["reasoning_kibo_entries"], 20)
         self.assertGreaterEqual(substrate["source_counts"]["language_development_stages"], 8)
+        self.assertEqual(substrate["source_counts"]["life_trace_events"], 252)
+        self.assertGreaterEqual(substrate["source_counts"]["developmental_ecology_layers"], 7)
         self.assertIn("procedural_operator_store", substrate["boards"])
         self.assertIn("conversation_development", substrate["boards"])
+        self.assertIn("developmental_ecology", substrate["boards"])
+        self.assertIn("life_trace", substrate["boards"])
         self.assertEqual(bundle_manifest["included_artifacts"]["memory_substrate"], "memory_substrate.json")
         self.assertEqual(
             bundle_manifest["included_artifacts"]["language_development_program"],
             "language_development_program.json",
         )
+        self.assertEqual(bundle_manifest["included_artifacts"]["developmental_ecology"], "developmental_ecology.json")
+        self.assertEqual(bundle_manifest["included_artifacts"]["life_trace"], "life_trace.jsonl")
         self.assertIn("memory_substrate", installed_manifest["entrypoints"])
         self.assertIn("language_development_program", installed_manifest["entrypoints"])
+        self.assertIn("developmental_ecology", installed_manifest["entrypoints"])
+        self.assertIn("life_trace", installed_manifest["entrypoints"])
         self.assertEqual(employment_record["agent"]["name"], "grham-쥬니어")
         self.assertIn("last_chat", employment_record["entrypoints"])
+        self.assertIn("developmental_ecology", employment_record["entrypoints"])
+        self.assertIn("life_trace", employment_record["entrypoints"])
 
     def test_chat_turn_uses_codex_as_engine_and_local_kibo_as_identity(self) -> None:
         from ai22b.talent_foundry.blueprint import create_agent_training_blueprint

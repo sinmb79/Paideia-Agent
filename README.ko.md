@@ -98,6 +98,8 @@ ai22b-talent-foundry onboard-agent `
 - `curriculum_manifest.json`
 - `assessment_transcript.json`
 - `reasoning_kibo.jsonl`
+- `developmental_ecology.json`: 가정/또래/환경/감정회복/미감/문화 경험을 담은 성장 환경 seed
+- `life_trace.jsonl`: 0세부터 20세까지의 월별 성장 사건 기록
 - `hiring_dossier.json`
 - `HIRING_DOSSIER.ko.md`
 - `learning_ledger.json`

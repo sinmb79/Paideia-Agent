@@ -55,6 +55,32 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             {item["id"] for item in blueprint["artifact_plan"]},
         )
 
+    def test_developmental_ecology_and_life_trace_are_reviewable_records(self) -> None:
+        from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
+        from ai22b.talent_foundry.developmental_ecology import build_developmental_ecology
+        from ai22b.talent_foundry.life_trace import build_life_trace
+
+        blueprint = create_agent_training_blueprint(
+            owner="Boss",
+            request="Raise a securities research AI talent through Graham's learning process.",
+            talent_name="graham-junior",
+            gender="male",
+            domain="securities_research",
+            role_model_id="graham_value_investing",
+        )
+        ecology = build_developmental_ecology(blueprint)
+        trace = build_life_trace(blueprint, ecology, density="monthly")
+
+        self.assertEqual(ecology["schema"], "ai22b-paideia-developmental-ecology/v1")
+        self.assertEqual(ecology["seed"]["role_model_birth_seed_use"], "symbolic_initial_condition_only")
+        self.assertIn("personality_injection", ecology["seed"]["forbidden_use"])
+        self.assertEqual(trace["manifest"]["schema"], "ai22b-paideia-life-trace/v1")
+        self.assertEqual(trace["manifest"]["event_count"], 252)
+        self.assertEqual(trace["events"][0]["schema"], "ai22b-paideia-life-trace-event/v1")
+        self.assertEqual(trace["events"][0]["safety"]["private_reasoning_trace"], "not_stored")
+        with self.assertRaises(ValueError):
+            build_life_trace(blueprint, ecology, density="hourly")
+
     def test_graham_raise_writes_dedicated_training_outputs(self) -> None:
         from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
         from ai22b.talent_foundry.training_run import materialize_training_blueprint
@@ -73,19 +99,33 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             artifacts = {key: Path(value) for key, value in run["artifacts"].items()}
             transcript = json.loads(artifacts["assessment_transcript"].read_text(encoding="utf-8"))
             manifest = json.loads(artifacts["agent_manifest"].read_text(encoding="utf-8"))
+            substrate = json.loads(artifacts["memory_substrate"].read_text(encoding="utf-8"))
+            life_trace_lines = artifacts["life_trace"].read_text(encoding="utf-8").splitlines()
 
             self.assertTrue(artifacts["role_model_profile"].exists())
             self.assertTrue(artifacts["saju_narrative_seed"].exists())
             self.assertTrue(artifacts["curriculum_manifest"].exists())
             self.assertTrue(artifacts["reasoning_kibo"].exists())
+            self.assertTrue(artifacts["developmental_ecology"].exists())
+            self.assertTrue(artifacts["life_trace"].exists())
             self.assertTrue(artifacts["employment_record"].exists())
             self.assertEqual(run["status"], "employment_ready")
+            self.assertTrue(run["verification"]["developmental_ecology_created"])
+            self.assertTrue(run["verification"]["life_trace_created"])
+            self.assertEqual(len(life_trace_lines), 253)
             self.assertGreaterEqual(len(transcript["results"]), 9)
             self.assertTrue(transcript["graduation_ready"])
             self.assertEqual(
                 manifest["identity_source"]["role_model_inspiration"]["role_model_id"],
                 "graham_value_investing",
             )
+            self.assertEqual(
+                manifest["identity_source"]["developmental_ecology"]["schema"],
+                "ai22b-paideia-developmental-ecology/v1",
+            )
+            self.assertEqual(manifest["identity_source"]["life_trace"]["event_count"], 252)
+            self.assertEqual(substrate["source_counts"]["life_trace_events"], 252)
+            self.assertGreaterEqual(substrate["source_counts"]["developmental_ecology_layers"], 7)
             self.assertIn("openclaw_style_agent_manifest", manifest["compatible_targets"])
 
     def test_cli_list_role_models_and_blueprint_alias(self) -> None:
@@ -119,6 +159,38 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             data = json.loads(output.read_text(encoding="utf-8"))
             self.assertEqual(data["identity"]["name"], "신용")
             self.assertEqual(data["role_model"]["role_model_id"], "graham_value_investing")
+            ecology_output = Path(tmp) / "ecology.json"
+            trace_output = Path(tmp) / "life_trace.jsonl"
+            self.assertEqual(
+                cli_main(
+                    [
+                        "build-developmental-ecology",
+                        "--blueprint",
+                        str(output),
+                        "--output",
+                        str(ecology_output),
+                    ]
+                ),
+                0,
+            )
+            self.assertEqual(
+                cli_main(
+                    [
+                        "build-life-trace",
+                        "--blueprint",
+                        str(output),
+                        "--ecology",
+                        str(ecology_output),
+                        "--density",
+                        "monthly",
+                        "--output",
+                        str(trace_output),
+                    ]
+                ),
+                0,
+            )
+            self.assertTrue(ecology_output.exists())
+            self.assertEqual(len(trace_output.read_text(encoding="utf-8").splitlines()), 253)
 
     def test_non_graham_role_model_blueprint_and_raise_use_generic_assessment_ladder(self) -> None:
         from ai22b.talent_foundry.blueprint import create_agent_training_blueprint

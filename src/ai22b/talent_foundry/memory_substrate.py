@@ -12,6 +12,7 @@ from ai22b.talent_foundry.language_development import (
     build_language_development_program,
 )
 from ai22b.talent_foundry.learning_loop import build_reasoning_kernel, record_learning_experience
+from ai22b.talent_foundry.life_trace import read_life_trace_jsonl
 from ai22b.talent_foundry.llm_runtime import invoke_llm_application_engine
 
 
@@ -372,6 +373,14 @@ def _base_boards(objective: str | None) -> dict[str, Any]:
             "purpose": "Keep staged language growth from voice rhythm and joint attention to adult repair.",
             "human_reference": "developmental milestones, social communication, joint attention, dialogic reading",
         },
+        "developmental_ecology": {
+            "purpose": "Store family, peer, environment, culture, stress, and recovery conditions as training context.",
+            "human_reference": "developmental ecology and bounded social-emotional learning context",
+        },
+        "life_trace": {
+            "purpose": "Store synthetic age-appropriate experiences across childhood, school, university, and work identity.",
+            "human_reference": "episodic development records with stress, support, recovery, and learning deltas",
+        },
         "episodic_fast_store": {
             "purpose": "Keep yearly learning, tests, mistakes, feedback, and job episodes as reviewable records.",
             "human_reference": "hippocampus-like fast capture and Soar-style episodic retrieval",
@@ -447,6 +456,119 @@ def _nodes_from_language_development(program: dict[str, Any] | None) -> list[dic
     return nodes
 
 
+def _nodes_from_developmental_ecology(ecology: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not ecology:
+        return []
+    layer_keys = [
+        "residential_environment",
+        "family_climate",
+        "peer_world",
+        "meaning_system",
+        "aesthetic_profile",
+        "emotional_development",
+        "asymmetry_budget",
+    ]
+    nodes: list[dict[str, Any]] = []
+    for key in layer_keys:
+        layer = ecology.get(key)
+        if not isinstance(layer, dict):
+            continue
+        nodes.append(
+            _node(
+                node_id=_stable_id("ecology", ecology.get("seed", {}).get("seed_id"), key),
+                layer="semantic_slow_store",
+                source="developmental_ecology",
+                title=key.replace("_", " "),
+                summary=_compact(layer, limit=360),
+                tags=_tokens(layer) | {key, "developmental_ecology", "growth_context"},
+                stage="developmental_ecology",
+                strength=0.7,
+                metadata={
+                    "ecology_schema": ecology.get("schema"),
+                    "seed_id": ecology.get("seed", {}).get("seed_id"),
+                    "review_status": ecology.get("review_status"),
+                },
+            )
+        )
+    return nodes
+
+
+def _select_life_trace_events(events: list[dict[str, Any]], *, limit: int = 72) -> list[dict[str, Any]]:
+    if not events:
+        return []
+    selected: list[dict[str, Any]] = []
+    stride = max(1, len(events) // max(1, limit))
+    for index, event in enumerate(events):
+        if index % stride == 0 or int(event.get("stress_level") or 0) >= 4:
+            selected.append(event)
+        if len(selected) >= limit:
+            break
+    return selected
+
+
+def _nodes_from_life_trace(events: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    if not events:
+        return []
+    nodes: list[dict[str, Any]] = []
+    for event in _select_life_trace_events(events):
+        domain = str(event.get("domain") or "life_event")
+        stage = str(event.get("stage_id") or "growth_stage")
+        summary = _compact(
+            {
+                "age_year": event.get("age_year"),
+                "period": f"{event.get('period_type')} {event.get('period_index')}",
+                "stimulus": event.get("stimulus"),
+                "challenge": event.get("challenge"),
+                "choice": event.get("choice"),
+                "outcome": event.get("outcome"),
+                "recovery": event.get("recovery"),
+                "learning_delta": event.get("learning_delta"),
+            },
+            limit=420,
+        )
+        nodes.append(
+            _node(
+                node_id=str(event.get("event_id") or _stable_id("life-event", event.get("sequence"))),
+                layer="episodic_fast_store",
+                source="life_trace",
+                title=f"{stage} {domain}",
+                summary=summary,
+                tags=_tokens(event) | {"life_trace", "growth_experience", domain, stage},
+                stage=stage,
+                strength=0.52 + min(int(event.get("stress_level") or 0), 5) * 0.05,
+                metadata={
+                    "sequence": event.get("sequence"),
+                    "age_year": event.get("age_year"),
+                    "domain": domain,
+                    "stress_level": event.get("stress_level"),
+                    "memory_targets": event.get("memory_targets", []),
+                },
+            )
+        )
+    domains = sorted({str(event.get("domain")) for event in events if event.get("domain")})
+    nodes.append(
+        _node(
+            node_id=_stable_id("life-trace-operator", len(events), ",".join(domains)),
+            layer="procedural_operator_store",
+            source="life_trace",
+            title="developmental experience retrieval operator",
+            summary=(
+                "For identity, social, and growth questions, retrieve age, setting, stress, support, "
+                "choice, recovery, and learning_delta before answering."
+            ),
+            tags={"life_trace", "growth_story", "social_repair", "experience_retrieval", "operator"},
+            stage="post_hire_growth",
+            strength=0.78,
+            metadata={
+                "event_count": len(events),
+                "domain_count": len(domains),
+                "private_reasoning_trace": "not_stored",
+            },
+        )
+    )
+    return nodes
+
+
 def _ensure_conversation_training(substrate: dict[str, Any]) -> dict[str, Any]:
     boards = substrate.setdefault("boards", {})
     boards.setdefault(
@@ -461,6 +583,20 @@ def _ensure_conversation_training(substrate: dict[str, Any]) -> dict[str, Any]:
         {
             "purpose": "Model language and dialogue as staged development from prosody and joint attention to adult repair.",
             "human_reference": "developmental language milestones, social communication, joint attention, and dialogic reading",
+        },
+    )
+    boards.setdefault(
+        "developmental_ecology",
+        {
+            "purpose": "Store family, peer, environment, culture, stress, and recovery conditions as training context.",
+            "human_reference": "developmental ecology and bounded social-emotional learning context",
+        },
+    )
+    boards.setdefault(
+        "life_trace",
+        {
+            "purpose": "Store synthetic age-appropriate experiences across childhood, school, university, and work identity.",
+            "human_reference": "episodic development records with stress, support, recovery, and learning deltas",
         },
     )
     substrate["conversation_method_training"] = CONVERSATION_METHOD_TRAINING
@@ -590,6 +726,8 @@ def build_memory_substrate(
     process_plan: dict[str, Any] | None = None,
     curriculum_manifest: dict[str, Any] | None = None,
     language_development_program: dict[str, Any] | None = None,
+    developmental_ecology: dict[str, Any] | None = None,
+    life_trace_events: list[dict[str, Any]] | None = None,
     objective: str | None = None,
 ) -> dict[str, Any]:
     agent = agent_manifest.get("agent", {})
@@ -603,6 +741,10 @@ def build_memory_substrate(
     nodes.extend(_nodes_from_learning_ledger(learning_ledger))
     nodes.extend(_nodes_from_curriculum(curriculum_manifest))
     nodes.extend(_nodes_from_language_development(language_development_program))
+    ecology_nodes = _nodes_from_developmental_ecology(developmental_ecology)
+    life_trace_nodes = _nodes_from_life_trace(life_trace_events)
+    nodes.extend(ecology_nodes)
+    nodes.extend(life_trace_nodes)
     nodes.extend(_conversation_nodes(agent.get("name")))
     if process_plan:
         nodes.append(
@@ -644,10 +786,24 @@ def build_memory_substrate(
             "growth_policy": language_development_program.get("growth_policy", {}),
             "research_basis": language_development_program.get("research_basis", []),
         },
+        "developmental_ecology": {
+            "schema": developmental_ecology.get("schema") if developmental_ecology else None,
+            "seed_id": developmental_ecology.get("seed", {}).get("seed_id") if developmental_ecology else None,
+            "review_status": developmental_ecology.get("review_status") if developmental_ecology else None,
+            "policy": developmental_ecology.get("generation_policy", {}) if developmental_ecology else {},
+        },
+        "life_trace": {
+            "event_count": len(life_trace_events or []),
+            "node_count": len(life_trace_nodes),
+            "policy": "reviewable_synthetic_experiences_only_no_private_reasoning_trace",
+        },
         "source_counts": {
             "reasoning_kibo_entries": len(rows),
             "learning_ledger_promoted_experiences": len(learning_ledger.get("promoted_experiences", [])),
             "language_development_stages": len(language_development_program.get("stages", [])),
+            "developmental_ecology_layers": len(ecology_nodes),
+            "life_trace_events": len(life_trace_events or []),
+            "life_trace_nodes": len(life_trace_nodes),
             "conversation_method_skills": len(CONVERSATION_METHOD_TRAINING["skills"]),
             "nodes": len(nodes),
             "edges": len(edges),
@@ -710,6 +866,8 @@ def _load_or_build_substrate(
     process_plan_path: Path | None = None,
     curriculum_manifest_path: Path | None = None,
     language_development_program_path: Path | None = None,
+    developmental_ecology_path: Path | None = None,
+    life_trace_path: Path | None = None,
 ) -> tuple[dict[str, Any], Path]:
     entrypoints = employment_record.get("entrypoints", {})
     candidate = memory_substrate_path
@@ -733,6 +891,18 @@ def _load_or_build_substrate(
         process_plan_path = _find_run_sidecar(target_root, "*_process_emulation_plan.json")
     if curriculum_manifest_path is None:
         curriculum_manifest_path = _find_run_sidecar(target_root, "*_curriculum_manifest.json")
+    if developmental_ecology_path is None:
+        entrypoint_name = employment_record.get("entrypoints", {}).get("developmental_ecology")
+        if entrypoint_name:
+            developmental_ecology_path = target_root / entrypoint_name
+        if developmental_ecology_path is None or not developmental_ecology_path.exists():
+            developmental_ecology_path = _find_run_sidecar(target_root, "*_developmental_ecology.json")
+    if life_trace_path is None:
+        entrypoint_name = employment_record.get("entrypoints", {}).get("life_trace")
+        if entrypoint_name:
+            life_trace_path = target_root / entrypoint_name
+        if life_trace_path is None or not life_trace_path.exists():
+            life_trace_path = _find_run_sidecar(target_root, "*_life_trace.jsonl")
     if language_development_program_path is None:
         entrypoint_name = employment_record.get("entrypoints", {}).get("language_development_program")
         if entrypoint_name:
@@ -747,6 +917,8 @@ def _load_or_build_substrate(
         process_plan=_maybe_read_json(process_plan_path),
         curriculum_manifest=_maybe_read_json(curriculum_manifest_path),
         language_development_program=_maybe_read_json(language_development_program_path),
+        developmental_ecology=_maybe_read_json(developmental_ecology_path),
+        life_trace_events=read_life_trace_jsonl(life_trace_path)["events"] if life_trace_path else [],
         objective=objective,
     )
     write_memory_substrate(candidate, substrate)
@@ -1689,6 +1861,8 @@ def run_chat_turn_from_employment(
     process_plan_path: Path | None = None,
     curriculum_manifest_path: Path | None = None,
     language_development_program_path: Path | None = None,
+    developmental_ecology_path: Path | None = None,
+    life_trace_path: Path | None = None,
     llm_mode: str = "offline",
     llm_model: str | None = None,
     learn_from_chat: bool = False,
@@ -1717,6 +1891,8 @@ def run_chat_turn_from_employment(
         process_plan_path=process_plan_path,
         curriculum_manifest_path=curriculum_manifest_path,
         language_development_program_path=language_development_program_path,
+        developmental_ecology_path=developmental_ecology_path,
+        life_trace_path=life_trace_path,
     )
     if language_development_program_path is None:
         language_entrypoint = entrypoints.get("language_development_program")

@@ -7,6 +7,7 @@ from typing import Any
 
 from ai22b.talent_foundry.agent_manifest import build_agent_manifest
 from ai22b.talent_foundry.assessment import build_assessment_transcript
+from ai22b.talent_foundry.developmental_ecology import build_developmental_ecology
 from ai22b.talent_foundry.distribution import (
     create_agent_release_bundle,
     install_agent_release_package,
@@ -23,6 +24,7 @@ from ai22b.talent_foundry.language_development import (
     build_language_development_program,
     write_language_development_program,
 )
+from ai22b.talent_foundry.life_trace import build_life_trace, write_life_trace_jsonl
 from ai22b.talent_foundry.memory import consolidate_memory, create_memory_store, remember_event
 from ai22b.talent_foundry.memory_substrate import build_memory_substrate, write_memory_substrate
 from ai22b.talent_foundry.program import create_talent_plan
@@ -220,6 +222,8 @@ def materialize_training_blueprint(
         "assessment_transcript": output_dir / f"{name_slug}_assessment_transcript.json",
         "reasoning_kibo": output_dir / f"{name_slug}_reasoning_kibo.jsonl",
         "language_development_program": output_dir / f"{name_slug}_language_development_program.json",
+        "developmental_ecology": output_dir / f"{name_slug}_developmental_ecology.json",
+        "life_trace": output_dir / f"{name_slug}_life_trace.jsonl",
         "talent_plan": output_dir / f"{name_slug}_agent_plan.json",
         "institutional_review": output_dir / f"{name_slug}_institutional_review.json",
         "memory_profile": output_dir / f"{name_slug}_memory_profile.json",
@@ -238,7 +242,6 @@ def materialize_training_blueprint(
         "curriculum_manifest",
         "assessment_transcript",
         "reasoning_kibo",
-        "memory_substrate",
     ]
     if not blueprint.get("role_model"):
         for key in role_artifact_keys:
@@ -266,6 +269,28 @@ def materialize_training_blueprint(
         "starts_before_school": language_development_program["growth_policy"]["starts_before_school"],
         "continues_after_hire": language_development_program["growth_policy"]["continues_after_hire"],
         "path_hint": "[AI22B_STORAGE_ROOT]/talent-foundry/runs/<talent>_language_development_program.json",
+    }
+    developmental_ecology = build_developmental_ecology(
+        blueprint,
+        output_path=artifacts["developmental_ecology"],
+    )
+    life_trace = build_life_trace(blueprint, developmental_ecology, density="monthly")
+    write_life_trace_jsonl(artifacts["life_trace"], life_trace)
+    packet["developmental_ecology"] = {
+        "schema": developmental_ecology["schema"],
+        "seed_id": developmental_ecology["seed"]["seed_id"],
+        "layer_count": 7,
+        "review_status": developmental_ecology["review_status"],
+        "path_hint": "[AI22B_STORAGE_ROOT]/talent-foundry/runs/<talent>_developmental_ecology.json",
+        "policy": developmental_ecology["generation_policy"],
+    }
+    packet["life_trace"] = {
+        "schema": life_trace["manifest"]["schema"],
+        "density": life_trace["manifest"]["density"],
+        "event_count": life_trace["manifest"]["event_count"],
+        "age_span_years": life_trace["manifest"]["age_span_years"],
+        "path_hint": "[AI22B_STORAGE_ROOT]/talent-foundry/runs/<talent>_life_trace.jsonl",
+        "policy": life_trace["manifest"]["policy"],
     }
     _write_json(artifacts["talent_plan"], packet)
 
@@ -313,16 +338,17 @@ def materialize_training_blueprint(
 
     agent_manifest = build_agent_manifest(packet, memory_profile)
     _write_json(artifacts["agent_manifest"], agent_manifest)
-    if blueprint.get("role_model"):
-        memory_substrate = build_memory_substrate(
-            agent_manifest=agent_manifest,
-            learning_ledger=learning_ledger,
-            reasoning_kibo_rows=reasoning_kibo.get("entries", []) if reasoning_kibo else [],
-            process_plan=blueprint.get("role_model_process"),
-            curriculum_manifest=blueprint.get("curriculum_manifest"),
-            language_development_program=language_development_program,
-        )
-        write_memory_substrate(artifacts["memory_substrate"], memory_substrate)
+    memory_substrate = build_memory_substrate(
+        agent_manifest=agent_manifest,
+        learning_ledger=learning_ledger,
+        reasoning_kibo_rows=reasoning_kibo.get("entries", []) if reasoning_kibo else [],
+        process_plan=blueprint.get("role_model_process"),
+        curriculum_manifest=blueprint.get("curriculum_manifest"),
+        language_development_program=language_development_program,
+        developmental_ecology=developmental_ecology,
+        life_trace_events=life_trace["events"],
+    )
+    write_memory_substrate(artifacts["memory_substrate"], memory_substrate)
 
     create_agent_release_bundle(
         output_dir=artifacts["release_bundle"],
@@ -330,6 +356,8 @@ def materialize_training_blueprint(
         learning_ledger_path=artifacts["learning_ledger"],
         memory_substrate_path=artifacts.get("memory_substrate"),
         language_development_program_path=artifacts["language_development_program"],
+        developmental_ecology_path=artifacts["developmental_ecology"],
+        life_trace_path=artifacts["life_trace"],
     )
     package = package_agent_release_bundle(
         artifacts["release_bundle"],
@@ -374,6 +402,8 @@ def materialize_training_blueprint(
             "release_package_created": package["archive"].exists(),
             "installed_agent_manifest_created": install["installed_manifest"].exists(),
             "employment_record_created": hiring["employment_record"].exists(),
+            "developmental_ecology_created": artifacts["developmental_ecology"].exists(),
+            "life_trace_created": artifacts["life_trace"].exists(),
         },
     }
     _write_json(artifacts["training_run"], run)

@@ -19,6 +19,7 @@ from ai22b.talent_foundry.audit import audit_foundry_release
 from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
 from ai22b.talent_foundry.cohort import create_specialist_cohort
 from ai22b.talent_foundry.console import collect_console_answers, run_console_session
+from ai22b.talent_foundry.developmental_ecology import build_developmental_ecology
 from ai22b.talent_foundry.distribution import (
     create_agent_release_bundle,
     doctor_agent_release_bundle,
@@ -34,6 +35,7 @@ from ai22b.talent_foundry.learning_loop import (
     create_learning_ledger,
     record_learning_experience,
 )
+from ai22b.talent_foundry.life_trace import build_life_trace, write_life_trace_jsonl
 from ai22b.talent_foundry.memory_substrate import run_chat_turn_from_employment
 from ai22b.talent_foundry.onboarding import run_agent_onboarding
 from ai22b.talent_foundry.onboarding_choices import (
@@ -153,6 +155,22 @@ def _build_parser() -> argparse.ArgumentParser:
     raise_command.add_argument("--blueprint", required=True)
     raise_command.add_argument("--output-dir", default=str(DEFAULT_RUN_DIR / "training_run"))
 
+    developmental_ecology = subparsers.add_parser(
+        "build-developmental-ecology",
+        help="Build a synthetic developmental ecology seed from a training blueprint.",
+    )
+    developmental_ecology.add_argument("--blueprint", required=True)
+    developmental_ecology.add_argument("--output", required=True)
+
+    life_trace = subparsers.add_parser(
+        "build-life-trace",
+        help="Build a synthetic age-by-age life trace from a blueprint and developmental ecology.",
+    )
+    life_trace.add_argument("--blueprint", required=True)
+    life_trace.add_argument("--ecology", required=True)
+    life_trace.add_argument("--density", choices=["monthly", "daily"], default="monthly")
+    life_trace.add_argument("--output", required=True)
+
     work = subparsers.add_parser("work", help="Run one local work session for a hired AI talent.")
     work.add_argument("--packet", default=str(DEFAULT_OUTPUT))
     work.add_argument("--task", required=True)
@@ -232,6 +250,10 @@ def _build_parser() -> argparse.ArgumentParser:
     bundle = subparsers.add_parser("bundle", help="Export a public-safe local agent release bundle.")
     bundle.add_argument("--manifest", required=True)
     bundle.add_argument("--learning-ledger", required=True)
+    bundle.add_argument("--memory-substrate")
+    bundle.add_argument("--language-development-program")
+    bundle.add_argument("--developmental-ecology")
+    bundle.add_argument("--life-trace")
     bundle.add_argument("--cohort")
     bundle.add_argument("--hiring-dossier")
     bundle.add_argument("--hiring-dossier-markdown")
@@ -279,6 +301,8 @@ def _build_parser() -> argparse.ArgumentParser:
     chat_hired_agent_command.add_argument("--process-emulation-plan")
     chat_hired_agent_command.add_argument("--curriculum-manifest")
     chat_hired_agent_command.add_argument("--language-development-program")
+    chat_hired_agent_command.add_argument("--developmental-ecology")
+    chat_hired_agent_command.add_argument("--life-trace")
     chat_hired_agent_command.add_argument(
         "--llm-mode",
         choices=["offline", "auto", "live"],
@@ -590,6 +614,22 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(str(run["artifacts"]["training_run"]))
         return 0
 
+    if args.command == "build-developmental-ecology":
+        blueprint_data = json.loads(Path(args.blueprint).read_text(encoding="utf-8"))
+        output_path = Path(args.output)
+        build_developmental_ecology(blueprint_data, output_path=output_path)
+        print(str(output_path))
+        return 0
+
+    if args.command == "build-life-trace":
+        blueprint_data = json.loads(Path(args.blueprint).read_text(encoding="utf-8"))
+        ecology = json.loads(Path(args.ecology).read_text(encoding="utf-8"))
+        output_path = Path(args.output)
+        trace = build_life_trace(blueprint_data, ecology, density=args.density)
+        write_life_trace_jsonl(output_path, trace)
+        print(str(output_path))
+        return 0
+
     if args.command == "work":
         packet_path = Path(args.packet)
         hiring_packet = json.loads(packet_path.read_text(encoding="utf-8"))
@@ -775,6 +815,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             output_dir=Path(args.output_dir),
             agent_manifest_path=Path(args.manifest),
             learning_ledger_path=Path(args.learning_ledger),
+            memory_substrate_path=Path(args.memory_substrate) if args.memory_substrate else None,
+            language_development_program_path=(
+                Path(args.language_development_program) if args.language_development_program else None
+            ),
+            developmental_ecology_path=Path(args.developmental_ecology) if args.developmental_ecology else None,
+            life_trace_path=Path(args.life_trace) if args.life_trace else None,
             specialist_cohort_path=Path(args.cohort) if args.cohort else None,
             hiring_dossier_path=Path(args.hiring_dossier) if args.hiring_dossier else None,
             hiring_dossier_markdown_path=Path(args.hiring_dossier_markdown)
@@ -846,6 +892,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             language_development_program_path=(
                 Path(args.language_development_program) if args.language_development_program else None
             ),
+            developmental_ecology_path=Path(args.developmental_ecology) if args.developmental_ecology else None,
+            life_trace_path=Path(args.life_trace) if args.life_trace else None,
             llm_mode=llm_mode,
             llm_model=args.llm_model,
             learn_from_chat=args.learn_from_chat,
