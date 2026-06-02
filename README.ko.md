@@ -10,6 +10,8 @@ Paideia Agent는 로컬 우선 AI 인재 육성 프로그램이자 설치형 에
 - **LLM은 엔진입니다.** ChatGPT/Codex, Claude, Gemini, Mistral, OpenRouter, Ollama, LM Studio, GGUF/Transformers 모델은 언어 생성과 추론 엔진으로 연결됩니다. 정체성은 로컬 학습 기록, 성적표, 메모리 기판, Reasoning Ledger에서 옵니다.
 - **롤모델은 인격 주입이 아닙니다.** 특정 인물의 성격을 흉내 내는 것이 아니라, 공개적으로 확인 가능한 학습 경로와 과제 압력을 커리큘럼으로 재구성합니다.
 - **Reasoning Ledger / Ariadne Thread**는 숨은 chain-of-thought가 아닙니다. 가설, 근거, 반례, 오답, 수정된 원칙, 공부 습관, 업무 경험을 검토 가능한 요약으로 축적하는 성장 기록입니다. 내부 호환 파일명은 `reasoning_kibo.jsonl`입니다.
+- **Growth Profile**은 생애 사건을 관계, 감정, 문화/의미, 미적 경험, 학습 비대칭 메모리로 압축합니다. 일반 대화와 업무 응답은 이 메모리 기판을 읽어 답합니다.
+- **졸업 패키지**는 이력서, 성적표, 메모리팩, 런타임 매니페스트, 온보딩 프롬프트를 묶어 최종 에이전트 고용 검토에 사용합니다.
 - **공개 저장소에는 메타데이터만 둡니다.** 개인 학습자료, 로컬 기억, 생성된 에이전트 번들, 모델 체크포인트, 비공개 교재 본문은 GitHub에 올리지 않습니다.
 
 ## 온보딩에서 선택할 수 있는 롤모델
@@ -100,12 +102,33 @@ ai22b-talent-foundry onboard-agent `
 - `reasoning_kibo.jsonl`
 - `developmental_ecology.json`: 가정/또래/환경/감정회복/미감/문화 경험을 담은 성장 환경 seed
 - `life_trace.jsonl`: 0세부터 20세까지의 월별 성장 사건 기록
+- `growth_profile.json`: 관계/감정/문화/미감/비대칭 성장 메모리 요약
 - `hiring_dossier.json`
 - `HIRING_DOSSIER.ko.md`
 - `learning_ledger.json`
 - `memory_substrate.json`
 - `22b_paideia_agent_program.json`
 - Hermes/OpenClaw 스타일 어댑터 manifest
+
+졸업 패키지 생성:
+
+```powershell
+ai22b-talent-foundry build-graduate-package `
+  --training-run .\training_run.json `
+  --output-dir .\graduate_package
+```
+
+같은 장면을 여러 에이전트에게 제시해 해석 차이를 비교:
+
+```powershell
+ai22b-talent-foundry run-same-sky-eval `
+  --agent .\employment_record.a.json `
+  --agent .\employment_record.b.json `
+  --scene .\same_sky_scene.json `
+  --output .\same_sky_eval.json
+```
+
+세부 설명은 [Growth Profile v0.5-v0.7](docs/growth_profile_v05.ko.md)을 참고하세요.
 
 ## 공개 저장소 규칙
 

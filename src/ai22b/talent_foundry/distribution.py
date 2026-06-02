@@ -48,6 +48,7 @@ GENERATED_FILES = set(REQUIRED_FILES) | {
     "language_development_program.json",
     "developmental_ecology.json",
     "life_trace.jsonl",
+    "growth_profile.json",
     "last_agent_run.json",
     "last_agent_job_run.json",
     "last_agent_job_cycle.json",
@@ -137,6 +138,7 @@ def _bundle_manifest(files: list[str], *, include_cohort: bool) -> dict[str, Any
             "language_development_program": "language_development_program.json",
             "developmental_ecology": "developmental_ecology.json" if "developmental_ecology.json" in files else None,
             "life_trace": "life_trace.jsonl" if "life_trace.jsonl" in files else None,
+            "growth_profile": "growth_profile.json" if "growth_profile.json" in files else None,
             "memory_substrate": "memory_substrate.json" if "memory_substrate.json" in files else None,
             "hiring_dossier": "hiring_dossier.json",
             "hiring_dossier_markdown": "HIRING_DOSSIER.ko.md",
@@ -162,6 +164,7 @@ def _bundle_manifest(files: list[str], *, include_cohort: bool) -> dict[str, Any
             "hiring_dossier_markdown": "HIRING_DOSSIER.ko.md",
             "developmental_ecology": "developmental_ecology.json" if "developmental_ecology.json" in files else None,
             "life_trace": "life_trace.jsonl" if "life_trace.jsonl" in files else None,
+            "growth_profile": "growth_profile.json" if "growth_profile.json" in files else None,
         },
         "exclusion_policy": [
             ".env",
@@ -254,6 +257,10 @@ powershell -ExecutionPolicy Bypass -File .\\run_specialist_team_cycle.ps1 -Objec
 The LLM is treated as an application engine, not the identity. Identity comes from the academic record, employment contract, memory profile, and learning ledger.
 
 `hiring_dossier.json` and `HIRING_DOSSIER.ko.md` summarize the academic record, resume, assessment gates, doctoral defense, reasoning profile, LLM contract, and hire-ready recommendation.
+
+`growth_profile.json` condenses developmental ecology and life trace events into relationship, emotion, meaning, aesthetic, and asymmetry memory for chat and work routing.
+
+Use `ai22b-talent-foundry build-graduate-package --training-run <training_run.json> --output-dir <graduate_package>` to export a resume, transcript, memory pack, runtime manifest, and onboarding prompt.
 
 `dataflow_job.template.json` and `run_dataflow_job.ps1` run the Agent Dataflow Runtime: job formatting, active memory cache, task tiles, shadow buffers, synthesis, reverse verification, and reviewed growth-candidate creation.
 """
@@ -732,6 +739,7 @@ def create_agent_release_bundle(
     language_development_program_path: Path | None = None,
     developmental_ecology_path: Path | None = None,
     life_trace_path: Path | None = None,
+    growth_profile_path: Path | None = None,
     specialist_cohort_path: Path | None = None,
     hiring_dossier_path: Path | None = None,
     hiring_dossier_markdown_path: Path | None = None,
@@ -747,6 +755,7 @@ def create_agent_release_bundle(
         "language_development_program": output_dir / "language_development_program.json",
         "developmental_ecology": output_dir / "developmental_ecology.json",
         "life_trace": output_dir / "life_trace.jsonl",
+        "growth_profile": output_dir / "growth_profile.json",
         "hiring_dossier": output_dir / "hiring_dossier.json",
         "hiring_dossier_markdown": output_dir / "HIRING_DOSSIER.ko.md",
         "readme_ko": output_dir / "README.ko.md",
@@ -797,6 +806,10 @@ def create_agent_release_bundle(
         paths["life_trace"].write_text(life_trace_path.read_text(encoding="utf-8"), encoding="utf-8")
     else:
         paths.pop("life_trace")
+    if growth_profile_path is not None:
+        _copy_json(growth_profile_path, paths["growth_profile"])
+    else:
+        paths.pop("growth_profile")
     if hiring_dossier_path is not None:
         _copy_json(hiring_dossier_path, paths["hiring_dossier"])
         if hiring_dossier_markdown_path is not None:
@@ -1137,6 +1150,8 @@ def install_agent_release_package(
         entrypoints["developmental_ecology"] = "developmental_ecology.json"
     if "life_trace.jsonl" in installed_files:
         entrypoints["life_trace"] = "life_trace.jsonl"
+    if "growth_profile.json" in installed_files:
+        entrypoints["growth_profile"] = "growth_profile.json"
     manifest = {
         "schema": INSTALLED_SCHEMA,
         "installed_at_utc": datetime.now(timezone.utc).isoformat(),

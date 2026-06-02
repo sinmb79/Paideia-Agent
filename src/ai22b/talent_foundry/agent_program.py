@@ -448,6 +448,9 @@ def build_agent_program(
                     "language_development_program",
                     "language_development_program.json",
                 ),
+                "developmental_ecology": entrypoints.get("developmental_ecology", "developmental_ecology.json"),
+                "life_trace": entrypoints.get("life_trace", "life_trace.jsonl"),
+                "growth_profile": entrypoints.get("growth_profile", "growth_profile.json"),
                 "reasoning_kibo_sidecar": _first_matching_name(target_root, "*_reasoning_kibo.jsonl"),
             },
             "policy": {
@@ -585,6 +588,12 @@ def build_paideia_agent_install_kit(
         "*_reasoning_kibo.jsonl",
         "*_curriculum_manifest.json",
         "*_assessment_transcript.json",
+        "*_developmental_ecology.json",
+        "*_life_trace.jsonl",
+        "*_growth_profile.json",
+        "developmental_ecology.json",
+        "life_trace.jsonl",
+        "growth_profile.json",
     ]
     for pattern in optional_patterns:
         for source in sorted(source_root.glob(pattern)):

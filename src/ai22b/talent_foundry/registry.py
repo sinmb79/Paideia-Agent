@@ -140,6 +140,7 @@ def hire_installed_agent(
                 "developmental_ecology.json",
             ),
             "life_trace": installed_manifest["entrypoints"].get("life_trace", "life_trace.jsonl"),
+            "growth_profile": installed_manifest["entrypoints"].get("growth_profile", "growth_profile.json"),
             "chat_log": "employment_chat_log.jsonl",
             "last_chat": "last_hired_agent_chat.json",
             "run_log": "employment_run_log.jsonl",

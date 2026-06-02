@@ -151,6 +151,7 @@ def run_agent_onboarding(
         "reasoning_kibo": training_run["artifacts"].get("reasoning_kibo"),
         "developmental_ecology": training_run["artifacts"].get("developmental_ecology"),
         "life_trace": training_run["artifacts"].get("life_trace"),
+        "growth_profile": training_run["artifacts"].get("growth_profile"),
         "memory_substrate": training_run["artifacts"].get("memory_substrate"),
         "talent_plan": training_run["artifacts"]["talent_plan"],
         "learning_ledger": training_run["artifacts"]["learning_ledger"],

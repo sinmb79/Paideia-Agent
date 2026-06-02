@@ -20,6 +20,7 @@ def build_agent_manifest(
     language_development = hiring_packet.get("language_development_program")
     developmental_ecology = hiring_packet.get("developmental_ecology")
     life_trace = hiring_packet.get("life_trace")
+    growth_profile = hiring_packet.get("growth_profile")
 
     return {
         "schema": SCHEMA,
@@ -52,6 +53,7 @@ def build_agent_manifest(
             "language_development_program": language_development,
             "developmental_ecology": developmental_ecology,
             "life_trace": life_trace,
+            "growth_profile": growth_profile,
             "reasoning_kibo_growth_model": {
                 "starts_at": "elementary_grade_1",
                 "continues_after_hire": True,

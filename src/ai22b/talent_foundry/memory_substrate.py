@@ -11,6 +11,7 @@ from typing import Any
 from ai22b.talent_foundry.language_development import (
     build_language_development_program,
 )
+from ai22b.talent_foundry.growth_profile import read_growth_profile
 from ai22b.talent_foundry.learning_loop import build_reasoning_kernel, record_learning_experience
 from ai22b.talent_foundry.life_trace import read_life_trace_jsonl
 from ai22b.talent_foundry.llm_runtime import invoke_llm_application_engine
@@ -381,6 +382,10 @@ def _base_boards(objective: str | None) -> dict[str, Any]:
             "purpose": "Store synthetic age-appropriate experiences across childhood, school, university, and work identity.",
             "human_reference": "episodic development records with stress, support, recovery, and learning deltas",
         },
+        "growth_profile": {
+            "purpose": "Consolidate life-trace events into relationship, emotion, culture, aesthetic, and asymmetry memory.",
+            "human_reference": "developmental ecology summarized into reviewable memory-pack scaffolds",
+        },
         "episodic_fast_store": {
             "purpose": "Keep yearly learning, tests, mistakes, feedback, and job episodes as reviewable records.",
             "human_reference": "hippocampus-like fast capture and Soar-style episodic retrieval",
@@ -569,6 +574,72 @@ def _nodes_from_life_trace(events: list[dict[str, Any]] | None) -> list[dict[str
     return nodes
 
 
+def _nodes_from_growth_profile(profile: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not profile:
+        return []
+    sections = [
+        (
+            "relationship_memory",
+            "semantic_slow_store",
+            "growth_profile.relationship_memory",
+            0.76,
+            {"relationship", "conflict_repair", "social_recovery"},
+        ),
+        (
+            "emotional_memory",
+            "metacognitive_monitor",
+            "growth_profile.emotional_memory",
+            0.74,
+            {"emotion", "stress", "recovery", "regulation"},
+        ),
+        (
+            "meaning_memory",
+            "semantic_slow_store",
+            "growth_profile.meaning_memory",
+            0.68,
+            {"culture", "meaning", "values"},
+        ),
+        (
+            "aesthetic_memory",
+            "semantic_slow_store",
+            "growth_profile.aesthetic_memory",
+            0.64,
+            {"aesthetic", "tone", "ordinary_conversation"},
+        ),
+        (
+            "asymmetry_profile",
+            "procedural_operator_store",
+            "growth_profile.asymmetry_profile",
+            0.72,
+            {"asymmetry", "learning_bias", "growth_cost", "operator"},
+        ),
+    ]
+    nodes: list[dict[str, Any]] = []
+    talent_name = profile.get("talent", {}).get("name")
+    for key, layer, title, strength, tags in sections:
+        section = profile.get(key)
+        if not isinstance(section, dict):
+            continue
+        nodes.append(
+            _node(
+                node_id=_stable_id("growth-profile", profile.get("schema"), talent_name, key),
+                layer=layer,
+                source="growth_profile",
+                title=title,
+                summary=_compact(section, limit=420),
+                tags=_tokens(section) | tags | {"growth_profile", key},
+                stage="growth_profile",
+                strength=strength,
+                metadata={
+                    "schema": profile.get("schema"),
+                    "review_status": profile.get("review_status"),
+                    "private_reasoning_trace": "not_stored",
+                },
+            )
+        )
+    return nodes
+
+
 def _ensure_conversation_training(substrate: dict[str, Any]) -> dict[str, Any]:
     boards = substrate.setdefault("boards", {})
     boards.setdefault(
@@ -597,6 +668,13 @@ def _ensure_conversation_training(substrate: dict[str, Any]) -> dict[str, Any]:
         {
             "purpose": "Store synthetic age-appropriate experiences across childhood, school, university, and work identity.",
             "human_reference": "episodic development records with stress, support, recovery, and learning deltas",
+        },
+    )
+    boards.setdefault(
+        "growth_profile",
+        {
+            "purpose": "Consolidate life-trace events into relationship, emotion, culture, aesthetic, and asymmetry memory.",
+            "human_reference": "developmental ecology summarized into reviewable memory-pack scaffolds",
         },
     )
     substrate["conversation_method_training"] = CONVERSATION_METHOD_TRAINING
@@ -728,6 +806,7 @@ def build_memory_substrate(
     language_development_program: dict[str, Any] | None = None,
     developmental_ecology: dict[str, Any] | None = None,
     life_trace_events: list[dict[str, Any]] | None = None,
+    growth_profile: dict[str, Any] | None = None,
     objective: str | None = None,
 ) -> dict[str, Any]:
     agent = agent_manifest.get("agent", {})
@@ -743,8 +822,10 @@ def build_memory_substrate(
     nodes.extend(_nodes_from_language_development(language_development_program))
     ecology_nodes = _nodes_from_developmental_ecology(developmental_ecology)
     life_trace_nodes = _nodes_from_life_trace(life_trace_events)
+    growth_profile_nodes = _nodes_from_growth_profile(growth_profile)
     nodes.extend(ecology_nodes)
     nodes.extend(life_trace_nodes)
+    nodes.extend(growth_profile_nodes)
     nodes.extend(_conversation_nodes(agent.get("name")))
     if process_plan:
         nodes.append(
@@ -797,6 +878,12 @@ def build_memory_substrate(
             "node_count": len(life_trace_nodes),
             "policy": "reviewable_synthetic_experiences_only_no_private_reasoning_trace",
         },
+        "growth_profile": {
+            "schema": growth_profile.get("schema") if growth_profile else None,
+            "node_count": len(growth_profile_nodes),
+            "review_status": growth_profile.get("review_status") if growth_profile else None,
+            "policy": growth_profile.get("policy", {}) if growth_profile else {},
+        },
         "source_counts": {
             "reasoning_kibo_entries": len(rows),
             "learning_ledger_promoted_experiences": len(learning_ledger.get("promoted_experiences", [])),
@@ -804,6 +891,7 @@ def build_memory_substrate(
             "developmental_ecology_layers": len(ecology_nodes),
             "life_trace_events": len(life_trace_events or []),
             "life_trace_nodes": len(life_trace_nodes),
+            "growth_profile_nodes": len(growth_profile_nodes),
             "conversation_method_skills": len(CONVERSATION_METHOD_TRAINING["skills"]),
             "nodes": len(nodes),
             "edges": len(edges),
@@ -868,6 +956,7 @@ def _load_or_build_substrate(
     language_development_program_path: Path | None = None,
     developmental_ecology_path: Path | None = None,
     life_trace_path: Path | None = None,
+    growth_profile_path: Path | None = None,
 ) -> tuple[dict[str, Any], Path]:
     entrypoints = employment_record.get("entrypoints", {})
     candidate = memory_substrate_path
@@ -903,6 +992,12 @@ def _load_or_build_substrate(
             life_trace_path = target_root / entrypoint_name
         if life_trace_path is None or not life_trace_path.exists():
             life_trace_path = _find_run_sidecar(target_root, "*_life_trace.jsonl")
+    if growth_profile_path is None:
+        entrypoint_name = employment_record.get("entrypoints", {}).get("growth_profile")
+        if entrypoint_name:
+            growth_profile_path = target_root / entrypoint_name
+        if growth_profile_path is None or not growth_profile_path.exists():
+            growth_profile_path = _find_run_sidecar(target_root, "*_growth_profile.json")
     if language_development_program_path is None:
         entrypoint_name = employment_record.get("entrypoints", {}).get("language_development_program")
         if entrypoint_name:
@@ -919,6 +1014,7 @@ def _load_or_build_substrate(
         language_development_program=_maybe_read_json(language_development_program_path),
         developmental_ecology=_maybe_read_json(developmental_ecology_path),
         life_trace_events=read_life_trace_jsonl(life_trace_path)["events"] if life_trace_path else [],
+        growth_profile=read_growth_profile(growth_profile_path) if growth_profile_path else None,
         objective=objective,
     )
     write_memory_substrate(candidate, substrate)
@@ -960,6 +1056,7 @@ def build_chat_context(
                 "agent_manifest",
                 "learning_ledger",
                 substrate_path_name,
+                "growth_profile",
             ],
             "private_reasoning_trace": "do_not_store",
             "hidden_chain_of_thought": "forbidden",
@@ -1863,6 +1960,7 @@ def run_chat_turn_from_employment(
     language_development_program_path: Path | None = None,
     developmental_ecology_path: Path | None = None,
     life_trace_path: Path | None = None,
+    growth_profile_path: Path | None = None,
     llm_mode: str = "offline",
     llm_model: str | None = None,
     learn_from_chat: bool = False,
@@ -1893,6 +1991,7 @@ def run_chat_turn_from_employment(
         language_development_program_path=language_development_program_path,
         developmental_ecology_path=developmental_ecology_path,
         life_trace_path=life_trace_path,
+        growth_profile_path=growth_profile_path,
     )
     if language_development_program_path is None:
         language_entrypoint = entrypoints.get("language_development_program")

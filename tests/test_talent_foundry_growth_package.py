@@ -1,0 +1,86 @@
+from __future__ import annotations
+
+import json
+import tempfile
+import unittest
+from pathlib import Path
+
+
+class PaideiaGrowthPackageTests(unittest.TestCase):
+    def test_graduate_package_and_same_sky_cli_use_growth_profile(self) -> None:
+        from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
+        from ai22b.talent_foundry.cli import main as cli_main
+        from ai22b.talent_foundry.training_run import materialize_training_blueprint
+
+        blueprint = create_agent_training_blueprint(
+            owner="Boss",
+            request="Raise a securities research AI talent through Graham's learning process.",
+            talent_name="graham-junior",
+            gender="male",
+            domain="securities_research",
+            role_model_id="graham_value_investing",
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run = materialize_training_blueprint(blueprint, output_dir=root / "graham")
+            artifacts = {key: Path(value) for key, value in run["artifacts"].items()}
+
+            graduate_dir = root / "graduate_package"
+            self.assertEqual(
+                cli_main(
+                    [
+                        "build-graduate-package",
+                        "--training-run",
+                        str(artifacts["training_run"]),
+                        "--output-dir",
+                        str(graduate_dir),
+                    ]
+                ),
+                0,
+            )
+            graduate_manifest = json.loads(
+                (graduate_dir / "graduate_package_manifest.json").read_text(encoding="utf-8")
+            )
+            runtime_manifest = json.loads((graduate_dir / "runtime_manifest.json").read_text(encoding="utf-8"))
+            self.assertTrue((graduate_dir / "agent_resume.md").exists())
+            self.assertTrue((graduate_dir / "memory_pack" / "episodic_memory.jsonl").exists())
+
+            scene = root / "scene.json"
+            scene.write_text(
+                json.dumps(
+                    {
+                        "id": "same_sky_market_note",
+                        "prompt": "One company missed earnings, but cash flow stayed strong. What matters first?",
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            same_sky_output = root / "same_sky_eval.json"
+            self.assertEqual(
+                cli_main(
+                    [
+                        "run-same-sky-eval",
+                        "--agent",
+                        str(artifacts["employment_record"]),
+                        "--scene",
+                        str(scene),
+                        "--output",
+                        str(same_sky_output),
+                    ]
+                ),
+                0,
+            )
+            same_sky = json.loads(same_sky_output.read_text(encoding="utf-8"))
+
+        self.assertEqual(graduate_manifest["schema"], "ai22b-paideia-graduate-package/v1")
+        self.assertEqual(runtime_manifest["llm_contract"]["identity_source"], "graduate_package_memory_pack")
+        self.assertEqual(same_sky["schema"], "ai22b-paideia-same-sky-eval/v1")
+        self.assertEqual(same_sky["agent_count"], 1)
+        self.assertIn("growth_profile", same_sky["agent_views"][0]["response"]["evidence_links"])
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -58,6 +58,7 @@ class GrahamTalentFoundryTests(unittest.TestCase):
     def test_developmental_ecology_and_life_trace_are_reviewable_records(self) -> None:
         from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
         from ai22b.talent_foundry.developmental_ecology import build_developmental_ecology
+        from ai22b.talent_foundry.growth_profile import build_growth_profile
         from ai22b.talent_foundry.life_trace import build_life_trace
 
         blueprint = create_agent_training_blueprint(
@@ -70,6 +71,7 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         )
         ecology = build_developmental_ecology(blueprint)
         trace = build_life_trace(blueprint, ecology, density="monthly")
+        growth_profile = build_growth_profile(blueprint, ecology, trace)
 
         self.assertEqual(ecology["schema"], "ai22b-paideia-developmental-ecology/v1")
         self.assertEqual(ecology["seed"]["role_model_birth_seed_use"], "symbolic_initial_condition_only")
@@ -78,6 +80,10 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertEqual(trace["manifest"]["event_count"], 252)
         self.assertEqual(trace["events"][0]["schema"], "ai22b-paideia-life-trace-event/v1")
         self.assertEqual(trace["events"][0]["safety"]["private_reasoning_trace"], "not_stored")
+        self.assertEqual(growth_profile["schema"], "ai22b-paideia-growth-profile/v1")
+        self.assertIn("relationship_memory", growth_profile)
+        self.assertIn("emotional_memory", growth_profile)
+        self.assertEqual(growth_profile["policy"]["personality_injection"], "forbidden")
         with self.assertRaises(ValueError):
             build_life_trace(blueprint, ecology, density="hourly")
 
@@ -108,13 +114,16 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             self.assertTrue(artifacts["reasoning_kibo"].exists())
             self.assertTrue(artifacts["developmental_ecology"].exists())
             self.assertTrue(artifacts["life_trace"].exists())
+            self.assertTrue(artifacts["growth_profile"].exists())
             self.assertTrue(artifacts["employment_record"].exists())
             self.assertEqual(run["status"], "employment_ready")
             self.assertTrue(run["verification"]["developmental_ecology_created"])
             self.assertTrue(run["verification"]["life_trace_created"])
+            self.assertTrue(run["verification"]["growth_profile_created"])
             self.assertEqual(len(life_trace_lines), 253)
             self.assertGreaterEqual(len(transcript["results"]), 9)
             self.assertTrue(transcript["graduation_ready"])
+            self.assertTrue(transcript["v2_assessment"]["passed"])
             self.assertEqual(
                 manifest["identity_source"]["role_model_inspiration"]["role_model_id"],
                 "graham_value_investing",
@@ -124,8 +133,13 @@ class GrahamTalentFoundryTests(unittest.TestCase):
                 "ai22b-paideia-developmental-ecology/v1",
             )
             self.assertEqual(manifest["identity_source"]["life_trace"]["event_count"], 252)
+            self.assertEqual(
+                manifest["identity_source"]["growth_profile"]["schema"],
+                "ai22b-paideia-growth-profile/v1",
+            )
             self.assertEqual(substrate["source_counts"]["life_trace_events"], 252)
             self.assertGreaterEqual(substrate["source_counts"]["developmental_ecology_layers"], 7)
+            self.assertGreaterEqual(substrate["source_counts"]["growth_profile_nodes"], 5)
             self.assertIn("openclaw_style_agent_manifest", manifest["compatible_targets"])
 
     def test_cli_list_role_models_and_blueprint_alias(self) -> None:
@@ -161,6 +175,7 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             self.assertEqual(data["role_model"]["role_model_id"], "graham_value_investing")
             ecology_output = Path(tmp) / "ecology.json"
             trace_output = Path(tmp) / "life_trace.jsonl"
+            growth_output = Path(tmp) / "growth_profile.json"
             self.assertEqual(
                 cli_main(
                     [
@@ -191,6 +206,27 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             )
             self.assertTrue(ecology_output.exists())
             self.assertEqual(len(trace_output.read_text(encoding="utf-8").splitlines()), 253)
+            self.assertEqual(
+                cli_main(
+                    [
+                        "build-growth-profile",
+                        "--blueprint",
+                        str(output),
+                        "--ecology",
+                        str(ecology_output),
+                        "--life-trace",
+                        str(trace_output),
+                        "--output",
+                        str(growth_output),
+                    ]
+                ),
+                0,
+            )
+            self.assertTrue(growth_output.exists())
+            self.assertEqual(
+                json.loads(growth_output.read_text(encoding="utf-8"))["schema"],
+                "ai22b-paideia-growth-profile/v1",
+            )
 
     def test_non_graham_role_model_blueprint_and_raise_use_generic_assessment_ladder(self) -> None:
         from ai22b.talent_foundry.blueprint import create_agent_training_blueprint

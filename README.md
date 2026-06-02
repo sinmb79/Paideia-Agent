@@ -15,7 +15,8 @@ Most agent runtimes begin with an assistant and add tools, memory, channels, and
 - **Raise first, hire later**: a talent passes through growth records, courses, exams, reports, and review gates before becoming an agent.
 - **Memory substrate, not full transcript replay**: the runtime selects bounded summaries, learning records, and procedural cues instead of injecting every old conversation.
 - **Reasoning Ledger / Ariadne Thread**: a reviewable ledger of hypotheses, evidence, mistakes, corrected principles, study habits, and work patterns. It is not hidden chain-of-thought. The internal compatibility artifact is still named `reasoning_kibo.jsonl`.
-- **Developmental Ecology / Life Trace**: a synthetic record of family climate, peer conflict, ordinary conversation, stress recovery, school life, aesthetic exposure, and domain curiosity. It gives the chat runtime growth experiences to retrieve instead of relying on case-by-case scripted replies.
+- **Developmental Ecology / Life Trace / Growth Profile**: synthetic family climate, peer conflict, ordinary conversation, stress recovery, school life, aesthetic exposure, and domain curiosity are condensed into relationship, emotion, culture, aesthetic, and asymmetry memory.
+- **Graduate package**: a raised talent can export an agent resume, transcript, memory pack, runtime manifest, and onboarding prompt before being used as an installable agent.
 - **Role-model process replication**: a role model contributes sourced learning conditions and curriculum pressure, not a preloaded personality or worldview.
 - **Local-first ownership**: the owner keeps private data, generated memories, voice assets, local curricula, and installed agent bundles on their own machine.
 - **Safe skill migration**: Hermes/OpenClaw/generic skills can be imported, but they are quarantined and disabled until reviewed.
@@ -64,12 +65,14 @@ All of these are **process templates**, not impersonation targets. The catalog s
 flowchart LR
     Owner["Owner request"] --> Blueprint["Growth blueprint"]
     Blueprint --> Ecology["Developmental ecology + life trace"]
-    Ecology --> Curriculum["Curriculum + simulations"]
+    Ecology --> GrowthProfile["Growth profile"]
+    GrowthProfile --> Curriculum["Curriculum + simulations"]
     Curriculum --> Assessment["Exams, reports, feedback"]
     Assessment --> Kibo["Reasoning Ledger"]
     Assessment --> Dossier["Hiring dossier"]
+    Dossier --> GraduatePackage["Graduate package"]
     Kibo --> Memory["Memory substrate"]
-    Dossier --> Kit["Paideia Agent kit"]
+    GraduatePackage --> Kit["Paideia Agent kit"]
     Memory --> Kit
     Kit --> Doctor["Doctor check"]
     Doctor --> Agent["Installed hired agent"]
@@ -154,7 +157,24 @@ ai22b-talent-foundry raise `
   --blueprint "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\agent_training_blueprint.json"
 ```
 
-`raise` now also writes `developmental_ecology.json`, `life_trace.jsonl`, and a memory substrate that links those growth records to chat. See [docs/developmental_ecology_v04.ko.md](docs/developmental_ecology_v04.ko.md).
+`raise` now also writes `developmental_ecology.json`, `life_trace.jsonl`, `growth_profile.json`, and a memory substrate that links those growth records to chat. See [docs/developmental_ecology_v04.ko.md](docs/developmental_ecology_v04.ko.md) and [docs/growth_profile_v05.ko.md](docs/growth_profile_v05.ko.md).
+
+Build a graduate package for review before using the installed agent:
+
+```powershell
+ai22b-talent-foundry build-graduate-package `
+  --training-run "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\grham_junior_sample\training_run.json" `
+  --output-dir "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\grham_junior_sample\graduate_package"
+```
+
+Compare multiple hired agents under one shared scene:
+
+```powershell
+ai22b-talent-foundry run-same-sky-eval `
+  --agent ".\installed_agents\agents\grham_junior_agent_release_bundle\employment_record.json" `
+  --scene ".\same_sky_scene.json" `
+  --output ".\same_sky_eval.json"
+```
 
 Create a non-Graham talent with a local Ollama-compatible LLM adapter selected during onboarding:
 

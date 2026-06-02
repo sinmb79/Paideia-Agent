@@ -21,6 +21,9 @@ REQUIRED_INSTALLER_COMMANDS = [
     "raise",
     "build-developmental-ecology",
     "build-life-trace",
+    "build-growth-profile",
+    "run-same-sky-eval",
+    "build-graduate-package",
     "doctor-bundle",
     "install-package",
     "hire-installed",
@@ -101,6 +104,9 @@ def _commands() -> list[dict[str, str]]:
         "raise": "Materialize the blueprint into an employable local AI talent.",
         "build-developmental-ecology": "Build a synthetic developmental ecology seed from a training blueprint.",
         "build-life-trace": "Build age-appropriate synthetic life events from ecology for the memory substrate.",
+        "build-growth-profile": "Condense life-trace and ecology records into relationship, emotion, culture, aesthetic, and asymmetry memory.",
+        "run-same-sky-eval": "Present one shared scene to multiple hired agents and compare reviewable interpretation differences.",
+        "build-graduate-package": "Export a resume, transcript, memory pack, runtime manifest, and onboarding prompt for a raised talent.",
         "doctor-bundle": "Verify a release bundle's files, entrypoints, installer template, and local-only policy.",
         "install-package": "Install a verified release archive into a local registry.",
         "hire-installed": "Create the owner-to-agent employment relationship.",
@@ -143,6 +149,8 @@ def build_public_program_manifest(run_dir: Path, *, output_path: Path | None = N
 
     evidence_candidates = {
         "training_blueprint": "shinyong_training_blueprint.json",
+        "growth_profile": "shinyong_growth_profile.json",
+        "graduate_package": "graduate_package/graduate_package_manifest.json",
         "active_memory_route": "shinyong_active_memory_route.json",
         "release_package": "shinyong_agent_release_bundle.zip",
         "package_manifest": "shinyong_agent_release_bundle.package_manifest.json",

@@ -29,13 +29,15 @@ from ai22b.talent_foundry.distribution import (
 from ai22b.talent_foundry.dossier import build_hiring_dossier, render_hiring_dossier_markdown
 from ai22b.talent_foundry.employment import create_employment_contract
 from ai22b.talent_foundry.family import create_child_seed, create_child_training_blueprint, create_family_union
+from ai22b.talent_foundry.graduate_package_builder import build_graduate_package
+from ai22b.talent_foundry.growth_profile import build_growth_profile
 from ai22b.talent_foundry.institutions import default_major_gate_submissions, run_institutional_review
 from ai22b.talent_foundry.learning_loop import (
     build_reasoning_kernel,
     create_learning_ledger,
     record_learning_experience,
 )
-from ai22b.talent_foundry.life_trace import build_life_trace, write_life_trace_jsonl
+from ai22b.talent_foundry.life_trace import build_life_trace, read_life_trace_jsonl, write_life_trace_jsonl
 from ai22b.talent_foundry.memory_substrate import run_chat_turn_from_employment
 from ai22b.talent_foundry.onboarding import run_agent_onboarding
 from ai22b.talent_foundry.onboarding_choices import (
@@ -47,6 +49,7 @@ from ai22b.talent_foundry.program import create_talent_plan
 from ai22b.talent_foundry.program_manifest import build_public_program_manifest
 from ai22b.talent_foundry.records import build_career_records
 from ai22b.talent_foundry.role_models import list_role_models, summarize_role_model
+from ai22b.talent_foundry.same_sky_eval import run_same_sky_eval
 from ai22b.talent_foundry.skill_migration import migrate_external_agent_assets
 from ai22b.talent_foundry.registry import (
     assign_hired_goal,
@@ -171,6 +174,30 @@ def _build_parser() -> argparse.ArgumentParser:
     life_trace.add_argument("--density", choices=["monthly", "daily"], default="monthly")
     life_trace.add_argument("--output", required=True)
 
+    growth_profile = subparsers.add_parser(
+        "build-growth-profile",
+        help="Build relationship, emotion, culture, aesthetic, and asymmetry memory from ecology and life trace.",
+    )
+    growth_profile.add_argument("--blueprint", required=True)
+    growth_profile.add_argument("--ecology", required=True)
+    growth_profile.add_argument("--life-trace", required=True)
+    growth_profile.add_argument("--output", required=True)
+
+    same_sky_eval = subparsers.add_parser(
+        "run-same-sky-eval",
+        help="Compare how one shared scene is interpreted by one or more hired Paideia agents.",
+    )
+    same_sky_eval.add_argument("--agent", action="append", required=True, help="Employment record path. Repeatable.")
+    same_sky_eval.add_argument("--scene", required=True)
+    same_sky_eval.add_argument("--output", required=True)
+
+    graduate_package = subparsers.add_parser(
+        "build-graduate-package",
+        help="Build an agent resume, transcript, memory pack, runtime manifest, and onboarding prompt.",
+    )
+    graduate_package.add_argument("--training-run", required=True)
+    graduate_package.add_argument("--output-dir", required=True)
+
     work = subparsers.add_parser("work", help="Run one local work session for a hired AI talent.")
     work.add_argument("--packet", default=str(DEFAULT_OUTPUT))
     work.add_argument("--task", required=True)
@@ -254,6 +281,7 @@ def _build_parser() -> argparse.ArgumentParser:
     bundle.add_argument("--language-development-program")
     bundle.add_argument("--developmental-ecology")
     bundle.add_argument("--life-trace")
+    bundle.add_argument("--growth-profile")
     bundle.add_argument("--cohort")
     bundle.add_argument("--hiring-dossier")
     bundle.add_argument("--hiring-dossier-markdown")
@@ -303,6 +331,7 @@ def _build_parser() -> argparse.ArgumentParser:
     chat_hired_agent_command.add_argument("--language-development-program")
     chat_hired_agent_command.add_argument("--developmental-ecology")
     chat_hired_agent_command.add_argument("--life-trace")
+    chat_hired_agent_command.add_argument("--growth-profile")
     chat_hired_agent_command.add_argument(
         "--llm-mode",
         choices=["offline", "auto", "live"],
@@ -630,6 +659,27 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(str(output_path))
         return 0
 
+    if args.command == "build-growth-profile":
+        blueprint_data = json.loads(Path(args.blueprint).read_text(encoding="utf-8"))
+        ecology = json.loads(Path(args.ecology).read_text(encoding="utf-8"))
+        trace = read_life_trace_jsonl(Path(args.life_trace))
+        output_path = Path(args.output)
+        build_growth_profile(blueprint_data, ecology, trace, output_path=output_path)
+        print(str(output_path))
+        return 0
+
+    if args.command == "run-same-sky-eval":
+        scene = json.loads(Path(args.scene).read_text(encoding="utf-8"))
+        output_path = Path(args.output)
+        run_same_sky_eval([Path(path) for path in args.agent], scene, output_path=output_path)
+        print(str(output_path))
+        return 0
+
+    if args.command == "build-graduate-package":
+        result = build_graduate_package(Path(args.training_run), Path(args.output_dir))
+        print(str(result["manifest_path"]))
+        return 0
+
     if args.command == "work":
         packet_path = Path(args.packet)
         hiring_packet = json.loads(packet_path.read_text(encoding="utf-8"))
@@ -821,6 +871,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             ),
             developmental_ecology_path=Path(args.developmental_ecology) if args.developmental_ecology else None,
             life_trace_path=Path(args.life_trace) if args.life_trace else None,
+            growth_profile_path=Path(args.growth_profile) if args.growth_profile else None,
             specialist_cohort_path=Path(args.cohort) if args.cohort else None,
             hiring_dossier_path=Path(args.hiring_dossier) if args.hiring_dossier else None,
             hiring_dossier_markdown_path=Path(args.hiring_dossier_markdown)
@@ -894,6 +945,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             ),
             developmental_ecology_path=Path(args.developmental_ecology) if args.developmental_ecology else None,
             life_trace_path=Path(args.life_trace) if args.life_trace else None,
+            growth_profile_path=Path(args.growth_profile) if args.growth_profile else None,
             llm_mode=llm_mode,
             llm_model=args.llm_model,
             learn_from_chat=args.learn_from_chat,

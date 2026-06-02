@@ -14,6 +14,8 @@ from ai22b.talent_foundry.distribution import (
     package_agent_release_bundle,
 )
 from ai22b.talent_foundry.employment import create_employment_contract
+from ai22b.talent_foundry.exam_engine_v2 import augment_assessment_transcript_v2
+from ai22b.talent_foundry.growth_profile import build_growth_profile
 from ai22b.talent_foundry.institutions import run_institutional_review
 from ai22b.talent_foundry.learning_loop import (
     build_reasoning_kernel,
@@ -224,6 +226,7 @@ def materialize_training_blueprint(
         "language_development_program": output_dir / f"{name_slug}_language_development_program.json",
         "developmental_ecology": output_dir / f"{name_slug}_developmental_ecology.json",
         "life_trace": output_dir / f"{name_slug}_life_trace.jsonl",
+        "growth_profile": output_dir / f"{name_slug}_growth_profile.json",
         "talent_plan": output_dir / f"{name_slug}_agent_plan.json",
         "institutional_review": output_dir / f"{name_slug}_institutional_review.json",
         "memory_profile": output_dir / f"{name_slug}_memory_profile.json",
@@ -276,6 +279,12 @@ def materialize_training_blueprint(
     )
     life_trace = build_life_trace(blueprint, developmental_ecology, density="monthly")
     write_life_trace_jsonl(artifacts["life_trace"], life_trace)
+    growth_profile = build_growth_profile(
+        blueprint,
+        developmental_ecology,
+        life_trace,
+        output_path=artifacts["growth_profile"],
+    )
     packet["developmental_ecology"] = {
         "schema": developmental_ecology["schema"],
         "seed_id": developmental_ecology["seed"]["seed_id"],
@@ -292,6 +301,14 @@ def materialize_training_blueprint(
         "path_hint": "[AI22B_STORAGE_ROOT]/talent-foundry/runs/<talent>_life_trace.jsonl",
         "policy": life_trace["manifest"]["policy"],
     }
+    packet["growth_profile"] = {
+        "schema": growth_profile["schema"],
+        "relationship_memory_refs": growth_profile["memory_pack_preview"]["relationship_memory_refs"],
+        "emotional_memory_refs": growth_profile["memory_pack_preview"]["emotional_memory_refs"],
+        "episodic_memory_events": growth_profile["memory_pack_preview"]["episodic_memory_events"],
+        "path_hint": "[AI22B_STORAGE_ROOT]/talent-foundry/runs/<talent>_growth_profile.json",
+        "policy": growth_profile["policy"],
+    }
     _write_json(artifacts["talent_plan"], packet)
 
     submissions = _submissions_for(blueprint)
@@ -302,6 +319,11 @@ def materialize_training_blueprint(
         assessment_transcript = institutional_review.get("assessment_transcript") or build_assessment_transcript(
             packet,
             submissions,
+        )
+        assessment_transcript = augment_assessment_transcript_v2(
+            assessment_transcript,
+            life_trace=life_trace,
+            growth_profile=growth_profile,
         )
         _write_json(artifacts["assessment_transcript"], assessment_transcript)
         reasoning_kibo = build_initial_reasoning_kibo(
@@ -347,6 +369,7 @@ def materialize_training_blueprint(
         language_development_program=language_development_program,
         developmental_ecology=developmental_ecology,
         life_trace_events=life_trace["events"],
+        growth_profile=growth_profile,
     )
     write_memory_substrate(artifacts["memory_substrate"], memory_substrate)
 
@@ -358,6 +381,7 @@ def materialize_training_blueprint(
         language_development_program_path=artifacts["language_development_program"],
         developmental_ecology_path=artifacts["developmental_ecology"],
         life_trace_path=artifacts["life_trace"],
+        growth_profile_path=artifacts["growth_profile"],
     )
     package = package_agent_release_bundle(
         artifacts["release_bundle"],
@@ -404,6 +428,7 @@ def materialize_training_blueprint(
             "employment_record_created": hiring["employment_record"].exists(),
             "developmental_ecology_created": artifacts["developmental_ecology"].exists(),
             "life_trace_created": artifacts["life_trace"].exists(),
+            "growth_profile_created": artifacts["growth_profile"].exists(),
         },
     }
     _write_json(artifacts["training_run"], run)
