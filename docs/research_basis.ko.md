@@ -11,6 +11,7 @@
 | OpenClaw agent runtime 문서 | OpenAI/Codex는 런타임 표면일 수 있지만, 그 자체가 에이전트 정체성은 아닙니다. | `llm_identity_policy: application_engine_not_identity`를 기록하고, 정체성은 로컬 교육 산출물에서 오도록 했습니다. |
 | Hermes Agent | 설치, 모델 전환, CLI 채팅, 도구, 스킬, 메모리, 게이트웨이, OpenClaw 마이그레이션을 강조합니다. | 설치 키트, doctor 검사, 스킬 마이그레이션 wrapper, adapter manifest, Reasoning Ledger를 추가했습니다. |
 | OpenHands | 워크스페이스 에이전트는 계획, 결과, trace 같은 검증 가능한 파일을 남겨야 합니다. | 고용 에이전트의 workspace/dataflow 실행이 계획, 결과, trace, 학습 승격 기록을 남깁니다. |
+| Agent ID Card | 에이전트 신원은 display name, owner, role, scope, credential, verification status와 연결되어야 합니다. | 계획 반영: hiring dossier와 설치 매니페스트에서 Agent ID Card payload를 export하되, 등록은 사용자가 명시적으로 실행할 때만 수행합니다. |
 
 ## 하드웨어와 데이터플로우 벤치마크
 
@@ -52,6 +53,7 @@
 - “추론기보”는 내부 파일명으로 유지하되, 공개 용어는 **Reasoning Ledger / Ariadne Thread**로 바꿨습니다.
 - LLM은 연구원과 대화 엔진입니다. AI 인재의 정체성은 로컬 교육기록, 학습원장, 기억기판, dossier에서 옵니다.
 - 이력서형 dossier를 제품의 핵심 산출물로 설명합니다.
+- 외부 신원은 자동 업로드가 아니라 dossier/install manifest export 경로로 계획합니다.
 - 외부 게이트웨이와 마이그레이션 스킬은 기본 비활성화이며, 보스 검토와 doctor 검사를 통과해야 합니다.
 - 이전 신용 성장 시스템은 폐기하지 않고, 앞으로 Paideia 인재들이 공통으로 사용할 수 있는 legacy life-development foundation으로 계승합니다. 상세 내용은 [기존 22B-AI 시스템 계승 메모](legacy_system_integration.ko.md)에 정리했습니다.
 - 보스의 Tesla 기판 비유는 Paideia가 Tesla 하드웨어를 구현한다는 주장이 아니라, Memory Board Architecture라는 소프트웨어 설계 원칙으로 반영했습니다.
@@ -64,6 +66,7 @@
 - OpenClaw onboarding reference: https://docs.openclaw.ai/reference/wizard
 - OpenClaw model providers: https://docs.openclaw.ai/providers/models
 - OpenClaw agent runtimes: https://docs.openclaw.ai/concepts/agent-runtimes
+- Agent ID Card: https://www.agentidcard.org/
 - Hermes Agent repository: https://github.com/NousResearch/hermes-agent
 - OpenHands overview: https://docs.openhands.dev/overview/introduction
 - Reflexion: https://arxiv.org/abs/2303.11366

@@ -16,6 +16,7 @@ DEFAULT_PUBLIC_PROGRAM_MANIFEST_NAME = "ai_talent_foundry_public_manifest.json"
 REQUIRED_INSTALLER_COMMANDS = [
     "list-role-models",
     "blueprint",
+    "onboard",
     "start-console",
     "onboard-agent",
     "raise",
@@ -26,6 +27,7 @@ REQUIRED_INSTALLER_COMMANDS = [
     "build-graduate-package",
     "doctor-bundle",
     "install-package",
+    "export-agent-id-card-payload",
     "hire-installed",
     "run-hired-workspace-agent",
     "run-hired-agent",
@@ -99,6 +101,7 @@ def _commands() -> list[dict[str, str]]:
     purposes = {
         "list-role-models": "List role-model process templates available for a talent track.",
         "blueprint": "Create a growth-to-employment blueprint from an owner request.",
+        "onboard": "Run the OpenClaw-style wizard for model, workspace, channel, skills, education path, identity, and health setup.",
         "start-console": "Guide a non-expert installer through request, identity, first goal, and onboarding execution.",
         "onboard-agent": "Run one-shot onboarding from owner request to hired agent with a first reviewed goal cycle.",
         "raise": "Materialize the blueprint into an employable local AI talent.",
@@ -109,6 +112,7 @@ def _commands() -> list[dict[str, str]]:
         "build-graduate-package": "Export a resume, transcript, memory pack, runtime manifest, and onboarding prompt for a raised talent.",
         "doctor-bundle": "Verify a release bundle's files, entrypoints, installer template, and local-only policy.",
         "install-package": "Install a verified release archive into a local registry.",
+        "export-agent-id-card-payload": "Build a local-only Agent ID Card registration payload without uploading it.",
         "hire-installed": "Create the owner-to-agent employment relationship.",
         "run-hired-workspace-agent": "Run the hired talent inside a local workspace.",
         "run-hired-agent": "Run the hired talent in the local CLI runtime.",

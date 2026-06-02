@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Sequence
 
 from ai22b.config import talent_foundry_storage_path
+from ai22b.talent_foundry.agent_identity_card import build_agent_id_card_payload
 from ai22b.talent_foundry.agent_manifest import build_agent_manifest
 from ai22b.talent_foundry.agent_program import (
     build_agent_program,
@@ -128,6 +129,14 @@ def _build_parser() -> argparse.ArgumentParser:
     start_console.add_argument("--answers", help="JSON file with console answers for non-interactive runs.")
     start_console.add_argument("--output-dir", default=str(DEFAULT_RUN_DIR / "console_onboarding"))
     start_console.add_argument("--output")
+
+    onboard_wizard = subparsers.add_parser(
+        "onboard",
+        help="Run the OpenClaw-style Paideia onboarding wizard.",
+    )
+    onboard_wizard.add_argument("--answers", help="JSON file with console answers for non-interactive runs.")
+    onboard_wizard.add_argument("--output-dir", default=str(DEFAULT_RUN_DIR / "console_onboarding"))
+    onboard_wizard.add_argument("--output")
 
     onboard = subparsers.add_parser(
         "onboard-agent",
@@ -299,6 +308,14 @@ def _build_parser() -> argparse.ArgumentParser:
     install_package.add_argument("--archive", required=True)
     install_package.add_argument("--install-root", required=True)
     install_package.add_argument("--expected-sha256")
+
+    agent_id_card = subparsers.add_parser(
+        "export-agent-id-card-payload",
+        help="Build a local-only Agent ID Card registration payload from an installed/hired agent.",
+    )
+    agent_id_card.add_argument("--installed-manifest", required=True)
+    agent_id_card.add_argument("--employment-record")
+    agent_id_card.add_argument("--output", required=True)
 
     hire_installed = subparsers.add_parser("hire-installed", help="Hire an installed AI talent as a local agent.")
     hire_installed.add_argument("--installed-manifest", required=True)
@@ -591,7 +608,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(str(output_path))
         return 0
 
-    if args.command == "start-console":
+    if args.command in {"start-console", "onboard"}:
         output_dir = Path(args.output_dir)
         output_path = Path(args.output) if args.output else output_dir / "console_session.json"
         if args.answers:
@@ -904,6 +921,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             expected_sha256=args.expected_sha256,
         )
         print(str(install["installed_manifest"]))
+        return 0
+
+    if args.command == "export-agent-id-card-payload":
+        payload = build_agent_id_card_payload(
+            installed_manifest_path=Path(args.installed_manifest),
+            employment_record_path=Path(args.employment_record) if args.employment_record else None,
+            output_path=Path(args.output),
+        )
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
         return 0
 
     if args.command == "hire-installed":

@@ -277,6 +277,70 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertEqual(config["network_access"], "external_api_selected_data_minimized")
         self.assertEqual(result["status"], "adapter_manifest_ready")
 
+    def test_openclaw_style_onboarding_questions_are_step_based(self) -> None:
+        from ai22b.talent_foundry.console import WIZARD_STEPS, questions_with_choices
+
+        questions = questions_with_choices()
+        by_id = {item["id"]: item for item in questions}
+        step_ids = {step[0] for step in WIZARD_STEPS}
+
+        self.assertIn("existing_config_action", by_id)
+        self.assertIn("onboarding_mode", by_id)
+        self.assertIn("gateway_mode", by_id)
+        self.assertIn("talent_source", by_id)
+        self.assertIn("agent_id_card_mode", by_id)
+        self.assertIn("health", step_ids)
+        self.assertIn("finish", step_ids)
+        self.assertEqual(by_id["onboarding_mode"]["default"], "quickstart")
+        self.assertIn("quickstart", {item["id"] for item in by_id["onboarding_mode"]["choices"]})
+        self.assertIn("owner_self_extension", {item["id"] for item in by_id["talent_source"]["choices"]})
+
+    def test_guided_console_writes_openclaw_style_config_identity_payload_and_rollouts(self) -> None:
+        from ai22b.talent_foundry.console import run_console_session
+
+        answers = {
+            "owner": "보스",
+            "request": "Graham 방식으로 증권 리서치 에이전트를 육성하고 첫 대화까지 준비한다.",
+            "talent_name": "paideia-test-junior",
+            "gender": "남자",
+            "initial_goal": "근거 우선 리서치 루틴을 만든다.",
+            "cycle_note": "첫 주: 근거, 반례, 안전 경계를 나눈다.",
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            output_dir = Path(tmp) / "openclaw_style_console"
+            session = run_console_session(
+                answers=answers,
+                output_dir=output_dir,
+                output_path=output_dir / "console_session.json",
+            )
+            config = json.loads(Path(session["artifacts"]["paideia_onboarding_config"]).read_text(encoding="utf-8"))
+            identity_payload = json.loads(Path(session["artifacts"]["agent_id_card_payload"]).read_text(encoding="utf-8"))
+            rollouts = json.loads(Path(session["artifacts"]["simulation_rollouts"]).read_text(encoding="utf-8"))
+
+        self.assertEqual(session["wizard"]["schema"], "ai22b-paideia-openclaw-style-onboarding/v1")
+        self.assertEqual(config["schema"], "ai22b-paideia-openclaw-style-config/v1")
+        self.assertEqual(config["gateway"]["mode"], "local_loopback")
+        self.assertEqual(config["channels"]["external_channels"], "disabled_until_explicit_configuration")
+        self.assertEqual(identity_payload["schema"], "ai-talent-agent-id-card-payload/v1")
+        self.assertFalse(identity_payload["network_action_performed"])
+        self.assertEqual(rollouts["schema"], "ai-talent-simulation-rollouts/v1")
+        self.assertGreaterEqual(rollouts["summary"]["episode_count"], 4)
+
+    def test_owner_self_extension_blueprint_uses_private_local_track_without_role_model(self) -> None:
+        from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
+
+        blueprint = create_agent_training_blueprint(
+            owner="보스",
+            request="나 자신의 문서와 프로젝트 기억을 바탕으로 개인 업무 확장 에이전트를 키운다.",
+            talent_name="boss-extension-junior",
+            gender="남자",
+            domain="owner_self_extension",
+        )
+
+        self.assertEqual(blueprint["track"]["track_id"], "owner_self_extension")
+        self.assertIsNone(blueprint["role_model"])
+        self.assertEqual(blueprint["local_policy"]["private_data_upload"], "forbidden_without_boss_approval")
+
 
 if __name__ == "__main__":
     unittest.main()
