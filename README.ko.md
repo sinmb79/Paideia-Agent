@@ -135,6 +135,18 @@ ai22b-talent-foundry run-hired-agent `
 
 `--llm-mode auto`는 live 호출을 먼저 시도하고, 실패하면 로컬 manifest/bridge 경로로 자동 fallback합니다.
 
+live provider 설정:
+
+| 엔진 | 필요한 환경변수 | 필요한 모델 입력 |
+| --- | --- | --- |
+| `openai_chatgpt_codex` | `OPENAI_API_KEY` | 선택, 기본 `gpt-4.1-mini` |
+| `anthropic_claude_api` | `ANTHROPIC_API_KEY` | `--llm-model` |
+| `google_gemini_api` | `GEMINI_API_KEY` 또는 `GOOGLE_API_KEY` | `--llm-model` |
+| `mistral_api` | `MISTRAL_API_KEY` | `--llm-model` |
+| `openrouter_api` | `OPENROUTER_API_KEY` | `--llm-model` |
+| `ollama_local_http` | 로컬 Ollama 서버 | `--llm-model`, 선택적 `--llm-model-path` endpoint |
+| `lm_studio_local_http` | 로컬 LM Studio 서버 | `--llm-model`, 선택적 `--llm-model-path` endpoint |
+
 Hopper Junior 예시:
 
 ```powershell

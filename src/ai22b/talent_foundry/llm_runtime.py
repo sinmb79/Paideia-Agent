@@ -112,7 +112,7 @@ def invoke_llm_application_engine(
             "identity_policy": runtime_config["identity_policy"],
             "network_access": runtime_config["network_access"],
         }
-    if llm_mode in {"auto", "live"} and engine in {"openai_chatgpt_codex", "ollama_local_http", "lm_studio_local_http"}:
+    if llm_mode in {"auto", "live"} and (engine in EXTERNAL_API_ENGINES or engine in LOCAL_HTTP_ENGINES):
         live_result = _invoke_live_client(
             effective_config,
             manifest=manifest,

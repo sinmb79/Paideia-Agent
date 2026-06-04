@@ -347,6 +347,18 @@ ai22b-talent-foundry run-hired-agent `
 
 `--llm-mode auto` attempts the live provider first and falls back to the local manifest/bridge path if the provider is unavailable.
 
+Live provider environment variables:
+
+| Engine | Required environment | Required model input |
+| --- | --- | --- |
+| `openai_chatgpt_codex` | `OPENAI_API_KEY` | optional, defaults to `gpt-4.1-mini` |
+| `anthropic_claude_api` | `ANTHROPIC_API_KEY` | `--llm-model` |
+| `google_gemini_api` | `GEMINI_API_KEY` or `GOOGLE_API_KEY` | `--llm-model` |
+| `mistral_api` | `MISTRAL_API_KEY` | `--llm-model` |
+| `openrouter_api` | `OPENROUTER_API_KEY` | `--llm-model` |
+| `ollama_local_http` | local Ollama server | `--llm-model`, optional `--llm-model-path` endpoint |
+| `lm_studio_local_http` | local LM Studio server | `--llm-model`, optional `--llm-model-path` endpoint |
+
 ## Hiring Dossier
 
 The hiring dossier is the resume-like record for a raised AI talent. It explains who the candidate is, what curriculum it completed, which exams and reports it passed, what its transcript says, which papers/projects were produced, what guardrails apply, and whether it is ready to be hired as a local agent.

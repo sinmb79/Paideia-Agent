@@ -14,6 +14,10 @@ DEFAULT_OPENAI_MODEL = "gpt-4.1-mini"
 DEFAULT_OLLAMA_MODEL = "llama3.1"
 DEFAULT_OLLAMA_ENDPOINT = "http://localhost:11434"
 DEFAULT_LM_STUDIO_ENDPOINT = "http://localhost:1234/v1/chat/completions"
+ANTHROPIC_MESSAGES_ENDPOINT = "https://api.anthropic.com/v1/messages"
+GEMINI_GENERATE_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/{model}:generateContent"
+MISTRAL_CHAT_COMPLETIONS_ENDPOINT = "https://api.mistral.ai/v1/chat/completions"
+OPENROUTER_CHAT_COMPLETIONS_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
 
 
 class LLMClient(Protocol):
@@ -70,6 +74,21 @@ def _messages_text(messages: list[dict[str, str]]) -> str:
     return "\n\n".join(f"{item.get('role', 'user')}: {item.get('content', '')}" for item in messages)
 
 
+def _system_and_chat_messages(messages: list[dict[str, str]]) -> tuple[str, list[dict[str, str]]]:
+    system_parts: list[str] = []
+    chat: list[dict[str, str]] = []
+    for item in messages:
+        role = item.get("role", "user")
+        content = str(item.get("content", ""))
+        if role == "system":
+            system_parts.append(content)
+        else:
+            chat.append({"role": role if role in {"user", "assistant"} else "user", "content": content})
+    if not chat:
+        chat.append({"role": "user", "content": _messages_text(messages)})
+    return "\n\n".join(system_parts), chat
+
+
 def _ok(engine: str, text: str, **fields: Any) -> dict[str, Any]:
     return {
         "schema": LLM_CLIENT_RESULT_SCHEMA,
@@ -91,6 +110,29 @@ def _unavailable(engine: str, reason: str, **fields: Any) -> dict[str, Any]:
         "identity_policy": "application_engine_not_identity",
         **fields,
     }
+
+
+def _post_json(
+    *,
+    url: str,
+    body: dict[str, Any],
+    headers: dict[str, str],
+    timeout: int = 60,
+) -> dict[str, Any]:
+    data = json.dumps(body, ensure_ascii=False).encode("utf-8")
+    request = urllib.request.Request(url, data=data, headers={**headers, "Content-Type": "application/json"}, method="POST")
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def _extract_openai_compatible_text(data: dict[str, Any]) -> str:
+    return str(data.get("choices", [{}])[0].get("message", {}).get("content", ""))
+
+
+def _model_required(engine: str, model: str | None) -> dict[str, Any] | None:
+    if model:
+        return None
+    return _unavailable(engine, "model_required_for_live_provider")
 
 
 @dataclass
@@ -172,6 +214,173 @@ class OpenAIResponsesClient:
             model=self.model,
             response_id=getattr(response, "id", None),
             usage=str(getattr(response, "usage", ""))[:500],
+            network_access="external_api_selected_data_minimized",
+        )
+
+
+@dataclass
+class AnthropicMessagesClient:
+    model: str | None
+    endpoint: str = ANTHROPIC_MESSAGES_ENDPOINT
+    api_key_env: str = "ANTHROPIC_API_KEY"
+
+    def generate(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        tools: list[dict[str, Any]] | None = None,
+        policy: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        required = _model_required("anthropic_claude_api", self.model)
+        if required:
+            return required
+        api_key = os.environ.get(self.api_key_env)
+        if not api_key:
+            return _unavailable("anthropic_claude_api", f"{self.api_key_env}_not_set", model=self.model)
+        system, chat = _system_and_chat_messages(messages)
+        body = {
+            "model": self.model,
+            "max_tokens": 900,
+            "messages": chat,
+        }
+        if system:
+            body["system"] = system
+        try:
+            data = _post_json(
+                url=self.endpoint,
+                body=body,
+                headers={
+                    "x-api-key": api_key,
+                    "anthropic-version": "2023-06-01",
+                },
+            )
+            text = "".join(str(block.get("text", "")) for block in data.get("content", []) if block.get("type") == "text")
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, KeyError) as exc:
+            return _unavailable(
+                "anthropic_claude_api",
+                "anthropic_messages_call_failed",
+                model=self.model,
+                error_type=type(exc).__name__,
+                error=str(exc)[:800],
+                network_access="external_api_selected_data_minimized",
+            )
+        return _ok(
+            "anthropic_claude_api",
+            text,
+            model=self.model,
+            response_id=data.get("id"),
+            usage=data.get("usage"),
+            network_access="external_api_selected_data_minimized",
+        )
+
+
+@dataclass
+class GeminiGenerateContentClient:
+    model: str | None
+    endpoint_template: str = GEMINI_GENERATE_ENDPOINT
+
+    def generate(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        tools: list[dict[str, Any]] | None = None,
+        policy: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        required = _model_required("google_gemini_api", self.model)
+        if required:
+            return required
+        api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+        if not api_key:
+            return _unavailable("google_gemini_api", "GEMINI_API_KEY_or_GOOGLE_API_KEY_not_set", model=self.model)
+        system, chat = _system_and_chat_messages(messages)
+        model_name = str(self.model)
+        if not model_name.startswith("models/"):
+            model_name = f"models/{model_name}"
+        url = self.endpoint_template.format(model=model_name) + f"?key={api_key}"
+        contents = [
+            {
+                "role": "model" if item["role"] == "assistant" else "user",
+                "parts": [{"text": item["content"]}],
+            }
+            for item in chat
+        ]
+        body: dict[str, Any] = {
+            "contents": contents,
+            "generationConfig": {"temperature": 0, "maxOutputTokens": 900},
+        }
+        if system:
+            body["systemInstruction"] = {"parts": [{"text": system}]}
+        try:
+            data = _post_json(url=url, body=body, headers={})
+            parts = data.get("candidates", [{}])[0].get("content", {}).get("parts", [])
+            text = "".join(str(part.get("text", "")) for part in parts)
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, KeyError, IndexError) as exc:
+            return _unavailable(
+                "google_gemini_api",
+                "gemini_generate_content_call_failed",
+                model=self.model,
+                error_type=type(exc).__name__,
+                error=str(exc)[:800],
+                network_access="external_api_selected_data_minimized",
+            )
+        return _ok(
+            "google_gemini_api",
+            text,
+            model=self.model,
+            usage=data.get("usageMetadata"),
+            network_access="external_api_selected_data_minimized",
+        )
+
+
+@dataclass
+class OpenAICompatibleChatClient:
+    engine: str
+    model: str | None
+    endpoint: str
+    api_key_env: str
+    extra_headers: dict[str, str] | None = None
+
+    def generate(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        tools: list[dict[str, Any]] | None = None,
+        policy: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        required = _model_required(self.engine, self.model)
+        if required:
+            return required
+        api_key = os.environ.get(self.api_key_env)
+        if not api_key:
+            return _unavailable(self.engine, f"{self.api_key_env}_not_set", model=self.model)
+        body = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": 0,
+            "stream": False,
+        }
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            **(self.extra_headers or {}),
+        }
+        try:
+            data = _post_json(url=self.endpoint, body=body, headers=headers)
+            text = _extract_openai_compatible_text(data)
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, KeyError, IndexError) as exc:
+            return _unavailable(
+                self.engine,
+                f"{self.engine}_chat_completions_call_failed",
+                model=self.model,
+                error_type=type(exc).__name__,
+                error=str(exc)[:800],
+                network_access="external_api_selected_data_minimized",
+            )
+        return _ok(
+            self.engine,
+            text,
+            model=self.model,
+            response_id=data.get("id"),
+            usage=data.get("usage"),
             network_access="external_api_selected_data_minimized",
         )
 
@@ -301,6 +510,30 @@ def build_llm_client(runtime_config: dict[str, Any], *, model_override: str | No
     model_path = runtime_config.get("model_path")
     if engine == "openai_chatgpt_codex":
         return OpenAIResponsesClient(model=model or DEFAULT_OPENAI_MODEL)
+    if engine == "anthropic_claude_api":
+        return AnthropicMessagesClient(model=model)
+    if engine == "google_gemini_api":
+        return GeminiGenerateContentClient(model=model)
+    if engine == "mistral_api":
+        return OpenAICompatibleChatClient(
+            engine="mistral_api",
+            model=model,
+            endpoint=model_path or MISTRAL_CHAT_COMPLETIONS_ENDPOINT,
+            api_key_env="MISTRAL_API_KEY",
+        )
+    if engine == "openrouter_api":
+        extra_headers = {}
+        if os.environ.get("OPENROUTER_SITE_URL"):
+            extra_headers["HTTP-Referer"] = os.environ["OPENROUTER_SITE_URL"]
+        if os.environ.get("OPENROUTER_APP_NAME"):
+            extra_headers["X-Title"] = os.environ["OPENROUTER_APP_NAME"]
+        return OpenAICompatibleChatClient(
+            engine="openrouter_api",
+            model=model,
+            endpoint=model_path or OPENROUTER_CHAT_COMPLETIONS_ENDPOINT,
+            api_key_env="OPENROUTER_API_KEY",
+            extra_headers=extra_headers,
+        )
     if engine == "ollama_local_http":
         return OllamaClient(model=model or DEFAULT_OLLAMA_MODEL, endpoint=model_path or DEFAULT_OLLAMA_ENDPOINT)
     if engine == "lm_studio_local_http":

@@ -35,6 +35,14 @@ EXTERNAL_UPLOAD_ALIASES = (
     "upload",
     "external upload",
 )
+EXTERNAL_UPLOAD_COMMAND_ALIASES = (
+    "업로드해줘",
+    "업로드 해줘",
+    "인터넷에 올려",
+    "공개 배포",
+    "upload this",
+    "external upload",
+)
 
 PERSONAL_DATA_TRANSFER_ALIASES = (
     "개인 데이터 외부 전송",
@@ -44,6 +52,7 @@ PERSONAL_DATA_TRANSFER_ALIASES = (
     "send personal data",
     "send family data",
 )
+DISCUSSION_MARKERS = ("정책", "설명", "리스크", "위험", "금지", "차단", "하지 말고", "하지 않고", "안 하고", "없이")
 
 TOOL_CAPABILITIES = {
     "work_session": ["research.analysis", "document.draft"],
@@ -82,6 +91,20 @@ def _financial_action_requested(task: str) -> bool:
     return requested
 
 
+def _external_upload_requested(task: str) -> bool:
+    if not _has_any(task, EXTERNAL_UPLOAD_ALIASES):
+        return False
+    if _has_any(task, EXTERNAL_UPLOAD_COMMAND_ALIASES):
+        return not _has_any(task, ("업로드하지 말고", "올리지 말고", "do not upload", "without upload"))
+    return not _has_any(task, DISCUSSION_MARKERS)
+
+
+def _personal_data_transfer_requested(task: str) -> bool:
+    if not _has_any(task, PERSONAL_DATA_TRANSFER_ALIASES):
+        return False
+    return not _has_any(task, DISCUSSION_MARKERS)
+
+
 def _intent(
     *,
     intent_id: str,
@@ -113,8 +136,8 @@ def _intent(
 
 def infer_action_intents(task: str, manifest: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     financial_requested = _financial_action_requested(task)
-    upload_requested = _has_any(task, EXTERNAL_UPLOAD_ALIASES)
-    personal_transfer_requested = _has_any(task, PERSONAL_DATA_TRANSFER_ALIASES)
+    upload_requested = _external_upload_requested(task)
+    personal_transfer_requested = _personal_data_transfer_requested(task)
     projection_requested = "팀" in task or "분신" in task
     return [
         _intent(

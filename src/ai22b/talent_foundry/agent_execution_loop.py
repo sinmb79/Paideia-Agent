@@ -13,6 +13,7 @@ from ai22b.talent_foundry.action_policy import (
 )
 from ai22b.talent_foundry.llm_clients import LLMClient
 from ai22b.talent_foundry.llm_runtime import build_llm_runtime_config, invoke_llm_application_engine
+from ai22b.talent_foundry.tool_registry import execute_registered_tools, tool_descriptors
 
 
 RUN_SCHEMA = "ai-talent-agent-run/v1"
@@ -25,88 +26,6 @@ def _now() -> str:
 def _run_id(agent_name: str, task: str, created_at: str) -> str:
     raw = f"{agent_name}|{task}|{created_at}".encode("utf-8")
     return hashlib.sha256(raw).hexdigest()[:16]
-
-
-def _tool_capability(tool: str) -> str:
-    return {
-        "work_session": "research.analysis",
-        "memory_consolidation": "memory.write_candidate",
-        "parent_controlled_projection_team": "projection.spawn_bounded",
-    }.get(tool, "unknown")
-
-
-def _tool_descriptor(tool: str) -> dict[str, Any]:
-    return {
-        "id": tool,
-        "name": tool,
-        "capability": _tool_capability(tool),
-        "execution_surface": "local_paideia_runtime",
-    }
-
-
-def _execute_tools(
-    *,
-    selected_tools: list[str],
-    manifest: dict[str, Any],
-    task: str,
-    llm_result: dict[str, Any],
-) -> dict[str, Any]:
-    outputs: list[dict[str, Any]] = []
-    agent = manifest.get("agent", {})
-    draft = str(llm_result.get("draft", "")).strip()
-    for tool in selected_tools:
-        if tool == "work_session":
-            outputs.append(
-                {
-                    "tool": tool,
-                    "status": "completed",
-                    "capability": "research.analysis",
-                    "output": {
-                        "summary": draft
-                        or f"{agent.get('name')}은 '{task}' 요청을 근거 확인, 경계 확인, 결과 기록 순서로 정리했습니다.",
-                        "requires_boss_review": True,
-                    },
-                }
-            )
-        elif tool == "memory_consolidation":
-            outputs.append(
-                {
-                    "tool": tool,
-                    "status": "completed",
-                    "capability": "memory.write_candidate",
-                    "output": {
-                        "candidate_only": True,
-                        "promotion_requires_review": True,
-                    },
-                }
-            )
-        elif tool == "parent_controlled_projection_team":
-            outputs.append(
-                {
-                    "tool": tool,
-                    "status": "completed",
-                    "capability": "projection.spawn_bounded",
-                    "output": {
-                        "control_model": "single_parent_identity_controls_task_limited_projections",
-                        "merge_policy": "reviewed_summary_only",
-                    },
-                }
-            )
-        else:
-            outputs.append(
-                {
-                    "tool": tool,
-                    "status": "skipped",
-                    "capability": "unknown",
-                    "output": {"reason": "tool_not_mapped_in_paideia_runtime"},
-                }
-            )
-    return {
-        "schema": "paideia-tool-execution/v1",
-        "execution_model": "capability_checked_local_tools_v1",
-        "selected_tools": selected_tools,
-        "tool_results": outputs,
-    }
 
 
 def _verify_execution(policy_decision: dict[str, Any], tool_execution: dict[str, Any], llm_result: dict[str, Any]) -> dict[str, Any]:
@@ -181,7 +100,7 @@ def run_agent_execution_loop(
     policy_violations = policy_decision["policy_violations"]
     selected_tools = select_tools_for_intents(manifest, action_intents, policy_decision)
     run_status = "blocked" if policy_decision["status"] == "blocked" else "completed"
-    tool_descriptors = [_tool_descriptor(tool) for tool in selected_tools]
+    selected_tool_descriptors = tool_descriptors(selected_tools)
 
     effective_runtime = runtime_config or build_llm_runtime_config(engine="deterministic_local")
     if run_status == "blocked":
@@ -202,10 +121,16 @@ def run_agent_execution_loop(
             llm_model=llm_model,
             client=llm_client,
             policy_context=policy_decision,
-            tools=tool_descriptors,
+            tools=selected_tool_descriptors,
         )
 
-    tool_execution = _execute_tools(selected_tools=selected_tools, manifest=manifest, task=task, llm_result=llm_result)
+    tool_execution = execute_registered_tools(
+        selected_tools=selected_tools,
+        manifest=manifest,
+        task=task,
+        llm_result=llm_result,
+        policy_decision=policy_decision,
+    )
     verification = _verify_execution(policy_decision, tool_execution, llm_result)
     response = _response_packet(agent, task, run_status, llm_result, policy_violations)
     growth_update = {
