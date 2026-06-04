@@ -147,6 +147,11 @@ live provider 설정:
 | `ollama_local_http` | 로컬 Ollama 서버 | `--llm-model`, 선택적 `--llm-model-path` endpoint |
 | `lm_studio_local_http` | 로컬 LM Studio 서버 | `--llm-model`, 선택적 `--llm-model-path` endpoint |
 
+워크스페이스 실행은 허용된 workspace root 안에 P0 런타임 산출물도 남깁니다.
+
+- `runtime_execution.json`: action policy, LLM runtime 결과, 등록형 도구 실행, 검증, 메모리 기록 판단 스냅샷
+- `workspace_sandbox.json`: 파일시스템 allowlist, 네트워크/서브프로세스 차단 정책, 리소스 제한, rollback 메모, 감사 요구사항
+
 Hopper Junior 예시:
 
 ```powershell

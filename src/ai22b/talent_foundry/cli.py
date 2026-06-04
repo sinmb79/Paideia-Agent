@@ -403,6 +403,14 @@ def _build_parser() -> argparse.ArgumentParser:
     run_hired_workspace_agent_command.add_argument("--task", required=True)
     run_hired_workspace_agent_command.add_argument("--workspace", required=True)
     run_hired_workspace_agent_command.add_argument("--output")
+    run_hired_workspace_agent_command.add_argument(
+        "--llm-mode",
+        choices=["offline", "auto", "live"],
+        default="offline",
+        help="offline uses local manifest mode; auto tries live then falls back; live requires configured provider.",
+    )
+    run_hired_workspace_agent_command.add_argument("--live-llm", action="store_true", help="Shortcut for --llm-mode live.")
+    run_hired_workspace_agent_command.add_argument("--llm-model", help="Override the employment LLM model for this workspace run.")
 
     run_hired_agent_job_command = subparsers.add_parser(
         "run-hired-agent-job",
@@ -1039,11 +1047,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if args.command == "run-hired-workspace-agent":
+        llm_mode = "live" if args.live_llm else args.llm_mode
         run_hired_workspace_agent(
             Path(args.employment_record),
             task=args.task,
             workspace_dir=Path(args.workspace),
             output_path=Path(args.output) if args.output else None,
+            llm_mode=llm_mode,
+            llm_model=args.llm_model,
         )
         output_path = (
             Path(args.output)

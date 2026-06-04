@@ -11,6 +11,7 @@ from ai22b.talent_foundry.agent_runner import run_agent_from_manifest
 WORKSPACE_RUN_SCHEMA = "ai-talent-workspace-agent-run/v1"
 WORKSPACE_JOB_RUN_SCHEMA = "ai-talent-workspace-agent-job-run/v1"
 ACCEPTANCE_CHECKLIST_SCHEMA = "ai-talent-agent-job-acceptance-checklist/v1"
+WORKSPACE_SANDBOX_SCHEMA = "paideia-workspace-sandbox-policy/v1"
 
 
 def _write_json(path: Path, data: dict[str, Any]) -> None:
@@ -72,6 +73,39 @@ def _trace_entry(action: str, **fields: Any) -> dict[str, Any]:
         "recorded_at_utc": datetime.now(timezone.utc).isoformat(),
         "action": action,
         **fields,
+    }
+
+
+def _workspace_sandbox_policy(workspace_root: Path) -> dict[str, Any]:
+    return {
+        "schema": WORKSPACE_SANDBOX_SCHEMA,
+        "workspace_root": str(workspace_root),
+        "filesystem": {
+            "mode": "allowlist",
+            "allowed_roots": [str(workspace_root)],
+            "path_traversal_guard": True,
+            "writes_must_use_safe_workspace_path": True,
+        },
+        "network": {
+            "default": "blocked",
+            "external_upload": "blocked_without_boss_approval",
+        },
+        "subprocess": {
+            "default": "blocked",
+            "allowlist": [],
+        },
+        "resource_limits": {
+            "max_output_file_bytes": 2_000_000,
+            "max_trace_events": 200,
+        },
+        "rollback": {
+            "generated_files_are_declared_in_workspace_outputs": True,
+            "manual_delete_safe_within_workspace_root": True,
+        },
+        "audit": {
+            "trace_required": True,
+            "tool_execution_snapshot_required": True,
+        },
     }
 
 
@@ -160,8 +194,17 @@ def run_workspace_agent_from_manifest(
     *,
     task: str,
     workspace_dir: Path,
+    runtime_config: dict[str, Any] | None = None,
+    llm_mode: str = "offline",
+    llm_model: str | None = None,
 ) -> dict[str, Any]:
-    base_run = run_agent_from_manifest(manifest, task=task)
+    base_run = run_agent_from_manifest(
+        manifest,
+        task=task,
+        runtime_config=runtime_config,
+        llm_mode=llm_mode,
+        llm_model=llm_model,
+    )
     created_at = datetime.now(timezone.utc).isoformat()
     workspace_root = workspace_dir.resolve()
 
@@ -173,11 +216,14 @@ def run_workspace_agent_from_manifest(
         "task": task,
         "run_status": base_run["run_status"],
         "policy_violations": base_run["policy_violations"],
+        "llm_runtime_result": base_run.get("llm_runtime_result", {}),
         "tool_authorization": {
             "allowed_tools": manifest.get("tool_policy", {}).get("allowed_tools", []),
             "blocked_tools": manifest.get("tool_policy", {}).get("blocked_tools", []),
             "network_access": "blocked",
             "workspace_root": str(workspace_root),
+            "sandbox_schema": WORKSPACE_SANDBOX_SCHEMA,
+            "capability_grants": base_run.get("policy_decision", {}).get("capability_grants", {}),
         },
         "base_agent_run": base_run,
         "workspace_outputs": {},
@@ -206,17 +252,28 @@ def run_workspace_agent_from_manifest(
     plan_path = _safe_workspace_path(workspace_root, "task_plan.md")
     summary_path = _safe_workspace_path(workspace_root, "result_summary.md")
     trace_path = _safe_workspace_path(workspace_root, "trace.jsonl")
+    runtime_execution_path = _safe_workspace_path(workspace_root, "runtime_execution.json")
+    sandbox_path = _safe_workspace_path(workspace_root, "workspace_sandbox.json")
 
     plan_text = _task_plan_text(manifest, task, base_run)
     summary_text = _summary_text(manifest, task, base_run)
     plan_path.write_text(plan_text + "\n", encoding="utf-8")
     summary_path.write_text(summary_text + "\n", encoding="utf-8")
+    _write_json(runtime_execution_path, base_run)
+    _write_json(sandbox_path, _workspace_sandbox_policy(workspace_root))
     _write_jsonl(
         trace_path,
         [
             _trace_entry("policy_check", status="passed", violations=[]),
+            _trace_entry(
+                "registered_tool_execution",
+                execution_model=base_run.get("tool_execution", {}).get("execution_model"),
+                selected_tools=base_run.get("selected_tools", []),
+            ),
             _trace_entry("local_file_write", file=plan_path.name, purpose="task_plan"),
             _trace_entry("local_file_write", file=summary_path.name, purpose="result_summary"),
+            _trace_entry("local_file_write", file=runtime_execution_path.name, purpose="runtime_execution_snapshot"),
+            _trace_entry("local_file_write", file=sandbox_path.name, purpose="workspace_sandbox_policy"),
             _trace_entry("memory_growth_candidate", source="workspace_agent_run"),
         ],
     )
@@ -225,6 +282,8 @@ def run_workspace_agent_from_manifest(
         "task_plan": str(plan_path),
         "result_summary": str(summary_path),
         "trace": str(trace_path),
+        "runtime_execution": str(runtime_execution_path),
+        "workspace_sandbox": str(sandbox_path),
     }
     return result
 
