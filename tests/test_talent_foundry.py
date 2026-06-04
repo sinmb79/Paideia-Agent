@@ -1237,6 +1237,35 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertTrue(any(item["action_type"] == "financial_trade_execution" for item in intents))
         self.assertEqual(decision["capability_grants"]["mode"], "deny_by_default")
 
+    def test_action_policy_distinguishes_negated_and_discussion_only_sensitive_intents(self) -> None:
+        from ai22b.talent_foundry.action_policy import evaluate_action_policy, infer_action_intents
+        from ai22b.talent_foundry.demo import run_demo
+
+        with tempfile.TemporaryDirectory() as tmp:
+            outputs = run_demo(output_dir=Path(tmp))
+            manifest = json.loads(outputs["agent_manifest"].read_text(encoding="utf-8"))
+
+        intents = infer_action_intents("매수 주문은 하지 말고 삼성전자 재무제표 분석만 해줘.", manifest)
+        decision = evaluate_action_policy(manifest, intents)
+        financial = next(item for item in intents if item["intent_id"] == "financial_trade_execution")
+
+        self.assertFalse(financial["requested"])
+        self.assertTrue(financial["negated"])
+        self.assertEqual(financial["inference"]["model"], "hybrid_structured_lexical_v2")
+        self.assertEqual(financial["inference"]["request_mode"], "negated")
+        self.assertEqual(decision["status"], "approved")
+        self.assertNotIn("투자 실행", decision["policy_violations"])
+
+        upload_intents = infer_action_intents("외부 업로드 정책을 설명하고 실제 업로드는 하지 말고 로컬 초안만 작성해줘.", manifest)
+        upload_decision = evaluate_action_policy(manifest, upload_intents)
+        upload = next(item for item in upload_intents if item["intent_id"] == "external_upload")
+
+        self.assertFalse(upload["requested"])
+        self.assertTrue(upload["inference"]["negated"])
+        self.assertEqual(upload["inference"]["request_mode"], "negated")
+        self.assertEqual(upload_decision["status"], "approved")
+        self.assertNotIn("보스 승인 없는 외부 업로드", upload_decision["policy_violations"])
+
     def test_llm_runtime_live_mode_uses_client_interface_and_auto_fallback(self) -> None:
         from ai22b.talent_foundry.llm_runtime import build_llm_runtime_config, invoke_llm_application_engine
 

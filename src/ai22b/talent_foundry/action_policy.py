@@ -5,6 +5,7 @@ from typing import Any
 
 
 ACTION_POLICY_SCHEMA = "paideia-action-policy/v1"
+ACTION_INTENT_INFERENCE_SCHEMA = "paideia-action-intent-inference/v1"
 
 FINANCIAL_ACTION_ALIASES = (
     "투자 실행",
@@ -22,11 +23,39 @@ FINANCIAL_ACTION_ALIASES = (
     "financial action",
 )
 FINANCIAL_VERBS = ("매수", "매도", "buy", "sell")
-ACTION_MARKERS = ("실행", "주문", "체결", "지금", "바로", "까지")
-ACTION_NEGATION_MARKERS = ("없이", "하지 않고", "하지 말고", "안 하고", "제외", "금지", "차단")
+ACTION_MARKERS = ("실행", "주문", "체결", "지금", "바로", "까지", "execute", "place")
+COMMAND_MARKERS = (
+    "해줘",
+    "하라",
+    "진행",
+    "실행",
+    "전송",
+    "올려",
+    "주문",
+    "execute",
+    "place",
+    "send",
+    "upload",
+)
+ACTION_NEGATION_MARKERS = (
+    "없이",
+    "하지 않고",
+    "하지 말고",
+    "하지마",
+    "하지 마",
+    "안 하고",
+    "제외",
+    "금지",
+    "차단",
+    "do not",
+    "don't",
+    "without",
+    "no ",
+)
 
 EXTERNAL_UPLOAD_ALIASES = (
     "외부 업로드",
+    "업로드",
     "업로드해줘",
     "업로드 해줘",
     "외부 전송",
@@ -52,7 +81,22 @@ PERSONAL_DATA_TRANSFER_ALIASES = (
     "send personal data",
     "send family data",
 )
-DISCUSSION_MARKERS = ("정책", "설명", "리스크", "위험", "금지", "차단", "하지 말고", "하지 않고", "안 하고", "없이")
+DISCUSSION_MARKERS = (
+    "정책",
+    "설명",
+    "리스크",
+    "위험",
+    "금지",
+    "차단",
+    "하지 말고",
+    "하지 않고",
+    "안 하고",
+    "없이",
+    "policy",
+    "risk",
+    "explain",
+    "explanation",
+)
 
 TOOL_CAPABILITIES = {
     "work_session": ["research.analysis", "document.draft"],
@@ -81,28 +125,99 @@ def _is_negated_action(task: str, action: str) -> bool:
     return any(f"{action_folded} {marker.casefold()}" in folded for marker in ACTION_NEGATION_MARKERS)
 
 
-def _financial_action_requested(task: str) -> bool:
+def _contains_nearby_marker(text: str, anchors: tuple[str, ...], markers: tuple[str, ...], *, window: int = 18) -> bool:
+    folded = text.casefold()
+    anchor_positions = _positions(folded, anchors)
+    marker_positions = _positions(folded, markers)
+    return any(abs(anchor - marker) <= window for anchor in anchor_positions for marker in marker_positions)
+
+
+def _positions(folded_text: str, needles: tuple[str, ...]) -> list[int]:
+    positions: list[int] = []
+    for needle in needles:
+        if not needle:
+            continue
+        folded_needle = needle.casefold()
+        start = 0
+        while True:
+            index = folded_text.find(folded_needle, start)
+            if index < 0:
+                break
+            positions.append(index)
+            start = index + max(len(folded_needle), 1)
+    return positions
+
+
+def _has_negated_phrase(task: str, phrases: tuple[str, ...]) -> bool:
+    direct = any(_is_negated_action(task, phrase) for phrase in phrases)
+    return direct or _contains_nearby_marker(task, phrases, ACTION_NEGATION_MARKERS)
+
+
+def _request_state(
+    task: str,
+    *,
+    anchors: tuple[str, ...],
+    command_aliases: tuple[str, ...] = (),
+    requested: bool,
+) -> dict[str, Any]:
+    matched = _matched(task, anchors)
+    command_markers = _matched(task, command_aliases + COMMAND_MARKERS)
+    negation_markers = _matched(task, ACTION_NEGATION_MARKERS)
+    discussion_markers = _matched(task, DISCUSSION_MARKERS)
+    negated = bool(matched) and _has_negated_phrase(task, anchors)
+    discussion_only = bool(matched) and bool(discussion_markers) and not bool(command_markers)
+    effective_requested = requested and not negated and not discussion_only
+    if negated:
+        mode = "negated"
+    elif discussion_only:
+        mode = "discussion_only"
+    elif effective_requested:
+        mode = "command"
+    elif matched:
+        mode = "mentioned_only"
+    else:
+        mode = "not_detected"
+    return {
+        "schema": ACTION_INTENT_INFERENCE_SCHEMA,
+        "model": "hybrid_structured_lexical_v2",
+        "request_mode": mode,
+        "requested": effective_requested,
+        "negated": negated,
+        "discussion_only": discussion_only,
+        "matched_markers": matched,
+        "command_markers": command_markers,
+        "negation_markers": negation_markers,
+        "discussion_markers": discussion_markers,
+    }
+
+
+def _financial_action_state(task: str) -> dict[str, Any]:
+    anchor_phrases = FINANCIAL_ACTION_ALIASES + FINANCIAL_VERBS
     requested = _has_any(task, FINANCIAL_ACTION_ALIASES) or (_has_any(task, FINANCIAL_VERBS) and _has_any(task, ACTION_MARKERS))
-    if _is_negated_action(task, "투자 실행") and not (
-        _has_any(task, ("매수 주문", "매도 주문", "주문 실행", "체결", "매수해줘", "매도해줘", "사줘", "팔아줘"))
-        or (_has_any(task, FINANCIAL_VERBS) and _has_any(task, ("주문", "체결", "지금", "바로")))
-    ):
-        return False
-    return requested
+    return _request_state(
+        task,
+        anchors=anchor_phrases,
+        command_aliases=FINANCIAL_ACTION_ALIASES + ACTION_MARKERS,
+        requested=requested,
+    )
 
 
-def _external_upload_requested(task: str) -> bool:
-    if not _has_any(task, EXTERNAL_UPLOAD_ALIASES):
-        return False
-    if _has_any(task, EXTERNAL_UPLOAD_COMMAND_ALIASES):
-        return not _has_any(task, ("업로드하지 말고", "올리지 말고", "do not upload", "without upload"))
-    return not _has_any(task, DISCUSSION_MARKERS)
+def _external_upload_state(task: str) -> dict[str, Any]:
+    return _request_state(
+        task,
+        anchors=EXTERNAL_UPLOAD_ALIASES,
+        command_aliases=EXTERNAL_UPLOAD_COMMAND_ALIASES,
+        requested=_has_any(task, EXTERNAL_UPLOAD_ALIASES),
+    )
 
 
-def _personal_data_transfer_requested(task: str) -> bool:
-    if not _has_any(task, PERSONAL_DATA_TRANSFER_ALIASES):
-        return False
-    return not _has_any(task, DISCUSSION_MARKERS)
+def _personal_data_transfer_state(task: str) -> dict[str, Any]:
+    return _request_state(
+        task,
+        anchors=PERSONAL_DATA_TRANSFER_ALIASES,
+        command_aliases=PERSONAL_DATA_TRANSFER_ALIASES,
+        requested=_has_any(task, PERSONAL_DATA_TRANSFER_ALIASES),
+    )
 
 
 def _intent(
@@ -118,6 +233,7 @@ def _intent(
     requires_boss_approval: bool = False,
     matched_markers: list[str] | None = None,
     negated: bool = False,
+    inference: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     return {
         "intent_id": intent_id,
@@ -131,13 +247,19 @@ def _intent(
         "requires_boss_approval": requires_boss_approval,
         "blocked_action_label": blocked_action_label,
         "matched_markers": matched_markers or [],
+        "inference": inference
+        or {
+            "schema": ACTION_INTENT_INFERENCE_SCHEMA,
+            "model": "system_default",
+            "request_mode": "default",
+        },
     }
 
 
 def infer_action_intents(task: str, manifest: dict[str, Any] | None = None) -> list[dict[str, Any]]:
-    financial_requested = _financial_action_requested(task)
-    upload_requested = _external_upload_requested(task)
-    personal_transfer_requested = _personal_data_transfer_requested(task)
+    financial_state = _financial_action_state(task)
+    upload_state = _external_upload_state(task)
+    personal_transfer_state = _personal_data_transfer_state(task)
     projection_requested = "팀" in task or "분신" in task
     return [
         _intent(
@@ -168,11 +290,12 @@ def infer_action_intents(task: str, manifest: dict[str, Any] | None = None) -> l
             data_class="financial_action",
             capability="financial.trade_execute",
             risk_level="critical",
-            requested=financial_requested,
+            requested=financial_state["requested"],
             blocked_action_label="투자 실행",
             requires_boss_approval=True,
-            matched_markers=_matched(task, FINANCIAL_ACTION_ALIASES + FINANCIAL_VERBS + ACTION_MARKERS),
-            negated=_is_negated_action(task, "투자 실행"),
+            matched_markers=financial_state["matched_markers"],
+            negated=financial_state["negated"],
+            inference=financial_state,
         ),
         _intent(
             intent_id="external_upload",
@@ -181,10 +304,12 @@ def infer_action_intents(task: str, manifest: dict[str, Any] | None = None) -> l
             data_class="agent_or_owner_data",
             capability="network.external_upload",
             risk_level="high",
-            requested=upload_requested,
+            requested=upload_state["requested"],
             blocked_action_label="보스 승인 없는 외부 업로드",
             requires_boss_approval=True,
-            matched_markers=_matched(task, EXTERNAL_UPLOAD_ALIASES),
+            matched_markers=upload_state["matched_markers"],
+            negated=upload_state["negated"],
+            inference=upload_state,
         ),
         _intent(
             intent_id="personal_data_transfer",
@@ -193,10 +318,12 @@ def infer_action_intents(task: str, manifest: dict[str, Any] | None = None) -> l
             data_class="personal_or_family_data",
             capability="privacy.personal_data_transfer",
             risk_level="critical",
-            requested=personal_transfer_requested,
+            requested=personal_transfer_state["requested"],
             blocked_action_label="개인/가족 데이터 외부 전송",
             requires_boss_approval=True,
-            matched_markers=_matched(task, PERSONAL_DATA_TRANSFER_ALIASES),
+            matched_markers=personal_transfer_state["matched_markers"],
+            negated=personal_transfer_state["negated"],
+            inference=personal_transfer_state,
         ),
         _intent(
             intent_id="bounded_projection_team",

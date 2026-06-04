@@ -364,6 +364,8 @@ Workspace runs also write two P0 runtime artifacts inside the allowed workspace 
 - `runtime_execution.json`: the action policy, LLM runtime result, registered tool execution, verification, and memory-write decision snapshot.
 - `workspace_sandbox.json`: filesystem allowlist, blocked network/subprocess policy, resource limits, rollback notes, and audit requirements.
 
+The P0 action policy now records a structured `hybrid_structured_lexical_v2` inference packet for sensitive intents. It distinguishes direct commands from discussion-only or negated requests, so "do not place a buy order; analyze only" is kept as safe research context instead of being treated as trade execution.
+
 ## Hiring Dossier
 
 The hiring dossier is the resume-like record for a raised AI talent. It explains who the candidate is, what curriculum it completed, which exams and reports it passed, what its transcript says, which papers/projects were produced, what guardrails apply, and whether it is ready to be hired as a local agent.
