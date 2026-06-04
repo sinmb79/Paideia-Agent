@@ -23,7 +23,7 @@ flowchart TD
 
 - `Education Path`: 공개 롤모델, 자기 확장, 커스텀 롤모델 중 선택합니다.
 - `Runtime`: 단일 에이전트, 본체 제어 분신 군체, 별도 전문팀, simulation rollout을 선택합니다.
-- `Agent Identity`: Agent ID Card 등록용 payload를 로컬 파일로만 생성합니다. 외부 등록은 자동으로 하지 않습니다.
+- `Agent Identity`: Agent ID Card 등록용 payload와 Agent_warrent/Agent Identity Layer `ail.v1` envelope를 로컬 파일로만 생성합니다. 외부 등록은 자동으로 하지 않습니다.
 - `Health Check`: 산출물, 로컬 전용 정책, 외부 채널 비활성화, 다음 명령을 점검합니다.
 
 ## 실행
@@ -49,6 +49,7 @@ ai22b-talent-foundry onboard --answers examples\graham_junior_onboarding.answers
 - `console_session.json`: 전체 온보딩 세션과 health 요약
 - `paideia_onboarding_config.json`: OpenClaw식 설정 요약
 - `agent_id_card_payload.json`: 외부 등록 전 검토할 Agent ID Card payload
+- `agent_identity_envelope.json`: Agent_warrent `ail.v1` 로컬 미등록 envelope
 - `simulation_rollouts.json`: 병렬 episode rollout 계획
 - `onboarding/onboarding_session.json`: 실제 육성, 설치, 고용, 첫 목표 사이클 기록
 
@@ -59,6 +60,15 @@ ai22b-talent-foundry export-agent-id-card-payload `
   --installed-manifest <installed_agent_manifest.json> `
   --employment-record <employment_record.json> `
   --output agent_id_card_payload.json
+```
+
+Agent_warrent 호환 envelope만 별도로 만들 수도 있습니다.
+
+```powershell
+ai22b-talent-foundry export-agent-identity-envelope `
+  --installed-manifest <installed_agent_manifest.json> `
+  --employment-record <employment_record.json> `
+  --output agent_identity_envelope.json
 ```
 
 ## 중요한 차이

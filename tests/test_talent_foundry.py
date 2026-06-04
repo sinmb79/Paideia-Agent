@@ -1732,12 +1732,15 @@ class TalentFoundryTests(unittest.TestCase):
                 output_path=kit_dir / "paideia_doctor_report.json",
             )
             onboarding = json.loads((kit_dir / "paideia_onboarding.template.json").read_text(encoding="utf-8"))
+            identity_envelope = json.loads((kit_dir / "agent_identity_envelope.json").read_text(encoding="utf-8"))
             hermes_adapter_exists = (kit_dir / "adapter_manifests" / "hermes_style.json").exists()
             openclaw_adapter_exists = (kit_dir / "adapter_manifests" / "openclaw_style.json").exists()
 
         self.assertEqual(manifest["schema"], "ai22b-paideia-agent-install-kit/v1")
         self.assertEqual(manifest["status"], "ready")
         self.assertIn("paideia_onboarding.template.json", manifest["files"])
+        self.assertIn("agent_identity_envelope.json", manifest["files"])
+        self.assertEqual(manifest["entrypoints"]["agent_identity_envelope"], "agent_identity_envelope.json")
         self.assertIn("doctor_paideia.ps1", manifest["files"])
         self.assertIn("adapter_manifests", manifest["directories"])
         self.assertTrue(hermes_adapter_exists)
@@ -1749,6 +1752,8 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(onboarding["flow"][1], "choose_chat_surface")
         self.assertIn("openai_chatgpt_codex", {item["id"] for item in onboarding["llm_service_catalog"]})
         self.assertIn("codex-bridge-chat", {item["id"] for item in onboarding["chat_surface_catalog"]})
+        self.assertEqual(identity_envelope["version"], "ail.v1")
+        self.assertEqual(identity_envelope["extensions"]["agent_warrent"]["registration_state"], "local_unregistered")
         self.assertEqual(manifest["default_safety_posture"]["external_channels"], "disabled")
 
     def test_cli_build_paideia_agent_kit_and_doctor_agent_program(self) -> None:

@@ -385,7 +385,16 @@ Paideia borrows useful operational patterns from agent runtimes while keeping a 
 - Hermes Agent foregrounds a learning loop, skills, persistent memory, MCP integration, and migration from OpenClaw.
 - OpenClaw foregrounds workspace files, skills, multi-channel routing, and configurable local agent workspaces.
 - Paideia keeps the education record as the source of identity and treats the LLM as an application engine, not the agent's self.
-- Agent identity systems such as [Agent ID Card](https://www.agentidcard.org/) are a planned external identity integration path. Registration and external upload must remain explicit user actions.
+- Agent identity systems such as [Agent ID Card](https://www.agentidcard.org/) and Boss's [Agent_warrent / Agent Identity Layer](https://github.com/sinmb79/Agent_warrent) are supported as local identity export paths. Registration and external upload must remain explicit user actions.
+
+```powershell
+ai22b-talent-foundry export-agent-identity-envelope `
+  --installed-manifest .\installed_agent_manifest.json `
+  --employment-record .\employment_record.json `
+  --output .\agent_identity_envelope.json
+```
+
+The generated `agent_identity_envelope.json` follows the Agent_warrent `ail.v1` local-unregistered shape. It contains no credential token, no raw owner email, and no automatic network registration.
 
 Primary references:
 

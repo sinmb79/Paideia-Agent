@@ -315,6 +315,7 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             )
             config = json.loads(Path(session["artifacts"]["paideia_onboarding_config"]).read_text(encoding="utf-8"))
             identity_payload = json.loads(Path(session["artifacts"]["agent_id_card_payload"]).read_text(encoding="utf-8"))
+            identity_envelope = json.loads(Path(session["artifacts"]["agent_identity_envelope"]).read_text(encoding="utf-8"))
             rollouts = json.loads(Path(session["artifacts"]["simulation_rollouts"]).read_text(encoding="utf-8"))
 
         self.assertEqual(session["wizard"]["schema"], "ai22b-paideia-openclaw-style-onboarding/v1")
@@ -323,8 +324,59 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertEqual(config["channels"]["external_channels"], "disabled_until_explicit_configuration")
         self.assertEqual(identity_payload["schema"], "ai-talent-agent-id-card-payload/v1")
         self.assertFalse(identity_payload["network_action_performed"])
+        self.assertEqual(identity_envelope["version"], "ail.v1")
+        self.assertIsNone(identity_envelope["ail_id"])
+        self.assertFalse(identity_envelope["verification"]["signed"])
+        self.assertEqual(
+            identity_envelope["extensions"]["agent_warrent"]["repo_url"],
+            "https://github.com/sinmb79/Agent_warrent",
+        )
         self.assertEqual(rollouts["schema"], "ai-talent-simulation-rollouts/v1")
         self.assertGreaterEqual(rollouts["summary"]["episode_count"], 4)
+
+    def test_agent_warrent_identity_envelope_cli_export(self) -> None:
+        from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
+        from ai22b.talent_foundry.cli import main as cli_main
+        from ai22b.talent_foundry.training_run import materialize_training_blueprint
+
+        blueprint = create_agent_training_blueprint(
+            owner="Boss",
+            request="Raise a local securities research AI talent and export an Agent_warrent identity envelope.",
+            talent_name="agent-warrent-test",
+            gender="male",
+            domain="securities_research",
+            role_model_id="graham_value_investing",
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            run = materialize_training_blueprint(blueprint, output_dir=Path(tmp) / "agent_warrent")
+            artifacts = {key: Path(value) for key, value in run["artifacts"].items()}
+            output = Path(tmp) / "agent_identity_envelope.json"
+            exit_code = cli_main(
+                [
+                    "export-agent-identity-envelope",
+                    "--installed-manifest",
+                    str(artifacts["installed_agent_manifest"]),
+                    "--employment-record",
+                    str(artifacts["employment_record"]),
+                    "--surface",
+                    "test_cli",
+                    "--task-ref",
+                    "test-agent-warrent-export",
+                    "--output",
+                    str(output),
+                ]
+            )
+            envelope = json.loads(output.read_text(encoding="utf-8"))
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(envelope["version"], "ail.v1")
+        self.assertEqual(envelope["agent"]["display_name"], "agent-warrent-test")
+        self.assertEqual(envelope["delegation"]["task_ref"], "test-agent-warrent-export")
+        self.assertEqual(envelope["runtime"]["surface"], "test_cli")
+        self.assertEqual(envelope["verification"]["strength"], "local_runtime_asserted")
+        self.assertFalse(envelope["extensions"]["paideia"]["privacy"]["network_action_performed"])
+        self.assertNotIn("C:\\Users\\", json.dumps(envelope, ensure_ascii=False))
 
     def test_owner_self_extension_blueprint_uses_private_local_track_without_role_model(self) -> None:
         from ai22b.talent_foundry.blueprint import create_agent_training_blueprint

@@ -5,7 +5,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
-from ai22b.talent_foundry.agent_identity_card import build_agent_id_card_payload
+from ai22b.talent_foundry.agent_identity_card import (
+    build_agent_id_card_payload,
+    build_agent_identity_layer_envelope,
+)
 from ai22b.talent_foundry.onboarding import run_agent_onboarding
 from ai22b.talent_foundry.onboarding_choices import (
     CHAT_SURFACE_CATALOG,
@@ -607,17 +610,28 @@ def run_console_session(
     status = onboarding["status"]
     if normalized.get("agent_id_card_mode") != "skip":
         agent_id_card_path = output_dir / "agent_id_card_payload.json"
+        agent_identity_envelope_path = output_dir / "agent_identity_envelope.json"
         payload = build_agent_id_card_payload(
             installed_manifest_path=Path(onboarding["artifacts"]["installed_agent_manifest"]),
             employment_record_path=Path(onboarding["artifacts"]["employment_record"]),
             output_path=agent_id_card_path,
         )
+        envelope = build_agent_identity_layer_envelope(
+            installed_manifest_path=Path(onboarding["artifacts"]["installed_agent_manifest"]),
+            employment_record_path=Path(onboarding["artifacts"]["employment_record"]),
+            output_path=agent_identity_envelope_path,
+            surface="paideia_onboarding_console",
+            task_ref="onboarding-agent-identity",
+        )
         artifacts["agent_id_card_payload"] = str(agent_id_card_path)
+        artifacts["agent_identity_envelope"] = str(agent_identity_envelope_path)
         post_hire_extensions["agent_id_card"] = {
             "schema": payload["schema"],
             "status": payload["status"],
             "network_action_performed": payload["network_action_performed"],
             "payload_fingerprint_sha256": payload["payload_fingerprint_sha256"],
+            "agent_identity_layer_version": envelope["version"],
+            "agent_warrent_repo": envelope["extensions"]["agent_warrent"]["repo_url"],
         }
     if normalized.get("simulation_rollouts_enabled", "yes") == "yes":
         simulation_path = output_dir / "simulation_rollouts.json"

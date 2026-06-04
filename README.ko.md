@@ -130,6 +130,7 @@ ai22b-talent-foundry onboard-agent `
 - `memory_substrate.json`
 - `22b_paideia_agent_program.json`
 - Hermes/OpenClaw 스타일 어댑터 manifest
+- `agent_identity_envelope.json`: [Agent_warrent / Agent Identity Layer](https://github.com/sinmb79/Agent_warrent) `ail.v1` 로컬 미등록 신원 envelope
 
 졸업 패키지 생성:
 
@@ -150,6 +151,17 @@ ai22b-talent-foundry run-same-sky-eval `
 ```
 
 세부 설명은 [Growth Profile v0.5-v0.7](docs/growth_profile_v05.ko.md)을 참고하세요.
+
+Agent_warrent 호환 신원 envelope만 별도로 만들 수도 있습니다.
+
+```powershell
+ai22b-talent-foundry export-agent-identity-envelope `
+  --installed-manifest .\installed_agent_manifest.json `
+  --employment-record .\employment_record.json `
+  --output .\agent_identity_envelope.json
+```
+
+이 파일은 외부 등록 전 검토용입니다. `ail_id`, credential token, 서명 검증은 외부 등록을 보스가 명시적으로 진행한 뒤에만 채워집니다.
 
 ## 공개 저장소 규칙
 

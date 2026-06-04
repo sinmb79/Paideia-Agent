@@ -6,7 +6,10 @@ from pathlib import Path
 from typing import Sequence
 
 from ai22b.config import talent_foundry_storage_path
-from ai22b.talent_foundry.agent_identity_card import build_agent_id_card_payload
+from ai22b.talent_foundry.agent_identity_card import (
+    build_agent_id_card_payload,
+    build_agent_identity_layer_envelope,
+)
 from ai22b.talent_foundry.agent_manifest import build_agent_manifest
 from ai22b.talent_foundry.agent_program import (
     build_agent_program,
@@ -316,6 +319,16 @@ def _build_parser() -> argparse.ArgumentParser:
     agent_id_card.add_argument("--installed-manifest", required=True)
     agent_id_card.add_argument("--employment-record")
     agent_id_card.add_argument("--output", required=True)
+
+    agent_identity_envelope = subparsers.add_parser(
+        "export-agent-identity-envelope",
+        help="Build an Agent_warrent/Agent Identity Layer v1 envelope without registering or uploading it.",
+    )
+    agent_identity_envelope.add_argument("--installed-manifest", required=True)
+    agent_identity_envelope.add_argument("--employment-record")
+    agent_identity_envelope.add_argument("--surface", default="paideia_cli")
+    agent_identity_envelope.add_argument("--task-ref")
+    agent_identity_envelope.add_argument("--output", required=True)
 
     hire_installed = subparsers.add_parser("hire-installed", help="Hire an installed AI talent as a local agent.")
     hire_installed.add_argument("--installed-manifest", required=True)
@@ -930,6 +943,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             output_path=Path(args.output),
         )
         print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.command == "export-agent-identity-envelope":
+        envelope = build_agent_identity_layer_envelope(
+            installed_manifest_path=Path(args.installed_manifest),
+            employment_record_path=Path(args.employment_record) if args.employment_record else None,
+            surface=args.surface,
+            task_ref=args.task_ref,
+            output_path=Path(args.output),
+        )
+        print(json.dumps(envelope, ensure_ascii=False, indent=2))
         return 0
 
     if args.command == "hire-installed":

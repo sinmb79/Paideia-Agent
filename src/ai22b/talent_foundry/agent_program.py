@@ -6,6 +6,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from ai22b.talent_foundry.agent_identity_card import (
+    build_agent_id_card_payload,
+    build_agent_identity_layer_envelope,
+)
 from ai22b.talent_foundry.memory_substrate import build_memory_substrate, run_chat_turn_from_employment, write_memory_substrate
 from ai22b.talent_foundry.onboarding_choices import (
     CHAT_SURFACE_CATALOG,
@@ -530,6 +534,8 @@ def build_agent_program(
             "live_llm_chat": "run-agent-program-chat --llm-mode live --learn-from-chat",
             "hiring_dossier": "hiring_dossier.json",
             "hiring_dossier_markdown": "HIRING_DOSSIER.ko.md",
+            "agent_id_card_payload": "agent_id_card_payload.json",
+            "agent_identity_envelope": "agent_identity_envelope.json",
         },
         "adapter_manifests": _adapter_manifests(str(agent.get("name") or "unknown")),
         "security": {
@@ -538,6 +544,7 @@ def build_agent_program(
             "external_channels_enabled": False,
             "community_skills_enabled": False,
             "gateway_binding": "disabled_until_explicit_loopback_or_private_network_configuration",
+            "agent_identity_layer": "Agent_warrent ail.v1 local envelope; external registration requires explicit owner action",
             "memory_replay_policy": "bounded_selected_summaries_not_full_session_replay",
             "profile_isolation": "per_hired_talent_install_kit",
             "doctor_required_before_first_run": True,
@@ -599,6 +606,7 @@ def build_paideia_agent_install_kit(
     copied: dict[str, str] = {}
     required_names = [
         "employment_record.json",
+        employment.get("source", {}).get("installed_manifest", "installed_agent_manifest.json"),
         entrypoints.get("agent_manifest", "agent_manifest.json"),
         entrypoints.get("learning_ledger", "learning_ledger.json"),
         entrypoints.get("memory_substrate", "memory_substrate.json"),
@@ -647,6 +655,35 @@ def build_paideia_agent_install_kit(
         program_name=program_name,
         program_name_ko=program_name_ko,
     )
+    installed_manifest_name = employment.get("source", {}).get("installed_manifest", "installed_agent_manifest.json")
+    installed_manifest_path = output_dir / installed_manifest_name
+    if installed_manifest_path.exists():
+        payload_path = output_dir / "agent_id_card_payload.json"
+        envelope_path = output_dir / "agent_identity_envelope.json"
+        payload = build_agent_id_card_payload(
+            installed_manifest_path=installed_manifest_path,
+            employment_record_path=output_dir / "employment_record.json",
+            output_path=payload_path,
+        )
+        envelope = build_agent_identity_layer_envelope(
+            installed_manifest_path=installed_manifest_path,
+            employment_record_path=output_dir / "employment_record.json",
+            output_path=envelope_path,
+            surface="paideia_agent_install_kit",
+            task_ref="paideia-agent-kit-identity",
+        )
+        copied[payload_path.name] = "generated_agent_id_card_payload"
+        copied[envelope_path.name] = "generated_agent_warrent_ail_v1_envelope"
+        program["entrypoints"]["agent_id_card_payload"] = payload_path.name
+        program["entrypoints"]["agent_identity_envelope"] = envelope_path.name
+        program["installable_runtime"]["agent_identity_layer"] = {
+            "payload_schema": payload["schema"],
+            "envelope_version": envelope["version"],
+            "agent_warrent_repo": envelope["extensions"]["agent_warrent"]["repo_url"],
+            "registration_state": envelope["extensions"]["agent_warrent"]["registration_state"],
+            "network_action_performed": False,
+        }
+        _write_json(program_path, program)
 
     adapters_dir = output_dir / "adapter_manifests"
     adapters_dir.mkdir(exist_ok=True)
@@ -666,6 +703,18 @@ def build_paideia_agent_install_kit(
     )
     (output_dir / DEFAULT_DOCTOR_SCRIPT).write_text(_doctor_script(), encoding="utf-8")
 
+    kit_entrypoints = {
+        "doctor": DEFAULT_DOCTOR_SCRIPT,
+        "start_chat": DEFAULT_CHAT_SCRIPT,
+        "program": program_path.name,
+        "onboarding_template": DEFAULT_ONBOARDING_TEMPLATE,
+        "adapter_manifests": "adapter_manifests",
+    }
+    if (output_dir / "agent_id_card_payload.json").exists():
+        kit_entrypoints["agent_id_card_payload"] = "agent_id_card_payload.json"
+    if (output_dir / "agent_identity_envelope.json").exists():
+        kit_entrypoints["agent_identity_envelope"] = "agent_identity_envelope.json"
+
     manifest = {
         "schema": INSTALL_KIT_SCHEMA,
         "created_at_utc": _now(),
@@ -676,13 +725,7 @@ def build_paideia_agent_install_kit(
         "files": sorted(path.name for path in output_dir.iterdir() if path.is_file()),
         "directories": sorted(path.name for path in output_dir.iterdir() if path.is_dir()),
         "copied_artifacts": copied,
-        "entrypoints": {
-            "doctor": DEFAULT_DOCTOR_SCRIPT,
-            "start_chat": DEFAULT_CHAT_SCRIPT,
-            "program": program_path.name,
-            "onboarding_template": DEFAULT_ONBOARDING_TEMPLATE,
-            "adapter_manifests": "adapter_manifests",
-        },
+        "entrypoints": kit_entrypoints,
         "benchmarked_from": {
             "hermes_agent": [
                 "one-command style install kit",
@@ -701,6 +744,7 @@ def build_paideia_agent_install_kit(
             "external_channels": "disabled",
             "community_skills": "manual_review_required",
             "gateway": "disabled_until_loopback_or_private_network_configured",
+            "agent_identity_registration": "manual_owner_action_only",
             "memory": "bounded_selected_summaries",
             "api_failures": "fallback_and_quarantine",
         },
