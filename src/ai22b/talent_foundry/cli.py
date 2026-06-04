@@ -42,6 +42,7 @@ from ai22b.talent_foundry.learning_loop import (
     record_learning_experience,
 )
 from ai22b.talent_foundry.life_trace import build_life_trace, read_life_trace_jsonl, write_life_trace_jsonl
+from ai22b.talent_foundry.llm_runtime import build_llm_runtime_config
 from ai22b.talent_foundry.memory_substrate import run_chat_turn_from_employment
 from ai22b.talent_foundry.onboarding import run_agent_onboarding
 from ai22b.talent_foundry.onboarding_choices import (
@@ -265,6 +266,11 @@ def _build_parser() -> argparse.ArgumentParser:
     run_agent.add_argument("--task", required=True)
     run_agent.add_argument("--output", default=str(DEFAULT_AGENT_RUN_OUTPUT))
     run_agent.add_argument("--log", default=str(DEFAULT_AGENT_RUN_LOG))
+    run_agent.add_argument("--llm-engine", default="deterministic_local")
+    run_agent.add_argument("--llm-model")
+    run_agent.add_argument("--llm-model-path")
+    run_agent.add_argument("--llm-mode", choices=["offline", "auto", "live"], default="offline")
+    run_agent.add_argument("--live-llm", action="store_true", help="Shortcut for --llm-mode live.")
 
     run_workspace_agent = subparsers.add_parser(
         "run-workspace-agent",
@@ -347,6 +353,14 @@ def _build_parser() -> argparse.ArgumentParser:
     run_hired_agent_command.add_argument("--employment-record", required=True)
     run_hired_agent_command.add_argument("--task", required=True)
     run_hired_agent_command.add_argument("--output")
+    run_hired_agent_command.add_argument(
+        "--llm-mode",
+        choices=["offline", "auto", "live"],
+        default="offline",
+        help="offline uses local deterministic/manifest mode; auto tries live then falls back; live requires a configured provider.",
+    )
+    run_hired_agent_command.add_argument("--live-llm", action="store_true", help="Shortcut for --llm-mode live.")
+    run_hired_agent_command.add_argument("--llm-model", help="Override the employment LLM model for this run.")
 
     chat_hired_agent_command = subparsers.add_parser(
         "chat-hired-agent",
@@ -829,7 +843,20 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "run-agent":
         manifest = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
-        result = run_agent_from_manifest(manifest, task=args.task, output_log_path=Path(args.log))
+        llm_mode = "live" if args.live_llm else args.llm_mode
+        runtime_config = build_llm_runtime_config(
+            engine=args.llm_engine,
+            model=args.llm_model,
+            model_path=args.llm_model_path,
+        )
+        result = run_agent_from_manifest(
+            manifest,
+            task=args.task,
+            output_log_path=Path(args.log) if args.log else None,
+            runtime_config=runtime_config,
+            llm_mode=llm_mode,
+            llm_model=args.llm_model,
+        )
         output_path = Path(args.output)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -971,10 +998,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if args.command == "run-hired-agent":
+        llm_mode = "live" if args.live_llm else args.llm_mode
         run = run_hired_agent(
             Path(args.employment_record),
             task=args.task,
             output_path=Path(args.output) if args.output else None,
+            llm_mode=llm_mode,
+            llm_model=args.llm_model,
         )
         output_path = Path(args.output) if args.output else Path(args.employment_record).parent / "last_hired_agent_run.json"
         print(str(output_path))

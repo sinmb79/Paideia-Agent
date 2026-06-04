@@ -74,6 +74,15 @@ $env:PYTHONPATH = "src"
 $env:AI22B_STORAGE_ROOT = "$env:USERPROFILE\Documents\22B-AI-local-storage"
 ```
 
+기능별 선택 설치:
+
+```powershell
+python -m pip install -e ".[live-llm]"   # OpenAI Responses API 실시간 실행
+python -m pip install -e ".[local-llm]"  # 로컬 Transformers 모델
+python -m pip install -e ".[rag]"        # 검색/평가 실험 도구
+python -m pip install -e ".[dev]"        # 테스트
+```
+
 롤모델 목록:
 
 ```powershell
@@ -95,6 +104,36 @@ ai22b-talent-foundry onboard
 ```
 
 이 wizard는 기존 설정 감지, QuickStart/Advanced, Model/Auth, Workspace, Gateway/Channels, Skills, Education Path, Runtime, Agent Identity, Health Check, Finish 순서로 진행합니다.
+
+## P0 실행 루프
+
+고용된 에이전트 실행은 이제 단순 응답 템플릿이 아니라 다음 흐름을 따릅니다.
+
+```text
+요청 -> ActionIntent -> capability 정책 -> LLM 계획 -> 로컬 도구 실행 -> 검증 -> 메모리 기록 판단 -> 감사 로그
+```
+
+기본은 로컬 deterministic/offline 실행입니다.
+
+```powershell
+ai22b-talent-foundry run-hired-agent `
+  --employment-record .\employment_record.json `
+  --task "증권 리서치 메모 전에 확인할 거시경제 질문을 정리해줘." `
+  --output .\last_hired_agent_run.json
+```
+
+API 키나 localhost 모델 서버가 준비되어 있으면 live 실행을 켤 수 있습니다.
+
+```powershell
+$env:OPENAI_API_KEY = "<your key>"
+ai22b-talent-foundry run-hired-agent `
+  --employment-record .\employment_record.json `
+  --task "검토 가능한 증권 리서치 체크리스트 초안을 작성해줘." `
+  --llm-mode live `
+  --llm-model gpt-4.1-mini
+```
+
+`--llm-mode auto`는 live 호출을 먼저 시도하고, 실패하면 로컬 manifest/bridge 경로로 자동 fallback합니다.
 
 Hopper Junior 예시:
 

@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from ai22b.from_scratch.bigram import generate_text, load_model
+from ai22b.talent_foundry.llm_clients import LLMClient, build_llm_client, build_runtime_messages
 
 
 RUNTIME_SCHEMA = "ai-talent-llm-runtime/v1"
@@ -84,13 +85,62 @@ def invoke_llm_application_engine(
     *,
     manifest: dict[str, Any],
     task: str,
+    llm_mode: str = "offline",
+    llm_model: str | None = None,
+    client: LLMClient | None = None,
+    policy_context: dict[str, Any] | None = None,
+    tools: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     if runtime_config.get("schema") != RUNTIME_SCHEMA:
         raise ValueError("Unsupported LLM runtime config schema")
+    if llm_mode not in {"offline", "auto", "live"}:
+        raise ValueError("llm_mode must be offline, auto, or live")
 
+    effective_config = {**runtime_config}
+    if llm_model:
+        effective_config["model"] = llm_model
+
+    engine = effective_config["engine"]
+    model_path = runtime_config.get("model_path")
+    model = effective_config.get("model")
+    if engine in {"bigram_local", "transformers_local", "llama_cpp_local"} and not model_path:
+        return {
+            "schema": RUNTIME_RESULT_SCHEMA,
+            "engine": engine,
+            "status": "unavailable",
+            "reason": "model_path_required_for_local_model_engine",
+            "identity_policy": runtime_config["identity_policy"],
+            "network_access": runtime_config["network_access"],
+        }
+    if llm_mode in {"auto", "live"} and engine in {"openai_chatgpt_codex", "ollama_local_http", "lm_studio_local_http"}:
+        live_result = _invoke_live_client(
+            effective_config,
+            manifest=manifest,
+            task=task,
+            client=client,
+            policy_context=policy_context,
+            tools=tools,
+        )
+        if live_result.get("status") == "completed" or llm_mode == "live":
+            return live_result
+        offline_result = _invoke_offline_or_local_engine(effective_config, manifest=manifest, task=task)
+        return {
+            **offline_result,
+            "llm_mode": "auto",
+            "live_attempt": live_result,
+            "fallback_used": True,
+        }
+    return _invoke_offline_or_local_engine(effective_config, manifest=manifest, task=task)
+
+
+def _invoke_offline_or_local_engine(
+    runtime_config: dict[str, Any],
+    *,
+    manifest: dict[str, Any],
+    task: str,
+) -> dict[str, Any]:
     engine = runtime_config["engine"]
     model_path = runtime_config.get("model_path")
-    model = runtime_config.get("model")
     if engine in {"bigram_local", "transformers_local", "llama_cpp_local"} and not model_path:
         return {
             "schema": RUNTIME_RESULT_SCHEMA,
@@ -135,6 +185,50 @@ def invoke_llm_application_engine(
             f"{agent['name']}은 자신의 학습 기록과 절차 원칙을 기준으로 "
             f"'{task}' 업무의 초안을 로컬 응용 엔진에서 구성한다."
         ),
+    }
+
+
+def _invoke_live_client(
+    runtime_config: dict[str, Any],
+    *,
+    manifest: dict[str, Any],
+    task: str,
+    client: LLMClient | None = None,
+    policy_context: dict[str, Any] | None = None,
+    tools: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    llm_client = client or build_llm_client(runtime_config)
+    messages = build_runtime_messages(manifest=manifest, task=task, policy_context=policy_context)
+    client_result = llm_client.generate(messages, tools=tools or [], policy=policy_context or {})
+    engine = runtime_config["engine"]
+    if client_result.get("status") != "completed":
+        return {
+            "schema": RUNTIME_RESULT_SCHEMA,
+            "engine": engine,
+            "status": "unavailable",
+            "reason": client_result.get("reason", "llm_client_unavailable"),
+            "identity_policy": runtime_config["identity_policy"],
+            "network_access": runtime_config["network_access"],
+            "llm_mode": "live",
+            "client_result": client_result,
+        }
+    return {
+        "schema": RUNTIME_RESULT_SCHEMA,
+        "engine": engine,
+        "status": "completed",
+        "identity_policy": runtime_config["identity_policy"],
+        "network_access": runtime_config["network_access"],
+        "applied_as": "live_language_and_tool_reasoning_engine",
+        "prompt_fingerprint": _prompt_fingerprint(manifest=manifest, task=task),
+        "llm_mode": "live",
+        "model": client_result.get("model") or runtime_config.get("model"),
+        "draft": client_result.get("text", ""),
+        "client_result": client_result,
+        "data_policy": {
+            "send_private_training_files": False,
+            "send_selected_memory_route_only": True,
+            "store_hidden_chain_of_thought": False,
+        },
     }
 
 

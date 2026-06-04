@@ -1213,6 +1213,80 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("투자 실행", result["blocked_actions"])
         self.assertIn("검증", result["memory_applied"]["procedural_principles"])
         self.assertEqual(result["llm_policy"]["role"], "application_engine_not_identity")
+        self.assertEqual(result["execution_loop"]["schema"], "paideia-agent-execution-loop/v1")
+        self.assertEqual(result["policy_decision"]["decision_model"], "action_intent_capability_v1")
+        self.assertEqual(result["verification"]["status"], "passed")
+        self.assertTrue(result["audit_events"])
+        self.assertIn("llm_runtime_result", result)
+
+    def test_action_policy_blocks_structured_sensitive_intents(self) -> None:
+        from ai22b.talent_foundry.action_policy import evaluate_action_policy, infer_action_intents
+        from ai22b.talent_foundry.demo import run_demo
+
+        with tempfile.TemporaryDirectory() as tmp:
+            outputs = run_demo(output_dir=Path(tmp))
+            manifest = json.loads(outputs["agent_manifest"].read_text(encoding="utf-8"))
+
+        intents = infer_action_intents("삼성전자 매수 주문을 실행하고 인터넷에 올려줘.", manifest)
+        decision = evaluate_action_policy(manifest, intents)
+
+        self.assertEqual(decision["schema"], "paideia-action-policy/v1")
+        self.assertEqual(decision["status"], "blocked")
+        self.assertIn("투자 실행", decision["policy_violations"])
+        self.assertIn("보스 승인 없는 외부 업로드", decision["policy_violations"])
+        self.assertTrue(any(item["action_type"] == "financial_trade_execution" for item in intents))
+        self.assertEqual(decision["capability_grants"]["mode"], "deny_by_default")
+
+    def test_llm_runtime_live_mode_uses_client_interface_and_auto_fallback(self) -> None:
+        from ai22b.talent_foundry.llm_runtime import build_llm_runtime_config, invoke_llm_application_engine
+
+        class FakeClient:
+            def __init__(self, status: str) -> None:
+                self.status = status
+
+            def generate(self, messages, *, tools=None, policy=None):
+                if self.status == "completed":
+                    return {
+                        "schema": "paideia-llm-client-result/v1",
+                        "engine": "fake_live_llm",
+                        "status": "completed",
+                        "text": "보스 검토용 live LLM 초안입니다.",
+                        "model": "fake-model",
+                    }
+                return {
+                    "schema": "paideia-llm-client-result/v1",
+                    "engine": "fake_live_llm",
+                    "status": "unavailable",
+                    "reason": "fake_offline",
+                }
+
+        config = build_llm_runtime_config(engine="openai_chatgpt_codex", model="fake-model")
+        manifest = {
+            "agent": {"name": "신용", "role": "증권 리서치", "major_goal": "증권 AI 박사"},
+            "memory_profile": {"procedural_principles": ["검증"], "semantic_themes": ["근거"]},
+        }
+
+        live = invoke_llm_application_engine(
+            config,
+            manifest=manifest,
+            task="거시경제 질문 정리",
+            llm_mode="live",
+            client=FakeClient("completed"),
+        )
+        fallback = invoke_llm_application_engine(
+            config,
+            manifest=manifest,
+            task="거시경제 질문 정리",
+            llm_mode="auto",
+            client=FakeClient("unavailable"),
+        )
+
+        self.assertEqual(live["status"], "completed")
+        self.assertEqual(live["draft"], "보스 검토용 live LLM 초안입니다.")
+        self.assertEqual(live["client_result"]["engine"], "fake_live_llm")
+        self.assertEqual(fallback["status"], "bridge_context_prepared")
+        self.assertTrue(fallback["fallback_used"])
+        self.assertEqual(fallback["live_attempt"]["reason"], "fake_offline")
 
     def test_agent_runner_allows_research_tasks_that_explicitly_exclude_investment_execution(self) -> None:
         from ai22b.talent_foundry.agent_runner import run_agent_from_manifest

@@ -496,13 +496,16 @@ def run_hired_agent(
     *,
     task: str,
     output_path: Path | None = None,
+    llm_mode: str = "offline",
+    llm_model: str | None = None,
 ) -> dict[str, Any]:
     employment_record, agent_manifest, target_root = _load_active_employment(employment_record_path)
-    result = run_agent_from_manifest(agent_manifest, task=task)
-    result["llm_runtime_result"] = invoke_llm_application_engine(
-        employment_record["llm_runtime"],
-        manifest=agent_manifest,
+    result = run_agent_from_manifest(
+        agent_manifest,
         task=task,
+        runtime_config=employment_record["llm_runtime"],
+        llm_mode=llm_mode,
+        llm_model=llm_model,
     )
     result["employment_context"] = _employment_context(employment_record)
     result["active_memory_route"] = _route_active_memory_for_employment(

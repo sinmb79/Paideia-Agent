@@ -11,6 +11,24 @@ requires-python = ">=3.10"
 authors = [{ name = "22B" }]
 dependencies = []
 
+[project.optional-dependencies]
+dev = ["pytest"]
+live-llm = ["openai>=1.0.0"]
+local-llm = ["accelerate", "sentence-transformers", "transformers"]
+rag = ["chromadb", "ragas"]
+fine-tune = ["datasets", "peft"]
+all = [
+  "openai>=1.0.0",
+  "accelerate",
+  "chromadb",
+  "datasets",
+  "peft",
+  "pytest",
+  "ragas",
+  "sentence-transformers",
+  "transformers",
+]
+
 [project.scripts]
 ai22b-doctor = "ai22b.doctor:main"
 ai22b-bigram = "ai22b.from_scratch.bigram:main"

@@ -120,6 +120,15 @@ python -m pip install -e .
 $env:PYTHONPATH = "src"
 ```
 
+Optional runtime extras are split by capability:
+
+```powershell
+python -m pip install -e ".[live-llm]"   # OpenAI Responses API live runs
+python -m pip install -e ".[local-llm]"  # local Transformers models
+python -m pip install -e ".[rag]"        # retrieval/eval lab tools
+python -m pip install -e ".[dev]"        # tests
+```
+
 Runtime artifacts are stored outside this source tree by default:
 
 ```powershell
@@ -306,7 +315,37 @@ Supported initial LLM services include:
 - `transformers_local`
 - `llama_cpp_local`
 
-External API adapters are manifest-ready and require the user's own keys before live use. Local model adapters prefer localhost or local files. Supported initial chat surfaces include `codex-bridge-chat`, `cli-console`, `dataflow-job`, and a disabled `openclaw-style-gateway` adapter manifest.
+External API adapters require the user's own keys before live use. Local model adapters prefer localhost or local files. Supported initial chat surfaces include `codex-bridge-chat`, `cli-console`, `dataflow-job`, and a disabled `openclaw-style-gateway` adapter manifest.
+
+## P0 Runtime Loop
+
+The hired-agent runner now uses a structured runtime loop instead of a template-only response:
+
+```text
+request -> ActionIntent -> capability policy -> LLM planning -> local tool execution -> verification -> memory write decision -> audit log
+```
+
+Offline mode stays deterministic and local:
+
+```powershell
+ai22b-talent-foundry run-hired-agent `
+  --employment-record .\employment_record.json `
+  --task "Summarize the macro questions before a securities research memo." `
+  --output .\last_hired_agent_run.json
+```
+
+Live mode calls the configured provider when credentials or localhost endpoints are available:
+
+```powershell
+$env:OPENAI_API_KEY = "<your key>"
+ai22b-talent-foundry run-hired-agent `
+  --employment-record .\employment_record.json `
+  --task "Draft a reviewable securities research checklist." `
+  --llm-mode live `
+  --llm-model gpt-4.1-mini
+```
+
+`--llm-mode auto` attempts the live provider first and falls back to the local manifest/bridge path if the provider is unavailable.
 
 ## Hiring Dossier
 
