@@ -14,7 +14,7 @@ from ai22b.talent_foundry.language_development import (
 from ai22b.talent_foundry.growth_profile import read_growth_profile
 from ai22b.talent_foundry.learning_loop import build_reasoning_kernel, record_learning_experience
 from ai22b.talent_foundry.life_trace import read_life_trace_jsonl
-from ai22b.talent_foundry.llm_clients import build_llm_client
+from ai22b.talent_foundry.llm_clients import build_llm_client, sanitize_llm_result_packet
 from ai22b.talent_foundry.llm_runtime import invoke_llm_application_engine
 
 
@@ -2125,6 +2125,7 @@ def run_chat_turn_from_employment(
             runtime_config=employment_record["llm_runtime"],
             model=llm_model,
         )
+        live_llm_attempt = sanitize_llm_result_packet(live_llm_attempt)
 
     if live_llm_attempt and live_llm_attempt.get("status") == "completed":
         llm_runtime_result = live_llm_attempt

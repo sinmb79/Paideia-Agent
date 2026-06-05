@@ -131,6 +131,12 @@ def _sanitize_value(value: Any) -> Any:
     return value
 
 
+def sanitize_llm_result_packet(value: Any) -> Any:
+    """Return an LLM result packet with provider credentials redacted."""
+
+    return _sanitize_value(value)
+
+
 def _ok(engine: str, text: str, **fields: Any) -> dict[str, Any]:
     return {
         "schema": LLM_CLIENT_RESULT_SCHEMA,

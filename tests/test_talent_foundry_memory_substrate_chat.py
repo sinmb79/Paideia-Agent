@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -514,6 +515,8 @@ class TalentFoundryMemorySubstrateChatTests(unittest.TestCase):
         from ai22b.talent_foundry.registry import hire_installed_agent
         from ai22b.talent_foundry.training_run import materialize_training_blueprint
 
+        secret = "fixture_openai_live_chat_secret_12345"
+
         def fake_failed_live_chat(*, chat_context: dict, model: str, max_output_tokens: int = 900) -> dict:
             return {
                 "schema": "ai-talent-live-llm-result/v1",
@@ -521,6 +524,10 @@ class TalentFoundryMemorySubstrateChatTests(unittest.TestCase):
                 "status": "unavailable",
                 "reason": "test_quota_failure",
                 "model": model,
+                "error": (
+                    f"request failed with Authorization: Bearer {secret}; "
+                    f"https://api.openai.com/v1/responses?key={secret}"
+                ),
             }
 
         blueprint = create_agent_training_blueprint(
@@ -543,18 +550,20 @@ class TalentFoundryMemorySubstrateChatTests(unittest.TestCase):
                 llm_engine="openai_chatgpt_codex",
                 record_name="employment_record_codex.json",
             )
-            with patch(
+            output_path = Path(tmp) / "live_failed_chat.json"
+            with patch.dict(os.environ, {"OPENAI_API_KEY": secret}, clear=False), patch(
                 "ai22b.talent_foundry.memory_substrate._call_openai_responses_chat",
                 side_effect=fake_failed_live_chat,
             ):
                 chat = run_chat_turn_from_employment(
                     hiring["employment_record"],
                     message="케이스별 답변 말고 자연스럽게 대화해줘. 오늘 기분은 어때?",
-                    output_path=Path(tmp) / "live_failed_chat.json",
+                    output_path=output_path,
                     llm_mode="live",
                     llm_model="gpt-test",
                     learn_from_chat=True,
                 )
+            saved_chat = output_path.read_text(encoding="utf-8")
             target_root = Path(hiring["employment_record"]).parent
             ledger = json.loads((target_root / "learning_ledger.json").read_text(encoding="utf-8"))
 
@@ -562,6 +571,11 @@ class TalentFoundryMemorySubstrateChatTests(unittest.TestCase):
         self.assertEqual(chat["conversation_intent"], "casual_conversation")
         self.assertEqual(chat["chat_learning_update"]["decision"], "quarantined")
         self.assertEqual(ledger["quarantined_experiences"][-1]["source"], "chat_turn")
+        serialized_chat = json.dumps(chat, ensure_ascii=False)
+        self.assertNotIn(secret, serialized_chat)
+        self.assertNotIn(secret, saved_chat)
+        self.assertIn("[REDACTED_SECRET]", serialized_chat)
+        self.assertIn("[REDACTED_SECRET]", saved_chat)
 
     def test_chat_turn_repairs_after_boss_correction(self) -> None:
         from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
