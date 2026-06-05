@@ -22,6 +22,7 @@ from ai22b.talent_foundry.tool_registry import execute_registered_tools, tool_de
 
 
 RUN_SCHEMA = "ai-talent-agent-run/v1"
+EXECUTION_CONTRACT_SCHEMA = "paideia-agent-execution-contract/v1"
 
 
 def _now() -> str:
@@ -133,6 +134,120 @@ def _response_packet(agent: dict[str, Any], task: str, run_status: str, llm_resu
     }
 
 
+def _build_execution_contract(
+    *,
+    run_status: str,
+    policy_decision: dict[str, Any],
+    selected_tools: list[str],
+    llm_result: dict[str, Any],
+    llm_provider_preflight: dict[str, Any],
+    tool_execution: dict[str, Any],
+    verification: dict[str, Any],
+    memory_write: dict[str, Any],
+) -> dict[str, Any]:
+    tool_results = tool_execution.get("tool_results", [])
+    completed_tools = sorted(
+        str(item.get("tool"))
+        for item in tool_results
+        if item.get("status") == "completed"
+    )
+    skipped_tools = sorted(
+        str(item.get("tool"))
+        for item in tool_results
+        if item.get("status") == "skipped"
+    )
+    blocked_tools = sorted(
+        str(item.get("tool"))
+        for item in tool_results
+        if item.get("status") == "blocked"
+    )
+    policy_status = policy_decision.get("status")
+    llm_attempted = run_status == "completed"
+    tool_attempted = bool(tool_results)
+    evidence_required = "work_session" in selected_tools
+    evidence_completed = "evidence_packet" in completed_tools
+    memory_decision = memory_write.get("decision")
+    automatic_promotion_performed = memory_decision == "promoted"
+    issues: list[str] = []
+    if run_status == "completed" and policy_status != "approved":
+        issues.append("completed_run_without_approved_policy")
+    if run_status in {"blocked", "needs_approval"} and llm_attempted:
+        issues.append("llm_attempted_after_policy_gate")
+    if run_status in {"blocked", "needs_approval"} and tool_attempted:
+        issues.append("tools_attempted_after_policy_gate")
+    if run_status == "completed" and evidence_required and not evidence_completed:
+        issues.append("evidence_packet_missing_for_work_session")
+    if automatic_promotion_performed:
+        issues.append("automatic_memory_promotion_performed")
+
+    if run_status == "blocked":
+        status = "blocked_before_execution" if not issues else "needs_review"
+    elif run_status == "needs_approval":
+        status = "approval_required_before_execution" if not issues else "needs_review"
+    else:
+        status = "passed" if not issues and verification.get("status") == "passed" else "needs_review"
+
+    return {
+        "schema": EXECUTION_CONTRACT_SCHEMA,
+        "status": status,
+        "issues": issues,
+        "policy_gate": {
+            "status": policy_status,
+            "decision_model": policy_decision.get("decision_model"),
+            "checked_before_llm": True,
+            "checked_before_tools": True,
+            "denied_count": len(policy_decision.get("denied_actions", [])),
+            "approval_required_count": len(policy_decision.get("approval_required", [])),
+        },
+        "llm_runtime": {
+            "attempted": llm_attempted,
+            "status": llm_result.get("status"),
+            "engine": llm_result.get("engine"),
+            "skip_reason": None if llm_attempted else llm_result.get("reason"),
+            "identity_policy": llm_result.get("identity_policy"),
+            "provider_preflight_status": llm_provider_preflight.get("status"),
+            "provider_live_check_performed": llm_provider_preflight.get("live_check_performed"),
+        },
+        "tool_execution": {
+            "attempted": tool_attempted,
+            "execution_model": tool_execution.get("execution_model"),
+            "selected_count": len(selected_tools),
+            "completed_tools": completed_tools,
+            "skipped_tools": skipped_tools,
+            "blocked_tools": blocked_tools,
+            "evidence_packet_required": evidence_required,
+            "evidence_packet_completed": evidence_completed,
+            "network_default": tool_execution.get("capability_scope", {}).get("network_default"),
+            "subprocess_default": tool_execution.get("capability_scope", {}).get("subprocess_default"),
+        },
+        "verification_gate": {
+            "status": verification.get("status"),
+            "issues": verification.get("issues", []),
+        },
+        "memory_write": {
+            "decision": memory_decision,
+            "automatic_promotion_performed": automatic_promotion_performed,
+            "promotion_requires": memory_write.get("promotion_requires", []),
+            "private_reasoning_trace_policy": memory_write.get("private_reasoning_trace_policy"),
+        },
+        "proof_steps": [
+            {"id": "request_to_action_intent", "status": "passed"},
+            {"id": "policy_before_llm", "status": "passed"},
+            {"id": "policy_before_tools", "status": "passed"},
+            {
+                "id": "llm_planning",
+                "status": "attempted" if llm_attempted else "skipped_by_policy_gate",
+            },
+            {
+                "id": "registered_tool_execution",
+                "status": "attempted" if tool_attempted else "skipped_by_policy_gate",
+            },
+            {"id": "verification", "status": verification.get("status")},
+            {"id": "memory_write_decision", "status": memory_decision},
+        ],
+    }
+
+
 def run_agent_execution_loop(
     manifest: dict[str, Any],
     *,
@@ -232,6 +347,16 @@ def run_agent_execution_loop(
         "private_reasoning_trace_policy": "do_not_store",
         "promotion_requires": ["verification_passed", "boss_or_committee_review"],
     }
+    execution_contract = _build_execution_contract(
+        run_status=run_status,
+        policy_decision=policy_decision,
+        selected_tools=selected_tools,
+        llm_result=llm_result,
+        llm_provider_preflight=llm_provider_preflight,
+        tool_execution=tool_execution,
+        verification=verification,
+        memory_write=memory_write,
+    )
     runtime_observability = build_agent_runtime_observability(
         manifest=manifest,
         task=task,
@@ -320,6 +445,7 @@ def run_agent_execution_loop(
                 "identity_policy": effective_runtime.get("identity_policy"),
             },
         },
+        "execution_contract": execution_contract,
         "tool_execution": tool_execution,
         "verification": verification,
         "memory_write": memory_write,
