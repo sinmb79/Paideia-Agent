@@ -52,6 +52,7 @@ def _verify_execution(policy_decision: dict[str, Any], tool_execution: dict[str,
     completed_tools: set[str] = set()
     evidence_packet: dict[str, Any] | None = None
     policy_status = policy_decision.get("status")
+    provider_not_ready = llm_result.get("status") == "skipped_provider_not_ready"
     if policy_status == "blocked":
         issues.extend(policy_decision.get("policy_violations", []))
     if policy_status == "needs_approval":
@@ -81,6 +82,7 @@ def _verify_execution(policy_decision: dict[str, Any], tool_execution: dict[str,
         "unavailable",
         "skipped_policy_block",
         "skipped_policy_approval_required",
+        "skipped_provider_not_ready",
     }:
         issues.append(f"llm_status_unexpected:{llm_result.get('status')}")
     if llm_result.get("status") in {"completed", "bridge_context_prepared", "adapter_manifest_ready"}:
@@ -94,6 +96,8 @@ def _verify_execution(policy_decision: dict[str, Any], tool_execution: dict[str,
             if policy_status == "blocked"
             else "needs_approval"
             if policy_status == "needs_approval"
+            else "skipped_provider_not_ready"
+            if provider_not_ready and not issues
             else ("passed" if not issues else "needs_review")
         ),
         "issues": issues,
@@ -260,6 +264,25 @@ def _response_packet(agent: dict[str, Any], task: str, run_status: str, llm_resu
             "runtime_target": "local_cli_runtime",
             "approval_required": policy_decision.get("approval_required", []),
         }
+    if run_status == "needs_configuration":
+        return {
+            "summary": (
+                f"{agent['name']} cannot start the live agent loop yet because the selected LLM provider is not configured. "
+                "No LLM planning, registered tool execution, or memory candidate write was performed."
+            ),
+            "next_actions": [
+                "Run doctor-llm-provider with --live-check after setting the provider key or local endpoint.",
+                "Use offline mode for a deterministic local runtime check.",
+                "Retry this agent run only after provider readiness is explicit.",
+            ],
+            "runtime_target": "local_cli_runtime",
+            "configuration_required": {
+                "reason": llm_result.get("reason"),
+                "provider_preflight_status": llm_result.get("llm_provider_preflight", {}).get("status")
+                if isinstance(llm_result.get("llm_provider_preflight"), dict)
+                else None,
+            },
+        }
     draft = str(llm_result.get("draft", "")).strip()
     return {
         "summary": (
@@ -309,6 +332,7 @@ def _build_execution_contract(
     authorization_invariants = capability_authorization.get("invariants", {})
     llm_attempted = run_status == "completed"
     tool_attempted = bool(tool_results)
+    provider_not_ready = run_status == "needs_configuration"
     evidence_required = "work_session" in selected_tools
     evidence_completed = "evidence_packet" in completed_tools
     memory_decision = memory_write.get("decision")
@@ -328,33 +352,40 @@ def _build_execution_contract(
         issues.append("capability_authorization_execution_authority_invalid")
     if authorization_invariants.get("llm_tool_suggestions_are_non_authoritative") is not True:
         issues.append("capability_authorization_llm_boundary_invalid")
-    if run_status in {"blocked", "needs_approval"} and llm_attempted:
+    if run_status in {"blocked", "needs_approval", "needs_configuration"} and llm_attempted:
         issues.append("llm_attempted_after_policy_gate")
-    if run_status in {"blocked", "needs_approval"} and tool_attempted:
+    if run_status in {"blocked", "needs_approval", "needs_configuration"} and tool_attempted:
         issues.append("tools_attempted_after_policy_gate")
+    if provider_not_ready and llm_result.get("status") != "skipped_provider_not_ready":
+        issues.append("provider_configuration_skip_status_invalid")
+    if provider_not_ready and llm_provider_preflight.get("status") != "needs_configuration":
+        issues.append("provider_configuration_preflight_status_invalid")
     if run_status == "completed" and evidence_required and not evidence_completed:
         issues.append("evidence_packet_missing_for_work_session")
     if llm_tool_plan_alignment.get("suggestion_only_enforced") is not True:
         issues.append("llm_tool_plan_suggestion_boundary_failed")
     if automatic_promotion_performed:
         issues.append("automatic_memory_promotion_performed")
-    if review_candidate.get("schema") != MEMORY_REVIEW_CANDIDATE_SCHEMA:
-        issues.append("memory_review_candidate_missing")
-    if review_candidate.get("target") != "local_learning_ledger":
-        issues.append("memory_review_candidate_target_invalid")
-    if review_candidate_promotion_gate.get("automatic_promotion_allowed") is not False:
-        issues.append("memory_review_candidate_allows_automatic_promotion")
-    if "boss_or_committee_review" not in review_candidate_promotion_gate.get("requires", []):
-        issues.append("memory_review_candidate_review_gate_missing")
-    if review_candidate_retention.get("private_reasoning_trace") != "do_not_store":
-        issues.append("memory_review_candidate_private_trace_policy_invalid")
-    if review_candidate_retention.get("raw_provider_text_stored") is not False:
-        issues.append("memory_review_candidate_raw_provider_text_policy_invalid")
+    if not provider_not_ready:
+        if review_candidate.get("schema") != MEMORY_REVIEW_CANDIDATE_SCHEMA:
+            issues.append("memory_review_candidate_missing")
+        if review_candidate.get("target") != "local_learning_ledger":
+            issues.append("memory_review_candidate_target_invalid")
+        if review_candidate_promotion_gate.get("automatic_promotion_allowed") is not False:
+            issues.append("memory_review_candidate_allows_automatic_promotion")
+        if "boss_or_committee_review" not in review_candidate_promotion_gate.get("requires", []):
+            issues.append("memory_review_candidate_review_gate_missing")
+        if review_candidate_retention.get("private_reasoning_trace") != "do_not_store":
+            issues.append("memory_review_candidate_private_trace_policy_invalid")
+        if review_candidate_retention.get("raw_provider_text_stored") is not False:
+            issues.append("memory_review_candidate_raw_provider_text_policy_invalid")
 
     if run_status == "blocked":
         status = "blocked_before_execution" if not issues else "needs_review"
     elif run_status == "needs_approval":
         status = "approval_required_before_execution" if not issues else "needs_review"
+    elif run_status == "needs_configuration":
+        status = "provider_configuration_required_before_execution" if not issues else "needs_review"
     else:
         status = "passed" if not issues and verification.get("status") == "passed" else "needs_review"
 
@@ -441,11 +472,23 @@ def _build_execution_contract(
             {"id": "policy_before_tools", "status": "passed"},
             {
                 "id": "llm_planning",
-                "status": "attempted" if llm_attempted else "skipped_by_policy_gate",
+                "status": (
+                    "attempted"
+                    if llm_attempted
+                    else "skipped_provider_not_ready"
+                    if provider_not_ready
+                    else "skipped_by_policy_gate"
+                ),
             },
             {
                 "id": "registered_tool_execution",
-                "status": "attempted" if tool_attempted else "skipped_by_policy_gate",
+                "status": (
+                    "attempted"
+                    if tool_attempted
+                    else "skipped_provider_not_ready"
+                    if provider_not_ready
+                    else "skipped_by_policy_gate"
+                ),
             },
             {"id": "verification", "status": verification.get("status")},
             {"id": "memory_write_decision", "status": memory_decision},
@@ -474,7 +517,6 @@ def run_agent_execution_loop(
     policy_violations = policy_decision["policy_violations"]
     selected_tools = select_tools_for_intents(manifest, action_intents, policy_decision)
     run_status = policy_decision["status"] if policy_decision["status"] in {"blocked", "needs_approval"} else "completed"
-    selected_tool_descriptors = tool_descriptors(selected_tools)
 
     effective_runtime = runtime_config or build_llm_runtime_config(engine="deterministic_local")
     llm_provider_preflight = build_llm_provider_preflight(
@@ -482,8 +524,25 @@ def run_agent_execution_loop(
         llm_mode=llm_mode,
         llm_model=llm_model,
     )
-    if run_status in {"blocked", "needs_approval"}:
-        skipped_status = "skipped_policy_block" if run_status == "blocked" else "skipped_policy_approval_required"
+    provider_not_ready = (
+        run_status == "completed"
+        and llm_mode == "live"
+        and llm_client is None
+        and llm_provider_preflight.get("status") == "needs_configuration"
+    )
+    if provider_not_ready:
+        run_status = "needs_configuration"
+        selected_tools = []
+    selected_tool_descriptors = tool_descriptors(selected_tools)
+
+    if run_status in {"blocked", "needs_approval", "needs_configuration"}:
+        skipped_status = (
+            "skipped_policy_block"
+            if run_status == "blocked"
+            else "skipped_policy_approval_required"
+            if run_status == "needs_approval"
+            else "skipped_provider_not_ready"
+        )
         llm_result = {
             "schema": "ai-talent-llm-runtime-result/v1",
             "engine": effective_runtime.get("engine", "deterministic_local"),
@@ -492,9 +551,12 @@ def run_agent_execution_loop(
                 "policy_blocked_before_llm_or_tool_execution"
                 if run_status == "blocked"
                 else "policy_requires_boss_approval_before_llm_or_tool_execution"
+                if run_status == "needs_approval"
+                else "live_provider_needs_configuration_before_agent_execution"
             ),
             "identity_policy": effective_runtime.get("identity_policy", "application_engine_not_identity"),
             "network_access": effective_runtime.get("network_access", "blocked"),
+            "llm_mode": llm_mode,
             "llm_provider_preflight": llm_provider_preflight,
         }
     else:
@@ -530,6 +592,8 @@ def run_agent_execution_loop(
             if run_status == "blocked"
             else "approval_required_after_hire"
             if run_status == "needs_approval"
+            else "provider_configuration_required_after_hire"
+            if run_status == "needs_configuration"
             else "agent_runtime_after_hire"
         ),
         "reflection": (
@@ -537,6 +601,8 @@ def run_agent_execution_loop(
             if run_status == "blocked"
             else "민감 행동은 보스 승인 전 실행하지 않고 승인 대기 상태로 기록했습니다."
             if run_status == "needs_approval"
+            else "선택한 live LLM provider가 준비되지 않아 LLM 계획, 도구 실행, 메모리 후보 생성을 시작하지 않았습니다."
+            if run_status == "needs_configuration"
             else "action policy, LLM planning, capability-checked tools, verification을 하나의 실행 루프로 적용했습니다."
         ),
         "reasoning_delta": [
@@ -552,25 +618,30 @@ def run_agent_execution_loop(
             if run_status == "blocked"
             else "pending_boss_approval"
             if run_status == "needs_approval"
+            else "skipped_provider_not_ready"
+            if run_status == "needs_configuration"
             else "candidate_pending_boss_review"
         ),
-        "target": "local_learning_ledger",
+        "target": "none" if run_status == "needs_configuration" else "local_learning_ledger",
         "private_reasoning_trace_policy": "do_not_store",
-        "promotion_requires": ["verification_passed", "boss_or_committee_review"],
+        "promotion_requires": []
+        if run_status == "needs_configuration"
+        else ["verification_passed", "boss_or_committee_review"],
         "automatic_promotion_performed": False,
     }
-    memory_review_candidate = _build_memory_review_candidate(
-        run_id=run_id,
-        agent=agent,
-        task=task,
-        run_status=run_status,
-        policy_decision=policy_decision,
-        llm_result=llm_result,
-        tool_execution=tool_execution,
-        verification=verification,
-        llm_tool_plan_alignment=llm_tool_plan_alignment,
-    )
-    memory_write["review_candidate"] = memory_review_candidate
+    if run_status != "needs_configuration":
+        memory_review_candidate = _build_memory_review_candidate(
+            run_id=run_id,
+            agent=agent,
+            task=task,
+            run_status=run_status,
+            policy_decision=policy_decision,
+            llm_result=llm_result,
+            tool_execution=tool_execution,
+            verification=verification,
+            llm_tool_plan_alignment=llm_tool_plan_alignment,
+        )
+        memory_write["review_candidate"] = memory_review_candidate
     execution_contract = _build_execution_contract(
         run_status=run_status,
         policy_decision=policy_decision,

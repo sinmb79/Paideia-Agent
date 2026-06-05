@@ -1944,6 +1944,45 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertNotIn(secret, serialized)
         self.assertNotIn(hidden_trace, serialized)
 
+    def test_agent_execution_loop_fails_closed_before_tools_when_live_provider_not_ready(self) -> None:
+        import os
+
+        from ai22b.talent_foundry.agent_runner import run_agent_from_manifest
+        from ai22b.talent_foundry.agent_runtime_smoke import _smoke_manifest
+        from ai22b.talent_foundry.llm_runtime import build_llm_runtime_config
+
+        old_key = os.environ.pop("OPENROUTER_API_KEY", None)
+        try:
+            result = run_agent_from_manifest(
+                _smoke_manifest(),
+                task="Prepare a public-safe evidence packet for a securities research note.",
+                runtime_config=build_llm_runtime_config(
+                    engine="openrouter_api",
+                    model="openai/gpt-4.1-mini",
+                ),
+                llm_mode="live",
+                llm_model="openai/gpt-4.1-mini",
+            )
+        finally:
+            if old_key is not None:
+                os.environ["OPENROUTER_API_KEY"] = old_key
+
+        self.assertEqual(result["run_status"], "needs_configuration")
+        self.assertEqual(result["llm_runtime_result"]["status"], "skipped_provider_not_ready")
+        self.assertEqual(result["llm_provider_preflight"]["status"], "needs_configuration")
+        self.assertEqual(result["selected_tools"], [])
+        self.assertEqual(result["tool_execution"]["tool_results"], [])
+        self.assertEqual(result["verification"]["status"], "skipped_provider_not_ready")
+        self.assertEqual(
+            result["execution_contract"]["status"],
+            "provider_configuration_required_before_execution",
+        )
+        self.assertFalse(result["execution_contract"]["llm_runtime"]["attempted"])
+        self.assertFalse(result["execution_contract"]["tool_execution"]["attempted"])
+        self.assertEqual(result["memory_write"]["decision"], "skipped_provider_not_ready")
+        self.assertNotIn("review_candidate", result["memory_write"])
+        self.assertFalse(result["memory_write"]["automatic_promotion_performed"])
+
     def test_cli_agent_runtime_smoke_strict_fails_closed_when_live_provider_not_ready(self) -> None:
         import os
 
