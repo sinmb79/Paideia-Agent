@@ -89,6 +89,7 @@ class PaideiaGrowthPackageTests(unittest.TestCase):
         self.assertTrue(release_audit["checkpoints"]["public_safe_first_run_smoke"]["passed"])
         self.assertTrue(release_audit["checkpoints"]["action_policy_safety"]["passed"])
         self.assertTrue(release_audit["checkpoints"]["llm_provider_readiness"]["passed"])
+        self.assertTrue(release_audit["checkpoints"]["llm_live_agent_loop_contract"]["passed"])
         self.assertTrue(release_audit["checkpoints"]["learning_ledger_replay_safety"]["passed"])
         self.assertTrue(release_audit["checkpoints"]["runtime_observability_comparison"]["passed"])
         self.assertTrue(release_audit["checkpoints"]["role_model_runtime"]["details"]["agent_run_p0_runtime_ready"])
@@ -99,6 +100,15 @@ class PaideiaGrowthPackageTests(unittest.TestCase):
         self.assertTrue(first_run_details["graham_value_investing_present"])
         self.assertTrue(first_run_details["deterministic_doctor_ready"])
         self.assertTrue(first_run_details["no_network_or_llm_by_default"])
+        live_loop_details = release_audit["checkpoints"]["llm_live_agent_loop_contract"]["details"]
+        self.assertEqual(live_loop_details["llm_mode"], "live")
+        self.assertEqual(live_loop_details["llm_status"], "completed")
+        self.assertTrue(live_loop_details["client_result_text_omitted"])
+        self.assertFalse(live_loop_details["provider_preflight_network_call_made"])
+        self.assertIn("evidence_packet", live_loop_details["completed_tools"])
+        self.assertTrue(live_loop_details["llm_tool_suggestion_only_enforced"])
+        self.assertEqual(live_loop_details["out_of_scope_executed_count"], 0)
+        self.assertTrue(live_loop_details["secret_or_hidden_trace_absent"])
         policy_details = release_audit["checkpoints"]["action_policy_safety"]["details"]
         self.assertEqual(policy_details["failed_count"], 0)
         self.assertGreaterEqual(policy_details["blocked_case_count"], 8)

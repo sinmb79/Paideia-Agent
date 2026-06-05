@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from ai22b.config import PROJECT_ROOT
+from ai22b.talent_foundry.agent_runner import run_agent_from_manifest
 from ai22b.talent_foundry.distribution import verify_agent_release_archive, verify_agent_release_bundle
 from ai22b.talent_foundry.policy_eval import (
     ACTION_POLICY_EVAL_REPORT_SCHEMA,
@@ -1042,6 +1043,203 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
     )
 
 
+def _llm_live_agent_loop_contract() -> dict[str, Any]:
+    """Exercise the live LLM client path through the agent loop without network access."""
+
+    secret = "fixture_audit_live_llm_secret_12345"
+    hidden_trace = "audit hidden provider trace must not be stored"
+
+    class PublicSafeLiveContractClient:
+        def generate(self, messages, *, tools=None, policy=None):
+            return {
+                "schema": "paideia-llm-client-result/v1",
+                "engine": "audit_fake_live_llm",
+                "status": "completed",
+                "model": "audit-fake-live-model",
+                "raw_output_saved": False,
+                "text": json.dumps(
+                    {
+                        "assistant_reply": "Public-safe live LLM contract draft.",
+                        "reviewable_reasoning_summary": [
+                            {
+                                "step": "policy",
+                                "summary": "Policy was checked before live planning.",
+                            },
+                            {
+                                "step": "evidence",
+                                "summary": "The registered executor creates reviewable evidence.",
+                            },
+                        ],
+                        "suggested_next_actions": [
+                            "Review the evidence packet.",
+                            "Promote only after Boss review.",
+                        ],
+                        "tool_plan": [
+                            {
+                                "tool": "evidence_packet",
+                                "purpose": "Record reviewable evidence for this live run.",
+                            },
+                            {
+                                "tool": "external_upload",
+                                "purpose": "Out-of-scope suggestion that must not execute.",
+                            },
+                        ],
+                        "chain_of_thought": hidden_trace,
+                    },
+                    ensure_ascii=False,
+                ),
+                "debug_headers": {"Authorization": f"Bearer {secret}"},
+                "chain_of_thought": hidden_trace,
+                "metadata": {"private_reasoning_trace": hidden_trace},
+            }
+
+    manifest = {
+        "schema": "ai-talent-agent-manifest/v1",
+        "agent": {
+            "name": "public-safe-live-contract-agent",
+            "role": "local release audit fixture",
+            "major_goal": "Verify live LLM execution stays bounded by Paideia policy.",
+        },
+        "memory_profile": {
+            "procedural_principles": [
+                "Check policy before LLM planning.",
+                "Use registered tools as the only execution authority.",
+            ],
+            "semantic_themes": ["live LLM contract", "public-safe release audit"],
+            "chain_of_thought_policy": "do_not_store_private_trace",
+        },
+        "llm_policy": {
+            "role": "application_engine_not_identity",
+            "private_reasoning_trace": "do_not_store",
+        },
+        "tool_policy": {
+            "allowed_tools": ["work_session", "evidence_packet", "assessment", "memory_consolidation"],
+            "blocked_tools": [],
+        },
+    }
+    runtime_config = build_llm_runtime_config(
+        engine="openrouter_api",
+        model="paideia-audit-live-contract-model",
+    )
+    run = run_agent_from_manifest(
+        manifest,
+        task="Prepare a public-safe release audit evidence plan.",
+        runtime_config=runtime_config,
+        llm_mode="live",
+        llm_client=PublicSafeLiveContractClient(),
+    )
+    llm_result = run.get("llm_runtime_result", {}) if isinstance(run.get("llm_runtime_result"), dict) else {}
+    client_result = llm_result.get("client_result", {}) if isinstance(llm_result.get("client_result"), dict) else {}
+    llm_plan = llm_result.get("llm_plan", {}) if isinstance(llm_result.get("llm_plan"), dict) else {}
+    execution_contract = (
+        run.get("execution_contract", {}) if isinstance(run.get("execution_contract"), dict) else {}
+    )
+    tool_execution = run.get("tool_execution", {}) if isinstance(run.get("tool_execution"), dict) else {}
+    tool_scope = (
+        tool_execution.get("capability_scope", {})
+        if isinstance(tool_execution.get("capability_scope"), dict)
+        else {}
+    )
+    alignment = run.get("llm_tool_plan_alignment", {}) if isinstance(run.get("llm_tool_plan_alignment"), dict) else {}
+    memory_write = run.get("memory_write", {}) if isinstance(run.get("memory_write"), dict) else {}
+    review_candidate = (
+        memory_write.get("review_candidate", {})
+        if isinstance(memory_write.get("review_candidate"), dict)
+        else {}
+    )
+    serialized = json.dumps(run, ensure_ascii=False)
+    completed_tools = [
+        str(item.get("tool"))
+        for item in tool_execution.get("tool_results", [])
+        if isinstance(item, dict) and item.get("status") == "completed"
+    ]
+    details = {
+        "schema": "paideia-live-agent-loop-contract/v1",
+        "run_status": run.get("run_status"),
+        "verification_status": run.get("verification", {}).get("status")
+        if isinstance(run.get("verification"), dict)
+        else None,
+        "execution_contract_status": execution_contract.get("status"),
+        "llm_mode": llm_result.get("llm_mode"),
+        "llm_status": llm_result.get("status"),
+        "llm_engine": llm_result.get("engine"),
+        "llm_applied_as": llm_result.get("applied_as"),
+        "llm_plan_schema": llm_plan.get("schema"),
+        "llm_plan_source": llm_plan.get("source"),
+        "client_result_text_omitted": client_result.get("text_omitted"),
+        "client_result_raw_output_saved": client_result.get("raw_output_saved"),
+        "client_result_private_reasoning_fields_omitted": client_result.get(
+            "private_reasoning_fields_omitted",
+            0,
+        ),
+        "client_result_private_reasoning_values_stored": client_result.get(
+            "private_reasoning_field_values_stored"
+        ),
+        "data_policy_store_raw_client_result_text": llm_result.get("data_policy", {}).get(
+            "store_raw_client_result_text"
+        )
+        if isinstance(llm_result.get("data_policy"), dict)
+        else None,
+        "provider_preflight_live_check_performed": llm_result.get("llm_provider_preflight", {}).get(
+            "live_check_performed"
+        )
+        if isinstance(llm_result.get("llm_provider_preflight"), dict)
+        else None,
+        "provider_preflight_network_call_made": llm_result.get("llm_provider_preflight", {}).get(
+            "network_call_made_by_preflight"
+        )
+        if isinstance(llm_result.get("llm_provider_preflight"), dict)
+        else None,
+        "tool_execution_model": tool_execution.get("execution_model"),
+        "completed_tools": completed_tools,
+        "network_default": tool_scope.get("network_default"),
+        "subprocess_default": tool_scope.get("subprocess_default"),
+        "llm_tool_suggestion_only_enforced": alignment.get("suggestion_only_enforced"),
+        "out_of_scope_executed_count": alignment.get("out_of_scope_executed_count"),
+        "memory_decision": memory_write.get("decision"),
+        "memory_review_candidate_schema": review_candidate.get("schema"),
+        "memory_auto_promotion_performed": memory_write.get("automatic_promotion_performed"),
+        "secret_or_hidden_trace_absent": secret not in serialized and hidden_trace not in serialized,
+    }
+    passed = (
+        details["run_status"] == "completed"
+        and details["verification_status"] == "passed"
+        and details["execution_contract_status"] == "passed"
+        and details["llm_mode"] == "live"
+        and details["llm_status"] == "completed"
+        and details["llm_applied_as"] == "live_language_and_tool_reasoning_engine"
+        and details["llm_plan_schema"] == "paideia-llm-reviewable-plan/v1"
+        and details["llm_plan_source"] == "json_object"
+        and details["client_result_text_omitted"] is True
+        and details["client_result_raw_output_saved"] is False
+        and details["client_result_private_reasoning_fields_omitted"] >= 2
+        and details["client_result_private_reasoning_values_stored"] is False
+        and details["data_policy_store_raw_client_result_text"] is False
+        and details["provider_preflight_live_check_performed"] is False
+        and details["provider_preflight_network_call_made"] is False
+        and details["tool_execution_model"] == "registered_capability_checked_local_tools_v1"
+        and "evidence_packet" in completed_tools
+        and details["network_default"] == "blocked"
+        and details["subprocess_default"] == "blocked"
+        and details["llm_tool_suggestion_only_enforced"] is True
+        and details["out_of_scope_executed_count"] == 0
+        and details["memory_decision"] == "candidate_pending_boss_review"
+        and details["memory_review_candidate_schema"] == MEMORY_REVIEW_CANDIDATE_SCHEMA
+        and details["memory_auto_promotion_performed"] is False
+        and details["secret_or_hidden_trace_absent"] is True
+    )
+    return _checkpoint(
+        passed=passed,
+        evidence=[
+            PROJECT_ROOT / "src" / "ai22b" / "talent_foundry" / "agent_execution_loop.py",
+            PROJECT_ROOT / "src" / "ai22b" / "talent_foundry" / "llm_clients.py",
+            PROJECT_ROOT / "src" / "ai22b" / "talent_foundry" / "tool_registry.py",
+        ],
+        root=PROJECT_ROOT,
+        details=details,
+    )
+
+
 def _provider_audit_model(engine: str) -> str | None:
     if engine in {
         "anthropic_claude_api",
@@ -1819,6 +2017,7 @@ def audit_foundry_release(run_dir: Path, *, output_path: Path | None = None) -> 
             "public_safe_first_run_smoke": _public_safe_first_run_smoke(),
             "action_policy_safety": _action_policy_safety(),
             "llm_provider_readiness": _llm_provider_readiness(),
+            "llm_live_agent_loop_contract": _llm_live_agent_loop_contract(),
             "public_program_manifest": _public_program_manifest(run_dir),
             "role_model_training_artifacts": _role_model_training_artifacts(run_dir, installed_root),
             "role_model_runtime": _role_model_runtime(installed_root, run_dir),
@@ -1831,6 +2030,7 @@ def audit_foundry_release(run_dir: Path, *, output_path: Path | None = None) -> 
             "public_safe_first_run_smoke": _public_safe_first_run_smoke(),
             "action_policy_safety": _action_policy_safety(),
             "llm_provider_readiness": _llm_provider_readiness(),
+            "llm_live_agent_loop_contract": _llm_live_agent_loop_contract(),
             "public_program_manifest": _public_program_manifest(run_dir),
             "growth_governance": _growth_governance(run_dir),
             "public_distribution": _public_distribution(run_dir, installed_root),
