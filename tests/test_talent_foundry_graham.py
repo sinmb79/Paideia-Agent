@@ -305,6 +305,8 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertEqual(by_id["onboarding_mode"]["default"], "quickstart")
         self.assertIn("quickstart", {item["id"] for item in by_id["onboarding_mode"]["choices"]})
         self.assertIn("owner_self_extension", {item["id"] for item in by_id["talent_source"]["choices"]})
+        self.assertIn("owner_materials_consent", by_id)
+        self.assertIn("copyright_attestation", by_id)
 
     def test_guided_console_writes_openclaw_style_config_identity_payload_and_rollouts(self) -> None:
         from ai22b.talent_foundry.console import run_console_session
@@ -344,6 +346,45 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         )
         self.assertEqual(rollouts["schema"], "ai-talent-simulation-rollouts/v1")
         self.assertGreaterEqual(rollouts["summary"]["episode_count"], 4)
+
+    def test_guided_console_owner_self_extension_writes_metadata_only_intake(self) -> None:
+        from ai22b.talent_foundry.console import run_console_session
+
+        with tempfile.TemporaryDirectory() as tmp:
+            source_dir = Path(tmp) / "owner_materials"
+            source_dir.mkdir()
+            (source_dir / "client-roadmap.md").write_text("private roadmap detail", encoding="utf-8")
+            output_dir = Path(tmp) / "owner_extension_console"
+            session = run_console_session(
+                answers={
+                    "owner": "보스",
+                    "request": "내 문서와 프로젝트 습관을 바탕으로 업무 확장 에이전트를 키운다.",
+                    "talent_source": "owner_self_extension",
+                    "private_curriculum_dir": str(source_dir),
+                    "owner_materials_consent": "yes",
+                    "copyright_attestation": "owner_provided_or_authorized_for_local_use",
+                    "talent_name": "boss-extension-junior",
+                    "gender": "남자",
+                    "agent_id_card_mode": "skip",
+                    "simulation_rollouts_enabled": "no",
+                },
+                output_dir=output_dir,
+                output_path=output_dir / "console_session.json",
+            )
+            intake = json.loads(Path(session["artifacts"]["owner_self_extension_intake"]).read_text(encoding="utf-8"))
+            raw_intake = Path(session["artifacts"]["owner_self_extension_intake"]).read_text(encoding="utf-8")
+            config = json.loads(Path(session["artifacts"]["paideia_onboarding_config"]).read_text(encoding="utf-8"))
+
+        self.assertEqual(session["onboarding_summary"]["track"]["track_id"], "owner_self_extension")
+        self.assertTrue(intake["valid"])
+        self.assertFalse(intake["content_ingestion_performed"])
+        self.assertEqual(intake["scan_summary"]["scanned_file_count"], 1)
+        self.assertIn("owner_self_extension_intake", session["post_hire_extensions"])
+        self.assertEqual(config["education_path"]["talent_source"], "owner_self_extension")
+        self.assertEqual(config["education_path"]["owner_materials_consent"], "yes")
+        self.assertNotIn("client-roadmap", raw_intake)
+        self.assertNotIn("private roadmap detail", raw_intake)
+        self.assertNotIn(str(source_dir), raw_intake)
 
     def test_agent_warrent_identity_envelope_cli_export(self) -> None:
         from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
@@ -538,6 +579,55 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertEqual(blueprint["track"]["track_id"], "owner_self_extension")
         self.assertIsNone(blueprint["role_model"])
         self.assertEqual(blueprint["local_policy"]["private_data_upload"], "forbidden_without_boss_approval")
+
+    def test_owner_self_extension_intake_is_metadata_only_and_requires_consent(self) -> None:
+        from ai22b.talent_foundry.cli import main as cli_main
+        from ai22b.talent_foundry.owner_self_extension import build_owner_self_extension_intake
+
+        with tempfile.TemporaryDirectory() as tmp:
+            source_dir = Path(tmp) / "owner_materials"
+            source_dir.mkdir()
+            secret_file = source_dir / "my-secret-client-plan.txt"
+            secret_file.write_text("private project detail that must not be exported", encoding="utf-8")
+            output_path = Path(tmp) / "owner_self_extension_intake.json"
+            blocked_output = Path(tmp) / "owner_self_extension_intake.blocked.json"
+
+            intake = build_owner_self_extension_intake(
+                source_dir=source_dir,
+                owner="보스",
+                owner_consent=True,
+                copyright_attestation="owner_provided_or_authorized_for_local_use",
+                repo_root=Path.cwd(),
+                output_path=output_path,
+            )
+            blocked_exit = cli_main(
+                [
+                    "prepare-owner-self-extension-intake",
+                    "--source-dir",
+                    str(source_dir),
+                    "--owner",
+                    "보스",
+                    "--output",
+                    str(blocked_output),
+                ]
+            )
+            blocked = json.loads(blocked_output.read_text(encoding="utf-8"))
+            raw = output_path.read_text(encoding="utf-8")
+
+        self.assertTrue(intake["valid"])
+        self.assertEqual(intake["schema"], "paideia-owner-self-extension-intake/v1")
+        self.assertFalse(intake["content_ingestion_performed"])
+        self.assertFalse(intake["privacy"]["raw_absolute_paths_exported"])
+        self.assertFalse(intake["privacy"]["raw_filenames_exported"])
+        self.assertEqual(intake["scan_summary"]["scanned_file_count"], 1)
+        self.assertEqual(intake["files"][0]["extension"], ".txt")
+        self.assertFalse(intake["files"][0]["content_read"])
+        self.assertNotIn("my-secret-client-plan", raw)
+        self.assertNotIn("private project detail", raw)
+        self.assertNotIn(str(source_dir), raw)
+        self.assertEqual(blocked_exit, 2)
+        self.assertFalse(blocked["valid"])
+        self.assertIn("owner_consent_missing", {item["id"] for item in blocked["issues"]})
 
 
 if __name__ == "__main__":

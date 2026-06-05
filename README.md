@@ -71,6 +71,21 @@ The onboarding catalog now also includes selectable public-metadata role-model t
 
 All of these are **process templates**, not impersonation targets. The catalog stores public facts, source links, curriculum pressure, and assessment ladders. It does not store copyrighted textbook bodies or inject a public figure's personality.
 
+## Owner Self-Extension Intake
+
+The owner self-extension path is local-only and metadata-first. Paideia can prepare a private-material intake manifest without reading file contents, exporting raw filenames, or writing absolute paths into public artifacts:
+
+```powershell
+ai22b-talent-foundry prepare-owner-self-extension-intake `
+  --source-dir .\data\private\owner_materials `
+  --owner "Boss" `
+  --owner-consent `
+  --copyright-attestation owner_provided_or_authorized_for_local_use `
+  --output .\owner_self_extension_intake.json
+```
+
+The output records extension counts, size buckets, relative-path fingerprints, consent, and copyright/use-policy status. It does not train on the files by itself. Selected materials must still be reviewed before becoming a local private curriculum or Reasoning Ledger candidate.
+
 ## Architecture
 
 ```mermaid

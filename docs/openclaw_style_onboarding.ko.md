@@ -22,6 +22,7 @@ flowchart TD
 ## Paideia에 추가된 단계
 
 - `Education Path`: 공개 롤모델, 자기 확장, 커스텀 롤모델 중 선택합니다.
+- `Owner Self-Extension Intake`: 자기 확장 자료는 본문을 읽지 않는 metadata-only manifest로 먼저 접수하며, 원본 파일명과 절대경로를 내보내지 않습니다.
 - `Runtime`: 단일 에이전트, 본체 제어 분신 군체, 별도 전문팀, simulation rollout을 선택합니다.
 - `Agent Identity`: Agent ID Card 등록용 payload와 Agent_warrent/Agent Identity Layer `ail.v1` envelope를 로컬 파일로만 생성합니다. 외부 등록은 자동으로 하지 않습니다.
 - `Health Check`: 산출물, 로컬 전용 정책, 외부 채널 비활성화, 다음 명령을 점검합니다.

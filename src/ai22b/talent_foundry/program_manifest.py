@@ -15,6 +15,7 @@ DEFAULT_PUBLIC_PROGRAM_MANIFEST_NAME = "ai_talent_foundry_public_manifest.json"
 
 REQUIRED_INSTALLER_COMMANDS = [
     "list-role-models",
+    "prepare-owner-self-extension-intake",
     "blueprint",
     "onboard",
     "start-console",
@@ -104,6 +105,7 @@ def _research_summary() -> dict[str, Any]:
 def _commands() -> list[dict[str, str]]:
     purposes = {
         "list-role-models": "List role-model process templates available for a talent track.",
+        "prepare-owner-self-extension-intake": "Prepare metadata-only local owner self-extension intake without exporting private filenames, paths, or file contents.",
         "blueprint": "Create a growth-to-employment blueprint from an owner request.",
         "onboard": "Run the OpenClaw-style wizard for model, workspace, channel, skills, education path, identity, and health setup.",
         "start-console": "Guide a non-expert installer through request, identity, first goal, and onboarding execution.",

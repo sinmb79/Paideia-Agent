@@ -45,7 +45,7 @@ Paideia targets two paths:
 - Public role-model path: use sourced public facts and education-process metadata from people such as Benjamin Graham, Grace Hopper, or John Tukey.
 - Self-extension path: use owner-provided documents, work records, preferences, voice assets, and project experience as local-only private material for a personal assistant talent.
 
-The self-extension path needs stronger consent, privacy, and copyright controls, so public samples should use safe templates rather than private owner data.
+The self-extension path uses metadata-only local intake first: Paideia records consent, copyright/use-policy status, extension counts, size buckets, and path fingerprints without reading file contents or exporting raw filenames. Public samples should still use safe templates rather than private owner data.
 
 ## Projection Swarm
 

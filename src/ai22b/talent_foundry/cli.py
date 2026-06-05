@@ -52,6 +52,7 @@ from ai22b.talent_foundry.onboarding_choices import (
     chat_surface_ids,
     llm_service_ids,
 )
+from ai22b.talent_foundry.owner_self_extension import build_owner_self_extension_intake
 from ai22b.talent_foundry.program import create_talent_plan
 from ai22b.talent_foundry.program_manifest import build_public_program_manifest
 from ai22b.talent_foundry.records import build_career_records
@@ -110,6 +111,26 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     list_role_models_command.add_argument("--domain")
     list_role_models_command.add_argument("--output")
+
+    owner_intake = subparsers.add_parser(
+        "prepare-owner-self-extension-intake",
+        help="Prepare a local-only metadata intake for owner self-extension materials without ingesting file contents.",
+    )
+    owner_intake.add_argument("--source-dir", required=True)
+    owner_intake.add_argument("--owner", default="보스")
+    owner_intake.add_argument("--output", required=True)
+    owner_intake.add_argument("--repo-root")
+    owner_intake.add_argument("--max-files", type=int, default=200)
+    owner_intake.add_argument("--owner-consent", action="store_true")
+    owner_intake.add_argument(
+        "--copyright-attestation",
+        default="metadata_only_pending_review",
+        choices=[
+            "owner_provided_or_authorized_for_local_use",
+            "public_or_open_license_metadata_only",
+            "metadata_only_pending_review",
+        ],
+    )
 
     create = subparsers.add_parser("create", help="Create an AI talent plan and hiring packet.")
     create.add_argument("--name", default="신용")
@@ -688,6 +709,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0
+
+    if args.command == "prepare-owner-self-extension-intake":
+        result = build_owner_self_extension_intake(
+            source_dir=Path(args.source_dir),
+            owner=args.owner,
+            output_path=Path(args.output),
+            owner_consent=args.owner_consent,
+            copyright_attestation=args.copyright_attestation,
+            repo_root=Path(args.repo_root) if args.repo_root else Path.cwd(),
+            max_files=args.max_files,
+        )
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0 if result["valid"] else 2
 
     if args.command == "create":
         plan = create_talent_plan(name=args.name, gender=args.gender, specialty=args.specialty)

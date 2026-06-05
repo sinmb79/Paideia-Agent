@@ -16,6 +16,7 @@ from ai22b.talent_foundry.onboarding_choices import (
     DEFAULT_LLM_SERVICE_ID,
     LLM_SERVICE_CATALOG,
 )
+from ai22b.talent_foundry.owner_self_extension import build_owner_self_extension_intake
 from ai22b.talent_foundry.role_models import list_role_models, summarize_role_model
 from ai22b.talent_foundry.registry import (
     assemble_hired_agent_team,
@@ -153,8 +154,24 @@ CONSOLE_QUESTIONS = [
     {
         "id": "private_curriculum_dir",
         "label": "비공개 교재 폴더",
-        "prompt": "보스가 제공할 비공개 교재 폴더는 어디로 둘까요?",
+        "prompt": "보스가 제공할 비공개 교재/자기확장 자료 폴더는 어디로 둘까요?",
         "default": "",
+        "step": "education_path",
+        "advanced_only": True,
+    },
+    {
+        "id": "owner_materials_consent",
+        "label": "자기확장 자료 동의",
+        "prompt": "자기확장 자료를 metadata-only로 로컬 접수하는 데 동의하나요?",
+        "default": "no",
+        "step": "education_path",
+        "advanced_only": True,
+    },
+    {
+        "id": "copyright_attestation",
+        "label": "저작권/사용권 확인",
+        "prompt": "비공개 자료의 사용권 확인 상태는 무엇인가요?",
+        "default": "metadata_only_pending_review",
         "step": "education_path",
         "advanced_only": True,
     },
@@ -364,6 +381,17 @@ def _question_choices(question_id: str) -> list[dict[str, str]]:
             {"id": "payload_only", "label": "Create local payload only"},
             {"id": "skip", "label": "Skip for now"},
         ]
+    if question_id == "owner_materials_consent":
+        return [
+            {"id": "no", "label": "No private intake"},
+            {"id": "yes", "label": "Yes, metadata-only local intake"},
+        ]
+    if question_id == "copyright_attestation":
+        return [
+            {"id": "metadata_only_pending_review", "label": "Metadata only, pending review"},
+            {"id": "owner_provided_or_authorized_for_local_use", "label": "Owner provided or authorized"},
+            {"id": "public_or_open_license_metadata_only", "label": "Public/open metadata only"},
+        ]
     if question_id == "finish_action":
         return [
             {"id": "chat", "label": "Open first chat next"},
@@ -421,6 +449,10 @@ def _choice_id_from_raw(raw: str, choices: list[dict[str, str]]) -> str:
         if lowered == item.get("label", "").casefold():
             return item["id"]
     return value
+
+
+def _truthy_answer(value: str | None) -> bool:
+    return str(value or "").strip().casefold() in {"1", "true", "yes", "y", "동의", "예"}
 
 
 def _format_choice_block(choices: list[dict[str, str]]) -> str:
@@ -552,6 +584,8 @@ def write_openclaw_style_config(
             "domain": normalized.get("domain"),
             "role_model_id": normalized.get("role_model_id"),
             "private_curriculum_dir": normalized.get("private_curriculum_dir"),
+            "owner_materials_consent": normalized.get("owner_materials_consent"),
+            "copyright_attestation": normalized.get("copyright_attestation"),
         },
         "runtime": {
             "post_hire_mode": normalized.get("post_hire_mode"),
@@ -608,6 +642,27 @@ def run_console_session(
         "first_goal_cycle": onboarding["artifacts"]["first_goal_cycle"],
     }
     status = onboarding["status"]
+    if normalized.get("talent_source") == "owner_self_extension" and normalized.get("private_curriculum_dir"):
+        owner_intake_path = output_dir / "owner_self_extension_intake.json"
+        owner_intake = build_owner_self_extension_intake(
+            source_dir=Path(normalized["private_curriculum_dir"]),
+            owner=normalized["owner"],
+            output_path=owner_intake_path,
+            owner_consent=_truthy_answer(normalized.get("owner_materials_consent")),
+            copyright_attestation=normalized.get("copyright_attestation") or "metadata_only_pending_review",
+            repo_root=Path.cwd(),
+        )
+        artifacts["owner_self_extension_intake"] = str(owner_intake_path)
+        post_hire_extensions["owner_self_extension_intake"] = {
+            "schema": owner_intake["schema"],
+            "status": owner_intake["status"],
+            "valid": owner_intake["valid"],
+            "content_ingestion_performed": owner_intake["content_ingestion_performed"],
+            "raw_paths_exported": owner_intake["privacy"]["raw_absolute_paths_exported"],
+            "scanned_file_count": owner_intake["scan_summary"]["scanned_file_count"],
+        }
+        if not owner_intake["valid"]:
+            status = "needs_owner_self_extension_intake_review"
     if normalized.get("agent_id_card_mode") != "skip":
         agent_id_card_path = output_dir / "agent_id_card_payload.json"
         agent_identity_envelope_path = output_dir / "agent_identity_envelope.json"
