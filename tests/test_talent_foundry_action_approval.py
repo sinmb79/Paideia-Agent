@@ -97,6 +97,16 @@ class ActionApprovalTests(unittest.TestCase):
         self.assertEqual(decision["boss_approval_gate"]["provided_count"], 0)
         self.assertEqual(decision["boss_approval_gate"]["accepted_count"], 0)
         self.assertEqual(decision["approval_required"][0]["capability"], "network.external_upload")
+        authorization = decision["capability_authorization"]
+        upload_record = next(
+            item for item in authorization["requested_intents"] if item["action_type"] == "external_upload"
+        )
+        self.assertEqual(authorization["schema"], "paideia-capability-authorization/v1")
+        self.assertEqual(authorization["mode"], "deny_by_default")
+        self.assertEqual(upload_record["authorization_status"], "needs_explicit_boss_approval")
+        self.assertFalse(upload_record["eligible_for_registered_tool_selection"])
+        self.assertFalse(upload_record["sensitive_side_effect_tool_execution_allowed"])
+        self.assertTrue(authorization["invariants"]["registered_tool_executor_is_execution_authority"])
         self.assertEqual(
             decision["approval_required"][0]["reason"],
             "sensitive_capability_requires_explicit_boss_approval",
@@ -129,6 +139,14 @@ class ActionApprovalTests(unittest.TestCase):
         )
         external = next(item for item in decision["approved_intents"] if item["action_type"] == "external_upload")
         self.assertEqual(external["approval_id"], "boss-approval-upload-001")
+        authorization = decision["capability_authorization"]
+        external_authorization = next(
+            item for item in authorization["requested_intents"] if item["action_type"] == "external_upload"
+        )
+        self.assertEqual(external_authorization["authorization_status"], "approved_for_policy_context")
+        self.assertFalse(external_authorization["eligible_for_registered_tool_selection"])
+        self.assertFalse(external_authorization["sensitive_side_effect_tool_execution_allowed"])
+        self.assertTrue(authorization["invariants"]["llm_tool_suggestions_are_non_authoritative"])
 
         result = run_agent_from_manifest(manifest, task=task)
 
@@ -136,6 +154,11 @@ class ActionApprovalTests(unittest.TestCase):
         self.assertEqual(result["policy_decision"]["status"], "approved")
         self.assertEqual(result["execution_contract"]["status"], "passed")
         self.assertEqual(result["execution_contract"]["policy_gate"]["boss_approval_accepted_count"], 1)
+        self.assertEqual(
+            result["execution_contract"]["policy_gate"]["capability_authorization_schema"],
+            "paideia-capability-authorization/v1",
+        )
+        self.assertTrue(result["execution_contract"]["policy_gate"]["registered_tool_executor_is_execution_authority"])
         self.assertTrue(result["execution_contract"]["llm_runtime"]["attempted"])
         self.assertTrue(result["execution_contract"]["tool_execution"]["attempted"])
         self.assertEqual(result["tool_execution"]["capability_scope"]["network_default"], "blocked")

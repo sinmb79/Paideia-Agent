@@ -56,6 +56,7 @@ class TalentFoundryExecutionProofTests(unittest.TestCase):
         self.assertIn("job_acceptance_checklist_passed", {item["id"] for item in saved["checks"]})
         self.assertIn("job_input_review_verified", {item["id"] for item in saved["checks"]})
         self.assertIn("agent_execution_contract_verified", {item["id"] for item in saved["checks"]})
+        self.assertIn("capability_authorization_verified", {item["id"] for item in saved["checks"]})
         self.assertIn("agent_boss_approval_gate_verified", {item["id"] for item in saved["checks"]})
         self.assertIn("agent_llm_reviewable_plan_verified", {item["id"] for item in saved["checks"]})
         self.assertIn("llm_tool_plan_suggestion_boundary_verified", {item["id"] for item in saved["checks"]})
@@ -93,6 +94,9 @@ class TalentFoundryExecutionProofTests(unittest.TestCase):
             tampered["workspace_run"]["base_agent_run"]["execution_contract"]["policy_gate"][
                 "approval_required_count"
             ] = 1
+            tampered["workspace_run"]["base_agent_run"]["policy_decision"]["capability_authorization"][
+                "mode"
+            ] = "allow_by_default"
             tampered["workspace_run"]["base_agent_run"]["llm_runtime_result"].pop("llm_plan", None)
             tampered["workspace_run"]["base_agent_run"]["llm_tool_plan_alignment"][
                 "out_of_scope_executed_count"
@@ -108,6 +112,7 @@ class TalentFoundryExecutionProofTests(unittest.TestCase):
         self.assertIn("workspace_required_outputs_present", proof["issues"])
         self.assertIn("workspace_rollback_manifest_schema", proof["issues"])
         self.assertIn("agent_execution_contract_verified", proof["issues"])
+        self.assertIn("capability_authorization_verified", proof["issues"])
         self.assertIn("agent_boss_approval_gate_verified", proof["issues"])
         self.assertIn("agent_llm_reviewable_plan_verified", proof["issues"])
         self.assertIn("llm_tool_plan_suggestion_boundary_verified", proof["issues"])

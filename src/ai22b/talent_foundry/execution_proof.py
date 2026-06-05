@@ -23,6 +23,7 @@ LLM_PROVIDER_PREFLIGHT_SCHEMA = "paideia-llm-provider-preflight/v1"
 LLM_REVIEWABLE_PLAN_SCHEMA = "paideia-llm-reviewable-plan/v1"
 LLM_TOOL_PLAN_ALIGNMENT_SCHEMA = "paideia-llm-tool-plan-alignment/v1"
 MEMORY_REVIEW_CANDIDATE_SCHEMA = "paideia-memory-review-candidate/v1"
+CAPABILITY_AUTHORIZATION_SCHEMA = "paideia-capability-authorization/v1"
 DATAFLOW_TRANSPOSE_VERIFICATION_SCHEMA = "ai-talent-dataflow-transpose-verification/v1"
 WORKSPACE_TOOL_ARTIFACTS_SCHEMA = "paideia-workspace-tool-artifacts/v1"
 WORKSPACE_INPUT_REVIEW_SCHEMA = "paideia-workspace-input-review/v1"
@@ -730,12 +731,44 @@ def build_workspace_execution_proof(
 
     policy = _policy_decision(workspace_run)
     if schema != "ai-talent-dataflow-run/v1":
+        capability_authorization = (
+            policy.get("capability_authorization", {})
+            if isinstance(policy.get("capability_authorization"), dict)
+            else {}
+        )
+        authorization_invariants = (
+            capability_authorization.get("invariants", {})
+            if isinstance(capability_authorization.get("invariants"), dict)
+            else {}
+        )
         _check(
             checks,
             "action_policy_approved_before_tools",
             policy.get("schema") == "paideia-action-policy/v1"
             and policy.get("status") == "approved",
             evidence={"schema": policy.get("schema"), "status": policy.get("status")},
+        )
+        _check(
+            checks,
+            "capability_authorization_verified",
+            capability_authorization.get("schema") == CAPABILITY_AUTHORIZATION_SCHEMA
+            and capability_authorization.get("mode") == "deny_by_default"
+            and capability_authorization.get("authorization_model") == "request_to_action_to_capability_to_approval_v1"
+            and capability_authorization.get("approval_gate_schema") == "paideia-boss-approval-gate/v1"
+            and authorization_invariants.get("policy_checked_before_llm") is True
+            and authorization_invariants.get("policy_checked_before_tools") is True
+            and authorization_invariants.get("llm_tool_suggestions_are_non_authoritative") is True
+            and authorization_invariants.get("registered_tool_executor_is_execution_authority") is True
+            and authorization_invariants.get("external_side_effects_require_capability_and_boss_approval") is True
+            and authorization_invariants.get("private_reasoning_trace") == "do_not_store",
+            evidence={
+                "schema": capability_authorization.get("schema"),
+                "mode": capability_authorization.get("mode"),
+                "authorization_model": capability_authorization.get("authorization_model"),
+                "tool_executable_capabilities": capability_authorization.get("tool_executable_capabilities", []),
+                "sensitive_requested_count": capability_authorization.get("sensitive_requested_count"),
+                "invariants": authorization_invariants,
+            },
         )
         base = _base_agent_run(workspace_run)
         tool_execution = base.get("tool_execution", {})
@@ -763,6 +796,9 @@ def build_workspace_execution_proof(
             and contract_policy.get("status") == "approved"
             and contract_policy.get("checked_before_llm") is True
             and contract_policy.get("checked_before_tools") is True
+            and contract_policy.get("capability_authorization_schema") == CAPABILITY_AUTHORIZATION_SCHEMA
+            and contract_policy.get("llm_tool_suggestions_are_non_authoritative") is True
+            and contract_policy.get("registered_tool_executor_is_execution_authority") is True
             and contract_llm.get("attempted") is True
             and contract_llm.get("identity_policy") == "application_engine_not_identity"
             and contract_alignment.get("schema") == LLM_TOOL_PLAN_ALIGNMENT_SCHEMA
@@ -786,6 +822,7 @@ def build_workspace_execution_proof(
                 "status": execution_contract.get("status"),
                 "issues": execution_contract.get("issues", []),
                 "policy_status": contract_policy.get("status"),
+                "capability_authorization_schema": contract_policy.get("capability_authorization_schema"),
                 "llm_attempted": contract_llm.get("attempted"),
                 "llm_tool_plan_alignment": contract_alignment,
                 "tool_attempted": contract_tool_execution.get("attempted"),

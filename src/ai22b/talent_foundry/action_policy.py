@@ -9,6 +9,7 @@ from typing import Any
 ACTION_POLICY_SCHEMA = "paideia-action-policy/v1"
 ACTION_INTENT_INFERENCE_SCHEMA = "paideia-action-intent-inference/v1"
 ACTION_APPROVAL_SCHEMA = "paideia-boss-approval/v1"
+CAPABILITY_AUTHORIZATION_SCHEMA = "paideia-capability-authorization/v1"
 INTENT_INFERENCE_MODEL = "hybrid_structured_lexical_v3"
 COMPACT_SEPARATOR_RE = re.compile(r"[\s\-_./\\|·•~`'\"“”‘’()\[\]{}:;,.!?]+")
 
@@ -743,6 +744,121 @@ def _approval_for_intent(approval_gate: dict[str, Any], intent: dict[str, Any]) 
     return None
 
 
+def _capability_authorization_record(
+    *,
+    intent: dict[str, Any],
+    approved: dict[str, Any] | None,
+    denied: dict[str, Any] | None,
+    approval_required: dict[str, Any] | None,
+    allowed_capabilities: set[str],
+) -> dict[str, Any]:
+    if denied:
+        status = "denied_before_runtime"
+        reason = denied.get("reason")
+    elif approval_required:
+        status = "needs_explicit_boss_approval"
+        reason = approval_required.get("reason")
+    elif approved:
+        status = "approved_for_policy_context"
+        reason = "capability_allowed_or_approval_present"
+    else:
+        status = "not_authorized_for_execution"
+        reason = "capability_not_requested_or_not_granted"
+    low_or_medium = intent.get("risk_level") in {"low", "medium"}
+    return {
+        "intent_id": intent.get("intent_id"),
+        "action_type": intent.get("action_type"),
+        "target": intent.get("target"),
+        "data_class": intent.get("data_class"),
+        "capability": intent.get("capability"),
+        "risk_level": intent.get("risk_level"),
+        "requires_boss_approval": bool(intent.get("requires_boss_approval")),
+        "authorization_status": status,
+        "reason": reason,
+        "approval_id": approved.get("approval_id") if approved else None,
+        "eligible_for_registered_tool_selection": (
+            status == "approved_for_policy_context"
+            and low_or_medium
+            and intent.get("capability") in allowed_capabilities
+        ),
+        "sensitive_side_effect_tool_execution_allowed": False
+        if intent.get("risk_level") in {"high", "critical"}
+        else None,
+    }
+
+
+def build_capability_authorization(
+    *,
+    intents: list[dict[str, Any]],
+    grants: dict[str, Any],
+    approval_gate: dict[str, Any],
+    approved_intents: list[dict[str, Any]],
+    denied_actions: list[dict[str, Any]],
+    approval_required: list[dict[str, Any]],
+) -> dict[str, Any]:
+    approved_by_id = {item.get("intent_id"): item for item in approved_intents}
+    denied_by_id = {item.get("intent_id"): item for item in denied_actions}
+    required_by_id = {item.get("intent_id"): item for item in approval_required}
+    allowed_capabilities = set(grants.get("allowed_capabilities", []))
+    requested_records: list[dict[str, Any]] = []
+    inactive_records: list[dict[str, Any]] = []
+    for intent in intents:
+        record = {
+            "intent_id": intent.get("intent_id"),
+            "action_type": intent.get("action_type"),
+            "capability": intent.get("capability"),
+            "risk_level": intent.get("risk_level"),
+            "requested": bool(intent.get("requested")),
+            "negated": bool(intent.get("negated")),
+        }
+        if not intent.get("requested") or intent.get("negated"):
+            inactive_records.append(record)
+            continue
+        requested_records.append(
+            _capability_authorization_record(
+                intent=intent,
+                approved=approved_by_id.get(intent.get("intent_id")),
+                denied=denied_by_id.get(intent.get("intent_id")),
+                approval_required=required_by_id.get(intent.get("intent_id")),
+                allowed_capabilities=allowed_capabilities,
+            )
+        )
+
+    tool_executable = sorted(
+        {
+            record["capability"]
+            for record in requested_records
+            if record.get("eligible_for_registered_tool_selection")
+        }
+    )
+    sensitive_requested = [
+        record
+        for record in requested_records
+        if record.get("risk_level") in {"high", "critical"}
+    ]
+    return {
+        "schema": CAPABILITY_AUTHORIZATION_SCHEMA,
+        "mode": "deny_by_default",
+        "authorization_model": "request_to_action_to_capability_to_approval_v1",
+        "allowed_capabilities": sorted(allowed_capabilities),
+        "requested_intents": requested_records,
+        "inactive_or_negated_intents": inactive_records,
+        "tool_executable_capabilities": tool_executable,
+        "sensitive_requested_count": len(sensitive_requested),
+        "sensitive_side_effect_execution_default": "blocked_without_registered_capability_and_boss_approval",
+        "approval_gate_schema": approval_gate.get("schema"),
+        "approved_sensitive_count": approval_gate.get("accepted_count", 0),
+        "invariants": {
+            "policy_checked_before_llm": True,
+            "policy_checked_before_tools": True,
+            "llm_tool_suggestions_are_non_authoritative": True,
+            "registered_tool_executor_is_execution_authority": True,
+            "external_side_effects_require_capability_and_boss_approval": True,
+            "private_reasoning_trace": "do_not_store",
+        },
+    }
+
+
 def select_tools_for_intents(manifest: dict[str, Any], intents: list[dict[str, Any]], policy_decision: dict[str, Any]) -> list[str]:
     if policy_decision.get("status") != "approved":
         return []
@@ -819,12 +935,21 @@ def evaluate_action_policy(manifest: dict[str, Any], intents: list[dict[str, Any
 
     status = "blocked" if denied_actions else ("needs_approval" if approval_required else "approved")
     violations = [item["blocked_action"] for item in denied_actions]
+    capability_authorization = build_capability_authorization(
+        intents=intents,
+        grants=grants,
+        approval_gate=approval_gate,
+        approved_intents=approved_intents,
+        denied_actions=denied_actions,
+        approval_required=approval_required,
+    )
     return {
         "schema": ACTION_POLICY_SCHEMA,
         "evaluated_at_utc": _now(),
         "status": status,
         "decision_model": "action_intent_capability_v1",
         "capability_grants": grants,
+        "capability_authorization": capability_authorization,
         "boss_approval_gate": approval_gate,
         "approved_intents": approved_intents,
         "approval_required": approval_required,

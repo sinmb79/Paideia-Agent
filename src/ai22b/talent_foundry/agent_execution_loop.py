@@ -304,6 +304,9 @@ def _build_execution_contract(
         if item.get("status") == "blocked"
     )
     policy_status = policy_decision.get("status")
+    capability_authorization = policy_decision.get("capability_authorization", {})
+    capability_authorization = capability_authorization if isinstance(capability_authorization, dict) else {}
+    authorization_invariants = capability_authorization.get("invariants", {})
     llm_attempted = run_status == "completed"
     tool_attempted = bool(tool_results)
     evidence_required = "work_session" in selected_tools
@@ -317,6 +320,14 @@ def _build_execution_contract(
     issues: list[str] = []
     if run_status == "completed" and policy_status != "approved":
         issues.append("completed_run_without_approved_policy")
+    if capability_authorization.get("schema") != "paideia-capability-authorization/v1":
+        issues.append("capability_authorization_missing")
+    if capability_authorization.get("mode") != "deny_by_default":
+        issues.append("capability_authorization_mode_invalid")
+    if authorization_invariants.get("registered_tool_executor_is_execution_authority") is not True:
+        issues.append("capability_authorization_execution_authority_invalid")
+    if authorization_invariants.get("llm_tool_suggestions_are_non_authoritative") is not True:
+        issues.append("capability_authorization_llm_boundary_invalid")
     if run_status in {"blocked", "needs_approval"} and llm_attempted:
         issues.append("llm_attempted_after_policy_gate")
     if run_status in {"blocked", "needs_approval"} and tool_attempted:
@@ -359,6 +370,15 @@ def _build_execution_contract(
             "denied_count": len(policy_decision.get("denied_actions", [])),
             "approval_required_count": len(policy_decision.get("approval_required", [])),
             "boss_approval_accepted_count": policy_decision.get("boss_approval_gate", {}).get("accepted_count", 0),
+            "capability_authorization_schema": capability_authorization.get("schema"),
+            "capability_authorization_model": capability_authorization.get("authorization_model"),
+            "tool_executable_capabilities": capability_authorization.get("tool_executable_capabilities", []),
+            "llm_tool_suggestions_are_non_authoritative": authorization_invariants.get(
+                "llm_tool_suggestions_are_non_authoritative"
+            ),
+            "registered_tool_executor_is_execution_authority": authorization_invariants.get(
+                "registered_tool_executor_is_execution_authority"
+            ),
         },
         "llm_runtime": {
             "attempted": llm_attempted,
