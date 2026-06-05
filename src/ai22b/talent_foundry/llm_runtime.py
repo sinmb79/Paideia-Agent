@@ -47,6 +47,7 @@ EXTERNAL_API_ENGINES = {
 }
 LOCAL_HTTP_ENGINES = {"ollama_local_http", "lm_studio_local_http"}
 LLM_PROVIDER_DOCTOR_SCHEMA = "paideia-llm-provider-doctor/v1"
+LLM_PROVIDER_PREFLIGHT_SCHEMA = "paideia-llm-provider-preflight/v1"
 MODEL_REQUIRED_ENGINES = {
     "anthropic_claude_api",
     "google_gemini_api",
@@ -282,6 +283,122 @@ def doctor_llm_provider(
     }
 
 
+def _provider_next_actions(doctor: dict[str, Any], *, engine: str, llm_mode: str) -> list[str]:
+    checks = {check["id"]: check for check in doctor.get("checks", [])}
+    actions: list[str] = []
+    if llm_mode == "offline":
+        actions.append("Switch to --llm-mode live or auto only when you intentionally want provider execution.")
+    if not checks.get("credential_environment", {}).get("passed", True):
+        required = checks["credential_environment"].get("details", {}).get("required", [])
+        env_hint = " or ".join("/".join(group.get("one_of", [])) for group in required)
+        actions.append(f"Set the required credential environment variable ({env_hint}) before live use.")
+    if not checks.get("model_selected", {}).get("passed", True):
+        actions.append("Pass --llm-model for this provider before live use.")
+    if not checks.get("model_path_selected", {}).get("passed", True):
+        actions.append("Pass --llm-model-path for this local model engine.")
+    if not checks.get("model_path_exists", {}).get("passed", True):
+        actions.append("Point --llm-model-path at an existing local model file or directory.")
+    if engine in LOCAL_HTTP_ENGINES:
+        actions.append("Start the selected localhost model server, then run doctor-llm-provider with --live-check.")
+    elif engine in EXTERNAL_API_ENGINES:
+        actions.append("Run doctor-llm-provider with --live-check only when you want a real API smoke call.")
+    else:
+        actions.append("Use offline mode for deterministic/local engines unless a model path is configured.")
+    return list(dict.fromkeys(actions))
+
+
+def build_llm_provider_preflight(
+    runtime_config: dict[str, Any],
+    *,
+    llm_mode: str,
+    llm_model: str | None = None,
+) -> dict[str, Any]:
+    """Build a no-network provider readiness packet to embed in runtime artifacts."""
+
+    if runtime_config.get("schema") != RUNTIME_SCHEMA:
+        raise ValueError("Unsupported LLM runtime config schema")
+    if llm_mode not in {"offline", "auto", "live"}:
+        raise ValueError("llm_mode must be offline, auto, or live")
+
+    engine = runtime_config["engine"]
+    effective_model = llm_model or runtime_config.get("model")
+    model_path = runtime_config.get("model_path")
+    doctor = doctor_llm_provider(
+        engine=engine,
+        model=effective_model,
+        model_path=model_path,
+        service=runtime_config.get("service"),
+        live_check=False,
+    )
+    blocking_checks = [
+        {
+            "id": check["id"],
+            "status": check["status"],
+            "severity": check["severity"],
+            "details": check.get("details", {}),
+        }
+        for check in doctor.get("checks", [])
+        if not check.get("passed") and check.get("severity") == "error"
+    ]
+    live_path_selected = llm_mode in {"auto", "live"} and (
+        engine in EXTERNAL_API_ENGINES or engine in LOCAL_HTTP_ENGINES
+    )
+    if llm_mode == "offline":
+        status = "skipped_offline"
+    elif blocking_checks:
+        status = "needs_configuration"
+    elif live_path_selected:
+        status = "ready_for_explicit_live_attempt"
+    elif engine in LOCAL_MODEL_PATH_REQUIRED_ENGINES:
+        status = "local_model_ready"
+    else:
+        status = "offline_or_deterministic_ready"
+
+    return {
+        "schema": LLM_PROVIDER_PREFLIGHT_SCHEMA,
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "engine": engine,
+        "service": runtime_config.get("service", engine),
+        "llm_mode": llm_mode,
+        "model": effective_model,
+        "model_path": model_path,
+        "status": status,
+        "provider_doctor_status": doctor["status"],
+        "blocking_checks": blocking_checks,
+        "live_path_selected": live_path_selected,
+        "live_check_performed": False,
+        "live_check_requires_explicit_flag": True,
+        "network_call_made_by_preflight": False,
+        "data_policy": {
+            "send_private_training_files": False,
+            "send_selected_memory_route_only": True,
+            "secret_values_exported": False,
+            "private_reasoning_trace": "do_not_store",
+        },
+        "doctor_summary": {
+            "schema": doctor["schema"],
+            "passed": doctor["passed"],
+            "network_access": doctor["network_access"],
+            "local_only": doctor["local_only"],
+            "check_statuses": [
+                {
+                    "id": check["id"],
+                    "status": check["status"],
+                    "passed": check["passed"],
+                    "severity": check["severity"],
+                }
+                for check in doctor.get("checks", [])
+            ],
+        },
+        "next_actions": _provider_next_actions(doctor, engine=engine, llm_mode=llm_mode),
+    }
+
+
+def _attach_provider_preflight(result: dict[str, Any], preflight: dict[str, Any]) -> dict[str, Any]:
+    result.setdefault("llm_provider_preflight", preflight)
+    return result
+
+
 def invoke_llm_application_engine(
     runtime_config: dict[str, Any],
     *,
@@ -303,17 +420,18 @@ def invoke_llm_application_engine(
         effective_config["model"] = llm_model
 
     engine = effective_config["engine"]
-    model_path = runtime_config.get("model_path")
+    model_path = effective_config.get("model_path")
     model = effective_config.get("model")
+    preflight = build_llm_provider_preflight(effective_config, llm_mode=llm_mode, llm_model=llm_model)
     if engine in {"bigram_local", "transformers_local", "llama_cpp_local"} and not model_path:
-        return {
+        return _attach_provider_preflight({
             "schema": RUNTIME_RESULT_SCHEMA,
             "engine": engine,
             "status": "unavailable",
             "reason": "model_path_required_for_local_model_engine",
             "identity_policy": runtime_config["identity_policy"],
             "network_access": runtime_config["network_access"],
-        }
+        }, preflight)
     if llm_mode in {"auto", "live"} and (engine in EXTERNAL_API_ENGINES or engine in LOCAL_HTTP_ENGINES):
         live_result = _invoke_live_client(
             effective_config,
@@ -323,16 +441,20 @@ def invoke_llm_application_engine(
             policy_context=policy_context,
             tools=tools,
         )
+        _attach_provider_preflight(live_result, preflight)
         if live_result.get("status") == "completed" or llm_mode == "live":
             return live_result
         offline_result = _invoke_offline_or_local_engine(effective_config, manifest=manifest, task=task)
-        return {
+        return _attach_provider_preflight({
             **offline_result,
             "llm_mode": "auto",
             "live_attempt": live_result,
             "fallback_used": True,
-        }
-    return _invoke_offline_or_local_engine(effective_config, manifest=manifest, task=task)
+        }, preflight)
+    return _attach_provider_preflight(
+        _invoke_offline_or_local_engine(effective_config, manifest=manifest, task=task),
+        preflight,
+    )
 
 
 def _invoke_offline_or_local_engine(

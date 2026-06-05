@@ -174,6 +174,7 @@ def run_workspace_agent_from_manifest(
         "run_status": base_run["run_status"],
         "policy_violations": base_run["policy_violations"],
         "llm_runtime_result": base_run.get("llm_runtime_result", {}),
+        "llm_provider_preflight": base_run.get("llm_provider_preflight"),
         "tool_authorization": {
             "allowed_tools": manifest.get("tool_policy", {}).get("allowed_tools", []),
             "blocked_tools": manifest.get("tool_policy", {}).get("blocked_tools", []),

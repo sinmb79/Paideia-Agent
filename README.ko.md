@@ -1,5 +1,7 @@
 # Paideia Agent
 
+> 현재 P0 반영: 모든 agent run, hired job, dataflow 실행 결과에는 `llm_provider_preflight`가 자동으로 포함됩니다. 이 패킷은 provider를 실제 호출하지 않고, 선택된 LLM이 offline mode라서 건너뛰어졌는지, 모델/API 키/로컬 경로 설정이 부족한지, 명시적인 live 실행 준비가 되었는지를 설명합니다. 또한 다음 조치, secret 비공개 정책, preflight 단계에서는 네트워크 호출을 하지 않았다는 사실을 함께 기록합니다.
+
 [English](README.md) | [한국어](README.ko.md)
 
 Paideia Agent는 로컬 우선 AI 인재 육성 프로그램이자 설치형 에이전트 런타임입니다. 단순히 프롬프트 프로필을 만드는 것이 아니라, 공개 근거가 있는 커리큘럼, 시험, 과제, 피드백, 이력서형 dossier, Reasoning Ledger를 거쳐 고용 가능한 로컬 AI 인재를 만드는 것을 목표로 합니다.

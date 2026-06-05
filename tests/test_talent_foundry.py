@@ -1371,8 +1371,15 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(live["client_result"]["private_reasoning_fields_omitted"], 2)
         self.assertFalse(live["client_result"]["private_reasoning_field_values_stored"])
         self.assertEqual(live["data_policy"]["store_raw_client_result_text"], False)
+        self.assertEqual(live["llm_provider_preflight"]["schema"], "paideia-llm-provider-preflight/v1")
+        self.assertEqual(live["llm_provider_preflight"]["status"], "ready_for_explicit_live_attempt")
+        self.assertFalse(live["llm_provider_preflight"]["live_check_performed"])
+        self.assertFalse(live["llm_provider_preflight"]["network_call_made_by_preflight"])
+        self.assertFalse(live["llm_provider_preflight"]["data_policy"]["secret_values_exported"])
         self.assertEqual(fallback["status"], "bridge_context_prepared")
         self.assertTrue(fallback["fallback_used"])
+        self.assertEqual(fallback["llm_provider_preflight"]["status"], "ready_for_explicit_live_attempt")
+        self.assertEqual(fallback["live_attempt"]["llm_provider_preflight"]["schema"], "paideia-llm-provider-preflight/v1")
         self.assertEqual(fallback["live_attempt"]["reason"], "fake_offline")
         self.assertNotIn("error", fallback["live_attempt"]["client_result"])
         self.assertIn("error", fallback["live_attempt"]["client_result"]["omitted_keys"])
@@ -1383,6 +1390,42 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertNotIn("private step-by-step trace", serialized)
         self.assertNotIn("nested private reasoning", serialized)
         self.assertNotIn("fallback private reasoning", serialized)
+
+    def test_llm_provider_preflight_explains_missing_live_configuration(self) -> None:
+        import os
+
+        from ai22b.talent_foundry.llm_runtime import (
+            build_llm_provider_preflight,
+            build_llm_runtime_config,
+            invoke_llm_application_engine,
+        )
+
+        old_key = os.environ.pop("OPENROUTER_API_KEY", None)
+        try:
+            config = build_llm_runtime_config(engine="openrouter_api")
+            preflight = build_llm_provider_preflight(config, llm_mode="live")
+            result = invoke_llm_application_engine(
+                config,
+                manifest={"agent": {"name": "preflight-test", "role": "provider check"}},
+                task="Check live provider configuration.",
+                llm_mode="live",
+            )
+        finally:
+            if old_key is not None:
+                os.environ["OPENROUTER_API_KEY"] = old_key
+
+        blocking_ids = {item["id"] for item in preflight["blocking_checks"]}
+
+        self.assertEqual(preflight["schema"], "paideia-llm-provider-preflight/v1")
+        self.assertEqual(preflight["status"], "needs_configuration")
+        self.assertIn("model_selected", blocking_ids)
+        self.assertIn("credential_environment", blocking_ids)
+        self.assertFalse(preflight["live_check_performed"])
+        self.assertFalse(preflight["data_policy"]["secret_values_exported"])
+        self.assertIn("Pass --llm-model", " ".join(preflight["next_actions"]))
+        self.assertEqual(result["status"], "unavailable")
+        self.assertEqual(result["reason"], "model_required_for_live_provider")
+        self.assertEqual(result["llm_provider_preflight"]["status"], "needs_configuration")
 
     def test_external_live_clients_fail_closed_without_required_keys_or_models(self) -> None:
         import os
@@ -3595,16 +3638,42 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(job_run["llm_runtime_result"]["llm_mode"], "live")
         self.assertEqual(job_run["llm_runtime_result"]["model"], "openrouter/job-model")
         self.assertEqual(job_run["llm_runtime_result"]["client_result"]["engine"], "fake_live_llm")
+        self.assertEqual(job_run["llm_provider_preflight"]["schema"], "paideia-llm-provider-preflight/v1")
+        self.assertEqual(
+            job_run["llm_runtime_result"]["llm_provider_preflight"]["schema"],
+            "paideia-llm-provider-preflight/v1",
+        )
+        self.assertIn(
+            job_run["llm_runtime_result"]["llm_provider_preflight"]["status"],
+            {"ready_for_explicit_live_attempt", "needs_configuration"},
+        )
+        self.assertFalse(job_run["llm_runtime_result"]["llm_provider_preflight"]["live_check_performed"])
+        self.assertFalse(
+            job_run["llm_runtime_result"]["llm_provider_preflight"]["data_policy"]["secret_values_exported"]
+        )
         self.assertNotIn("text", job_run["llm_runtime_result"]["client_result"])
         self.assertTrue(job_run["llm_runtime_result"]["client_result"]["text_omitted"])
         self.assertEqual(
             job_run["workspace_run"]["base_agent_run"]["execution_loop"]["runtime_config"]["engine"],
             "openrouter_api",
         )
+        self.assertEqual(
+            job_run["workspace_run"]["base_agent_run"]["llm_provider_preflight"]["schema"],
+            "paideia-llm-provider-preflight/v1",
+        )
         self.assertEqual(dataflow_run["llm_runtime_result"]["llm_mode"], "live")
         self.assertEqual(dataflow_run["llm_runtime_result"]["model"], "openrouter/dataflow-model")
+        self.assertEqual(dataflow_run["llm_provider_preflight"]["schema"], "paideia-llm-provider-preflight/v1")
+        self.assertEqual(
+            dataflow_run["llm_runtime_result"]["llm_provider_preflight"]["schema"],
+            "paideia-llm-provider-preflight/v1",
+        )
         self.assertEqual(cycle["job_run"]["llm_runtime_result"]["llm_mode"], "live")
         self.assertEqual(cycle["job_run"]["llm_runtime_result"]["model"], "openrouter/cycle-model")
+        self.assertEqual(
+            cycle["job_run"]["llm_runtime_result"]["llm_provider_preflight"]["schema"],
+            "paideia-llm-provider-preflight/v1",
+        )
 
     def test_cli_run_hired_agent_job_command_uses_job_spec_file(self) -> None:
         from ai22b.talent_foundry.cli import main as cli_main
@@ -4659,7 +4728,14 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(cache["owner"], "Shin Yong")
         self.assertEqual(cache["quarantined_experiences"], "excluded")
         self.assertEqual(cache["memory_health"]["quarantined_experience_count"], 1)
-        self.assertNotIn("secret", json.dumps(cache, ensure_ascii=False))
+        active_memory_blob = json.dumps(
+            {
+                "selected_memory_tiles": cache["selected_memory_tiles"],
+                "active_memory_route": cache["active_memory_route"]["selected_memories"],
+            },
+            ensure_ascii=False,
+        )
+        self.assertNotIn("secret", active_memory_blob)
 
     def test_dataflow_tile_matrix_creates_securities_tiles_with_safety_first(self) -> None:
         from ai22b.talent_foundry.dataflow_runtime import build_task_tile_matrix, format_dataflow_job

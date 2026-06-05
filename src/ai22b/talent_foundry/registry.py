@@ -1079,6 +1079,7 @@ def run_hired_agent_job(
     )
     result["schema"] = "ai-talent-hired-agent-job-run/v1"
     result["llm_runtime_result"] = result["workspace_run"]["llm_runtime_result"]
+    result["llm_provider_preflight"] = result["llm_runtime_result"].get("llm_provider_preflight")
     result["employment_context"] = _employment_context(employment_record)
     result["active_memory_route"] = _route_active_memory_for_employment(
         employment_record,
@@ -1135,6 +1136,7 @@ def run_hired_dataflow_job(
         llm_model=llm_model,
         client=llm_client,
     )
+    result["llm_provider_preflight"] = result["llm_runtime_result"].get("llm_provider_preflight")
 
     run_output_path = output_path or target_root / entrypoints.get("last_dataflow_run", "last_hired_dataflow_run.json")
     _write_json(run_output_path, result)

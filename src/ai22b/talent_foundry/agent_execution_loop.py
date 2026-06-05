@@ -12,7 +12,11 @@ from ai22b.talent_foundry.action_policy import (
     select_tools_for_intents,
 )
 from ai22b.talent_foundry.llm_clients import LLMClient
-from ai22b.talent_foundry.llm_runtime import build_llm_runtime_config, invoke_llm_application_engine
+from ai22b.talent_foundry.llm_runtime import (
+    build_llm_provider_preflight,
+    build_llm_runtime_config,
+    invoke_llm_application_engine,
+)
 from ai22b.talent_foundry.runtime_observability import build_agent_runtime_observability
 from ai22b.talent_foundry.tool_registry import execute_registered_tools, tool_descriptors
 
@@ -152,6 +156,11 @@ def run_agent_execution_loop(
     selected_tool_descriptors = tool_descriptors(selected_tools)
 
     effective_runtime = runtime_config or build_llm_runtime_config(engine="deterministic_local")
+    llm_provider_preflight = build_llm_provider_preflight(
+        effective_runtime,
+        llm_mode=llm_mode,
+        llm_model=llm_model,
+    )
     if run_status in {"blocked", "needs_approval"}:
         skipped_status = "skipped_policy_block" if run_status == "blocked" else "skipped_policy_approval_required"
         llm_result = {
@@ -165,6 +174,7 @@ def run_agent_execution_loop(
             ),
             "identity_policy": effective_runtime.get("identity_policy", "application_engine_not_identity"),
             "network_access": effective_runtime.get("network_access", "blocked"),
+            "llm_provider_preflight": llm_provider_preflight,
         }
     else:
         llm_result = invoke_llm_application_engine(
@@ -177,6 +187,7 @@ def run_agent_execution_loop(
             policy_context=policy_decision,
             tools=selected_tool_descriptors,
         )
+        llm_provider_preflight = llm_result.get("llm_provider_preflight", llm_provider_preflight)
 
     tool_execution = execute_registered_tools(
         selected_tools=selected_tools,
@@ -258,6 +269,12 @@ def run_agent_execution_loop(
             "estimated_prompt_tokens": runtime_observability["context"]["prompt_context_estimated_tokens"],
             "selected_memory_count": runtime_observability["context"]["selected_memory_count"],
         },
+        {
+            "recorded_at_utc": _now(),
+            "event": "llm_provider_preflight_recorded",
+            "status": llm_provider_preflight["status"],
+            "live_check_performed": llm_provider_preflight["live_check_performed"],
+        },
     ]
 
     return {
@@ -273,6 +290,7 @@ def run_agent_execution_loop(
         "run_status": run_status,
         "llm_policy": manifest["llm_policy"],
         "llm_runtime_result": llm_result,
+        "llm_provider_preflight": llm_provider_preflight,
         "selected_tools": selected_tools,
         "blocked_actions": manifest.get("tool_policy", {}).get("blocked_tools", []),
         "policy_violations": policy_violations,
