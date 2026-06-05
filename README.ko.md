@@ -181,6 +181,8 @@ ai22b-talent-foundry doctor-llm-provider `
 
 선택한 API 또는 localhost 서버를 실제로 호출하려면 `--live-check`를 명시합니다. 리포트는 provider 준비 상태, 모델 요구사항, 환경변수 존재 여부, 로컬 경로 점검, 공개 안전 smoke 결과를 기록하며 secret 값은 내보내지 않습니다. Live provider 결과 packet도 성공/실패 필드를 저장하기 전에 API key, bearer token, query token 값을 제거합니다.
 
+CI, 릴리스 게이트, 온보딩 체크리스트에서 provider doctor를 사용할 때는 `--strict`를 추가합니다. JSON 리포트는 그대로 저장되지만, 선택한 provider가 준비되지 않았으면 CLI가 exit code `2`를 반환해 자동화가 실패를 놓치지 않게 합니다.
+
 완료, bridge-ready, adapter-ready 상태의 agent run에는 `llm_plan`도 포함됩니다. 이 packet은 `assistant_reply`, 검토 가능한 짧은 추론 요약, 다음 행동 제안, suggestion-only 도구 계획을 담습니다. raw provider text와 숨은 추론 trace는 저장하지 않으며, 실제 등록 도구 실행은 계속 policy gate를 통과한 local tool registry만 담당합니다. 각 실행은 `llm_tool_plan_alignment`도 남겨 LLM의 범위 밖 도구 제안이 실행되지 않았음을 증명합니다.
 
 실행 후 학습도 review-gated 방식입니다. `memory_write.review_candidate`는 `paideia-memory-review-candidate/v1` 형식의 요약 전용 후보 packet을 남기며, LLM 계획, 정책 판단, 도구 실행, 검증, 도구 계획 정합성의 digest를 기록합니다. 이 후보는 `automatic_promotion_allowed=false`를 명시하므로, 검증과 보스/위원회 리뷰가 통과하기 전에는 로컬 learning ledger로 자동 승격되지 않습니다.

@@ -409,6 +409,11 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Actually call the selected provider/local server. Without this, no network call is made.",
     )
+    doctor_llm.add_argument(
+        "--strict",
+        action="store_true",
+        help="Return exit code 2 when the provider doctor report is not ready.",
+    )
     doctor_llm.add_argument("--output", required=True)
 
     run_workspace_agent = subparsers.add_parser(
@@ -1210,6 +1215,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
         print(str(output_path))
+        if args.strict and not report.get("passed"):
+            return 2
         return 0
 
     if args.command == "run-workspace-agent":

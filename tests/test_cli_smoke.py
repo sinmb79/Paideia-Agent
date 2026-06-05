@@ -30,6 +30,7 @@ class CliSmokeTests(unittest.TestCase):
                     "doctor-llm-provider",
                     "--llm-engine",
                     "deterministic_local",
+                    "--strict",
                     "--output",
                     str(doctor_path),
                 ]

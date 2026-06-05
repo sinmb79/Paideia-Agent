@@ -393,6 +393,8 @@ ai22b-talent-foundry doctor-llm-provider `
 
 Add `--live-check` only when you intentionally want Paideia to call the selected API or localhost server. The report records provider readiness, model requirements, credential environment presence, local path checks, and a public-safe smoke result without exporting secret values. Live provider result packets also redact API key, bearer token, and query-token values from success or failure fields before they are saved.
 
+Add `--strict` when this doctor command is part of CI, release gating, or an onboarding checklist: the JSON report is still written, but the CLI returns exit code `2` if the selected provider is not ready.
+
 Provider doctor reports now include a `smoke_contract` packet. It states whether an explicit live check was requested, whether a provider call was attempted, whether the doctor made a network or localhost call, and whether the smoke passed, skipped, or failed closed. The contract also records the retention policy: no raw provider text, no raw provider payload, no hidden reasoning trace, and client-result summaries only. If the selected provider is unavailable during `--live-check`, Paideia marks the doctor report as `needs_configuration` and keeps only the redacted summary and failure reason.
 
 The adapter regression suite uses fake SDK/HTTP success fixtures for OpenAI Responses, Anthropic, Gemini, OpenAI-compatible APIs, Ollama, and LM Studio. This proves the shared `LLMClient` path builds provider requests and parses successful responses without making live network calls during tests or saving raw provider payloads.

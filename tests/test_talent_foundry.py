@@ -1734,6 +1734,40 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(checks["smoke_contract_verified"]["status"], "skipped")
         self.assertEqual(report["smoke_contract"]["status"], "skipped")
 
+    def test_cli_doctor_llm_provider_strict_fails_when_not_ready(self) -> None:
+        import os
+
+        from ai22b.talent_foundry.cli import main as cli_main
+
+        old_key = os.environ.pop("OPENROUTER_API_KEY", None)
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                output_path = Path(tmp) / "openrouter_doctor_strict.json"
+                exit_code = cli_main(
+                    [
+                        "doctor-llm-provider",
+                        "--llm-engine",
+                        "openrouter_api",
+                        "--llm-model",
+                        "openrouter-test-model",
+                        "--strict",
+                        "--output",
+                        str(output_path),
+                    ]
+                )
+                report = json.loads(output_path.read_text(encoding="utf-8"))
+        finally:
+            if old_key is not None:
+                os.environ["OPENROUTER_API_KEY"] = old_key
+
+        self.assertEqual(exit_code, 2)
+        self.assertFalse(report["passed"])
+        self.assertEqual(report["status"], "needs_configuration")
+        checks = {item["id"]: item for item in report["checks"]}
+        self.assertFalse(checks["credential_environment"]["passed"])
+        self.assertEqual(checks["live_smoke"]["status"], "skipped")
+        self.assertFalse(report["secret_values_exported"])
+
     def test_agent_execution_uses_registered_tool_executor(self) -> None:
         from ai22b.talent_foundry.agent_runner import run_agent_from_manifest
         from ai22b.talent_foundry.demo import run_demo
