@@ -1310,6 +1310,8 @@ class TalentFoundryTests(unittest.TestCase):
                         "text": "보스 검토용 live LLM 초안입니다.",
                         "model": "fake-model",
                         "debug_headers": {"Authorization": f"Bearer {secret}"},
+                        "chain_of_thought": "private step-by-step trace must not be stored",
+                        "metadata": {"private_reasoning_trace": "nested private reasoning must be dropped"},
                     }
                 return {
                     "schema": "paideia-llm-client-result/v1",
@@ -1317,6 +1319,7 @@ class TalentFoundryTests(unittest.TestCase):
                     "status": "unavailable",
                     "reason": "fake_offline",
                     "error": f"https://example.invalid/provider?api_key={secret} Authorization: Bearer {secret}",
+                    "reasoning_trace": "fallback private reasoning must not be stored",
                 }
 
         config = build_llm_runtime_config(engine="openai_chatgpt_codex", model="fake-model")
@@ -1348,14 +1351,22 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertNotIn("debug_headers", live["client_result"])
         self.assertTrue(live["client_result"]["text_omitted"])
         self.assertIn("debug_headers", live["client_result"]["omitted_keys"])
+        self.assertNotIn("chain_of_thought", live["client_result"].get("omitted_keys", []))
+        self.assertEqual(live["client_result"]["private_reasoning_fields_omitted"], 2)
+        self.assertFalse(live["client_result"]["private_reasoning_field_values_stored"])
         self.assertEqual(live["data_policy"]["store_raw_client_result_text"], False)
         self.assertEqual(fallback["status"], "bridge_context_prepared")
         self.assertTrue(fallback["fallback_used"])
         self.assertEqual(fallback["live_attempt"]["reason"], "fake_offline")
         self.assertNotIn("error", fallback["live_attempt"]["client_result"])
         self.assertIn("error", fallback["live_attempt"]["client_result"]["omitted_keys"])
+        self.assertNotIn("reasoning_trace", fallback["live_attempt"]["client_result"].get("omitted_keys", []))
+        self.assertEqual(fallback["live_attempt"]["client_result"]["private_reasoning_fields_omitted"], 1)
         serialized = json.dumps({"live": live, "fallback": fallback}, ensure_ascii=False)
         self.assertNotIn(secret, serialized)
+        self.assertNotIn("private step-by-step trace", serialized)
+        self.assertNotIn("nested private reasoning", serialized)
+        self.assertNotIn("fallback private reasoning", serialized)
 
     def test_external_live_clients_fail_closed_without_required_keys_or_models(self) -> None:
         import os

@@ -11,6 +11,7 @@ from ai22b.talent_foundry.llm_clients import (
     LLMClient,
     build_llm_client,
     build_runtime_messages,
+    count_private_reasoning_fields,
     sanitize_llm_result_packet,
 )
 
@@ -401,8 +402,12 @@ def _invoke_live_client(
     llm_client = client or build_llm_client(runtime_config)
     messages = build_runtime_messages(manifest=manifest, task=task, policy_context=policy_context)
     client_result = llm_client.generate(messages, tools=tools or [], policy=policy_context or {})
+    private_reasoning_fields_omitted = count_private_reasoning_fields(client_result)
     client_result = sanitize_llm_result_packet(client_result)
-    client_result_summary = _client_result_for_runtime_storage(client_result)
+    client_result_summary = _client_result_for_runtime_storage(
+        client_result,
+        private_reasoning_fields_omitted=private_reasoning_fields_omitted,
+    )
     engine = runtime_config["engine"]
     if client_result.get("status") != "completed":
         return {
@@ -436,7 +441,11 @@ def _invoke_live_client(
     }
 
 
-def _client_result_for_runtime_storage(client_result: dict[str, Any]) -> dict[str, Any]:
+def _client_result_for_runtime_storage(
+    client_result: dict[str, Any],
+    *,
+    private_reasoning_fields_omitted: int = 0,
+) -> dict[str, Any]:
     summary = {
         key: client_result[key]
         for key in CLIENT_RESULT_RUNTIME_SUMMARY_KEYS
@@ -451,6 +460,9 @@ def _client_result_for_runtime_storage(client_result: dict[str, Any]) -> dict[st
         summary["text_omitted"] = True
     if omitted_keys:
         summary["omitted_keys"] = omitted_keys
+    if private_reasoning_fields_omitted:
+        summary["private_reasoning_fields_omitted"] = private_reasoning_fields_omitted
+    summary["private_reasoning_field_values_stored"] = False
     summary["retention_policy"] = "summary_without_provider_text_or_debug_payload"
     return summary
 

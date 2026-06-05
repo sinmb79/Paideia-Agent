@@ -30,6 +30,15 @@ SECRET_ENV_KEYS = (
 SECRET_QUERY_RE = re.compile(r"([?&](?:key|api_key|access_token|auth_token|refresh_token|token)=)([^&\s]+)", re.I)
 BEARER_RE = re.compile(r"((?:Authorization:\s*)?Bearer\s+)([A-Za-z0-9._\-]+)", re.I)
 OPENAI_SECRET_RE = re.compile(r"sk-[A-Za-z0-9_-]{16,}")
+PRIVATE_REASONING_KEY_MARKERS = (
+    "chainofthought",
+    "cottrace",
+    "hiddenchain",
+    "hiddenthought",
+    "hiddentrace",
+    "privatereasoning",
+    "reasoningtrace",
+)
 
 
 class LLMClient(Protocol):
@@ -119,11 +128,38 @@ def _redact_secret_text(text: str) -> str:
     return OPENAI_SECRET_RE.sub("[REDACTED_SECRET]", redacted)
 
 
+def _normalized_key(key: Any) -> str:
+    return re.sub(r"[^a-z0-9]+", "", str(key).casefold())
+
+
+def _is_private_reasoning_key(key: Any) -> bool:
+    normalized = _normalized_key(key)
+    return any(marker in normalized for marker in PRIVATE_REASONING_KEY_MARKERS)
+
+
+def count_private_reasoning_fields(value: Any) -> int:
+    if isinstance(value, dict):
+        total = 0
+        for key, item in value.items():
+            if _is_private_reasoning_key(key):
+                total += 1
+                continue
+            total += count_private_reasoning_fields(item)
+        return total
+    if isinstance(value, (list, tuple)):
+        return sum(count_private_reasoning_fields(item) for item in value)
+    return 0
+
+
 def _sanitize_value(value: Any) -> Any:
     if isinstance(value, str):
         return _redact_secret_text(value)
     if isinstance(value, dict):
-        return {str(key): _sanitize_value(item) for key, item in value.items()}
+        return {
+            str(key): _sanitize_value(item)
+            for key, item in value.items()
+            if not _is_private_reasoning_key(key)
+        }
     if isinstance(value, list):
         return [_sanitize_value(item) for item in value]
     if isinstance(value, tuple):
