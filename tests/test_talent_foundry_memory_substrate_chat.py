@@ -489,7 +489,7 @@ class TalentFoundryMemorySubstrateChatTests(unittest.TestCase):
                 llm_model="openai/gpt-test",
                 record_name="employment_record_openrouter.json",
             )
-            with patch(
+            with patch.dict(os.environ, {"OPENROUTER_API_KEY": "fixture-openrouter-key"}, clear=False), patch(
                 "ai22b.talent_foundry.memory_substrate.build_llm_client",
                 return_value=FakeGenericClient(),
             ):
@@ -589,6 +589,118 @@ class TalentFoundryMemorySubstrateChatTests(unittest.TestCase):
         self.assertIn("[REDACTED_SECRET]", serialized_chat)
         self.assertIn("[REDACTED_SECRET]", saved_chat)
 
+    def test_live_chat_provider_not_configured_fails_closed_without_fallback_learning(self) -> None:
+        import os
+
+        from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
+        from ai22b.talent_foundry.memory_substrate import run_chat_turn_from_employment
+        from ai22b.talent_foundry.registry import hire_installed_agent
+        from ai22b.talent_foundry.training_run import materialize_training_blueprint
+
+        old_key = os.environ.pop("OPENROUTER_API_KEY", None)
+        try:
+            blueprint = create_agent_training_blueprint(
+                owner="보스",
+                request="Graham 학습 경로를 재현하는 별도 샘플 AI를 만든다.",
+                talent_name="grham-주니어",
+                gender="남자",
+                domain="securities_research",
+                role_model_id="graham_value_investing",
+                agent_surface="cli-console",
+            )
+            with tempfile.TemporaryDirectory() as tmp:
+                run = materialize_training_blueprint(blueprint, output_dir=Path(tmp) / "grham_junior")
+                artifacts = {key: Path(value) for key, value in run["artifacts"].items()}
+                hiring = hire_installed_agent(
+                    artifacts["installed_agent_manifest"],
+                    employer="보스",
+                    role="증권 리서치 AI 박사",
+                    llm_engine="openrouter_api",
+                    llm_model="openai/gpt-test",
+                    record_name="employment_record_openrouter.json",
+                )
+                target_root = Path(hiring["employment_record"]).parent
+                ledger_before = json.loads((target_root / "learning_ledger.json").read_text(encoding="utf-8"))
+                chat = run_chat_turn_from_employment(
+                    hiring["employment_record"],
+                    message="지금 live provider로 자연스럽게 대화해줘.",
+                    output_path=Path(tmp) / "live_missing_chat.json",
+                    llm_mode="live",
+                    llm_model="openai/gpt-test",
+                    learn_from_chat=True,
+                )
+                ledger_after = json.loads((target_root / "learning_ledger.json").read_text(encoding="utf-8"))
+        finally:
+            if old_key is not None:
+                os.environ["OPENROUTER_API_KEY"] = old_key
+
+        self.assertEqual(chat["chat_status"], "needs_configuration")
+        self.assertEqual(chat["reply_generation_mode"], "skipped_provider_not_ready")
+        self.assertEqual(chat["llm_runtime_result"]["status"], "skipped_provider_not_ready")
+        self.assertEqual(chat["llm_provider_preflight"]["status"], "needs_configuration")
+        self.assertNotIn("fallback_used", chat["llm_runtime_result"])
+        self.assertEqual(chat["chat_learning_update"]["decision"], "skipped_provider_not_ready")
+        self.assertFalse(chat["chat_learning_update"]["ledger_write_performed"])
+        self.assertEqual(
+            len(ledger_after.get("promoted_experiences", [])),
+            len(ledger_before.get("promoted_experiences", [])),
+        )
+        self.assertEqual(
+            len(ledger_after.get("quarantined_experiences", [])),
+            len(ledger_before.get("quarantined_experiences", [])),
+        )
+
+    def test_auto_chat_provider_not_configured_fallback_quarantines_learning(self) -> None:
+        import os
+
+        from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
+        from ai22b.talent_foundry.memory_substrate import run_chat_turn_from_employment
+        from ai22b.talent_foundry.registry import hire_installed_agent
+        from ai22b.talent_foundry.training_run import materialize_training_blueprint
+
+        old_key = os.environ.pop("OPENROUTER_API_KEY", None)
+        try:
+            blueprint = create_agent_training_blueprint(
+                owner="보스",
+                request="Graham 학습 경로를 재현하는 별도 샘플 AI를 만든다.",
+                talent_name="grham-주니어",
+                gender="남자",
+                domain="securities_research",
+                role_model_id="graham_value_investing",
+                agent_surface="cli-console",
+            )
+            with tempfile.TemporaryDirectory() as tmp:
+                run = materialize_training_blueprint(blueprint, output_dir=Path(tmp) / "grham_junior")
+                artifacts = {key: Path(value) for key, value in run["artifacts"].items()}
+                hiring = hire_installed_agent(
+                    artifacts["installed_agent_manifest"],
+                    employer="보스",
+                    role="증권 리서치 AI 박사",
+                    llm_engine="openrouter_api",
+                    llm_model="openai/gpt-test",
+                    record_name="employment_record_openrouter.json",
+                )
+                target_root = Path(hiring["employment_record"]).parent
+                chat = run_chat_turn_from_employment(
+                    hiring["employment_record"],
+                    message="auto mode로 자연스럽게 대화해줘.",
+                    output_path=Path(tmp) / "auto_missing_chat.json",
+                    llm_mode="auto",
+                    llm_model="openai/gpt-test",
+                    learn_from_chat=True,
+                )
+                ledger = json.loads((target_root / "learning_ledger.json").read_text(encoding="utf-8"))
+        finally:
+            if old_key is not None:
+                os.environ["OPENROUTER_API_KEY"] = old_key
+
+        self.assertEqual(chat["chat_status"], "completed")
+        self.assertEqual(chat["reply_generation_mode"], "deterministic_local_fallback")
+        self.assertTrue(chat["llm_runtime_result"]["fallback_used"])
+        self.assertEqual(chat["llm_provider_preflight"]["status"], "needs_configuration")
+        self.assertEqual(chat["chat_learning_update"]["decision"], "quarantined")
+        self.assertEqual(ledger["quarantined_experiences"][-1]["source"], "chat_turn")
+
     def test_chat_turn_repairs_after_boss_correction(self) -> None:
         from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
         from ai22b.talent_foundry.memory_substrate import run_chat_turn_from_employment
@@ -669,6 +781,63 @@ class TalentFoundryMemorySubstrateChatTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertEqual(chat["chat_context"]["llm_contract"]["role"], "application_language_engine_only")
         self.assertTrue(chat["chat_context"]["active_memory_route"]["operator_candidates"])
+
+    def test_cli_chat_hired_agent_live_provider_not_configured_writes_needs_configuration(self) -> None:
+        import os
+
+        from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
+        from ai22b.talent_foundry.cli import main as cli_main
+        from ai22b.talent_foundry.registry import hire_installed_agent
+        from ai22b.talent_foundry.training_run import materialize_training_blueprint
+
+        old_key = os.environ.pop("OPENROUTER_API_KEY", None)
+        try:
+            blueprint = create_agent_training_blueprint(
+                owner="보스",
+                request="Graham 학습 경로를 재현하는 별도 샘플 AI를 만든다.",
+                talent_name="grham-주니어",
+                gender="남자",
+                domain="securities_research",
+                role_model_id="graham_value_investing",
+                agent_surface="cli-console",
+            )
+            with tempfile.TemporaryDirectory() as tmp:
+                run = materialize_training_blueprint(blueprint, output_dir=Path(tmp) / "grham_junior")
+                artifacts = {key: Path(value) for key, value in run["artifacts"].items()}
+                hiring = hire_installed_agent(
+                    artifacts["installed_agent_manifest"],
+                    employer="보스",
+                    role="증권 리서치 AI 박사",
+                    llm_engine="openrouter_api",
+                    llm_model="openai/gpt-test",
+                    record_name="employment_record_openrouter.json",
+                )
+                output = Path(tmp) / "cli_live_missing_chat.json"
+                exit_code = cli_main(
+                    [
+                        "chat-hired-agent",
+                        "--employment-record",
+                        str(hiring["employment_record"]),
+                        "--message",
+                        "live provider로 자연스럽게 대화해줘.",
+                        "--output",
+                        str(output),
+                        "--live-llm",
+                        "--llm-model",
+                        "openai/gpt-test",
+                        "--learn-from-chat",
+                    ]
+                )
+                chat = json.loads(output.read_text(encoding="utf-8"))
+        finally:
+            if old_key is not None:
+                os.environ["OPENROUTER_API_KEY"] = old_key
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(chat["chat_status"], "needs_configuration")
+        self.assertEqual(chat["reply_generation_mode"], "skipped_provider_not_ready")
+        self.assertEqual(chat["llm_provider_preflight"]["status"], "needs_configuration")
+        self.assertEqual(chat["chat_learning_update"]["decision"], "skipped_provider_not_ready")
 
 
 if __name__ == "__main__":

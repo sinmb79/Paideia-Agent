@@ -217,7 +217,7 @@ ai22b-talent-foundry run-agent-runtime-smoke `
 
 실행 후 학습도 review-gated 방식입니다. `memory_write.review_candidate`는 `paideia-memory-review-candidate/v1` 형식의 요약 전용 후보 packet을 남기며, LLM 계획, 정책 판단, 도구 실행, 검증, 도구 계획 정합성의 digest를 기록합니다. 이 후보는 `automatic_promotion_allowed=false`를 명시하므로, 검증과 보스/위원회 리뷰가 통과하기 전에는 로컬 learning ledger로 자동 승격되지 않습니다.
 
-채팅 실행도 같은 provider 선택 계약을 따릅니다. `openai_chatgpt_codex`는 전용 OpenAI Responses 채팅 bridge를 유지하고, Anthropic, Gemini, Mistral, OpenRouter, Ollama, LM Studio는 공통 `LLMClient` adapter 경로로 채팅합니다. 각 채팅 턴은 `chat_execution_trace`에 메모리 라우팅, live provider 시도/fallback, 답변 생성 모드, `--learn-from-chat` 사용 시 검토된 학습 결정을 기록합니다.
+채팅 실행도 같은 provider 선택 계약을 따릅니다. `openai_chatgpt_codex`는 전용 OpenAI Responses 채팅 bridge를 유지하고, Anthropic, Gemini, Mistral, OpenRouter, Ollama, LM Studio는 공통 `LLMClient` adapter 경로로 채팅합니다. 명시적인 `--llm-mode live`는 provider API key 또는 localhost endpoint가 없으면 `chat_status=needs_configuration`으로 닫히며, deterministic fallback 답변을 live 대화처럼 위장하지 않습니다. `--llm-mode auto`는 deterministic fallback을 사용할 수 있지만, fallback 기반 채팅 학습은 보스 검토 전 quarantine으로 남깁니다. 각 채팅 턴은 `chat_execution_trace`에 메모리 라우팅, provider preflight, live provider 시도/fallback, 답변 생성 모드, `--learn-from-chat` 사용 시 검토된 학습 결정을 기록합니다.
 
 manifest 기반 workspace 실행도 같은 provider 플래그를 받습니다. 그래서 고용 전 실험용 workspace 실행에서도 선택한 LLM adapter를 쓰되, 결과는 sandboxed local artifact로 남길 수 있습니다.
 

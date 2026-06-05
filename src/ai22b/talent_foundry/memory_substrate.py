@@ -19,7 +19,7 @@ from ai22b.talent_foundry.llm_clients import (
     count_private_reasoning_fields,
     sanitize_llm_result_packet,
 )
-from ai22b.talent_foundry.llm_runtime import invoke_llm_application_engine
+from ai22b.talent_foundry.llm_runtime import build_llm_provider_preflight, invoke_llm_application_engine
 
 
 MEMORY_SUBSTRATE_SCHEMA = "ai-talent-memory-substrate/v1"
@@ -1483,6 +1483,73 @@ def _wrap_live_llm_failure_reply(
     }
 
 
+def _provider_configuration_required_reply(
+    *,
+    message: str,
+    preflight: dict[str, Any],
+) -> dict[str, Any]:
+    reason = "live_provider_needs_configuration_before_chat"
+    missing_checks = [
+        item.get("id")
+        for item in preflight.get("blocking_checks", [])
+        if isinstance(item, dict) and item.get("id")
+    ]
+    missing_text = f" 필요한 설정 확인: {', '.join(missing_checks)}." if missing_checks else ""
+    answer = (
+        "보스, 선택한 live LLM provider가 아직 설정되지 않아 이번 채팅 턴을 시작하지 않았습니다. "
+        "이 상태에서는 로컬 fallback 답변을 실제 live 대화처럼 만들지 않고, provider doctor로 설정을 먼저 확인해야 합니다."
+        f"{missing_text}"
+    )
+    return {
+        "intent": "provider_configuration_required",
+        "answer": answer,
+        "reply": answer,
+        "active_operator": "llm.provider_configuration_required",
+        "source_text": _trim_text(message, 240),
+        "reviewable_reasoning_summary": [
+            {
+                "step": "provider preflight",
+                "summary": f"Live chat was not started because provider preflight returned {preflight.get('status')}.",
+            },
+            {
+                "step": "fallback policy",
+                "summary": "Explicit live mode does not use deterministic fallback when the provider is not configured.",
+            },
+        ],
+        "learning_candidate": {},
+        "configuration_required": {
+            "reason": reason,
+            "provider_preflight_status": preflight.get("status"),
+            "next_actions": preflight.get("next_actions", []),
+        },
+    }
+
+
+def _skipped_chat_learning_update(
+    *,
+    target_root: Path,
+    entrypoints: dict[str, Any],
+    reason: str,
+) -> dict[str, Any]:
+    return {
+        "schema": "ai-talent-chat-learning-update/v1",
+        "created_at_utc": _now(),
+        "decision": "skipped_provider_not_ready",
+        "learning_ledger": entrypoints.get("learning_ledger", "learning_ledger.json"),
+        "memory_substrate": entrypoints.get("memory_substrate", "memory_substrate.json"),
+        "latest_experience_id": None,
+        "promoted_count_before": None,
+        "promoted_count_after": None,
+        "quarantined_count_before": None,
+        "quarantined_count_after": None,
+        "latest_promoted_skills": [],
+        "policy": "no_chat_learning_without_configured_live_provider",
+        "reason": reason,
+        "automatic_promotion_performed": False,
+        "ledger_write_performed": False,
+    }
+
+
 def _record_chat_learning(
     *,
     target_root: Path,
@@ -1510,9 +1577,9 @@ def _record_chat_learning(
         "stored_private_reasoning_trace": False,
     }
     runtime_result = run.get("llm_runtime_result", {})
-    live_failure_fallback = run.get("llm_mode") == "live" and bool(runtime_result.get("fallback_used"))
-    score = 60 if live_failure_fallback else 86 if runtime_result.get("status") == "completed" else 80
-    status = "needs_review" if live_failure_fallback else "verified"
+    provider_fallback_used = bool(runtime_result.get("fallback_used"))
+    score = 60 if provider_fallback_used else 86 if runtime_result.get("status") == "completed" else 80
+    status = "needs_review" if provider_fallback_used else "verified"
     ledger_before = len(ledger.get("promoted_experiences", []))
     quarantined_before = len(ledger.get("quarantined_experiences", []))
     ledger = record_learning_experience(
@@ -1524,8 +1591,8 @@ def _record_chat_learning(
             "status": status,
             "reviewer": "local_chat_learning_policy",
             "notes": (
-                "실시간 LLM 실패 후 fallback 답변이므로 보스 검토 전 승격하지 않는다."
-                if live_failure_fallback
+                "LLM provider fallback 답변이므로 보스 검토 전 승격하지 않는다."
+                if provider_fallback_used
                 else "실시간 대화 후 검토 가능한 요약만 승격하고 숨은 사고과정은 저장하지 않는다."
             ),
         },
@@ -2124,21 +2191,83 @@ def run_chat_turn_from_employment(
         intent=conversation_intent,
         active_route=chat_context["active_memory_route"],
     )
-    base_runtime_result = invoke_llm_application_engine(
+    llm_provider_preflight = build_llm_provider_preflight(
         employment_record["llm_runtime"],
-        manifest=agent_manifest,
-        task=message,
+        llm_mode=llm_mode,
+        llm_model=llm_model,
     )
-    live_llm_attempt: dict[str, Any] | None = None
-    if llm_mode in {"auto", "live"}:
-        live_llm_attempt = _invoke_live_chat_llm(
-            chat_context=chat_context,
-            runtime_config=employment_record["llm_runtime"],
-            model=llm_model,
+    provider_not_ready = llm_mode == "live" and llm_provider_preflight.get("status") == "needs_configuration"
+    base_runtime_result: dict[str, Any]
+    if provider_not_ready:
+        base_runtime_result = {
+            "schema": "ai-talent-llm-runtime-result/v1",
+            "engine": employment_record["llm_runtime"].get("engine", "deterministic_local"),
+            "status": "skipped_provider_not_ready",
+            "reason": "live_provider_needs_configuration_before_chat",
+            "model": llm_model or employment_record["llm_runtime"].get("model"),
+            "identity_policy": employment_record["llm_runtime"].get(
+                "identity_policy",
+                "application_engine_not_identity",
+            ),
+            "network_access": employment_record["llm_runtime"].get("network_access", "blocked"),
+            "llm_mode": llm_mode,
+            "llm_provider_preflight": llm_provider_preflight,
+        }
+    else:
+        base_runtime_result = invoke_llm_application_engine(
+            employment_record["llm_runtime"],
+            manifest=agent_manifest,
+            task=message,
+            llm_mode="offline" if llm_mode in {"auto", "live"} else llm_mode,
+            llm_model=llm_model,
         )
-        live_llm_attempt = sanitize_llm_result_packet(live_llm_attempt)
+    live_llm_attempt: dict[str, Any] | None = None
+    if provider_not_ready:
+        live_llm_attempt = {
+            "schema": "ai-talent-live-llm-result/v1",
+            "engine": employment_record["llm_runtime"].get("engine"),
+            "status": "skipped_provider_not_ready",
+            "reason": "live_provider_needs_configuration_before_chat",
+            "model": llm_model or employment_record["llm_runtime"].get("model"),
+            "identity_policy": employment_record["llm_runtime"].get(
+                "identity_policy",
+                "application_engine_not_identity",
+            ),
+            "network_access": employment_record["llm_runtime"].get("network_access"),
+            "llm_provider_preflight": llm_provider_preflight,
+        }
+    elif llm_mode in {"auto", "live"}:
+        auto_provider_not_ready = llm_mode == "auto" and llm_provider_preflight.get("status") == "needs_configuration"
+        if auto_provider_not_ready:
+            live_llm_attempt = {
+                "schema": "ai-talent-live-llm-result/v1",
+                "engine": employment_record["llm_runtime"].get("engine"),
+                "status": "skipped_provider_not_ready",
+                "reason": "live_provider_needs_configuration_auto_fallback",
+                "model": llm_model or employment_record["llm_runtime"].get("model"),
+                "identity_policy": employment_record["llm_runtime"].get(
+                    "identity_policy",
+                    "application_engine_not_identity",
+                ),
+                "network_access": employment_record["llm_runtime"].get("network_access"),
+                "llm_provider_preflight": llm_provider_preflight,
+            }
+        else:
+            live_llm_attempt = _invoke_live_chat_llm(
+                chat_context=chat_context,
+                runtime_config=employment_record["llm_runtime"],
+                model=llm_model,
+            )
+            live_llm_attempt = sanitize_llm_result_packet(live_llm_attempt)
 
-    if live_llm_attempt and live_llm_attempt.get("status") == "completed":
+    if provider_not_ready:
+        llm_runtime_result = base_runtime_result
+        reply_packet = _provider_configuration_required_reply(
+            message=message,
+            preflight=llm_provider_preflight,
+        )
+        reply_generation_mode = "skipped_provider_not_ready"
+    elif live_llm_attempt and live_llm_attempt.get("status") == "completed":
         llm_runtime_result = live_llm_attempt
         reply_packet = _draft_chat_reply_from_live_llm(
             llm_result=live_llm_attempt,
@@ -2156,6 +2285,7 @@ def run_chat_turn_from_employment(
                 **base_runtime_result,
                 "fallback_used": True,
                 "live_llm_attempt": live_llm_attempt,
+                "llm_provider_preflight": llm_provider_preflight,
             }
         reply_packet = _draft_chat_reply(
             employment_record["agent"]["name"],
@@ -2191,6 +2321,12 @@ def run_chat_turn_from_employment(
             status=base_runtime_result.get("status"),
         ),
         _chat_trace_entry(
+            "llm_provider_preflight",
+            status=llm_provider_preflight.get("status"),
+            live_path_selected=llm_provider_preflight.get("live_path_selected"),
+            network_call_made=llm_provider_preflight.get("network_call_made_by_preflight"),
+        ),
+        _chat_trace_entry(
             "live_llm_attempt",
             requested=llm_mode in {"auto", "live"},
             engine=(live_llm_attempt or {}).get("engine"),
@@ -2216,7 +2352,9 @@ def run_chat_turn_from_employment(
         "message": message,
         "chat_context": chat_context,
         "llm_runtime_result": llm_runtime_result,
+        "llm_provider_preflight": llm_provider_preflight,
         "llm_mode": llm_mode,
+        "chat_status": "needs_configuration" if provider_not_ready else "completed",
         "reply_generation_mode": reply_generation_mode,
         "conversation_intent": conversation_intent,
         "assistant_answer": reply_packet["answer"],
@@ -2226,7 +2364,20 @@ def run_chat_turn_from_employment(
         "chat_execution_trace": chat_execution_trace,
         "stored_private_reasoning_trace": False,
     }
-    if learn_from_chat:
+    if learn_from_chat and provider_not_ready:
+        run["chat_learning_update"] = _skipped_chat_learning_update(
+            target_root=target_root,
+            entrypoints=entrypoints,
+            reason="live_provider_needs_configuration_before_chat",
+        )
+        run["chat_execution_trace"].append(
+            _chat_trace_entry(
+                "chat_learning_update",
+                decision=run["chat_learning_update"]["decision"],
+                latest_experience_id=None,
+            )
+        )
+    elif learn_from_chat:
         run["chat_learning_update"] = _record_chat_learning(
             target_root=target_root,
             entrypoints=entrypoints,
