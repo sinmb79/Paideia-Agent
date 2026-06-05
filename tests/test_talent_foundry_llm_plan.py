@@ -69,6 +69,7 @@ class TalentFoundryLlmPlanTests(unittest.TestCase):
 
         llm_plan = result["llm_runtime_result"]["llm_plan"]
         alignment = result["llm_tool_plan_alignment"]
+        memory_candidate = result["memory_write"]["review_candidate"]
         evidence_packet = next(
             item["output"]
             for item in result["tool_execution"]["tool_results"]
@@ -98,6 +99,28 @@ class TalentFoundryLlmPlanTests(unittest.TestCase):
         self.assertEqual(
             result["execution_contract"]["llm_tool_plan_alignment"]["execution_authority"],
             "policy_selected_registered_tool_executor",
+        )
+        self.assertEqual(memory_candidate["schema"], "paideia-memory-review-candidate/v1")
+        self.assertEqual(memory_candidate["source_run_id"], result["run_id"])
+        self.assertEqual(memory_candidate["target"], "local_learning_ledger")
+        self.assertFalse(memory_candidate["promotion_gate"]["automatic_promotion_allowed"])
+        self.assertIn("boss_or_committee_review", memory_candidate["promotion_gate"]["requires"])
+        self.assertEqual(memory_candidate["retention_policy"]["private_reasoning_trace"], "do_not_store")
+        self.assertFalse(memory_candidate["retention_policy"]["raw_provider_text_stored"])
+        self.assertFalse(memory_candidate["retention_policy"]["full_session_replay_stored"])
+        self.assertEqual(
+            result["execution_contract"]["memory_write"]["review_candidate_schema"],
+            "paideia-memory-review-candidate/v1",
+        )
+        self.assertFalse(result["execution_contract"]["memory_write"]["automatic_promotion_performed"])
+        self.assertTrue(
+            {
+                "llm_plan_digest_sha256",
+                "tool_execution_digest_sha256",
+                "policy_decision_digest_sha256",
+                "verification_digest_sha256",
+                "llm_tool_plan_alignment_digest_sha256",
+            }.issubset(memory_candidate["evidence"])
         )
         self.assertEqual(work_session["llm_plan_schema"], "paideia-llm-reviewable-plan/v1")
         self.assertIn("llm_reviewable_plan", {item["id"] for item in evidence_packet["evidence_items"]})

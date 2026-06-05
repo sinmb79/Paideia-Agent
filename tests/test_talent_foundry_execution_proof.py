@@ -59,6 +59,7 @@ class TalentFoundryExecutionProofTests(unittest.TestCase):
         self.assertIn("agent_boss_approval_gate_verified", {item["id"] for item in saved["checks"]})
         self.assertIn("agent_llm_reviewable_plan_verified", {item["id"] for item in saved["checks"]})
         self.assertIn("llm_tool_plan_suggestion_boundary_verified", {item["id"] for item in saved["checks"]})
+        self.assertIn("memory_review_candidate_verified", {item["id"] for item in saved["checks"]})
         self.assertIn("workspace_tool_artifacts_materialized", {item["id"] for item in saved["checks"]})
         self.assertIn("llm_provider_preflight_present", {item["id"] for item in saved["checks"]})
         self.assertTrue(saved["artifact_summary"]["absolute_paths_redacted"])
@@ -96,6 +97,7 @@ class TalentFoundryExecutionProofTests(unittest.TestCase):
             tampered["workspace_run"]["base_agent_run"]["llm_tool_plan_alignment"][
                 "out_of_scope_executed_count"
             ] = 1
+            tampered["workspace_run"]["base_agent_run"]["memory_write"].pop("review_candidate", None)
             tampered["workspace_run"]["base_agent_run"]["execution_contract"]["llm_tool_plan_alignment"][
                 "suggestion_only_enforced"
             ] = False
@@ -109,6 +111,7 @@ class TalentFoundryExecutionProofTests(unittest.TestCase):
         self.assertIn("agent_boss_approval_gate_verified", proof["issues"])
         self.assertIn("agent_llm_reviewable_plan_verified", proof["issues"])
         self.assertIn("llm_tool_plan_suggestion_boundary_verified", proof["issues"])
+        self.assertIn("memory_review_candidate_verified", proof["issues"])
 
     def test_cli_verify_workspace_execution_for_dataflow_run(self) -> None:
         from ai22b.talent_foundry.cli import main as cli_main

@@ -22,6 +22,7 @@ SUPPORTED_RUN_SCHEMAS = {
 LLM_PROVIDER_PREFLIGHT_SCHEMA = "paideia-llm-provider-preflight/v1"
 LLM_REVIEWABLE_PLAN_SCHEMA = "paideia-llm-reviewable-plan/v1"
 LLM_TOOL_PLAN_ALIGNMENT_SCHEMA = "paideia-llm-tool-plan-alignment/v1"
+MEMORY_REVIEW_CANDIDATE_SCHEMA = "paideia-memory-review-candidate/v1"
 DATAFLOW_TRANSPOSE_VERIFICATION_SCHEMA = "ai-talent-dataflow-transpose-verification/v1"
 WORKSPACE_TOOL_ARTIFACTS_SCHEMA = "paideia-workspace-tool-artifacts/v1"
 WORKSPACE_INPUT_REVIEW_SCHEMA = "paideia-workspace-input-review/v1"
@@ -773,7 +774,13 @@ def build_workspace_execution_proof(
             and contract_tool_execution.get("network_default") == "blocked"
             and contract_tool_execution.get("subprocess_default") == "blocked"
             and contract_memory.get("automatic_promotion_performed") is False
-            and contract_memory.get("private_reasoning_trace_policy") == "do_not_store",
+            and contract_memory.get("private_reasoning_trace_policy") == "do_not_store"
+            and contract_memory.get("review_candidate_schema") == MEMORY_REVIEW_CANDIDATE_SCHEMA
+            and contract_memory.get("review_candidate_target") == "local_learning_ledger"
+            and contract_memory.get("review_candidate_automatic_promotion_allowed") is False
+            and "boss_or_committee_review" in contract_memory.get("review_candidate_promotion_requires", [])
+            and contract_memory.get("review_candidate_private_reasoning_trace") == "do_not_store"
+            and contract_memory.get("review_candidate_raw_provider_text_stored") is False,
             evidence={
                 "schema": execution_contract.get("schema"),
                 "status": execution_contract.get("status"),
@@ -784,6 +791,65 @@ def build_workspace_execution_proof(
                 "tool_attempted": contract_tool_execution.get("attempted"),
                 "evidence_packet_completed": contract_tool_execution.get("evidence_packet_completed"),
                 "automatic_promotion_performed": contract_memory.get("automatic_promotion_performed"),
+                "memory_review_candidate_schema": contract_memory.get("review_candidate_schema"),
+                "memory_review_candidate_id": contract_memory.get("review_candidate_id"),
+            },
+        )
+        memory_write = base.get("memory_write", {}) if isinstance(base.get("memory_write"), dict) else {}
+        review_candidate = (
+            memory_write.get("review_candidate", {})
+            if isinstance(memory_write.get("review_candidate"), dict)
+            else {}
+        )
+        candidate_evidence = review_candidate.get("evidence", {}) if isinstance(review_candidate.get("evidence"), dict) else {}
+        promotion_gate = (
+            review_candidate.get("promotion_gate", {})
+            if isinstance(review_candidate.get("promotion_gate"), dict)
+            else {}
+        )
+        retention_policy = (
+            review_candidate.get("retention_policy", {})
+            if isinstance(review_candidate.get("retention_policy"), dict)
+            else {}
+        )
+        digest_keys = {
+            "llm_plan_digest_sha256",
+            "tool_execution_digest_sha256",
+            "policy_decision_digest_sha256",
+            "verification_digest_sha256",
+            "llm_tool_plan_alignment_digest_sha256",
+        }
+        _check(
+            checks,
+            "memory_review_candidate_verified",
+            review_candidate.get("schema") == MEMORY_REVIEW_CANDIDATE_SCHEMA
+            and review_candidate.get("source_run_id") == base.get("run_id")
+            and review_candidate.get("source_run_status") == base.get("run_status")
+            and review_candidate.get("target") == "local_learning_ledger"
+            and review_candidate.get("candidate_type") == "post_run_experience_summary"
+            and isinstance(review_candidate.get("candidate_id"), str)
+            and bool(review_candidate.get("candidate_id"))
+            and promotion_gate.get("automatic_promotion_allowed") is False
+            and "verification_passed" in promotion_gate.get("requires", [])
+            and "boss_or_committee_review" in promotion_gate.get("requires", [])
+            and retention_policy.get("private_reasoning_trace") == "do_not_store"
+            and retention_policy.get("raw_provider_text_stored") is False
+            and retention_policy.get("full_session_replay_stored") is False
+            and all(
+                isinstance(candidate_evidence.get(key), str)
+                and len(candidate_evidence.get(key, "")) == 64
+                for key in digest_keys
+            ),
+            evidence={
+                "schema": review_candidate.get("schema"),
+                "candidate_id": review_candidate.get("candidate_id"),
+                "source_run_id_present": bool(review_candidate.get("source_run_id")),
+                "target": review_candidate.get("target"),
+                "automatic_promotion_allowed": promotion_gate.get("automatic_promotion_allowed"),
+                "promotion_requires": promotion_gate.get("requires", []),
+                "private_reasoning_trace": retention_policy.get("private_reasoning_trace"),
+                "raw_provider_text_stored": retention_policy.get("raw_provider_text_stored"),
+                "digest_keys_present": sorted(key for key in digest_keys if candidate_evidence.get(key)),
             },
         )
         alignment = base.get("llm_tool_plan_alignment", {})

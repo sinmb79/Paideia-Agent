@@ -183,6 +183,8 @@ ai22b-talent-foundry doctor-llm-provider `
 
 완료, bridge-ready, adapter-ready 상태의 agent run에는 `llm_plan`도 포함됩니다. 이 packet은 `assistant_reply`, 검토 가능한 짧은 추론 요약, 다음 행동 제안, suggestion-only 도구 계획을 담습니다. raw provider text와 숨은 추론 trace는 저장하지 않으며, 실제 등록 도구 실행은 계속 policy gate를 통과한 local tool registry만 담당합니다. 각 실행은 `llm_tool_plan_alignment`도 남겨 LLM의 범위 밖 도구 제안이 실행되지 않았음을 증명합니다.
 
+실행 후 학습도 review-gated 방식입니다. `memory_write.review_candidate`는 `paideia-memory-review-candidate/v1` 형식의 요약 전용 후보 packet을 남기며, LLM 계획, 정책 판단, 도구 실행, 검증, 도구 계획 정합성의 digest를 기록합니다. 이 후보는 `automatic_promotion_allowed=false`를 명시하므로, 검증과 보스/위원회 리뷰가 통과하기 전에는 로컬 learning ledger로 자동 승격되지 않습니다.
+
 채팅 실행도 같은 provider 선택 계약을 따릅니다. `openai_chatgpt_codex`는 전용 OpenAI Responses 채팅 bridge를 유지하고, Anthropic, Gemini, Mistral, OpenRouter, Ollama, LM Studio는 공통 `LLMClient` adapter 경로로 채팅합니다. 각 채팅 턴은 `chat_execution_trace`에 메모리 라우팅, live provider 시도/fallback, 답변 생성 모드, `--learn-from-chat` 사용 시 검토된 학습 결정을 기록합니다.
 
 manifest 기반 workspace 실행도 같은 provider 플래그를 받습니다. 그래서 고용 전 실험용 workspace 실행에서도 선택한 LLM adapter를 쓰되, 결과는 sandboxed local artifact로 남길 수 있습니다.
@@ -255,7 +257,7 @@ ai22b-talent-foundry verify-workspace-execution `
   --output .\workspace_execution_proof.json
 ```
 
-이 증명은 실행 schema/status, 필수 workspace 산출물, sandbox 강제 여부, rollback manifest, LLM 정체성 경계, 검토 가능한 `llm_plan`, suggestion-only 도구 계획 정합성, provider preflight, agent `execution_contract`, private reasoning trace 비저장 정책, 수락 체크리스트, dataflow transpose verification을 확인합니다. 로컬 절대경로는 proof에 그대로 쓰지 않고 fingerprint로만 남깁니다.
+이 증명은 실행 schema/status, 필수 workspace 산출물, sandbox 강제 여부, rollback manifest, LLM 정체성 경계, 검토 가능한 `llm_plan`, suggestion-only 도구 계획 정합성, provider preflight, agent `execution_contract`, review-gated memory candidate, private reasoning trace 비저장 정책, 수락 체크리스트, dataflow transpose verification을 확인합니다. 로컬 절대경로는 proof에 그대로 쓰지 않고 fingerprint로만 남깁니다.
 
 본체 제어 분신/군체 실험은 병렬 episode rollout 평가로 다룹니다.
 

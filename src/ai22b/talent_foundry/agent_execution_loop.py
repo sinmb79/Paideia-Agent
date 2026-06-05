@@ -24,6 +24,7 @@ from ai22b.talent_foundry.tool_registry import execute_registered_tools, tool_de
 RUN_SCHEMA = "ai-talent-agent-run/v1"
 EXECUTION_CONTRACT_SCHEMA = "paideia-agent-execution-contract/v1"
 LLM_TOOL_PLAN_ALIGNMENT_SCHEMA = "paideia-llm-tool-plan-alignment/v1"
+MEMORY_REVIEW_CANDIDATE_SCHEMA = "paideia-memory-review-candidate/v1"
 
 
 def _now() -> str:
@@ -33,6 +34,17 @@ def _now() -> str:
 def _run_id(agent_name: str, task: str, created_at: str) -> str:
     raw = f"{agent_name}|{task}|{created_at}".encode("utf-8")
     return hashlib.sha256(raw).hexdigest()[:16]
+
+
+def _digest(value: Any) -> str:
+    return hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
+
+
+def _compact_text(value: Any, *, limit: int = 500) -> str:
+    text = str(value or "").strip()
+    if len(text) <= limit:
+        return text
+    return text[: limit - 3].rstrip() + "..."
 
 
 def _verify_execution(policy_decision: dict[str, Any], tool_execution: dict[str, Any], llm_result: dict[str, Any]) -> dict[str, Any]:
@@ -151,6 +163,74 @@ def _build_llm_tool_plan_alignment(
     }
 
 
+def _build_memory_review_candidate(
+    *,
+    run_id: str,
+    agent: dict[str, Any],
+    task: str,
+    run_status: str,
+    policy_decision: dict[str, Any],
+    llm_result: dict[str, Any],
+    tool_execution: dict[str, Any],
+    verification: dict[str, Any],
+    llm_tool_plan_alignment: dict[str, Any],
+) -> dict[str, Any]:
+    llm_plan = llm_result.get("llm_plan", {}) if isinstance(llm_result.get("llm_plan"), dict) else {}
+    completed_tools = [
+        str(item.get("tool"))
+        for item in tool_execution.get("tool_results", [])
+        if isinstance(item, dict) and item.get("status") == "completed"
+    ]
+    candidate_payload = {
+        "run_id": run_id,
+        "agent_name": agent.get("name"),
+        "task": task,
+        "run_status": run_status,
+        "llm_plan_digest_sha256": _digest(llm_plan),
+        "tool_execution_digest_sha256": _digest(tool_execution),
+        "policy_decision_digest_sha256": _digest(policy_decision),
+        "verification_digest_sha256": _digest(verification),
+    }
+    return {
+        "schema": MEMORY_REVIEW_CANDIDATE_SCHEMA,
+        "candidate_id": hashlib.sha256(json.dumps(candidate_payload, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()[:16],
+        "source_run_id": run_id,
+        "source_run_status": run_status,
+        "agent": {
+            "name": agent.get("name"),
+            "role": agent.get("role"),
+            "major_goal": agent.get("major_goal"),
+        },
+        "target": "local_learning_ledger",
+        "candidate_type": "post_run_experience_summary",
+        "summary": _compact_text(llm_plan.get("assistant_reply") or llm_result.get("draft") or task),
+        "reviewable_reasoning_summary": llm_plan.get("reviewable_reasoning_summary", [])
+        if isinstance(llm_plan.get("reviewable_reasoning_summary"), list)
+        else [],
+        "evidence": {
+            "policy_status": policy_decision.get("status"),
+            "verification_status": verification.get("status"),
+            "completed_tools": completed_tools,
+            "llm_plan_digest_sha256": candidate_payload["llm_plan_digest_sha256"],
+            "tool_execution_digest_sha256": candidate_payload["tool_execution_digest_sha256"],
+            "policy_decision_digest_sha256": candidate_payload["policy_decision_digest_sha256"],
+            "verification_digest_sha256": candidate_payload["verification_digest_sha256"],
+            "llm_tool_plan_alignment_digest_sha256": _digest(llm_tool_plan_alignment),
+        },
+        "promotion_gate": {
+            "automatic_promotion_allowed": False,
+            "requires": ["verification_passed", "boss_or_committee_review"],
+            "review_label_required": True,
+        },
+        "retention_policy": {
+            "private_reasoning_trace": "do_not_store",
+            "raw_provider_text_stored": False,
+            "full_session_replay_stored": False,
+            "safe_reference_detail": "summary_and_digests_only",
+        },
+    }
+
+
 def _response_packet(agent: dict[str, Any], task: str, run_status: str, llm_result: dict[str, Any], policy_decision: dict[str, Any]) -> dict[str, Any]:
     if run_status == "blocked":
         return {
@@ -229,7 +309,11 @@ def _build_execution_contract(
     evidence_required = "work_session" in selected_tools
     evidence_completed = "evidence_packet" in completed_tools
     memory_decision = memory_write.get("decision")
-    automatic_promotion_performed = memory_decision == "promoted"
+    automatic_promotion_performed = bool(memory_write.get("automatic_promotion_performed", memory_decision == "promoted"))
+    review_candidate = memory_write.get("review_candidate", {})
+    review_candidate = review_candidate if isinstance(review_candidate, dict) else {}
+    review_candidate_promotion_gate = review_candidate.get("promotion_gate", {})
+    review_candidate_retention = review_candidate.get("retention_policy", {})
     issues: list[str] = []
     if run_status == "completed" and policy_status != "approved":
         issues.append("completed_run_without_approved_policy")
@@ -243,6 +327,18 @@ def _build_execution_contract(
         issues.append("llm_tool_plan_suggestion_boundary_failed")
     if automatic_promotion_performed:
         issues.append("automatic_memory_promotion_performed")
+    if review_candidate.get("schema") != MEMORY_REVIEW_CANDIDATE_SCHEMA:
+        issues.append("memory_review_candidate_missing")
+    if review_candidate.get("target") != "local_learning_ledger":
+        issues.append("memory_review_candidate_target_invalid")
+    if review_candidate_promotion_gate.get("automatic_promotion_allowed") is not False:
+        issues.append("memory_review_candidate_allows_automatic_promotion")
+    if "boss_or_committee_review" not in review_candidate_promotion_gate.get("requires", []):
+        issues.append("memory_review_candidate_review_gate_missing")
+    if review_candidate_retention.get("private_reasoning_trace") != "do_not_store":
+        issues.append("memory_review_candidate_private_trace_policy_invalid")
+    if review_candidate_retention.get("raw_provider_text_stored") is not False:
+        issues.append("memory_review_candidate_raw_provider_text_policy_invalid")
 
     if run_status == "blocked":
         status = "blocked_before_execution" if not issues else "needs_review"
@@ -308,6 +404,16 @@ def _build_execution_contract(
             "automatic_promotion_performed": automatic_promotion_performed,
             "promotion_requires": memory_write.get("promotion_requires", []),
             "private_reasoning_trace_policy": memory_write.get("private_reasoning_trace_policy"),
+            "review_candidate_schema": review_candidate.get("schema"),
+            "review_candidate_id": review_candidate.get("candidate_id"),
+            "review_candidate_target": review_candidate.get("target"),
+            "review_candidate_source_status": review_candidate.get("source_run_status"),
+            "review_candidate_automatic_promotion_allowed": review_candidate_promotion_gate.get(
+                "automatic_promotion_allowed"
+            ),
+            "review_candidate_promotion_requires": review_candidate_promotion_gate.get("requires", []),
+            "review_candidate_private_reasoning_trace": review_candidate_retention.get("private_reasoning_trace"),
+            "review_candidate_raw_provider_text_stored": review_candidate_retention.get("raw_provider_text_stored"),
         },
         "proof_steps": [
             {"id": "request_to_action_intent", "status": "passed"},
@@ -341,6 +447,7 @@ def run_agent_execution_loop(
 
     created_at = _now()
     agent = manifest["agent"]
+    run_id = _run_id(agent["name"], task, created_at)
     memory = manifest.get("memory_profile", {})
     action_intents = infer_action_intents(task, manifest)
     policy_decision = evaluate_action_policy(manifest, action_intents)
@@ -430,7 +537,20 @@ def run_agent_execution_loop(
         "target": "local_learning_ledger",
         "private_reasoning_trace_policy": "do_not_store",
         "promotion_requires": ["verification_passed", "boss_or_committee_review"],
+        "automatic_promotion_performed": False,
     }
+    memory_review_candidate = _build_memory_review_candidate(
+        run_id=run_id,
+        agent=agent,
+        task=task,
+        run_status=run_status,
+        policy_decision=policy_decision,
+        llm_result=llm_result,
+        tool_execution=tool_execution,
+        verification=verification,
+        llm_tool_plan_alignment=llm_tool_plan_alignment,
+    )
+    memory_write["review_candidate"] = memory_review_candidate
     execution_contract = _build_execution_contract(
         run_status=run_status,
         policy_decision=policy_decision,
@@ -489,7 +609,7 @@ def run_agent_execution_loop(
 
     return {
         "schema": RUN_SCHEMA,
-        "run_id": _run_id(agent["name"], task, created_at),
+        "run_id": run_id,
         "created_at_utc": created_at,
         "agent": {
             "name": agent["name"],

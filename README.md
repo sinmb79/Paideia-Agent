@@ -401,6 +401,8 @@ Every agent, hired job, and dataflow runtime result also embeds `llm_provider_pr
 
 Completed, bridge-ready, and adapter-ready agent runs also include `llm_plan`. This is a reviewable packet with `assistant_reply`, short evidence-facing reasoning summaries, suggested next actions, and suggestion-only tool plans. Raw provider text and hidden reasoning traces are not stored; registered tools still execute only through the policy-checked local tool registry. Each run also records `llm_tool_plan_alignment`, proving that out-of-scope LLM tool suggestions were not executed.
 
+Post-run learning is also review-gated. `memory_write.review_candidate` records a summary-only `paideia-memory-review-candidate/v1` packet with evidence digests for the LLM plan, policy decision, tool execution, verification, and tool-plan alignment. It explicitly sets `automatic_promotion_allowed=false`; no run is promoted into the local learning ledger until verification and Boss/committee review approve it.
+
 Chat runs use the same selected provider contract. `openai_chatgpt_codex` keeps the dedicated OpenAI Responses chat bridge, while Anthropic, Gemini, Mistral, OpenRouter, Ollama, and LM Studio chat through the shared `LLMClient` adapter path. Every chat turn records `chat_execution_trace` with memory routing, live provider attempt/fallback, reply generation mode, and reviewed learning decision when `--learn-from-chat` is enabled.
 
 Manifest-based workspace runs also accept the same provider flags. This lets a pre-hire or lab workspace run use the selected LLM adapter while still writing sandboxed local artifacts:
@@ -473,7 +475,7 @@ ai22b-talent-foundry verify-workspace-execution `
   --output .\workspace_execution_proof.json
 ```
 
-The proof checks the source run schema/status, required workspace artifacts, sandbox enforcement, rollback manifests, LLM identity boundary, reviewable `llm_plan`, suggestion-only tool-plan alignment, provider preflight, agent `execution_contract`, private-reasoning retention policy, acceptance checklist, and dataflow transpose verification where applicable. Absolute local paths are fingerprinted instead of copied into the proof.
+The proof checks the source run schema/status, required workspace artifacts, sandbox enforcement, rollback manifests, LLM identity boundary, reviewable `llm_plan`, suggestion-only tool-plan alignment, provider preflight, agent `execution_contract`, review-gated memory candidate, private-reasoning retention policy, acceptance checklist, and dataflow transpose verification where applicable. Absolute local paths are fingerprinted instead of copied into the proof.
 
 Parent-controlled projection work now has a rollout evaluator:
 
