@@ -1556,6 +1556,18 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertFalse(report["secret_values_exported"])
         self.assertFalse(checks["credential_environment"]["passed"])
         self.assertEqual(checks["live_smoke"]["status"], "skipped")
+        self.assertEqual(report["smoke_contract"]["schema"], "paideia-llm-provider-smoke-contract/v1")
+        self.assertEqual(report["smoke_contract"]["status"], "skipped")
+        self.assertEqual(report["smoke_contract"]["failure_mode"], "not_requested")
+        self.assertFalse(report["smoke_contract"]["live_check_performed"])
+        self.assertFalse(report["smoke_contract"]["provider_call_attempted"])
+        self.assertFalse(report["smoke_contract"]["network_call_made_by_doctor"])
+        self.assertFalse(report["smoke_contract"]["retention_policy"]["raw_provider_text_saved"])
+        self.assertFalse(report["smoke_contract"]["retention_policy"]["raw_provider_payload_saved"])
+        self.assertFalse(report["smoke_contract"]["data_policy"]["secret_values_exported"])
+        self.assertEqual(report["smoke_contract"]["data_policy"]["private_reasoning_trace"], "do_not_store")
+        self.assertEqual(checks["smoke_contract_verified"]["status"], "skipped")
+        self.assertTrue(checks["smoke_contract_verified"]["passed"])
         self.assertIn("ANTHROPIC_API_KEY", serialized)
         self.assertNotIn("fixture_value_should_not_be_exported", serialized)
 
@@ -1572,6 +1584,9 @@ class TalentFoundryTests(unittest.TestCase):
                     "status": "completed",
                     "text": "OK",
                     "model": "fake-model",
+                    "raw_output_saved": False,
+                    "debug_headers": {"Authorization": "Bearer fixture_value_should_not_be_exported"},
+                    "chain_of_thought": "private provider smoke trace must not be stored",
                 }
 
         old_key = os.environ.get("OPENAI_API_KEY")
@@ -1596,8 +1611,86 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(report["status"], "ready")
         self.assertTrue(checks["credential_environment"]["passed"])
         self.assertTrue(checks["live_smoke"]["passed"])
+        self.assertTrue(checks["smoke_contract_verified"]["passed"])
+        self.assertEqual(report["smoke_contract"]["status"], "passed")
+        self.assertEqual(report["smoke_contract"]["failure_mode"], "none")
+        self.assertTrue(report["smoke_contract"]["live_check_performed"])
+        self.assertTrue(report["smoke_contract"]["provider_call_attempted"])
+        self.assertTrue(report["smoke_contract"]["network_call_made_by_doctor"])
+        self.assertFalse(report["smoke_contract"]["retention_policy"]["raw_provider_text_saved"])
+        self.assertFalse(report["smoke_contract"]["retention_policy"]["raw_provider_payload_saved"])
+        self.assertFalse(report["smoke_contract"]["retention_policy"]["hidden_reasoning_saved"])
+        self.assertEqual(
+            report["smoke_contract"]["result_summary"]["client_result"]["retention_policy"],
+            "summary_without_provider_text_or_debug_payload",
+        )
+        self.assertTrue(report["smoke_contract"]["result_summary"]["client_result"]["text_omitted"])
+        self.assertFalse(report["smoke_contract"]["result_summary"]["client_result"]["raw_output_saved"])
+        self.assertEqual(report["smoke_contract"]["result_summary"]["client_result"]["private_reasoning_fields_omitted"], 1)
         self.assertEqual(report["live_result"]["status"], "completed")
+        self.assertTrue(report["live_result"]["client_result"]["text_omitted"])
+        self.assertIn("debug_headers", report["live_result"]["client_result"]["omitted_keys"])
+        self.assertFalse(report["live_result"]["client_result"]["private_reasoning_field_values_stored"])
         self.assertNotIn("fixture_value_should_not_be_exported", serialized)
+        self.assertNotIn("private provider smoke trace", serialized)
+
+    def test_llm_provider_doctor_live_check_fails_closed_without_raw_payload_storage(self) -> None:
+        import os
+
+        from ai22b.talent_foundry.llm_runtime import doctor_llm_provider
+
+        secret = "fixture_provider_doctor_secret_12345"
+
+        class FakeFailingClient:
+            def generate(self, messages, *, tools=None, policy=None):
+                return {
+                    "schema": "paideia-llm-client-result/v1",
+                    "engine": "fake_live_llm",
+                    "status": "unavailable",
+                    "reason": "fixture_provider_down",
+                    "model": "fake-model",
+                    "error": f"provider failed with key={secret} Authorization: Bearer {secret}",
+                    "debug_headers": {"Authorization": f"Bearer {secret}"},
+                    "private_reasoning_trace": "provider hidden failure trace must not be stored",
+                }
+
+        old_key = os.environ.get("OPENAI_API_KEY")
+        os.environ["OPENAI_API_KEY"] = secret
+        try:
+            report = doctor_llm_provider(
+                engine="openai_chatgpt_codex",
+                model="fake-model",
+                live_check=True,
+                client=FakeFailingClient(),
+            )
+        finally:
+            if old_key is None:
+                os.environ.pop("OPENAI_API_KEY", None)
+            else:
+                os.environ["OPENAI_API_KEY"] = old_key
+
+        checks = {item["id"]: item for item in report["checks"]}
+        serialized = json.dumps(report, ensure_ascii=False)
+
+        self.assertFalse(report["passed"])
+        self.assertEqual(report["status"], "needs_configuration")
+        self.assertFalse(checks["live_smoke"]["passed"])
+        self.assertFalse(checks["smoke_contract_verified"]["passed"])
+        self.assertEqual(report["smoke_contract"]["status"], "failed")
+        self.assertEqual(report["smoke_contract"]["failure_mode"], "fail_closed_unavailable")
+        self.assertTrue(report["smoke_contract"]["live_check_performed"])
+        self.assertTrue(report["smoke_contract"]["provider_call_attempted"])
+        self.assertTrue(report["smoke_contract"]["network_call_made_by_doctor"])
+        self.assertFalse(report["smoke_contract"]["retention_policy"]["raw_provider_text_saved"])
+        self.assertFalse(report["smoke_contract"]["retention_policy"]["raw_provider_payload_saved"])
+        self.assertEqual(report["live_result"]["status"], "unavailable")
+        self.assertEqual(report["live_result"]["reason"], "fixture_provider_down")
+        self.assertEqual(report["live_result"]["client_result"]["reason"], "fixture_provider_down")
+        self.assertIn("error", report["live_result"]["client_result"]["omitted_keys"])
+        self.assertIn("debug_headers", report["live_result"]["client_result"]["omitted_keys"])
+        self.assertEqual(report["live_result"]["client_result"]["private_reasoning_fields_omitted"], 1)
+        self.assertNotIn(secret, serialized)
+        self.assertNotIn("provider hidden failure trace", serialized)
 
     def test_cli_doctor_llm_provider_writes_report(self) -> None:
         import os
@@ -1628,7 +1721,10 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(report["schema"], "paideia-llm-provider-doctor/v1")
         self.assertEqual(report["engine"], "openrouter_api")
         self.assertFalse(report["passed"])
-        self.assertEqual(report["checks"][-1]["id"], "live_smoke")
+        checks = {item["id"]: item for item in report["checks"]}
+        self.assertEqual(checks["live_smoke"]["status"], "skipped")
+        self.assertEqual(checks["smoke_contract_verified"]["status"], "skipped")
+        self.assertEqual(report["smoke_contract"]["status"], "skipped")
 
     def test_agent_execution_uses_registered_tool_executor(self) -> None:
         from ai22b.talent_foundry.agent_runner import run_agent_from_manifest

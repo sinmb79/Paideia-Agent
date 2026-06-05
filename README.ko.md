@@ -267,6 +267,8 @@ ai22b-talent-foundry evaluate-simulation-rollouts `
 
 P0 action policy는 민감 intent마다 `hybrid_structured_lexical_v3` 추론 패킷을 기록합니다. 원문 매칭을 유지하면서 compact separator normalization을 추가해 `매 수 주 문`, `업 로 드`, `승인없이`, `place-buy-order`처럼 공백/하이픈으로 쪼갠 우회 표현도 action intent로 연결합니다. 직접 실행 명령, 정책/설명 질문, "하지 말고"로 부정된 요청을 구분하므로 "매수 주문은 하지 말고 분석만" 같은 문장은 거래 실행이 아니라 안전한 리서치 맥락으로 처리됩니다. 민감 행동이 완전 차단 대상은 아니지만 보스 승인이 필요한 경우에는 `needs_approval` 상태로 멈추며, 승인 전에는 LLM 계획, 도구 실행, 메모리 승격을 건너뜁니다.
 
+LLM provider doctor는 `smoke_contract` 패킷도 함께 남깁니다. 이 패킷은 보스가 명시적으로 `--live-check`를 요청했는지, provider 호출이 실제로 시도됐는지, doctor가 네트워크 또는 localhost 호출을 했는지, smoke가 통과/생략/fail-closed 중 무엇이었는지를 기록합니다. 저장 정책도 함께 명시해서 raw provider text, raw provider payload, hidden reasoning trace를 저장하지 않고 client-result summary만 남깁니다. `--live-check` 중 provider가 실패하면 report는 `needs_configuration`으로 닫히고, redacted summary와 실패 사유만 저장합니다.
+
 Hopper Junior 예시:
 
 ```powershell

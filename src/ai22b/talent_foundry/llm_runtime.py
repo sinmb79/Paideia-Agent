@@ -48,6 +48,7 @@ EXTERNAL_API_ENGINES = {
 LOCAL_HTTP_ENGINES = {"ollama_local_http", "lm_studio_local_http"}
 LLM_PROVIDER_DOCTOR_SCHEMA = "paideia-llm-provider-doctor/v1"
 LLM_PROVIDER_PREFLIGHT_SCHEMA = "paideia-llm-provider-preflight/v1"
+LLM_PROVIDER_SMOKE_CONTRACT_SCHEMA = "paideia-llm-provider-smoke-contract/v1"
 MODEL_REQUIRED_ENGINES = {
     "anthropic_claude_api",
     "google_gemini_api",
@@ -259,6 +260,24 @@ def doctor_llm_provider(
             status="skipped",
             details={"reason": "live_check_not_requested", "network_call_made": False},
         )
+    smoke_contract = _build_provider_smoke_contract(
+        runtime_config,
+        live_check_requested=live_check,
+        live_result=live_result,
+    )
+    add_check(
+        "smoke_contract_verified",
+        smoke_contract["status"] in {"passed", "skipped"},
+        severity="error" if live_check else "info",
+        status=smoke_contract["status"],
+        details={
+            "schema": smoke_contract["schema"],
+            "provider_call_attempted": smoke_contract["provider_call_attempted"],
+            "network_call_made_by_doctor": smoke_contract["network_call_made_by_doctor"],
+            "raw_provider_payload_saved": smoke_contract["retention_policy"]["raw_provider_payload_saved"],
+            "private_reasoning_trace": smoke_contract["data_policy"]["private_reasoning_trace"],
+        },
+    )
 
     blocking_failures = [
         check
@@ -278,6 +297,7 @@ def doctor_llm_provider(
         "network_access": runtime_config["network_access"],
         "local_only": runtime_config["local_only"],
         "secret_values_exported": False,
+        "smoke_contract": smoke_contract,
         "checks": checks,
         "live_result": _sanitize_runtime_result(live_result) if live_result else None,
     }
@@ -380,6 +400,7 @@ def build_llm_provider_preflight(
             "passed": doctor["passed"],
             "network_access": doctor["network_access"],
             "local_only": doctor["local_only"],
+            "smoke_contract_status": doctor.get("smoke_contract", {}).get("status"),
             "check_statuses": [
                 {
                     "id": check["id"],
@@ -587,6 +608,79 @@ def _client_result_for_runtime_storage(
     summary["private_reasoning_field_values_stored"] = False
     summary["retention_policy"] = "summary_without_provider_text_or_debug_payload"
     return summary
+
+
+def _build_provider_smoke_contract(
+    runtime_config: dict[str, Any],
+    *,
+    live_check_requested: bool,
+    live_result: dict[str, Any] | None,
+) -> dict[str, Any]:
+    live_check_performed = live_result is not None
+    engine = runtime_config["engine"]
+    provider_call_attempted = live_check_performed and engine in EXTERNAL_API_ENGINES.union(LOCAL_HTTP_ENGINES)
+    client_summary = {}
+    if isinstance(live_result, dict) and isinstance(live_result.get("client_result"), dict):
+        client = live_result["client_result"]
+        client_summary = {
+            "schema": client.get("schema"),
+            "engine": client.get("engine"),
+            "status": client.get("status"),
+            "reason": client.get("reason"),
+            "model": client.get("model"),
+            "text_omitted": client.get("text_omitted") is True,
+            "omitted_keys": client.get("omitted_keys", []),
+            "raw_output_saved": client.get("raw_output_saved"),
+            "private_reasoning_fields_omitted": client.get("private_reasoning_fields_omitted", 0),
+            "private_reasoning_field_values_stored": client.get("private_reasoning_field_values_stored", False),
+            "retention_policy": client.get("retention_policy"),
+        }
+    live_status = live_result.get("status") if isinstance(live_result, dict) else None
+    if not live_check_requested:
+        status = "skipped"
+    elif live_status == "completed":
+        status = "passed"
+    else:
+        status = "failed"
+    return {
+        "schema": LLM_PROVIDER_SMOKE_CONTRACT_SCHEMA,
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "engine": engine,
+        "service": runtime_config.get("service", engine),
+        "model": runtime_config.get("model"),
+        "live_check_requested": live_check_requested,
+        "live_check_performed": live_check_performed,
+        "provider_call_attempted": provider_call_attempted,
+        "network_call_made_by_doctor": provider_call_attempted,
+        "network_policy": "no_network_without_explicit_live_check",
+        "data_policy": {
+            "send_private_training_files": False,
+            "send_full_session_replay": False,
+            "send_selected_memory_route_only": True,
+            "secret_values_exported": False,
+            "private_reasoning_trace": "do_not_store",
+        },
+        "retention_policy": {
+            "raw_provider_text_saved": False,
+            "raw_provider_payload_saved": False,
+            "client_result_summary_only": True,
+            "hidden_reasoning_saved": False,
+        },
+        "result_summary": {
+            "runtime_status": live_status,
+            "runtime_reason": live_result.get("reason") if isinstance(live_result, dict) else None,
+            "runtime_identity_policy": live_result.get("identity_policy") if isinstance(live_result, dict) else None,
+            "client_result": client_summary,
+        },
+        "failure_mode": (
+            "not_requested"
+            if not live_check_requested
+            else "none"
+            if status == "passed"
+            else "fail_closed_unavailable"
+        ),
+        "status": status,
+    }
 
 
 def _invoke_bigram_local(
@@ -850,6 +944,12 @@ def _sanitize_runtime_result(result: dict[str, Any] | None) -> dict[str, Any] | 
                 "error_type",
                 "network_access",
                 "local_files_only",
+                "text_omitted",
+                "omitted_keys",
+                "raw_output_saved",
+                "private_reasoning_fields_omitted",
+                "private_reasoning_field_values_stored",
+                "retention_policy",
             ]
             if key in client_result
         }
