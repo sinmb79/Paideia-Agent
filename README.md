@@ -418,6 +418,16 @@ Workspace runs also write three P0 runtime artifacts inside the allowed workspac
 
 Every agent run now includes `runtime_observability`: estimated context size, estimated prompt tokens, selected-memory count, selected-tool count, provider usage presence, fallback state, review/promotion/quarantine counters, and privacy flags showing that full session replay and private reasoning traces were not stored. Dataflow jobs also write `runtime_observability.json` inside the workspace, so the memory-board claim can be measured instead of only described.
 
+After a workspace, hired-job, or dataflow run, create an execution proof before trusting the result:
+
+```powershell
+ai22b-talent-foundry verify-workspace-execution `
+  --run .\last_hired_agent_job_run.json `
+  --output .\workspace_execution_proof.json
+```
+
+The proof checks the source run schema/status, required workspace artifacts, sandbox enforcement, rollback manifests, LLM identity boundary, provider preflight, private-reasoning retention policy, acceptance checklist, and dataflow transpose verification where applicable. Absolute local paths are fingerprinted instead of copied into the proof.
+
 Parent-controlled projection work now has a rollout evaluator:
 
 ```powershell
@@ -498,6 +508,14 @@ ai22b-talent-foundry run-action-policy-eval `
 ```
 
 This uses public fixtures in `evals/policy_safety_cases.json` to check prompt-injection, trade execution, external upload, personal-data transfer, negated analysis-only requests, and policy-discussion requests. It does not call an LLM or the network.
+
+Run the workspace execution proof verifier against a generated run artifact before calling a workspace/dataflow change P0-ready:
+
+```powershell
+ai22b-talent-foundry verify-workspace-execution `
+  --run .\last_hired_dataflow_run.json `
+  --output .\workspace_execution_proof.json
+```
 
 The GitHub Actions workflow in `.github/workflows/ci.yml` runs package compilation, the regression suite, and the same public hygiene check on pull requests and pushes.
 

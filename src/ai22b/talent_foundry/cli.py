@@ -34,6 +34,7 @@ from ai22b.talent_foundry.distribution import (
 )
 from ai22b.talent_foundry.dossier import build_hiring_dossier, render_hiring_dossier_markdown
 from ai22b.talent_foundry.employment import create_employment_contract
+from ai22b.talent_foundry.execution_proof import verify_workspace_execution_file
 from ai22b.talent_foundry.family import create_child_seed, create_child_training_blueprint, create_family_union
 from ai22b.talent_foundry.graduate_package_builder import build_graduate_package
 from ai22b.talent_foundry.growth_profile import build_growth_profile
@@ -247,6 +248,13 @@ def _build_parser() -> argparse.ArgumentParser:
     policy_eval.add_argument("--suite", default=str(DEFAULT_POLICY_EVAL_SUITE))
     policy_eval.add_argument("--manifest")
     policy_eval.add_argument("--output", required=True)
+
+    execution_proof = subparsers.add_parser(
+        "verify-workspace-execution",
+        help="Verify a workspace, hired-job, or dataflow run with sandbox, rollback, LLM, and memory-safety proof checks.",
+    )
+    execution_proof.add_argument("--run", required=True)
+    execution_proof.add_argument("--output", required=True)
 
     graduate_package = subparsers.add_parser(
         "build-graduate-package",
@@ -881,6 +889,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         print(str(output_path))
         return 0 if report["status"] == "passed" else 1
+
+    if args.command == "verify-workspace-execution":
+        output_path = Path(args.output)
+        proof = verify_workspace_execution_file(Path(args.run), output_path=output_path)
+        print(str(output_path))
+        return 0 if proof["passed"] else 1
 
     if args.command == "build-graduate-package":
         result = build_graduate_package(Path(args.training_run), Path(args.output_dir))

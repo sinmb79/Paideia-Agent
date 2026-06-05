@@ -206,6 +206,16 @@ ai22b-talent-foundry run-hired-dataflow-job `
 
 모든 agent run에는 `runtime_observability`가 포함됩니다. 여기에는 추정 컨텍스트 크기, 추정 prompt token, 선택된 메모리 수, 선택된 도구 수, provider usage 존재 여부, fallback 상태, review/promotion/quarantine 카운터, full session replay와 private reasoning trace를 저장하지 않았다는 privacy flag가 기록됩니다. Dataflow job은 workspace 안에 `runtime_observability.json`도 따로 써서, 기억기판이 토큰과 컨텍스트를 줄인다는 주장을 실제 지표로 검토할 수 있게 합니다.
 
+workspace, hired-job, dataflow 실행 후에는 결과를 신뢰하기 전에 실행 증명 파일을 만들 수 있습니다.
+
+```powershell
+ai22b-talent-foundry verify-workspace-execution `
+  --run .\last_hired_agent_job_run.json `
+  --output .\workspace_execution_proof.json
+```
+
+이 증명은 실행 schema/status, 필수 workspace 산출물, sandbox 강제 여부, rollback manifest, LLM 정체성 경계, provider preflight, private reasoning trace 비저장 정책, 수락 체크리스트, dataflow transpose verification을 확인합니다. 로컬 절대경로는 proof에 그대로 쓰지 않고 fingerprint로만 남깁니다.
+
 본체 제어 분신/군체 실험은 병렬 episode rollout 평가로 다룹니다.
 
 ```powershell
@@ -344,6 +354,14 @@ ai22b-talent-foundry run-action-policy-eval `
 ```
 
 이 명령은 `evals/policy_safety_cases.json`의 공개 fixture로 prompt injection, 투자 실행, 외부 업로드, 개인/가족 데이터 전송, 부정된 분석 전용 요청, 정책 설명 요청을 검사합니다. LLM이나 네트워크는 호출하지 않습니다.
+
+workspace/dataflow 변경을 P0-ready라고 부르기 전에는 생성된 실행 산출물에 대해 실행 증명 verifier를 돌립니다.
+
+```powershell
+ai22b-talent-foundry verify-workspace-execution `
+  --run .\last_hired_dataflow_run.json `
+  --output .\workspace_execution_proof.json
+```
 
 GitHub Actions 설정은 `.github/workflows/ci.yml`에 있으며, pull request와 push에서 패키지 컴파일, 회귀 테스트, 공개 저장소 위생 검사를 실행합니다.
 
