@@ -58,6 +58,10 @@ def _verify_execution(policy_decision: dict[str, Any], tool_execution: dict[str,
     if policy_status == "needs_approval":
         issues.extend(f"approval_required:{item.get('action_type')}" for item in policy_decision.get("approval_required", []))
     for item in tool_execution.get("tool_results", []):
+        scope = item.get("capability_scope", {}) if isinstance(item.get("capability_scope"), dict) else {}
+        if item.get("status") == "skipped" and scope.get("registered") is False:
+            issues.append(f"unregistered_tool_selected:{item.get('tool')}")
+            continue
         if item.get("status") not in {"completed", "skipped"}:
             issues.append(f"tool_failed:{item.get('tool')}")
             continue
@@ -321,6 +325,13 @@ def _build_execution_contract(
         for item in tool_results
         if item.get("status") == "skipped"
     )
+    unregistered_tools = sorted(
+        str(item.get("tool"))
+        for item in tool_results
+        if item.get("status") == "skipped"
+        and isinstance(item.get("capability_scope"), dict)
+        and item.get("capability_scope", {}).get("registered") is False
+    )
     blocked_tools = sorted(
         str(item.get("tool"))
         for item in tool_results
@@ -362,6 +373,8 @@ def _build_execution_contract(
         issues.append("provider_configuration_preflight_status_invalid")
     if run_status == "completed" and evidence_required and not evidence_completed:
         issues.append("evidence_packet_missing_for_work_session")
+    if unregistered_tools:
+        issues.extend(f"unregistered_tool_selected:{tool}" for tool in unregistered_tools)
     if llm_tool_plan_alignment.get("suggestion_only_enforced") is not True:
         issues.append("llm_tool_plan_suggestion_boundary_failed")
     if automatic_promotion_performed:
@@ -432,6 +445,7 @@ def _build_execution_contract(
             "selected_count": len(selected_tools),
             "completed_tools": completed_tools,
             "skipped_tools": skipped_tools,
+            "unregistered_tools": unregistered_tools,
             "blocked_tools": blocked_tools,
             "evidence_packet_required": evidence_required,
             "evidence_packet_completed": evidence_completed,

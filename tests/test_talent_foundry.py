@@ -1190,6 +1190,9 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(report["status"], "passed")
         self.assertGreaterEqual(details["tool_count"], 7)
         self.assertEqual(details["missing_required_tools"], [])
+        self.assertEqual(details["unregistered_policy_tools"], [])
+        self.assertEqual(details["registry_tools_without_policy_capabilities"], [])
+        self.assertEqual(set(details["policy_tool_ids"]), set(details["registered_tool_ids"]))
         self.assertEqual(details["scope_failure_count"], 0)
         self.assertTrue(details["denied_all_blocked"])
         self.assertTrue(details["granted_all_completed"])
@@ -1207,6 +1210,24 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertFalse(public_safe["direct_arbitrary_file_write"])
         self.assertFalse(public_safe["private_reasoning_trace_stored"])
         self.assertFalse(public_safe["raw_provider_payload_saved"])
+
+    def test_tool_capability_audit_fails_on_registry_policy_drift(self) -> None:
+        from ai22b.talent_foundry.tool_registry import ToolSpec, audit_tool_capability_registry, build_default_tool_registry
+
+        registry = build_default_tool_registry()
+        registry["orphan_tool"] = ToolSpec(
+            tool_id="orphan_tool",
+            capability="research.analysis",
+            description="Fixture tool that exists in registry but not in the action policy map.",
+            side_effects="none",
+            handler=lambda _context: {"schema": "fixture-orphan-tool/v1"},
+        )
+
+        report = audit_tool_capability_registry(registry)
+
+        self.assertFalse(report["passed"])
+        self.assertEqual(report["status"], "failed")
+        self.assertIn("orphan_tool", report["details"]["registry_tools_without_policy_capabilities"])
 
     def test_cli_manifest_command_writes_agent_manifest(self) -> None:
         from ai22b.talent_foundry.cli import main as cli_main
@@ -2135,6 +2156,52 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("evidence_packet", tool_results["assessment"]["output"]["previous_completed_tools"])
         self.assertTrue(tool_results["assessment"]["output"]["checks"]["evidence_packet_seen"])
         self.assertEqual(tool_results["parent_controlled_projection_team"]["output"]["separate_consciousness"], False)
+
+    def test_agent_execution_flags_policy_tool_that_is_not_registered(self) -> None:
+        from unittest.mock import patch
+
+        from ai22b.talent_foundry.agent_runner import run_agent_from_manifest
+
+        manifest = {
+            "schema": "ai-talent-agent-manifest/v1",
+            "agent": {
+                "name": "ghost-tool-test-agent",
+                "role": "local research agent",
+                "major_goal": "Verify unregistered tool drift fails closed.",
+            },
+            "memory_profile": {
+                "procedural_principles": ["Only registered tools can execute."],
+                "semantic_themes": ["tool registry drift"],
+                "chain_of_thought_policy": "do_not_store_private_trace",
+            },
+            "llm_policy": {
+                "role": "application_engine_not_identity",
+                "private_reasoning_trace": "do_not_store",
+            },
+            "tool_policy": {
+                "allowed_tools": ["ghost_research_tool"],
+                "blocked_tools": [],
+            },
+        }
+
+        with patch.dict(
+            "ai22b.talent_foundry.action_policy.TOOL_CAPABILITIES",
+            {"ghost_research_tool": ["research.analysis"]},
+            clear=False,
+        ):
+            result = run_agent_from_manifest(manifest, task="Prepare a local research summary.")
+
+        self.assertEqual(result["run_status"], "completed")
+        self.assertEqual(result["tool_execution"]["tool_results"][0]["status"], "skipped")
+        self.assertEqual(result["tool_execution"]["tool_results"][0]["capability_scope"]["registered"], False)
+        self.assertEqual(result["verification"]["status"], "needs_review")
+        self.assertIn("unregistered_tool_selected:ghost_research_tool", result["verification"]["issues"])
+        self.assertEqual(result["execution_contract"]["status"], "needs_review")
+        self.assertIn(
+            "ghost_research_tool",
+            result["execution_contract"]["tool_execution"]["unregistered_tools"],
+        )
+        self.assertIn("unregistered_tool_selected:ghost_research_tool", result["execution_contract"]["issues"])
 
     def test_policy_engine_blocks_prompt_injection_sensitive_actions_but_allows_policy_discussion(self) -> None:
         from ai22b.talent_foundry.agent_runner import run_agent_from_manifest

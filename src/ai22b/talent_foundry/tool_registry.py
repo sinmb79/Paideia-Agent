@@ -518,9 +518,14 @@ def _audit_llm_result() -> dict[str, Any]:
 def audit_tool_capability_registry(registry: dict[str, ToolSpec] | None = None) -> dict[str, Any]:
     """Audit the default local tool registry as a public-safe P0 capability contract."""
 
+    from ai22b.talent_foundry.action_policy import TOOL_CAPABILITIES
+
     active_registry = registry or build_default_tool_registry()
     tool_ids = sorted(active_registry)
+    policy_tool_ids = sorted(TOOL_CAPABILITIES)
     missing_required = sorted(REQUIRED_DEFAULT_TOOLS - set(tool_ids))
+    unregistered_policy_tools = sorted(set(policy_tool_ids) - set(tool_ids))
+    registry_tools_without_policy_capabilities = sorted(set(tool_ids) - set(policy_tool_ids))
     descriptors = [active_registry[tool_id].descriptor() for tool_id in tool_ids]
     scope_failures: list[dict[str, Any]] = []
     for tool_id in tool_ids:
@@ -619,8 +624,11 @@ def audit_tool_capability_registry(registry: dict[str, ToolSpec] | None = None) 
     details = {
         "tool_count": len(tool_ids),
         "registered_tool_ids": tool_ids,
+        "policy_tool_ids": policy_tool_ids,
         "required_tool_ids": sorted(REQUIRED_DEFAULT_TOOLS),
         "missing_required_tools": missing_required,
+        "unregistered_policy_tools": unregistered_policy_tools,
+        "registry_tools_without_policy_capabilities": registry_tools_without_policy_capabilities,
         "safe_side_effects": sorted(SAFE_SIDE_EFFECTS),
         "safe_filesystem_scopes": sorted(SAFE_FILESYSTEM_SCOPES),
         "scope_failure_count": len(scope_failures),
@@ -643,6 +651,8 @@ def audit_tool_capability_registry(registry: dict[str, ToolSpec] | None = None) 
     }
     passed = (
         not missing_required
+        and not unregistered_policy_tools
+        and not registry_tools_without_policy_capabilities
         and not scope_failures
         and details["denied_execution_schema"] == TOOL_EXECUTION_SCHEMA
         and details["denied_execution_model"] == "registered_capability_checked_local_tools_v1"

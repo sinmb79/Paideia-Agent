@@ -194,7 +194,7 @@ ai22b-talent-foundry run-llm-application-smoke `
   --output .\llm_application_smoke.json
 ```
 
-로컬 도구 권한 경로를 직접 확인하려면 `audit-tool-capabilities`를 사용합니다. 이 명령은 등록된 도구 카탈로그, capability가 없을 때의 deny-by-default 차단, 명시적 capability grant 이후의 로컬 실행, 미등록 도구의 skipped 처리, 그리고 네트워크 호출/서브프로세스 실행/임의 파일 읽기·쓰기/raw provider payload/숨은 추론 trace가 저장되지 않는 공개 안전 불변식을 검증합니다.
+로컬 도구 권한 경로를 직접 확인하려면 `audit-tool-capabilities`를 사용합니다. 이 명령은 등록된 도구 카탈로그, action policy 도구 맵과 registry의 동기화, capability가 없을 때의 deny-by-default 차단, 명시적 capability grant 이후의 로컬 실행, 미등록 도구의 skipped 처리, 그리고 네트워크 호출/서브프로세스 실행/임의 파일 읽기·쓰기/raw provider payload/숨은 추론 trace가 저장되지 않는 공개 안전 불변식을 검증합니다.
 
 ```powershell
 ai22b-talent-foundry audit-tool-capabilities `
@@ -332,7 +332,7 @@ ai22b-talent-foundry promote-simulation-rollout-winner `
 
 매니페스트에는 이름만 있는 ghost tool 권한을 남기지 않습니다. `local_file_read`, `local_file_write`, `work_session`, `evidence_packet`, `assessment`, `memory_consolidation`, projection-team 도구는 모두 명시적 capability scope와 함께 등록됩니다. 파일 도구는 일반 agent run에서 임의 경로를 직접 읽거나 쓰지 않고, workspace 읽기/쓰기는 `WorkspaceSandbox`에 위임되어 rollback 가능 산출물 또는 검토 artifact로 선언됩니다. job spec에는 `max_input_file_bytes`, `max_declared_outputs`, `max_total_output_bytes`, `max_runtime_seconds`, `allowed_network_hosts`, `allowed_subprocess_commands` 같은 `resource_limits`를 넣을 수 있습니다. `assessment` 도구는 실행 후 검토 단계로 선택되어, 승인된 실행이 학습을 조용히 승격하지 않고 보스 검토용 review packet을 남기게 합니다.
 
-Release audit에는 `paideia-tool-capability-audit/v1` 게이트도 포함됩니다. 따라서 사용자의 비공개 커리큘럼이나 live provider가 개입되기 전에도 도구 scope가 명시적이고, capability가 없으면 deny-by-default로 차단되며, 네트워크/서브프로세스/임의 파일 접근/숨은 추론 trace 저장이 발생하지 않는지 증명합니다.
+Release audit에는 `paideia-tool-capability-audit/v1` 게이트도 포함됩니다. 따라서 사용자의 비공개 커리큘럼이나 live provider가 개입되기 전에도 action policy 도구 맵과 registered executor catalog가 서로 맞는지, 도구 scope가 명시적인지, capability가 없으면 deny-by-default로 차단되는지, 네트워크/서브프로세스/임의 파일 접근/숨은 추론 trace 저장이 발생하지 않는지 증명합니다. 정책이 선택한 도구가 registry에 없으면 실행 계약에 `unregistered_tool_selected:*`가 남고, 성공처럼 보이지 않고 review 상태가 됩니다.
 
 P0 action policy는 민감 intent마다 `hybrid_structured_lexical_v3` 추론 패킷을 기록합니다. 원문 매칭을 유지하면서 compact separator normalization을 추가해 `매 수 주 문`, `업 로 드`, `승인없이`, `place-buy-order`처럼 공백/하이픈으로 쪼갠 우회 표현도 action intent로 연결합니다. 또한 raw task text를 저장하지 않는 공개 안전형 `paideia-action-arguments/v1` 패킷을 남겨 주문 방향, 종목 참조, 업로드 목적지 class, 데이터 class, 개인/가족 데이터 범주 같은 실행 인자를 구조화합니다. 직접 실행 명령, 정책/설명 질문, "하지 말고"로 부정된 요청을 구분하므로 "매수 주문은 하지 말고 분석만" 같은 문장은 거래 실행이 아니라 안전한 리서치 맥락으로 처리됩니다. 각 판단은 request → action → capability → approval → registered-tool eligibility를 연결한 deny-by-default `capability_authorization` packet도 남깁니다. 민감 행동이 완전 차단 대상은 아니지만 보스 승인이 필요한 경우에는 `boss_approvals` artifact가 있기 전까지 `needs_approval` 상태로 멈추며, 승인 전에는 LLM 계획, 도구 실행, 메모리 승격을 건너뜁니다. 승인된 artifact는 `boss_approval_gate`에 기록되지만, 런타임 도구 범위는 여전히 네트워크와 서브프로세스 기본 차단을 유지합니다.
 
