@@ -610,6 +610,17 @@ Run the public-release hygiene check before publishing:
 
 The hygiene check blocks private data, local absolute paths, generated runs, model checkpoints, API keys, tokens, `node_modules`, build outputs, and owner-specific instructions.
 
+Run the Python release-readiness audit when you want the same source-repository gate as a reviewable JSON artifact:
+
+```powershell
+ai22b-talent-foundry audit-public-release-readiness `
+  --repo-root . `
+  --strict `
+  --output .\public_release_readiness.json
+```
+
+This checks required public files, package license metadata, CI markers, release-readiness docs, the security policy, and the public hygiene policy without network calls or subprocess execution.
+
 Run the P0 action-policy safety corpus before trusting a runtime change:
 
 ```powershell

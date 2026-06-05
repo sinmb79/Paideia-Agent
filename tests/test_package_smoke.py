@@ -77,6 +77,20 @@ class PackageSmokeTests(unittest.TestCase):
         self.assertTrue(Path("docs/public_release_readiness.md").exists())
         self.assertTrue(Path("docs/public_release_readiness.ko.md").exists())
 
+    def test_public_release_readiness_audit_passes_without_network_or_subprocess(self) -> None:
+        from ai22b.talent_foundry.public_release import audit_public_release_readiness
+
+        report = audit_public_release_readiness(Path("."))
+
+        self.assertEqual(report["schema"], "paideia-public-release-readiness/v1")
+        self.assertTrue(report["passed"])
+        self.assertEqual(report["status"], "passed")
+        self.assertEqual(report["summary"]["failed_count"], 0)
+        self.assertFalse(report["summary"]["network_call_performed"])
+        self.assertFalse(report["summary"]["subprocess_executed"])
+        self.assertFalse(report["summary"]["private_runtime_outputs_scanned"])
+        self.assertFalse(report["policy"]["secret_values_exported"])
+
 
 if __name__ == "__main__":
     unittest.main()

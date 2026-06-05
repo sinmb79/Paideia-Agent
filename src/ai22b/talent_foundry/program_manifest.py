@@ -60,6 +60,7 @@ REQUIRED_INSTALLER_COMMANDS = [
     "assemble-hired-team",
     "family",
     "audit-release",
+    "audit-public-release-readiness",
 ]
 
 EMPLOYMENT_LIFECYCLE_STEPS = [
@@ -159,6 +160,7 @@ def _commands() -> list[dict[str, str]]:
         "assemble-hired-team": "Assemble separately hired specialist talents into one team.",
         "family": "Create a local AI family lineage, child seed, and child training blueprint.",
         "audit-release": "Audit public preview readiness across the lifecycle.",
+        "audit-public-release-readiness": "Audit source repository release metadata, CI gates, license, and public hygiene policy.",
     }
     return [
         {

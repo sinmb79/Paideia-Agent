@@ -18,6 +18,7 @@ class CliSmokeTests(unittest.TestCase):
             agent_runtime_smoke_path = tmp_path / "agent_runtime_smoke.json"
             tool_audit_path = tmp_path / "tool_capability_audit.json"
             policy_eval_path = tmp_path / "policy_eval_report.json"
+            public_release_path = tmp_path / "public_release_readiness.json"
 
             role_models_code = cli_main(
                 [
@@ -67,6 +68,16 @@ class CliSmokeTests(unittest.TestCase):
                 ]
             )
             policy_eval_code = cli_main(["run-action-policy-eval", "--output", str(policy_eval_path)])
+            public_release_code = cli_main(
+                [
+                    "audit-public-release-readiness",
+                    "--repo-root",
+                    ".",
+                    "--strict",
+                    "--output",
+                    str(public_release_path),
+                ]
+            )
 
             role_models = json.loads(role_models_path.read_text(encoding="utf-8"))
             doctor = json.loads(doctor_path.read_text(encoding="utf-8"))
@@ -74,6 +85,7 @@ class CliSmokeTests(unittest.TestCase):
             agent_runtime_smoke = json.loads(agent_runtime_smoke_path.read_text(encoding="utf-8"))
             tool_audit = json.loads(tool_audit_path.read_text(encoding="utf-8"))
             policy_eval = json.loads(policy_eval_path.read_text(encoding="utf-8"))
+            public_release = json.loads(public_release_path.read_text(encoding="utf-8"))
 
         self.assertEqual(role_models_code, 0)
         self.assertEqual(doctor_code, 0)
@@ -81,6 +93,7 @@ class CliSmokeTests(unittest.TestCase):
         self.assertEqual(agent_runtime_smoke_code, 0)
         self.assertEqual(tool_audit_code, 0)
         self.assertEqual(policy_eval_code, 0)
+        self.assertEqual(public_release_code, 0)
 
         self.assertEqual(role_models["schema"], "ai-talent-role-model-list/v1")
         self.assertEqual(role_models["domain"], "securities_research")
@@ -143,6 +156,14 @@ class CliSmokeTests(unittest.TestCase):
         self.assertEqual(policy_eval["summary"]["failed_count"], 0)
         self.assertFalse(policy_eval["runtime_policy"]["network_call_performed"])
         self.assertFalse(policy_eval["runtime_policy"]["llm_called"])
+
+        self.assertEqual(public_release["schema"], "paideia-public-release-readiness/v1")
+        self.assertTrue(public_release["passed"])
+        self.assertEqual(public_release["status"], "passed")
+        self.assertEqual(public_release["summary"]["failed_count"], 0)
+        self.assertFalse(public_release["summary"]["network_call_performed"])
+        self.assertFalse(public_release["summary"]["subprocess_executed"])
+        self.assertFalse(public_release["policy"]["secret_values_exported"])
 
 
 if __name__ == "__main__":

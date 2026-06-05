@@ -64,6 +64,7 @@ from ai22b.talent_foundry.owner_self_extension import build_owner_self_extension
 from ai22b.talent_foundry.policy_eval import DEFAULT_POLICY_EVAL_SUITE, run_action_policy_eval
 from ai22b.talent_foundry.program import create_talent_plan
 from ai22b.talent_foundry.program_manifest import build_public_program_manifest
+from ai22b.talent_foundry.public_release import audit_public_release_readiness
 from ai22b.talent_foundry.records import build_career_records
 from ai22b.talent_foundry.role_models import list_role_models, summarize_role_model
 from ai22b.talent_foundry.same_sky_eval import run_same_sky_eval
@@ -828,6 +829,18 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     audit_release.add_argument("--run-dir", required=True)
     audit_release.add_argument("--output", required=True)
+
+    public_release_readiness = subparsers.add_parser(
+        "audit-public-release-readiness",
+        help="Audit this source repository's public release metadata, CI gates, license, and hygiene policy.",
+    )
+    public_release_readiness.add_argument("--repo-root", default=".")
+    public_release_readiness.add_argument("--output", required=True)
+    public_release_readiness.add_argument(
+        "--strict",
+        action="store_true",
+        help="Return exit code 2 when the source repository is not public-release ready.",
+    )
 
     public_program_manifest = subparsers.add_parser(
         "build-public-program-manifest",
@@ -1752,6 +1765,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         print(str(Path(args.output)))
         return 0
+
+    if args.command == "audit-public-release-readiness":
+        report = audit_public_release_readiness(
+            Path(args.repo_root),
+            output_path=Path(args.output),
+        )
+        print(str(Path(args.output)))
+        if args.strict and not report.get("passed"):
+            return 2
+        return 0 if report.get("passed") else 1
 
     if args.command == "build-public-program-manifest":
         build_public_program_manifest(

@@ -456,6 +456,17 @@ ai22b-talent-foundry import-agent-id-card-registration `
 .\scripts\check_public_repo_hygiene.ps1
 ```
 
+소스 저장소 공개 릴리스 준비도를 JSON 산출물로 남기려면 다음 명령을 실행합니다.
+
+```powershell
+ai22b-talent-foundry audit-public-release-readiness `
+  --repo-root . `
+  --strict `
+  --output .\public_release_readiness.json
+```
+
+이 명령은 네트워크 호출이나 서브프로세스 실행 없이 공개 필수 파일, 패키지 라이선스 메타데이터, CI marker, 릴리스 준비도 문서, 보안 정책, 공개 hygiene 정책을 검사합니다.
+
 P0 action policy 회귀 평가:
 
 ```powershell
