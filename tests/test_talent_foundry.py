@@ -2417,6 +2417,31 @@ class TalentFoundryTests(unittest.TestCase):
             audit["checkpoints"]["agent_job_runtime"]["details"]["job_status"],
             "completed",
         )
+        self.assertTrue(
+            audit["checkpoints"]["local_employment"]["details"]["agent_run_p0_runtime_ready"],
+        )
+        self.assertTrue(
+            audit["checkpoints"]["local_employment"]["details"]["workspace_run_p0_runtime_ready"],
+        )
+        self.assertEqual(
+            audit["checkpoints"]["local_employment"]["details"]["agent_run_p0"]["execution_contract_schema"],
+            "paideia-agent-execution-contract/v1",
+        )
+        self.assertEqual(
+            audit["checkpoints"]["local_employment"]["details"]["agent_run_p0"]["capability_authorization_schema"],
+            "paideia-capability-authorization/v1",
+        )
+        self.assertEqual(
+            audit["checkpoints"]["local_employment"]["details"]["agent_run_p0"]["memory_review_candidate_schema"],
+            "paideia-memory-review-candidate/v1",
+        )
+        self.assertEqual(
+            audit["checkpoints"]["local_employment"]["details"]["agent_run_p0"]["runtime_observability_schema"],
+            "paideia-runtime-observability/v1",
+        )
+        self.assertTrue(
+            audit["checkpoints"]["agent_job_runtime"]["details"]["job_base_agent_p0_runtime_ready"],
+        )
         self.assertEqual(
             audit["checkpoints"]["agent_job_runtime"]["details"]["active_memory_route_schema"],
             "ai-talent-active-memory-route/v1",

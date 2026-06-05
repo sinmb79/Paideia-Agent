@@ -25,6 +25,7 @@ class PaideiaGrowthPackageTests(unittest.TestCase):
             root = Path(tmp)
             run = materialize_training_blueprint(blueprint, output_dir=root / "graham")
             artifacts = {key: Path(value) for key, value in run["artifacts"].items()}
+            release_audit = json.loads(artifacts["release_audit"].read_text(encoding="utf-8"))
 
             graduate_dir = root / "graduate_package"
             self.assertEqual(
@@ -77,6 +78,12 @@ class PaideiaGrowthPackageTests(unittest.TestCase):
 
         self.assertEqual(graduate_manifest["schema"], "ai22b-paideia-graduate-package/v1")
         self.assertEqual(runtime_manifest["llm_contract"]["identity_source"], "graduate_package_memory_pack")
+        self.assertTrue(run["verification"]["hired_agent_run_created"])
+        self.assertTrue(run["verification"]["hired_dataflow_run_created"])
+        self.assertTrue(run["verification"]["release_audit_public_ready"])
+        self.assertTrue(release_audit["public_release_ready"])
+        self.assertTrue(release_audit["checkpoints"]["role_model_runtime"]["details"]["agent_run_p0_runtime_ready"])
+        self.assertTrue(release_audit["checkpoints"]["role_model_runtime"]["details"]["dataflow_p0_runtime_ready"])
         self.assertEqual(same_sky["schema"], "ai22b-paideia-same-sky-eval/v1")
         self.assertEqual(same_sky["agent_count"], 1)
         self.assertIn("growth_profile", same_sky["agent_views"][0]["response"]["evidence_links"])

@@ -10,6 +10,10 @@ from ai22b.talent_foundry.distribution import verify_agent_release_archive, veri
 
 
 AUDIT_SCHEMA = "ai-talent-foundry-release-audit/v1"
+AGENT_EXECUTION_CONTRACT_SCHEMA = "paideia-agent-execution-contract/v1"
+CAPABILITY_AUTHORIZATION_SCHEMA = "paideia-capability-authorization/v1"
+MEMORY_REVIEW_CANDIDATE_SCHEMA = "paideia-memory-review-candidate/v1"
+RUNTIME_OBSERVABILITY_SCHEMA = "paideia-runtime-observability/v1"
 REQUIRED_MAJOR_GATES = {"school_exam", "csat", "university_graduation", "doctoral_defense"}
 REQUIRED_RESEARCH_NAMES = {
     "Hermes Agent",
@@ -95,6 +99,154 @@ def _installed_agent_root(run_dir: Path) -> Path:
     if not candidates:
         return agents_dir / "missing_agent"
     return candidates[0]
+
+
+def _base_agent_run(run: dict[str, Any]) -> dict[str, Any]:
+    base = run.get("base_agent_run")
+    return base if isinstance(base, dict) else run
+
+
+def _agent_p0_runtime_details(run: dict[str, Any]) -> dict[str, Any]:
+    base = _base_agent_run(run)
+    contract = base.get("execution_contract", {}) if isinstance(base.get("execution_contract"), dict) else {}
+    policy = base.get("policy_decision", {}) if isinstance(base.get("policy_decision"), dict) else {}
+    authorization = (
+        policy.get("capability_authorization", {})
+        if isinstance(policy.get("capability_authorization"), dict)
+        else {}
+    )
+    authorization_invariants = (
+        authorization.get("invariants", {})
+        if isinstance(authorization.get("invariants"), dict)
+        else {}
+    )
+    memory_write = base.get("memory_write", {}) if isinstance(base.get("memory_write"), dict) else {}
+    review_candidate = (
+        memory_write.get("review_candidate", {})
+        if isinstance(memory_write.get("review_candidate"), dict)
+        else {}
+    )
+    promotion_gate = (
+        review_candidate.get("promotion_gate", {})
+        if isinstance(review_candidate.get("promotion_gate"), dict)
+        else {}
+    )
+    retention_policy = (
+        review_candidate.get("retention_policy", {})
+        if isinstance(review_candidate.get("retention_policy"), dict)
+        else {}
+    )
+    observability = (
+        base.get("runtime_observability", {})
+        if isinstance(base.get("runtime_observability"), dict)
+        else run.get("runtime_observability", {})
+    )
+    observability = observability if isinstance(observability, dict) else {}
+    llm_result = base.get("llm_runtime_result", {}) if isinstance(base.get("llm_runtime_result"), dict) else {}
+    llm_plan = llm_result.get("llm_plan", {}) if isinstance(llm_result.get("llm_plan"), dict) else {}
+    alignment = (
+        base.get("llm_tool_plan_alignment", {})
+        if isinstance(base.get("llm_tool_plan_alignment"), dict)
+        else {}
+    )
+    contract_policy = contract.get("policy_gate", {}) if isinstance(contract.get("policy_gate"), dict) else {}
+    contract_memory = contract.get("memory_write", {}) if isinstance(contract.get("memory_write"), dict) else {}
+    details = {
+        "run_schema": base.get("schema"),
+        "run_status": base.get("run_status"),
+        "execution_contract_schema": contract.get("schema"),
+        "execution_contract_status": contract.get("status"),
+        "execution_contract_issues": contract.get("issues", []),
+        "policy_status": policy.get("status"),
+        "policy_checked_before_llm": contract_policy.get("checked_before_llm"),
+        "policy_checked_before_tools": contract_policy.get("checked_before_tools"),
+        "capability_authorization_schema": authorization.get("schema"),
+        "capability_authorization_mode": authorization.get("mode"),
+        "capability_authorization_model": authorization.get("authorization_model"),
+        "registered_tool_executor_is_execution_authority": authorization_invariants.get(
+            "registered_tool_executor_is_execution_authority"
+        ),
+        "llm_tool_suggestions_are_non_authoritative": authorization_invariants.get(
+            "llm_tool_suggestions_are_non_authoritative"
+        ),
+        "llm_plan_schema": llm_plan.get("schema"),
+        "llm_plan_raw_provider_text_stored": llm_plan.get("raw_provider_text_stored"),
+        "llm_tool_plan_alignment_schema": alignment.get("schema"),
+        "llm_tool_plan_suggestion_only_enforced": alignment.get("suggestion_only_enforced"),
+        "memory_review_candidate_schema": review_candidate.get("schema"),
+        "memory_review_candidate_target": review_candidate.get("target"),
+        "memory_automatic_promotion_performed": contract_memory.get(
+            "automatic_promotion_performed",
+            memory_write.get("automatic_promotion_performed"),
+        ),
+        "memory_review_candidate_automatic_promotion_allowed": promotion_gate.get("automatic_promotion_allowed"),
+        "memory_review_candidate_private_reasoning_trace": retention_policy.get("private_reasoning_trace"),
+        "runtime_observability_schema": observability.get("schema"),
+        "runtime_private_reasoning_trace_stored": observability.get("privacy", {}).get(
+            "private_reasoning_trace_stored"
+        ),
+        "runtime_full_session_replay_used": observability.get("context", {}).get("full_session_replay_used"),
+    }
+    details["p0_runtime_ready"] = (
+        details["execution_contract_schema"] == AGENT_EXECUTION_CONTRACT_SCHEMA
+        and details["execution_contract_status"] == "passed"
+        and details["execution_contract_issues"] == []
+        and details["policy_status"] == "approved"
+        and details["policy_checked_before_llm"] is True
+        and details["policy_checked_before_tools"] is True
+        and details["capability_authorization_schema"] == CAPABILITY_AUTHORIZATION_SCHEMA
+        and details["capability_authorization_mode"] == "deny_by_default"
+        and details["registered_tool_executor_is_execution_authority"] is True
+        and details["llm_tool_suggestions_are_non_authoritative"] is True
+        and details["llm_plan_schema"] == "paideia-llm-reviewable-plan/v1"
+        and details["llm_plan_raw_provider_text_stored"] is False
+        and details["llm_tool_plan_alignment_schema"] == "paideia-llm-tool-plan-alignment/v1"
+        and details["llm_tool_plan_suggestion_only_enforced"] is True
+        and details["memory_review_candidate_schema"] == MEMORY_REVIEW_CANDIDATE_SCHEMA
+        and details["memory_review_candidate_target"] == "local_learning_ledger"
+        and details["memory_automatic_promotion_performed"] is False
+        and details["memory_review_candidate_automatic_promotion_allowed"] is False
+        and details["memory_review_candidate_private_reasoning_trace"] == "do_not_store"
+        and details["runtime_observability_schema"] == RUNTIME_OBSERVABILITY_SCHEMA
+        and details["runtime_private_reasoning_trace_stored"] is False
+        and details["runtime_full_session_replay_used"] is False
+    )
+    return details
+
+
+def _dataflow_p0_runtime_details(run: dict[str, Any]) -> dict[str, Any]:
+    observability = run.get("runtime_observability", {}) if isinstance(run.get("runtime_observability"), dict) else {}
+    llm_result = run.get("llm_runtime_result", {}) if isinstance(run.get("llm_runtime_result"), dict) else {}
+    preflight = (
+        run.get("llm_provider_preflight", {})
+        if isinstance(run.get("llm_provider_preflight"), dict)
+        else llm_result.get("llm_provider_preflight", {})
+    )
+    preflight = preflight if isinstance(preflight, dict) else {}
+    growth = run.get("growth_commit_candidate", {}) if isinstance(run.get("growth_commit_candidate"), dict) else {}
+    details = {
+        "schema": run.get("schema"),
+        "status": run.get("run_status"),
+        "llm_provider_preflight_schema": preflight.get("schema"),
+        "runtime_observability_schema": observability.get("schema"),
+        "runtime_private_reasoning_trace_stored": observability.get("privacy", {}).get(
+            "private_reasoning_trace_stored"
+        ),
+        "runtime_full_session_replay_used": observability.get("context", {}).get("full_session_replay_used"),
+        "growth_candidate_schema": growth.get("schema"),
+        "growth_candidate_private_reasoning_trace_policy": growth.get("private_reasoning_trace_policy"),
+    }
+    details["p0_runtime_ready"] = (
+        details["schema"] == "ai-talent-dataflow-run/v1"
+        and details["status"] == "completed"
+        and details["llm_provider_preflight_schema"] == "paideia-llm-provider-preflight/v1"
+        and details["runtime_observability_schema"] == RUNTIME_OBSERVABILITY_SCHEMA
+        and details["runtime_private_reasoning_trace_stored"] is False
+        and details["runtime_full_session_replay_used"] is False
+        and details["growth_candidate_schema"] == "ai-talent-dataflow-growth-commit-candidate/v1"
+        and details["growth_candidate_private_reasoning_trace_policy"] == "do_not_store"
+    )
+    return details
 
 
 def _checkpoint(
@@ -384,6 +536,8 @@ def _local_employment(installed_root: Path, run_dir: Path) -> dict[str, Any]:
         employment = _read_json(paths["employment_record"])
         agent_run = _read_json(paths["hired_agent_run"])
         workspace_run = _read_json(paths["hired_workspace_run"])
+        agent_p0 = _agent_p0_runtime_details(agent_run)
+        workspace_p0 = _agent_p0_runtime_details(workspace_run)
         details = {
             "employment_schema": employment.get("schema"),
             "employment_status": employment.get("status"),
@@ -391,6 +545,10 @@ def _local_employment(installed_root: Path, run_dir: Path) -> dict[str, Any]:
             "llm_identity_policy": employment.get("llm_runtime", {}).get("identity_policy"),
             "agent_run_status": agent_run.get("run_status"),
             "workspace_run_status": workspace_run.get("run_status"),
+            "agent_run_p0_runtime_ready": agent_p0["p0_runtime_ready"],
+            "workspace_run_p0_runtime_ready": workspace_p0["p0_runtime_ready"],
+            "agent_run_p0": agent_p0,
+            "workspace_run_p0": workspace_p0,
         }
         passed = (
             details["employment_schema"] == "ai-talent-local-employment/v1"
@@ -399,6 +557,8 @@ def _local_employment(installed_root: Path, run_dir: Path) -> dict[str, Any]:
             and details["llm_identity_policy"] == "application_engine_not_identity"
             and details["agent_run_status"] == "completed"
             and details["workspace_run_status"] == "completed"
+            and details["agent_run_p0_runtime_ready"] is True
+            and details["workspace_run_p0_runtime_ready"] is True
         )
     return _checkpoint(passed=passed, evidence=list(paths.values()), root=run_dir, details=details, missing=missing)
 
@@ -423,6 +583,7 @@ def _agent_job_runtime(installed_root: Path, run_dir: Path) -> dict[str, Any]:
         checklist = _read_json(checklist_path) if checklist_path is not None and checklist_path.exists() else {}
         criteria_statuses = {str(item.get("status", "")) for item in checklist.get("criteria", [])}
         active_memory_route = job_run.get("active_memory_route", {})
+        job_p0 = _agent_p0_runtime_details(job_run.get("workspace_run", {}))
         details = {
             "schema": job_run.get("schema"),
             "runtime_model": job_run.get("runtime_model"),
@@ -439,6 +600,8 @@ def _agent_job_runtime(installed_root: Path, run_dir: Path) -> dict[str, Any]:
             "job_cycle_schema": job_cycle.get("schema"),
             "job_cycle_status": job_cycle.get("cycle_status"),
             "job_cycle_learning_decision": job_cycle.get("learning_update", {}).get("decision"),
+            "job_base_agent_p0_runtime_ready": job_p0["p0_runtime_ready"],
+            "job_base_agent_p0": job_p0,
         }
         passed = (
             details["schema"] == "ai-talent-hired-agent-job-run/v1"
@@ -457,6 +620,7 @@ def _agent_job_runtime(installed_root: Path, run_dir: Path) -> dict[str, Any]:
             and details["job_cycle_schema"] == "ai-talent-hired-agent-job-cycle/v1"
             and details["job_cycle_status"] == "completed_and_promoted"
             and details["job_cycle_learning_decision"] == "promoted"
+            and details["job_base_agent_p0_runtime_ready"] is True
         )
     return _checkpoint(passed=passed, evidence=list(paths.values()), root=run_dir, details=details, missing=missing)
 
@@ -697,12 +861,18 @@ def _role_model_runtime(installed_root: Path, run_dir: Path) -> dict[str, Any]:
     if passed:
         agent_run = _read_json(paths["agent_run"])
         dataflow_run = _read_json(paths["dataflow_run"])
+        agent_p0 = _agent_p0_runtime_details(agent_run)
+        dataflow_p0 = _dataflow_p0_runtime_details(dataflow_run)
         details = {
             "agent_run_status": agent_run.get("run_status"),
             "dataflow_schema": dataflow_run.get("schema"),
             "dataflow_status": dataflow_run.get("run_status"),
             "workspace_output_count": len(dataflow_run.get("workspace_outputs", {})),
             "growth_candidate_schema": dataflow_run.get("growth_commit_candidate", {}).get("schema"),
+            "agent_run_p0_runtime_ready": agent_p0["p0_runtime_ready"],
+            "dataflow_p0_runtime_ready": dataflow_p0["p0_runtime_ready"],
+            "agent_run_p0": agent_p0,
+            "dataflow_p0": dataflow_p0,
         }
         passed = (
             details["agent_run_status"] == "completed"
@@ -710,6 +880,8 @@ def _role_model_runtime(installed_root: Path, run_dir: Path) -> dict[str, Any]:
             and details["dataflow_status"] == "completed"
             and details["workspace_output_count"] >= 5
             and details["growth_candidate_schema"] == "ai-talent-dataflow-growth-commit-candidate/v1"
+            and details["agent_run_p0_runtime_ready"] is True
+            and details["dataflow_p0_runtime_ready"] is True
         )
     return _checkpoint(passed=passed, evidence=list(paths.values()), root=run_dir, details=details, missing=missing)
 

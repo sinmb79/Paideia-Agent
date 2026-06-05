@@ -7,6 +7,7 @@ from typing import Any
 
 from ai22b.talent_foundry.agent_manifest import build_agent_manifest
 from ai22b.talent_foundry.assessment import build_assessment_transcript
+from ai22b.talent_foundry.audit import audit_foundry_release
 from ai22b.talent_foundry.developmental_ecology import build_developmental_ecology
 from ai22b.talent_foundry.distribution import (
     create_agent_release_bundle,
@@ -30,9 +31,10 @@ from ai22b.talent_foundry.life_trace import build_life_trace, write_life_trace_j
 from ai22b.talent_foundry.memory import consolidate_memory, create_memory_store, remember_event
 from ai22b.talent_foundry.memory_substrate import build_memory_substrate, write_memory_substrate
 from ai22b.talent_foundry.program import create_talent_plan
+from ai22b.talent_foundry.program_manifest import build_public_program_manifest
 from ai22b.talent_foundry.reasoning_kibo import build_initial_reasoning_kibo, write_reasoning_kibo_jsonl
 from ai22b.talent_foundry.records import build_career_records
-from ai22b.talent_foundry.registry import hire_installed_agent
+from ai22b.talent_foundry.registry import hire_installed_agent, run_hired_agent, run_hired_dataflow_job
 
 
 TRAINING_RUN_SCHEMA = "ai-talent-training-run/v1"
@@ -236,6 +238,8 @@ def materialize_training_blueprint(
         "release_bundle": output_dir / f"{name_slug}_agent_release_bundle",
         "release_archive": output_dir / f"{name_slug}_agent_release_bundle.zip",
         "installed_agent_root": output_dir / "installed_agents",
+        "public_program_manifest": output_dir / "ai_talent_foundry_public_manifest.json",
+        "release_audit": output_dir / "foundry_release_audit.json",
         "training_run": output_dir / "training_run.json",
     }
     role_artifact_keys = [
@@ -409,6 +413,39 @@ def materialize_training_blueprint(
     artifacts["installed_agent_manifest"] = install["installed_manifest"]
     artifacts["employment_record"] = hiring["employment_record"]
     artifacts["employment_registry"] = hiring["registry_index"]
+    installed_root = artifacts["employment_record"].parent
+    artifacts["hired_agent_run"] = installed_root / "last_hired_agent_run.json"
+    artifacts["hired_dataflow_workspace"] = installed_root / "agent_dataflow_workspace"
+    artifacts["hired_dataflow_run"] = installed_root / "last_hired_dataflow_run.json"
+
+    run_hired_agent(
+        artifacts["employment_record"],
+        task=f"{packet['talent']['name']}의 전공 기억을 바탕으로 보스 검토용 리서치 질문을 정리한다.",
+        output_path=artifacts["hired_agent_run"],
+        llm_mode="offline",
+    )
+    run_hired_dataflow_job(
+        artifacts["employment_record"],
+        job_spec={
+            "schema": "ai-talent-dataflow-job/v1",
+            "objective": f"{packet['talent']['name']}의 학습 기록을 바탕으로 검토 가능한 리서치 dataflow를 실행한다.",
+            "deliverables": [
+                {
+                    "id": "training_runtime_synthesis",
+                    "description": "Training-to-runtime synthesis for Boss review.",
+                }
+            ],
+            "acceptance_criteria": [
+                "Every conclusion links to local memory tiles or uncertainty.",
+                "External side effects remain blocked.",
+            ],
+        },
+        workspace_dir=artifacts["hired_dataflow_workspace"],
+        review_label={"score": 91, "reviewed_by": blueprint["owner"], "status": "verified"},
+        output_path=artifacts["hired_dataflow_run"],
+        llm_mode="offline",
+    )
+    build_public_program_manifest(output_dir, output_path=artifacts["public_program_manifest"])
 
     run = {
         "schema": TRAINING_RUN_SCHEMA,
@@ -429,7 +466,16 @@ def materialize_training_blueprint(
             "developmental_ecology_created": artifacts["developmental_ecology"].exists(),
             "life_trace_created": artifacts["life_trace"].exists(),
             "growth_profile_created": artifacts["growth_profile"].exists(),
+            "hired_agent_run_created": artifacts["hired_agent_run"].exists(),
+            "hired_dataflow_run_created": artifacts["hired_dataflow_run"].exists(),
+            "public_program_manifest_created": artifacts["public_program_manifest"].exists(),
         },
     }
+    _write_json(artifacts["training_run"], run)
+    release_audit = audit_foundry_release(output_dir, output_path=artifacts["release_audit"])
+    run["verification"]["release_audit_created"] = artifacts["release_audit"].exists()
+    run["verification"]["release_audit_public_ready"] = release_audit["public_release_ready"]
+    run["artifact_count"] = len(artifacts)
+    run["artifacts"] = {key: str(path) for key, path in artifacts.items()}
     _write_json(artifacts["training_run"], run)
     return run
