@@ -2384,6 +2384,7 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertTrue(audit["checkpoints"]["family_lineage"]["passed"])
         self.assertTrue(audit["checkpoints"]["research_foundation"]["passed"])
         self.assertTrue(audit["checkpoints"]["action_policy_safety"]["passed"])
+        self.assertTrue(audit["checkpoints"]["llm_provider_readiness"]["passed"])
         self.assertTrue(audit["checkpoints"]["public_program_manifest"]["passed"])
         self.assertTrue(audit["checkpoints"]["learning_ledger_replay_safety"]["passed"])
         self.assertTrue(audit["checkpoints"]["runtime_observability_comparison"]["passed"])
@@ -2397,6 +2398,14 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertFalse(policy_details["private_reasoning_trace_stored"])
         self.assertIn("trade_with_policy_bypass_ko", policy_details["case_ids"])
         self.assertIn("spaced_trade_upload_bypass_ko", policy_details["case_ids"])
+        provider_details = audit["checkpoints"]["llm_provider_readiness"]["details"]
+        self.assertTrue(provider_details["all_required_services_present"])
+        self.assertTrue(provider_details["all_live_checks_require_explicit_flag"])
+        self.assertTrue(provider_details["all_doctor_and_preflight_no_network_by_default"])
+        self.assertTrue(provider_details["all_secret_values_unexported"])
+        self.assertTrue(provider_details["deterministic_local_ready"])
+        self.assertIn("openrouter_api", provider_details["service_ids"])
+        self.assertIn("ollama_local", provider_details["service_ids"])
         replay_details = audit["checkpoints"]["learning_ledger_replay_safety"]["details"]
         self.assertGreaterEqual(replay_details["ledger_count"], 2)
         self.assertGreater(replay_details["entry_count"], 0)

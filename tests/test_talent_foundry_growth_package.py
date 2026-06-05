@@ -87,6 +87,7 @@ class PaideiaGrowthPackageTests(unittest.TestCase):
         self.assertTrue(run["verification"]["release_audit_public_ready"])
         self.assertTrue(release_audit["public_release_ready"])
         self.assertTrue(release_audit["checkpoints"]["action_policy_safety"]["passed"])
+        self.assertTrue(release_audit["checkpoints"]["llm_provider_readiness"]["passed"])
         self.assertTrue(release_audit["checkpoints"]["learning_ledger_replay_safety"]["passed"])
         self.assertTrue(release_audit["checkpoints"]["runtime_observability_comparison"]["passed"])
         self.assertTrue(release_audit["checkpoints"]["role_model_runtime"]["details"]["agent_run_p0_runtime_ready"])
@@ -96,6 +97,10 @@ class PaideiaGrowthPackageTests(unittest.TestCase):
         self.assertGreaterEqual(policy_details["blocked_case_count"], 8)
         self.assertFalse(policy_details["network_call_performed"])
         self.assertFalse(policy_details["llm_called"])
+        provider_details = release_audit["checkpoints"]["llm_provider_readiness"]["details"]
+        self.assertTrue(provider_details["all_required_services_present"])
+        self.assertTrue(provider_details["all_doctor_and_preflight_no_network_by_default"])
+        self.assertTrue(provider_details["deterministic_local_ready"])
         replay_details = release_audit["checkpoints"]["learning_ledger_replay_safety"]["details"]
         self.assertGreater(replay_details["entry_count"], 0)
         self.assertTrue(replay_details["installed_ledger_present"])

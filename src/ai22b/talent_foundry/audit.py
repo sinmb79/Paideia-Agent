@@ -13,6 +13,15 @@ from ai22b.talent_foundry.policy_eval import (
     DEFAULT_POLICY_EVAL_SUITE,
     run_action_policy_eval,
 )
+from ai22b.talent_foundry.llm_runtime import (
+    LLM_PROVIDER_DOCTOR_SCHEMA,
+    LLM_PROVIDER_PREFLIGHT_SCHEMA,
+    LLM_PROVIDER_SMOKE_CONTRACT_SCHEMA,
+    build_llm_provider_preflight,
+    build_llm_runtime_config,
+    doctor_llm_provider,
+)
+from ai22b.talent_foundry.onboarding_choices import LLM_SERVICE_CATALOG
 from ai22b.talent_foundry.runtime_benchmark import RUNTIME_OBSERVABILITY_COMPARISON_SCHEMA
 
 
@@ -80,6 +89,19 @@ REQUIRED_POLICY_EVAL_CATEGORIES = {
     "blocked_multilingual_sensitive_command",
     "blocked_personal_data_transfer",
     "blocked_policy_bypass_and_trade",
+}
+REQUIRED_LLM_SERVICE_IDS = {
+    "anthropic_claude_api",
+    "bigram_local",
+    "deterministic_local",
+    "google_gemini_api",
+    "llama_cpp_local",
+    "lm_studio_local",
+    "mistral_api",
+    "ollama_local",
+    "openai_chatgpt_codex",
+    "openrouter_api",
+    "transformers_local",
 }
 REQUIRED_PUBLIC_PROGRAM_COMMANDS = {
     "blueprint",
@@ -898,6 +920,230 @@ def _action_policy_safety() -> dict[str, Any]:
     return _checkpoint(passed=passed, evidence=[suite_path], root=PROJECT_ROOT, details=details)
 
 
+def _provider_audit_model(engine: str) -> str | None:
+    if engine in {
+        "anthropic_claude_api",
+        "google_gemini_api",
+        "mistral_api",
+        "openrouter_api",
+        "ollama_local_http",
+        "lm_studio_local_http",
+    }:
+        return "paideia-audit-model"
+    return None
+
+
+def _llm_provider_readiness() -> dict[str, Any]:
+    services = [item for item in LLM_SERVICE_CATALOG if isinstance(item, dict)]
+    service_ids = {str(item.get("id", "")) for item in services}
+    missing_services = sorted(REQUIRED_LLM_SERVICE_IDS - service_ids)
+    duplicate_services = sorted(
+        service_id
+        for service_id in service_ids
+        if service_id and sum(1 for item in services if item.get("id") == service_id) > 1
+    )
+
+    service_reports: list[dict[str, Any]] = []
+    failures: list[dict[str, Any]] = []
+    for item in services:
+        service_id = str(item.get("id", ""))
+        engine = str(item.get("engine", ""))
+        if not service_id or not engine:
+            failures.append({"id": "llm_service_missing_identity", "service_id": service_id, "engine": engine})
+            continue
+
+        model = _provider_audit_model(engine)
+        try:
+            runtime_config = build_llm_runtime_config(
+                engine=engine,
+                model=model,
+                model_path=None,
+                service=service_id,
+            )
+            doctor = doctor_llm_provider(
+                engine=engine,
+                model=model,
+                service=service_id,
+                live_check=False,
+            )
+            preflight = build_llm_provider_preflight(
+                runtime_config,
+                llm_mode="auto",
+                llm_model=model,
+            )
+        except (OSError, ValueError) as exc:
+            failures.append(
+                {
+                    "id": "llm_provider_readiness_failed_to_build",
+                    "service_id": service_id,
+                    "engine": engine,
+                    "error": type(exc).__name__,
+                }
+            )
+            continue
+
+        doctor_card = item.get("doctor", {}) if isinstance(item.get("doctor"), dict) else {}
+        live_check_policy = (
+            item.get("live_check_policy", {}) if isinstance(item.get("live_check_policy"), dict) else {}
+        )
+        data_transfer_policy = (
+            item.get("data_transfer_policy", {}) if isinstance(item.get("data_transfer_policy"), dict) else {}
+        )
+        smoke_contract = doctor.get("smoke_contract", {}) if isinstance(doctor.get("smoke_contract"), dict) else {}
+        smoke_retention = (
+            smoke_contract.get("retention_policy", {})
+            if isinstance(smoke_contract.get("retention_policy"), dict)
+            else {}
+        )
+        smoke_data_policy = (
+            smoke_contract.get("data_policy", {}) if isinstance(smoke_contract.get("data_policy"), dict) else {}
+        )
+        preflight_policy = (
+            preflight.get("data_policy", {}) if isinstance(preflight.get("data_policy"), dict) else {}
+        )
+
+        service_failures: list[str] = []
+        if not item.get("runtime_readiness"):
+            service_failures.append("runtime_readiness_missing")
+        if "doctor-llm-provider" not in str(doctor_card.get("command", "")):
+            service_failures.append("doctor_command_missing")
+        if "--live-check" not in str(doctor_card.get("live_check_command", "")):
+            service_failures.append("live_check_command_missing_explicit_flag")
+        if doctor_card.get("live_check_default") is not False:
+            service_failures.append("doctor_live_check_default_not_false")
+        if doctor_card.get("secret_values_exported") is not False:
+            service_failures.append("doctor_card_secret_export_policy_invalid")
+        if live_check_policy.get("requires_explicit_flag") is not True:
+            service_failures.append("live_check_policy_requires_explicit_flag_missing")
+        if live_check_policy.get("network_call_made_by_default") is not False:
+            service_failures.append("live_check_policy_network_default_invalid")
+        if not data_transfer_policy.get("network_access"):
+            service_failures.append("data_transfer_network_access_missing")
+        if doctor.get("schema") != LLM_PROVIDER_DOCTOR_SCHEMA:
+            service_failures.append("doctor_schema_invalid")
+        if doctor.get("secret_values_exported") is not False:
+            service_failures.append("doctor_secret_export_policy_invalid")
+        if smoke_contract.get("schema") != LLM_PROVIDER_SMOKE_CONTRACT_SCHEMA:
+            service_failures.append("smoke_contract_schema_invalid")
+        if smoke_contract.get("live_check_requested") is not False:
+            service_failures.append("smoke_contract_live_check_requested")
+        if smoke_contract.get("live_check_performed") is not False:
+            service_failures.append("smoke_contract_live_check_performed")
+        if smoke_contract.get("provider_call_attempted") is not False:
+            service_failures.append("smoke_contract_provider_call_attempted")
+        if smoke_contract.get("network_call_made_by_doctor") is not False:
+            service_failures.append("smoke_contract_network_call_made")
+        if smoke_retention.get("raw_provider_text_saved") is not False:
+            service_failures.append("smoke_retention_raw_provider_text_saved")
+        if smoke_retention.get("raw_provider_payload_saved") is not False:
+            service_failures.append("smoke_retention_raw_provider_payload_saved")
+        if smoke_retention.get("hidden_reasoning_saved") is not False:
+            service_failures.append("smoke_retention_hidden_reasoning_saved")
+        if smoke_data_policy.get("secret_values_exported") is not False:
+            service_failures.append("smoke_data_policy_secret_export_invalid")
+        if smoke_data_policy.get("private_reasoning_trace") != "do_not_store":
+            service_failures.append("smoke_data_policy_private_reasoning_invalid")
+        if preflight.get("schema") != LLM_PROVIDER_PREFLIGHT_SCHEMA:
+            service_failures.append("preflight_schema_invalid")
+        if preflight.get("live_check_performed") is not False:
+            service_failures.append("preflight_live_check_performed")
+        if preflight.get("live_check_requires_explicit_flag") is not True:
+            service_failures.append("preflight_explicit_live_check_flag_missing")
+        if preflight.get("network_call_made_by_preflight") is not False:
+            service_failures.append("preflight_network_call_made")
+        if preflight_policy.get("secret_values_exported") is not False:
+            service_failures.append("preflight_secret_export_policy_invalid")
+        if preflight_policy.get("private_reasoning_trace") != "do_not_store":
+            service_failures.append("preflight_private_reasoning_policy_invalid")
+        if engine == "deterministic_local" and doctor.get("status") != "ready":
+            service_failures.append("deterministic_provider_not_ready")
+
+        if service_failures:
+            failures.append(
+                {
+                    "id": "llm_service_readiness_contract_failed",
+                    "service_id": service_id,
+                    "engine": engine,
+                    "failures": service_failures,
+                }
+            )
+
+        service_reports.append(
+            {
+                "service_id": service_id,
+                "engine": engine,
+                "catalog_status": item.get("status"),
+                "runtime_readiness": item.get("runtime_readiness"),
+                "doctor_status": doctor.get("status"),
+                "doctor_passed": doctor.get("passed"),
+                "preflight_status": preflight.get("status"),
+                "network_access": runtime_config.get("network_access"),
+                "catalog_network_access": data_transfer_policy.get("network_access"),
+                "live_check_default": doctor_card.get("live_check_default"),
+                "live_check_requires_explicit_flag": live_check_policy.get("requires_explicit_flag"),
+                "network_call_made_by_default": live_check_policy.get("network_call_made_by_default"),
+                "doctor_network_call_made": smoke_contract.get("network_call_made_by_doctor"),
+                "preflight_network_call_made": preflight.get("network_call_made_by_preflight"),
+                "secret_values_exported": doctor.get("secret_values_exported"),
+                "blocking_check_count": len(preflight.get("blocking_checks", [])),
+            }
+        )
+
+    if missing_services:
+        failures.append({"id": "llm_required_services_missing", "missing_services": missing_services})
+    if duplicate_services:
+        failures.append({"id": "llm_duplicate_services", "duplicate_services": duplicate_services})
+
+    details = {
+        "service_count": len(services),
+        "required_service_count": len(REQUIRED_LLM_SERVICE_IDS),
+        "service_ids": sorted(service_ids),
+        "missing_services": missing_services,
+        "duplicate_services": duplicate_services,
+        "all_required_services_present": not missing_services,
+        "all_live_checks_require_explicit_flag": all(
+            item.get("live_check_requires_explicit_flag") is True for item in service_reports
+        ),
+        "all_doctor_and_preflight_no_network_by_default": all(
+            item.get("doctor_network_call_made") is False and item.get("preflight_network_call_made") is False
+            for item in service_reports
+        ),
+        "all_secret_values_unexported": all(item.get("secret_values_exported") is False for item in service_reports),
+        "deterministic_local_ready": any(
+            item.get("engine") == "deterministic_local" and item.get("doctor_status") == "ready"
+            for item in service_reports
+        ),
+        "external_or_local_providers_configuration_gated": all(
+            item.get("live_check_requires_explicit_flag") is True
+            and item.get("network_call_made_by_default") is False
+            for item in service_reports
+            if item.get("engine") != "deterministic_local"
+        ),
+        "service_reports": service_reports,
+        "failure_count": len(failures),
+        "failures": failures,
+    }
+    passed = (
+        len(services) >= len(REQUIRED_LLM_SERVICE_IDS)
+        and details["all_required_services_present"] is True
+        and details["all_live_checks_require_explicit_flag"] is True
+        and details["all_doctor_and_preflight_no_network_by_default"] is True
+        and details["all_secret_values_unexported"] is True
+        and details["deterministic_local_ready"] is True
+        and details["external_or_local_providers_configuration_gated"] is True
+        and not failures
+    )
+    return _checkpoint(
+        passed=passed,
+        evidence=[
+            PROJECT_ROOT / "src" / "ai22b" / "talent_foundry" / "onboarding_choices.py",
+            PROJECT_ROOT / "src" / "ai22b" / "talent_foundry" / "llm_runtime.py",
+        ],
+        root=PROJECT_ROOT,
+        details=details,
+    )
+
+
 def _growth_governance(run_dir: Path) -> dict[str, Any]:
     paths = {
         "blueprint": run_dir / "shinyong_training_blueprint.json",
@@ -1449,6 +1695,7 @@ def audit_foundry_release(run_dir: Path, *, output_path: Path | None = None) -> 
         checkpoints = {
             "research_foundation": _research_foundation(),
             "action_policy_safety": _action_policy_safety(),
+            "llm_provider_readiness": _llm_provider_readiness(),
             "public_program_manifest": _public_program_manifest(run_dir),
             "role_model_training_artifacts": _role_model_training_artifacts(run_dir, installed_root),
             "role_model_runtime": _role_model_runtime(installed_root, run_dir),
@@ -1459,6 +1706,7 @@ def audit_foundry_release(run_dir: Path, *, output_path: Path | None = None) -> 
         checkpoints = {
             "research_foundation": _research_foundation(),
             "action_policy_safety": _action_policy_safety(),
+            "llm_provider_readiness": _llm_provider_readiness(),
             "public_program_manifest": _public_program_manifest(run_dir),
             "growth_governance": _growth_governance(run_dir),
             "public_distribution": _public_distribution(run_dir, installed_root),
