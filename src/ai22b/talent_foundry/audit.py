@@ -22,6 +22,7 @@ from ai22b.talent_foundry.llm_runtime import (
     doctor_llm_provider,
 )
 from ai22b.talent_foundry.onboarding_choices import LLM_SERVICE_CATALOG
+from ai22b.talent_foundry.role_models import list_role_models, summarize_role_model
 from ai22b.talent_foundry.runtime_benchmark import RUNTIME_OBSERVABILITY_COMPARISON_SCHEMA
 
 
@@ -140,6 +141,11 @@ REQUIRED_PUBLIC_PROGRAM_LIFECYCLE = {
     "audit",
 }
 REQUIRED_PUBLIC_PROGRAM_ROLES = {"education_committee", "home_care", "oversight_committee"}
+PUBLIC_SAFE_FIRST_RUN_COMMANDS = {
+    "list-role-models",
+    "doctor-llm-provider",
+    "run-action-policy-eval",
+}
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -920,6 +926,122 @@ def _action_policy_safety() -> dict[str, Any]:
     return _checkpoint(passed=passed, evidence=[suite_path], root=PROJECT_ROOT, details=details)
 
 
+def _public_safe_first_run_smoke() -> dict[str, Any]:
+    """Verify the public no-secret first-run path without importing the CLI."""
+
+    pyproject_path = PROJECT_ROOT / "pyproject.toml"
+    cli_smoke_test_path = PROJECT_ROOT / "tests" / "test_cli_smoke.py"
+    role_model_catalog_dir = PROJECT_ROOT / "apps" / "ai-talent-foundry" / "catalogs" / "role_models"
+    evidence = [
+        pyproject_path,
+        cli_smoke_test_path,
+        role_model_catalog_dir,
+        PROJECT_ROOT / "src" / "ai22b" / "talent_foundry" / "role_models.py",
+        PROJECT_ROOT / "src" / "ai22b" / "talent_foundry" / "llm_runtime.py",
+        DEFAULT_POLICY_EVAL_SUITE,
+    ]
+    missing = [path for path in evidence if not path.exists()]
+    pyproject_text = pyproject_path.read_text(encoding="utf-8") if pyproject_path.exists() else ""
+
+    role_models = [summarize_role_model(item) for item in list_role_models("securities_research")]
+    role_model_ids = {str(item.get("role_model_id", "")) for item in role_models}
+    doctor = doctor_llm_provider(engine="deterministic_local", live_check=False)
+    smoke_contract = doctor.get("smoke_contract", {}) if isinstance(doctor.get("smoke_contract"), dict) else {}
+    smoke_data_policy = (
+        smoke_contract.get("data_policy", {}) if isinstance(smoke_contract.get("data_policy"), dict) else {}
+    )
+    smoke_retention = (
+        smoke_contract.get("retention_policy", {})
+        if isinstance(smoke_contract.get("retention_policy"), dict)
+        else {}
+    )
+    policy_eval = run_action_policy_eval(suite_path=DEFAULT_POLICY_EVAL_SUITE)
+    policy_runtime = (
+        policy_eval.get("runtime_policy", {}) if isinstance(policy_eval.get("runtime_policy"), dict) else {}
+    )
+    policy_summary = policy_eval.get("summary", {}) if isinstance(policy_eval.get("summary"), dict) else {}
+    console_script_present = (
+        'ai22b-talent-foundry = "ai22b.talent_foundry.cli:main"' in pyproject_text
+        and "[project.scripts]" in pyproject_text
+    )
+    optional_dependency_groups_present = all(
+        f"{group} =" in pyproject_text
+        for group in ('dev', 'live-llm', 'local-llm', 'rag', 'fine-tune', 'all')
+    )
+    cli_smoke_covers_required_commands = False
+    if cli_smoke_test_path.exists():
+        cli_smoke_text = cli_smoke_test_path.read_text(encoding="utf-8")
+        cli_smoke_covers_required_commands = all(
+            command in cli_smoke_text for command in PUBLIC_SAFE_FIRST_RUN_COMMANDS
+        )
+
+    details = {
+        "schema": "paideia-public-safe-first-run-smoke/v1",
+        "commands": sorted(PUBLIC_SAFE_FIRST_RUN_COMMANDS),
+        "console_script_present": console_script_present,
+        "optional_dependency_groups_present": optional_dependency_groups_present,
+        "cli_smoke_covers_required_commands": cli_smoke_covers_required_commands,
+        "role_model_domain": "securities_research",
+        "role_model_count": len(role_models),
+        "role_model_ids": sorted(role_model_ids),
+        "graham_value_investing_present": "graham_value_investing" in role_model_ids,
+        "doctor_schema": doctor.get("schema"),
+        "deterministic_doctor_ready": doctor.get("engine") == "deterministic_local"
+        and doctor.get("status") == "ready"
+        and doctor.get("passed") is True,
+        "doctor_network_access": doctor.get("network_access"),
+        "doctor_live_check_requested": doctor.get("live_check_requested"),
+        "doctor_secret_values_exported": doctor.get("secret_values_exported"),
+        "smoke_contract_schema": smoke_contract.get("schema"),
+        "smoke_contract_status": smoke_contract.get("status"),
+        "smoke_provider_call_attempted": smoke_contract.get("provider_call_attempted"),
+        "smoke_network_call_made": smoke_contract.get("network_call_made_by_doctor"),
+        "smoke_raw_provider_text_saved": smoke_retention.get("raw_provider_text_saved"),
+        "smoke_raw_provider_payload_saved": smoke_retention.get("raw_provider_payload_saved"),
+        "smoke_private_reasoning_trace": smoke_data_policy.get("private_reasoning_trace"),
+        "policy_eval_schema": policy_eval.get("schema"),
+        "policy_eval_status": policy_eval.get("status"),
+        "policy_eval_failed_count": policy_summary.get("failed_count"),
+        "policy_eval_network_call_performed": policy_runtime.get("network_call_performed"),
+        "policy_eval_llm_called": policy_runtime.get("llm_called"),
+        "policy_eval_private_reasoning_trace_stored": policy_runtime.get("private_reasoning_trace_stored"),
+        "no_network_or_llm_by_default": (
+            doctor.get("network_access") == "blocked"
+            and doctor.get("live_check_requested") is False
+            and smoke_contract.get("provider_call_attempted") is False
+            and smoke_contract.get("network_call_made_by_doctor") is False
+            and policy_runtime.get("network_call_performed") is False
+            and policy_runtime.get("llm_called") is False
+        ),
+    }
+    passed = (
+        not missing
+        and details["console_script_present"] is True
+        and details["optional_dependency_groups_present"] is True
+        and details["cli_smoke_covers_required_commands"] is True
+        and details["graham_value_investing_present"] is True
+        and details["deterministic_doctor_ready"] is True
+        and details["doctor_secret_values_exported"] is False
+        and details["smoke_contract_schema"] == LLM_PROVIDER_SMOKE_CONTRACT_SCHEMA
+        and details["smoke_contract_status"] == "skipped"
+        and details["smoke_raw_provider_text_saved"] is False
+        and details["smoke_raw_provider_payload_saved"] is False
+        and details["smoke_private_reasoning_trace"] == "do_not_store"
+        and details["policy_eval_schema"] == ACTION_POLICY_EVAL_REPORT_SCHEMA
+        and details["policy_eval_status"] == "passed"
+        and details["policy_eval_failed_count"] == 0
+        and details["policy_eval_private_reasoning_trace_stored"] is False
+        and details["no_network_or_llm_by_default"] is True
+    )
+    return _checkpoint(
+        passed=passed,
+        evidence=evidence,
+        root=PROJECT_ROOT,
+        details=details,
+        missing=missing,
+    )
+
+
 def _provider_audit_model(engine: str) -> str | None:
     if engine in {
         "anthropic_claude_api",
@@ -1694,6 +1816,7 @@ def audit_foundry_release(run_dir: Path, *, output_path: Path | None = None) -> 
     if _is_role_model_run(run_dir):
         checkpoints = {
             "research_foundation": _research_foundation(),
+            "public_safe_first_run_smoke": _public_safe_first_run_smoke(),
             "action_policy_safety": _action_policy_safety(),
             "llm_provider_readiness": _llm_provider_readiness(),
             "public_program_manifest": _public_program_manifest(run_dir),
@@ -1705,6 +1828,7 @@ def audit_foundry_release(run_dir: Path, *, output_path: Path | None = None) -> 
     else:
         checkpoints = {
             "research_foundation": _research_foundation(),
+            "public_safe_first_run_smoke": _public_safe_first_run_smoke(),
             "action_policy_safety": _action_policy_safety(),
             "llm_provider_readiness": _llm_provider_readiness(),
             "public_program_manifest": _public_program_manifest(run_dir),
