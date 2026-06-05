@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import hashlib
+import os
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +26,21 @@ EXTERNAL_API_ENGINES = {
     "openrouter_api",
 }
 LOCAL_HTTP_ENGINES = {"ollama_local_http", "lm_studio_local_http"}
+LLM_PROVIDER_DOCTOR_SCHEMA = "paideia-llm-provider-doctor/v1"
+MODEL_REQUIRED_ENGINES = {
+    "anthropic_claude_api",
+    "google_gemini_api",
+    "mistral_api",
+    "openrouter_api",
+}
+LOCAL_MODEL_PATH_REQUIRED_ENGINES = {"bigram_local", "transformers_local", "llama_cpp_local"}
+PROVIDER_ENV_REQUIREMENTS = {
+    "openai_chatgpt_codex": [["OPENAI_API_KEY"]],
+    "anthropic_claude_api": [["ANTHROPIC_API_KEY"]],
+    "google_gemini_api": [["GEMINI_API_KEY", "GOOGLE_API_KEY"]],
+    "mistral_api": [["MISTRAL_API_KEY"]],
+    "openrouter_api": [["OPENROUTER_API_KEY"]],
+}
 
 
 def build_llm_runtime_config(
@@ -77,6 +94,171 @@ def build_llm_runtime_config(
             "cannot_change_identity": True,
             "cannot_override_guardrails": True,
         },
+    }
+
+
+def doctor_llm_provider(
+    *,
+    engine: str,
+    model: str | None = None,
+    model_path: str | None = None,
+    service: str | None = None,
+    live_check: bool = False,
+    client: LLMClient | None = None,
+) -> dict[str, Any]:
+    """Build a public-safe readiness report for one selected LLM provider."""
+
+    runtime_config = build_llm_runtime_config(
+        engine=engine,
+        model=model,
+        model_path=model_path,
+        service=service,
+    )
+    checks: list[dict[str, Any]] = []
+
+    def add_check(
+        check_id: str,
+        passed: bool,
+        *,
+        severity: str = "error",
+        status: str | None = None,
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        checks.append(
+            {
+                "id": check_id,
+                "status": status or ("passed" if passed else "failed"),
+                "passed": passed,
+                "severity": severity,
+                "details": details or {},
+            }
+        )
+
+    add_check(
+        "supported_engine",
+        True,
+        details={"engine": engine, "compatible_engines": runtime_config["compatible_engines"]},
+    )
+    add_check(
+        "identity_boundary",
+        runtime_config["identity_policy"] == "application_engine_not_identity",
+        details={
+            "identity_policy": runtime_config["identity_policy"],
+            "private_reasoning_trace": runtime_config["private_reasoning_trace"],
+        },
+    )
+
+    model_required = engine in MODEL_REQUIRED_ENGINES
+    add_check(
+        "model_selected",
+        (not model_required) or bool(model),
+        details={"model_required": model_required, "model_present": bool(model)},
+    )
+
+    if engine in PROVIDER_ENV_REQUIREMENTS:
+        env_groups = PROVIDER_ENV_REQUIREMENTS[engine]
+        group_results = [
+            {
+                "one_of": group,
+                "present": [key for key in group if bool(os.environ.get(key))],
+            }
+            for group in env_groups
+        ]
+        env_ready = all(bool(item["present"]) for item in group_results)
+        add_check(
+            "credential_environment",
+            env_ready,
+            details={
+                "required": group_results,
+                "secret_values_exported": False,
+            },
+        )
+
+    if engine in LOCAL_HTTP_ENGINES:
+        default_endpoint = "http://localhost:11434" if engine == "ollama_local_http" else "http://localhost:1234/v1/chat/completions"
+        add_check(
+            "local_http_endpoint",
+            True,
+            severity="warning",
+            details={
+                "endpoint": model_path or default_endpoint,
+                "server_reachability_requires_live_check": True,
+            },
+        )
+
+    if engine in LOCAL_MODEL_PATH_REQUIRED_ENGINES:
+        path = Path(model_path) if model_path else None
+        add_check(
+            "model_path_selected",
+            path is not None,
+            details={"model_path_present": path is not None},
+        )
+        if path is not None:
+            add_check(
+                "model_path_exists",
+                path.exists(),
+                details={"model_path": str(path), "is_dir": path.is_dir() if path.exists() else False},
+            )
+            if path.exists() and engine == "transformers_local":
+                missing = _missing_transformers_files(path)
+                add_check(
+                    "transformers_local_files",
+                    not missing,
+                    details={"missing_files": missing, "local_files_only": True},
+                )
+            if path.exists() and engine == "llama_cpp_local":
+                gguf_ready = (path.is_file() and path.suffix.casefold() == ".gguf") or (
+                    path.is_dir() and any(child.suffix.casefold() == ".gguf" for child in path.iterdir())
+                )
+                add_check(
+                    "llama_cpp_gguf_file",
+                    gguf_ready,
+                    details={"requires_gguf": True},
+                )
+
+    live_result: dict[str, Any] | None = None
+    if live_check:
+        live_result = invoke_llm_application_engine(
+            runtime_config,
+            manifest=_doctor_manifest(),
+            task="Paideia LLM provider smoke test. Reply briefly with OK.",
+            llm_mode="live",
+            client=client,
+        )
+        add_check(
+            "live_smoke",
+            live_result.get("status") == "completed",
+            details=_sanitize_runtime_result(live_result),
+        )
+    else:
+        add_check(
+            "live_smoke",
+            True,
+            severity="info",
+            status="skipped",
+            details={"reason": "live_check_not_requested", "network_call_made": False},
+        )
+
+    blocking_failures = [
+        check
+        for check in checks
+        if not check["passed"] and check["severity"] == "error"
+    ]
+    return {
+        "schema": LLM_PROVIDER_DOCTOR_SCHEMA,
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "engine": engine,
+        "service": service or engine,
+        "model": model,
+        "model_path": model_path,
+        "live_check_requested": live_check,
+        "passed": not blocking_failures,
+        "status": "ready" if not blocking_failures else "needs_configuration",
+        "network_access": runtime_config["network_access"],
+        "local_only": runtime_config["local_only"],
+        "secret_values_exported": False,
+        "checks": checks,
+        "live_result": _sanitize_runtime_result(live_result) if live_result else None,
     }
 
 
@@ -445,6 +627,58 @@ def _invoke_configured_adapter_manifest(
             f"Paideia keeps identity and learned routes in local records; the adapter supplies language generation for: {task}"
         ),
     }
+
+
+def _doctor_manifest() -> dict[str, Any]:
+    return {
+        "schema": "ai-talent-agent-manifest/v1",
+        "agent": {
+            "name": "paideia-provider-doctor",
+            "role": "LLM provider readiness checker",
+            "major_goal": "Verify the selected application engine without becoming the agent identity.",
+        },
+        "memory_profile": {
+            "procedural_principles": ["identity stays in local records", "do not store hidden chain-of-thought"],
+            "semantic_themes": ["provider readiness", "public-safe diagnostic"],
+            "chain_of_thought_policy": "do_not_store_private_trace",
+        },
+    }
+
+
+def _sanitize_runtime_result(result: dict[str, Any] | None) -> dict[str, Any] | None:
+    if result is None:
+        return None
+    safe_keys = {
+        "schema",
+        "engine",
+        "status",
+        "reason",
+        "model",
+        "model_path",
+        "network_access",
+        "identity_policy",
+        "llm_mode",
+        "fallback_used",
+        "local_files_only",
+    }
+    sanitized = {key: result[key] for key in safe_keys if key in result}
+    client_result = result.get("client_result")
+    if isinstance(client_result, dict):
+        sanitized["client_result"] = {
+            key: client_result[key]
+            for key in [
+                "schema",
+                "engine",
+                "status",
+                "reason",
+                "model",
+                "error_type",
+                "network_access",
+                "local_files_only",
+            ]
+            if key in client_result
+        }
+    return sanitized
 
 
 def _build_runtime_prompt(*, manifest: dict[str, Any], task: str) -> str:

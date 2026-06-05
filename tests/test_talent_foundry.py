@@ -1355,6 +1355,104 @@ class TalentFoundryTests(unittest.TestCase):
                 if value is not None:
                     os.environ[key] = value
 
+    def test_llm_provider_doctor_reports_readiness_without_exporting_secrets(self) -> None:
+        import os
+
+        from ai22b.talent_foundry.llm_runtime import doctor_llm_provider
+
+        old_key = os.environ.pop("ANTHROPIC_API_KEY", None)
+        try:
+            report = doctor_llm_provider(
+                engine="anthropic_claude_api",
+                model="claude-test-model",
+            )
+        finally:
+            if old_key is not None:
+                os.environ["ANTHROPIC_API_KEY"] = old_key
+
+        checks = {item["id"]: item for item in report["checks"]}
+        serialized = json.dumps(report, ensure_ascii=False)
+
+        self.assertEqual(report["schema"], "paideia-llm-provider-doctor/v1")
+        self.assertFalse(report["passed"])
+        self.assertEqual(report["status"], "needs_configuration")
+        self.assertFalse(report["secret_values_exported"])
+        self.assertFalse(checks["credential_environment"]["passed"])
+        self.assertEqual(checks["live_smoke"]["status"], "skipped")
+        self.assertIn("ANTHROPIC_API_KEY", serialized)
+        self.assertNotIn("fixture_value_should_not_be_exported", serialized)
+
+    def test_llm_provider_doctor_live_check_uses_client_interface(self) -> None:
+        import os
+
+        from ai22b.talent_foundry.llm_runtime import doctor_llm_provider
+
+        class FakeClient:
+            def generate(self, messages, *, tools=None, policy=None):
+                return {
+                    "schema": "paideia-llm-client-result/v1",
+                    "engine": "fake_live_llm",
+                    "status": "completed",
+                    "text": "OK",
+                    "model": "fake-model",
+                }
+
+        old_key = os.environ.get("OPENAI_API_KEY")
+        os.environ["OPENAI_API_KEY"] = "fixture_value_should_not_be_exported"
+        try:
+            report = doctor_llm_provider(
+                engine="openai_chatgpt_codex",
+                model="fake-model",
+                live_check=True,
+                client=FakeClient(),
+            )
+        finally:
+            if old_key is None:
+                os.environ.pop("OPENAI_API_KEY", None)
+            else:
+                os.environ["OPENAI_API_KEY"] = old_key
+
+        checks = {item["id"]: item for item in report["checks"]}
+        serialized = json.dumps(report, ensure_ascii=False)
+
+        self.assertTrue(report["passed"])
+        self.assertEqual(report["status"], "ready")
+        self.assertTrue(checks["credential_environment"]["passed"])
+        self.assertTrue(checks["live_smoke"]["passed"])
+        self.assertEqual(report["live_result"]["status"], "completed")
+        self.assertNotIn("fixture_value_should_not_be_exported", serialized)
+
+    def test_cli_doctor_llm_provider_writes_report(self) -> None:
+        import os
+
+        from ai22b.talent_foundry.cli import main as cli_main
+
+        old_key = os.environ.pop("OPENROUTER_API_KEY", None)
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                output_path = Path(tmp) / "openrouter_doctor.json"
+                exit_code = cli_main(
+                    [
+                        "doctor-llm-provider",
+                        "--llm-engine",
+                        "openrouter_api",
+                        "--llm-model",
+                        "openrouter-test-model",
+                        "--output",
+                        str(output_path),
+                    ]
+                )
+                report = json.loads(output_path.read_text(encoding="utf-8"))
+        finally:
+            if old_key is not None:
+                os.environ["OPENROUTER_API_KEY"] = old_key
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(report["schema"], "paideia-llm-provider-doctor/v1")
+        self.assertEqual(report["engine"], "openrouter_api")
+        self.assertFalse(report["passed"])
+        self.assertEqual(report["checks"][-1]["id"], "live_smoke")
+
     def test_agent_execution_uses_registered_tool_executor(self) -> None:
         from ai22b.talent_foundry.agent_runner import run_agent_from_manifest
         from ai22b.talent_foundry.demo import run_demo

@@ -359,6 +359,17 @@ Live provider environment variables:
 | `ollama_local_http` | local Ollama server | `--llm-model`, optional `--llm-model-path` endpoint |
 | `lm_studio_local_http` | local LM Studio server | `--llm-model`, optional `--llm-model-path` endpoint |
 
+Before hiring or running a talent with a live/local provider, run the provider doctor:
+
+```powershell
+ai22b-talent-foundry doctor-llm-provider `
+  --llm-engine openrouter_api `
+  --llm-model openai/gpt-4.1-mini `
+  --output .\llm_provider_doctor.json
+```
+
+Add `--live-check` only when you intentionally want Paideia to call the selected API or localhost server. The report records provider readiness, model requirements, credential environment presence, local path checks, and a public-safe smoke result without exporting secret values.
+
 Workspace runs also write two P0 runtime artifacts inside the allowed workspace root:
 
 - `runtime_execution.json`: the action policy, LLM runtime result, registered tool execution, verification, and memory-write decision snapshot.

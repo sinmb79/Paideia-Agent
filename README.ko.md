@@ -147,6 +147,17 @@ live provider 설정:
 | `ollama_local_http` | 로컬 Ollama 서버 | `--llm-model`, 선택적 `--llm-model-path` endpoint |
 | `lm_studio_local_http` | 로컬 LM Studio 서버 | `--llm-model`, 선택적 `--llm-model-path` endpoint |
 
+live 또는 로컬 provider로 인재를 고용/실행하기 전에는 provider doctor를 먼저 실행할 수 있습니다.
+
+```powershell
+ai22b-talent-foundry doctor-llm-provider `
+  --llm-engine openrouter_api `
+  --llm-model openai/gpt-4.1-mini `
+  --output .\llm_provider_doctor.json
+```
+
+선택한 API 또는 localhost 서버를 실제로 호출하려면 `--live-check`를 명시합니다. 리포트는 provider 준비 상태, 모델 요구사항, 환경변수 존재 여부, 로컬 경로 점검, 공개 안전 smoke 결과를 기록하며 secret 값은 내보내지 않습니다.
+
 워크스페이스 실행은 허용된 workspace root 안에 P0 런타임 산출물도 남깁니다.
 
 - `runtime_execution.json`: action policy, LLM runtime 결과, 등록형 도구 실행, 검증, 메모리 기록 판단 스냅샷

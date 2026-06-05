@@ -39,6 +39,7 @@ REQUIRED_PUBLIC_PROGRAM_COMMANDS = {
     "start-console",
     "onboard-agent",
     "raise",
+    "doctor-llm-provider",
     "doctor-bundle",
     "install-package",
     "hire-installed",

@@ -42,7 +42,7 @@ from ai22b.talent_foundry.learning_loop import (
     record_learning_experience,
 )
 from ai22b.talent_foundry.life_trace import build_life_trace, read_life_trace_jsonl, write_life_trace_jsonl
-from ai22b.talent_foundry.llm_runtime import build_llm_runtime_config
+from ai22b.talent_foundry.llm_runtime import build_llm_runtime_config, doctor_llm_provider
 from ai22b.talent_foundry.memory_substrate import run_chat_turn_from_employment
 from ai22b.talent_foundry.onboarding import run_agent_onboarding
 from ai22b.talent_foundry.onboarding_choices import (
@@ -271,6 +271,21 @@ def _build_parser() -> argparse.ArgumentParser:
     run_agent.add_argument("--llm-model-path")
     run_agent.add_argument("--llm-mode", choices=["offline", "auto", "live"], default="offline")
     run_agent.add_argument("--live-llm", action="store_true", help="Shortcut for --llm-mode live.")
+
+    doctor_llm = subparsers.add_parser(
+        "doctor-llm-provider",
+        help="Check one selected LLM provider before using it in a hired Paideia Agent.",
+    )
+    doctor_llm.add_argument("--llm-engine", required=True)
+    doctor_llm.add_argument("--llm-service")
+    doctor_llm.add_argument("--llm-model")
+    doctor_llm.add_argument("--llm-model-path")
+    doctor_llm.add_argument(
+        "--live-check",
+        action="store_true",
+        help="Actually call the selected provider/local server. Without this, no network call is made.",
+    )
+    doctor_llm.add_argument("--output", required=True)
 
     run_workspace_agent = subparsers.add_parser(
         "run-workspace-agent",
@@ -868,6 +883,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         output_path = Path(args.output)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(str(output_path))
+        return 0
+
+    if args.command == "doctor-llm-provider":
+        report = doctor_llm_provider(
+            engine=args.llm_engine,
+            service=args.llm_service,
+            model=args.llm_model,
+            model_path=args.llm_model_path,
+            live_check=args.live_check,
+        )
+        output_path = Path(args.output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
         print(str(output_path))
         return 0
 
