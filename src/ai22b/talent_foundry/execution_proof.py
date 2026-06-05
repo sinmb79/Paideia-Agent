@@ -26,6 +26,7 @@ WORKSPACE_INPUT_REVIEW_SCHEMA = "paideia-workspace-input-review/v1"
 RESEARCH_ANALYSIS_SCHEMA = "paideia-workspace-research-analysis/v1"
 DELIVERABLE_SYNTHESIS_SCHEMA = "paideia-workspace-deliverable-synthesis/v1"
 DELIVERABLE_MANIFEST_SCHEMA = "paideia-workspace-job-deliverables/v1"
+AGENT_EXECUTION_CONTRACT_SCHEMA = "paideia-agent-execution-contract/v1"
 
 
 def _now() -> str:
@@ -170,6 +171,16 @@ def _policy_decision(workspace_run: dict[str, Any]) -> dict[str, Any]:
     for candidate in (
         workspace_run.get("policy_decision"),
         _base_agent_run(workspace_run).get("policy_decision"),
+    ):
+        if isinstance(candidate, dict):
+            return candidate
+    return {}
+
+
+def _execution_contract(workspace_run: dict[str, Any]) -> dict[str, Any]:
+    for candidate in (
+        workspace_run.get("execution_contract"),
+        _base_agent_run(workspace_run).get("execution_contract"),
     ):
         if isinstance(candidate, dict):
             return candidate
@@ -695,6 +706,40 @@ def build_workspace_execution_proof(
             evidence={
                 "execution_model": tool_execution.get("execution_model"),
                 "tool_count": len(tool_execution.get("tool_results", [])) if isinstance(tool_execution, dict) else 0,
+            },
+        )
+        execution_contract = _execution_contract(workspace_run)
+        contract_tool_execution = execution_contract.get("tool_execution", {})
+        contract_memory = execution_contract.get("memory_write", {})
+        contract_policy = execution_contract.get("policy_gate", {})
+        contract_llm = execution_contract.get("llm_runtime", {})
+        _check(
+            checks,
+            "agent_execution_contract_verified",
+            execution_contract.get("schema") == AGENT_EXECUTION_CONTRACT_SCHEMA
+            and execution_contract.get("status") == "passed"
+            and execution_contract.get("issues") == []
+            and contract_policy.get("status") == "approved"
+            and contract_policy.get("checked_before_llm") is True
+            and contract_policy.get("checked_before_tools") is True
+            and contract_llm.get("attempted") is True
+            and contract_llm.get("identity_policy") == "application_engine_not_identity"
+            and contract_tool_execution.get("attempted") is True
+            and contract_tool_execution.get("evidence_packet_required") is True
+            and contract_tool_execution.get("evidence_packet_completed") is True
+            and contract_tool_execution.get("network_default") == "blocked"
+            and contract_tool_execution.get("subprocess_default") == "blocked"
+            and contract_memory.get("automatic_promotion_performed") is False
+            and contract_memory.get("private_reasoning_trace_policy") == "do_not_store",
+            evidence={
+                "schema": execution_contract.get("schema"),
+                "status": execution_contract.get("status"),
+                "issues": execution_contract.get("issues", []),
+                "policy_status": contract_policy.get("status"),
+                "llm_attempted": contract_llm.get("attempted"),
+                "tool_attempted": contract_tool_execution.get("attempted"),
+                "evidence_packet_completed": contract_tool_execution.get("evidence_packet_completed"),
+                "automatic_promotion_performed": contract_memory.get("automatic_promotion_performed"),
             },
         )
         workspace_tool_results = _load_declared_json(workspace_outputs, "workspace_tool_results") or {}

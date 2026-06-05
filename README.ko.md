@@ -249,7 +249,7 @@ ai22b-talent-foundry verify-workspace-execution `
   --output .\workspace_execution_proof.json
 ```
 
-이 증명은 실행 schema/status, 필수 workspace 산출물, sandbox 강제 여부, rollback manifest, LLM 정체성 경계, provider preflight, private reasoning trace 비저장 정책, 수락 체크리스트, dataflow transpose verification을 확인합니다. 로컬 절대경로는 proof에 그대로 쓰지 않고 fingerprint로만 남깁니다.
+이 증명은 실행 schema/status, 필수 workspace 산출물, sandbox 강제 여부, rollback manifest, LLM 정체성 경계, provider preflight, agent `execution_contract`, private reasoning trace 비저장 정책, 수락 체크리스트, dataflow transpose verification을 확인합니다. 로컬 절대경로는 proof에 그대로 쓰지 않고 fingerprint로만 남깁니다.
 
 본체 제어 분신/군체 실험은 병렬 episode rollout 평가로 다룹니다.
 
