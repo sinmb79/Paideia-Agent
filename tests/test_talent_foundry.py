@@ -2755,6 +2755,8 @@ class TalentFoundryTests(unittest.TestCase):
                 "assemble-hired-team",
                 "family",
                 "audit-release",
+                "audit-public-release-readiness",
+                "build-source-sbom",
             },
             {command["id"] for command in manifest["commands"]},
         )
@@ -2828,6 +2830,8 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("run-agent-runtime-smoke", first_run_details["commands"])
         self.assertIn("audit-tool-capabilities", first_run_details["commands"])
         self.assertIn("run-action-policy-eval", first_run_details["commands"])
+        self.assertIn("audit-public-release-readiness", first_run_details["commands"])
+        self.assertIn("build-source-sbom", first_run_details["commands"])
         self.assertTrue(first_run_details["console_script_present"])
         self.assertTrue(first_run_details["optional_dependency_groups_present"])
         self.assertTrue(first_run_details["cli_smoke_covers_required_commands"])
@@ -2847,6 +2851,15 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(first_run_details["application_smoke_llm_mode"], "offline")
         self.assertEqual(first_run_details["application_smoke_runtime_status"], "completed")
         self.assertEqual(first_run_details["application_smoke_network_access"], "blocked")
+        self.assertEqual(first_run_details["source_sbom_schema"], "paideia-source-sbom/v1")
+        self.assertEqual(first_run_details["source_sbom_package"], "paideia-agent")
+        self.assertGreater(first_run_details["source_sbom_component_count"], 20)
+        self.assertTrue(first_run_details["source_sbom_release_readiness_passed"])
+        self.assertEqual(first_run_details["source_sbom_public_candidate_issue_count"], 0)
+        self.assertFalse(first_run_details["source_sbom_network_call_performed"])
+        self.assertFalse(first_run_details["source_sbom_subprocess_executed"])
+        self.assertFalse(first_run_details["source_sbom_private_runtime_outputs_scanned"])
+        self.assertTrue(first_run_details["source_sbom_not_vulnerability_scan"])
         self.assertEqual(
             first_run_details["application_smoke_identity_policy"],
             "application_engine_not_identity",
@@ -3013,6 +3026,11 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("run-hired-agent-job", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])
         self.assertIn("run-hired-agent-job-cycle", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])
         self.assertIn("family", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])
+        self.assertIn(
+            "audit-public-release-readiness",
+            audit["checkpoints"]["public_program_manifest"]["details"]["commands"],
+        )
+        self.assertIn("build-source-sbom", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])
         self.assertTrue(audit["checkpoints"]["public_program_manifest"]["details"]["local_first"])
         self.assertIn("reference_agent_program", audit["checkpoints"]["research_foundation"]["details"]["categories"])
         self.assertIn("memory_architecture", audit["checkpoints"]["research_foundation"]["details"]["categories"])

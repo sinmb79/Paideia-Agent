@@ -35,6 +35,7 @@ from ai22b.talent_foundry.learning_loop import build_reasoning_kernel, create_le
 from ai22b.talent_foundry.onboarding_choices import LLM_SERVICE_CATALOG
 from ai22b.talent_foundry.role_models import list_role_models, summarize_role_model
 from ai22b.talent_foundry.runtime_benchmark import RUNTIME_OBSERVABILITY_COMPARISON_SCHEMA
+from ai22b.talent_foundry.source_sbom import SOURCE_SBOM_SCHEMA, build_source_sbom
 from ai22b.talent_foundry.tool_registry import TOOL_CAPABILITY_AUDIT_SCHEMA, audit_tool_capability_registry
 
 
@@ -147,6 +148,8 @@ REQUIRED_PUBLIC_PROGRAM_COMMANDS = {
     "assemble-hired-team",
     "family",
     "audit-release",
+    "audit-public-release-readiness",
+    "build-source-sbom",
 }
 REQUIRED_PUBLIC_PROGRAM_LIFECYCLE = {
     "design",
@@ -168,6 +171,8 @@ PUBLIC_SAFE_FIRST_RUN_COMMANDS = {
     "run-agent-runtime-smoke",
     "audit-tool-capabilities",
     "run-action-policy-eval",
+    "audit-public-release-readiness",
+    "build-source-sbom",
 }
 
 
@@ -963,6 +968,8 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
         PROJECT_ROOT / "src" / "ai22b" / "talent_foundry" / "llm_runtime.py",
         PROJECT_ROOT / "src" / "ai22b" / "talent_foundry" / "agent_runtime_smoke.py",
         PROJECT_ROOT / "src" / "ai22b" / "talent_foundry" / "tool_registry.py",
+        PROJECT_ROOT / "src" / "ai22b" / "talent_foundry" / "public_release.py",
+        PROJECT_ROOT / "src" / "ai22b" / "talent_foundry" / "source_sbom.py",
         DEFAULT_POLICY_EVAL_SUITE,
     ]
     missing = [path for path in evidence if not path.exists()]
@@ -1014,6 +1021,16 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
         policy_eval.get("runtime_policy", {}) if isinstance(policy_eval.get("runtime_policy"), dict) else {}
     )
     policy_summary = policy_eval.get("summary", {}) if isinstance(policy_eval.get("summary"), dict) else {}
+    source_sbom = build_source_sbom(PROJECT_ROOT)
+    source_sbom_policy = source_sbom.get("policy", {}) if isinstance(source_sbom.get("policy"), dict) else {}
+    source_sbom_inventory = (
+        source_sbom.get("inventory", {}) if isinstance(source_sbom.get("inventory"), dict) else {}
+    )
+    source_sbom_release = (
+        source_sbom.get("release_readiness", {})
+        if isinstance(source_sbom.get("release_readiness"), dict)
+        else {}
+    )
     console_script_present = (
         'ai22b-talent-foundry = "ai22b.talent_foundry.cli:main"' in pyproject_text
         and "[project.scripts]" in pyproject_text
@@ -1113,6 +1130,18 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
         "policy_eval_network_call_performed": policy_runtime.get("network_call_performed"),
         "policy_eval_llm_called": policy_runtime.get("llm_called"),
         "policy_eval_private_reasoning_trace_stored": policy_runtime.get("private_reasoning_trace_stored"),
+        "source_sbom_schema": source_sbom.get("schema"),
+        "source_sbom_package": source_sbom.get("package", {}).get("name")
+        if isinstance(source_sbom.get("package"), dict)
+        else None,
+        "source_sbom_component_count": source_sbom_inventory.get("component_count"),
+        "source_sbom_repository_digest": source_sbom_inventory.get("repository_public_candidate_digest_sha256"),
+        "source_sbom_release_readiness_passed": source_sbom_release.get("passed"),
+        "source_sbom_public_candidate_issue_count": source_sbom_release.get("public_candidate_issue_count"),
+        "source_sbom_network_call_performed": source_sbom_policy.get("network_call_performed"),
+        "source_sbom_subprocess_executed": source_sbom_policy.get("subprocess_executed"),
+        "source_sbom_private_runtime_outputs_scanned": source_sbom_policy.get("private_runtime_outputs_scanned"),
+        "source_sbom_not_vulnerability_scan": source_sbom_policy.get("not_a_vulnerability_scan"),
         "no_network_or_llm_by_default": (
             doctor.get("network_access") == "blocked"
             and doctor.get("live_check_requested") is False
@@ -1127,6 +1156,8 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
             and tool_audit_public.get("subprocess_executed") is False
             and policy_runtime.get("network_call_performed") is False
             and policy_runtime.get("llm_called") is False
+            and source_sbom_policy.get("network_call_performed") is False
+            and source_sbom_policy.get("subprocess_executed") is False
         ),
     }
     passed = (
@@ -1192,6 +1223,18 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
         and details["policy_eval_status"] == "passed"
         and details["policy_eval_failed_count"] == 0
         and details["policy_eval_private_reasoning_trace_stored"] is False
+        and details["source_sbom_schema"] == SOURCE_SBOM_SCHEMA
+        and details["source_sbom_package"] == "paideia-agent"
+        and isinstance(details["source_sbom_component_count"], int)
+        and details["source_sbom_component_count"] > 20
+        and isinstance(details["source_sbom_repository_digest"], str)
+        and len(details["source_sbom_repository_digest"]) == 64
+        and details["source_sbom_release_readiness_passed"] is True
+        and details["source_sbom_public_candidate_issue_count"] == 0
+        and details["source_sbom_network_call_performed"] is False
+        and details["source_sbom_subprocess_executed"] is False
+        and details["source_sbom_private_runtime_outputs_scanned"] is False
+        and details["source_sbom_not_vulnerability_scan"] is True
         and details["no_network_or_llm_by_default"] is True
     )
     return _checkpoint(
