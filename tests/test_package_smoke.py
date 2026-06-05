@@ -63,6 +63,20 @@ class PackageSmokeTests(unittest.TestCase):
         for fragment in forbidden_fragments:
             self.assertNotIn(fragment, pyproject_text)
 
+    def test_public_release_license_and_metadata_are_declared(self) -> None:
+        project = self._pyproject()["project"]
+        license_file = Path("LICENSE")
+
+        self.assertTrue(license_file.exists())
+        self.assertIn("MIT License", license_file.read_text(encoding="utf-8"))
+        self.assertEqual(project.get("license", {}).get("file"), "LICENSE")
+        self.assertIn("License :: OSI Approved :: MIT License", project.get("classifiers", []))
+        self.assertEqual(project.get("urls", {}).get("Repository"), "https://github.com/sinmb79/Paideia-Agent")
+        self.assertTrue(Path("SECURITY.md").exists())
+        self.assertTrue(Path("README.ko.md").exists())
+        self.assertTrue(Path("docs/public_release_readiness.md").exists())
+        self.assertTrue(Path("docs/public_release_readiness.ko.md").exists())
+
 
 if __name__ == "__main__":
     unittest.main()

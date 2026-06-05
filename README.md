@@ -148,6 +148,8 @@ CI runs a package smoke test that verifies the `pyproject.toml` console scripts 
 
 CI also runs a CLI smoke test for public-safe first-run commands. It verifies that `list-role-models`, `doctor-llm-provider --llm-engine deterministic_local`, `run-llm-application-smoke --llm-engine deterministic_local`, `run-agent-runtime-smoke --llm-engine deterministic_local`, `audit-tool-capabilities --strict`, and `run-action-policy-eval` execute without private files, API keys, or network access while writing reviewable JSON reports.
 
+The source package declares an MIT license in `LICENSE` and `pyproject.toml`. Public release readiness is tracked separately from generated agent bundles; see [Public Release Readiness](docs/public_release_readiness.md) and [공개 릴리스 준비도](docs/public_release_readiness.ko.md).
+
 Runtime artifacts are stored outside this source tree by default:
 
 ```powershell
@@ -675,6 +677,7 @@ Securities-research talents may help organize evidence, compare sources, draft r
 - [Tesla-style dataflow board benchmark](docs/tesla_board_benchmark.md)
 - [Legacy 22B-AI system integration](docs/legacy_system_integration.md)
 - [Public release hygiene policy](docs/40_public_release_hygiene_ko.md)
+- [Public release readiness](docs/public_release_readiness.md)
 - [Korean README](README.ko.md)
 
 ## Inspiration And References

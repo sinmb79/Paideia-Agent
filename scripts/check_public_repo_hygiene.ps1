@@ -41,6 +41,37 @@ $contentPatterns = @(
 
 $issues = New-Object System.Collections.Generic.List[object]
 
+$requiredReleaseFiles = @(
+    "README.md",
+    "README.ko.md",
+    "SECURITY.md",
+    "LICENSE",
+    "pyproject.toml"
+)
+
+foreach ($requiredFile in $requiredReleaseFiles) {
+    $requiredPath = Join-Path $Root $requiredFile
+    if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf)) {
+        $issues.Add([pscustomobject]@{
+            type = "missing_required_release_file"
+            file = $requiredFile
+            rule = "public_release_required_file"
+        })
+    }
+}
+
+$pyprojectPath = Join-Path $Root "pyproject.toml"
+if (Test-Path -LiteralPath $pyprojectPath -PathType Leaf) {
+    $pyprojectText = Get-Content -LiteralPath $pyprojectPath -Raw -Encoding UTF8
+    if ($pyprojectText -notmatch 'license\s*=\s*\{\s*file\s*=\s*"LICENSE"\s*\}') {
+        $issues.Add([pscustomobject]@{
+            type = "missing_package_license_metadata"
+            file = "pyproject.toml"
+            rule = "project_license_file_must_reference_LICENSE"
+        })
+    }
+}
+
 foreach ($file in $candidateFiles) {
     $normalized = $file -replace '\\', '/'
     if (
@@ -104,6 +135,8 @@ $report = [ordered]@{
             "session logs",
             "environment files"
         )
+        required_release_files = $requiredReleaseFiles
+        package_license_metadata = "pyproject.toml must reference LICENSE"
     }
 }
 
