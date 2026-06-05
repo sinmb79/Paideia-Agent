@@ -257,15 +257,26 @@ class GrahamTalentFoundryTests(unittest.TestCase):
     def test_onboarding_exposes_multi_provider_llms_and_role_model_choices(self) -> None:
         from ai22b.talent_foundry.console import questions_with_choices
         from ai22b.talent_foundry.llm_runtime import build_llm_runtime_config, invoke_llm_application_engine
-        from ai22b.talent_foundry.onboarding_choices import llm_service_ids
+        from ai22b.talent_foundry.onboarding_choices import LLM_SERVICE_CATALOG, llm_service_ids, resolve_llm_service
 
         self.assertIn("ollama_local", llm_service_ids())
         self.assertIn("openrouter_api", llm_service_ids())
+        openrouter_service = next(item for item in LLM_SERVICE_CATALOG if item["id"] == "openrouter_api")
+        resolved_openrouter = resolve_llm_service(llm_service="openrouter_api", llm_model="openai/gpt-test")
         questions = questions_with_choices()
         role_question = next(item for item in questions if item["id"] == "role_model_id")
         llm_question = next(item for item in questions if item["id"] == "llm_service")
         self.assertIn("hopper_software_tooling", {item["id"] for item in role_question["choices"]})
         self.assertIn("anthropic_claude_api", {item["id"] for item in llm_question["choices"]})
+        self.assertEqual(openrouter_service["runtime_readiness"], "live_client_ready_when_configured")
+        self.assertFalse(openrouter_service["doctor"]["live_check_default"])
+        self.assertIn("--live-check", openrouter_service["doctor"]["live_check_command"])
+        self.assertFalse(openrouter_service["doctor"]["secret_values_exported"])
+        self.assertEqual(openrouter_service["data_transfer_policy"]["network_access"], "external_api_selected_data_minimized")
+        self.assertTrue(openrouter_service["live_check_policy"]["requires_explicit_flag"])
+        self.assertIn("cost", openrouter_service["cost_warning"].casefold())
+        self.assertEqual(resolved_openrouter["doctor"]["required_before_live"], True)
+        self.assertEqual(resolved_openrouter["selected_model"], "openai/gpt-test")
 
         config = build_llm_runtime_config(engine="openrouter_api", model="user-selected-model")
         result = invoke_llm_application_engine(

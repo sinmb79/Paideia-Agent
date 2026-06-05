@@ -147,6 +147,8 @@ live provider 설정:
 | `ollama_local_http` | 로컬 Ollama 서버 | `--llm-model`, 선택적 `--llm-model-path` endpoint |
 | `lm_studio_local_http` | 로컬 LM Studio 서버 | `--llm-model`, 선택적 `--llm-model-path` endpoint |
 
+온보딩의 LLM 선택지는 단순 이름 목록이 아니라 readiness card로 제공됩니다. 각 선택지는 `runtime_readiness`, 실행할 `doctor-llm-provider` 명령, 명시적 `--live-check` 명령, 기본 no-network live-check 정책, secret 비공개 정책, 데이터 전송 범위, 실패 시 fallback 동작, 비용/로컬 자원 경고를 포함합니다. 그래서 LLM은 선택 가능한 언어 엔진으로 남고, 에이전트의 정체성은 로컬 육성 기록과 기억기판에 남습니다.
+
 live 또는 로컬 provider로 인재를 고용/실행하기 전에는 provider doctor를 먼저 실행할 수 있습니다.
 
 ```powershell

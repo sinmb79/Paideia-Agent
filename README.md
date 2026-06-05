@@ -359,6 +359,8 @@ Live provider environment variables:
 | `ollama_local_http` | local Ollama server | `--llm-model`, optional `--llm-model-path` endpoint |
 | `lm_studio_local_http` | local LM Studio server | `--llm-model`, optional `--llm-model-path` endpoint |
 
+Onboarding exposes each LLM option as a readiness card, not only a label. The card includes `runtime_readiness`, the exact `doctor-llm-provider` command, an explicit `--live-check` command, default no-network live-check posture, secret export policy, data-transfer scope, fallback behavior, and cost/resource warnings. This keeps the LLM as a selectable language engine while the local talent records remain the agent identity.
+
 Before hiring or running a talent with a live/local provider, run the provider doctor:
 
 ```powershell

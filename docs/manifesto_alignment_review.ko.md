@@ -63,9 +63,9 @@
 
 메모리 기판과 bounded context 구조는 있지만, 일반 프롬프트형 에이전트 대비 토큰 사용량, 비용, 정확도, 재작업률을 비교하는 리포트는 없습니다.
 
-6. 외부 LLM 어댑터는 일부가 manifest-ready 상태입니다.
+6. 외부 LLM 어댑터는 doctor 기반 운영 준비 상태로 올라왔지만, 실제 provider별 장기 운영 검증은 계속 필요합니다.
 
-온보딩 선택지는 제공하지만, 모든 외부 LLM에 대해 실제 API 호출과 오류 처리, 요금/프라이버시 경고가 완성된 것은 아닙니다. 문서에는 이 차이를 더 명확히 써야 합니다.
+온보딩 선택지는 이제 provider readiness card를 포함합니다. 각 카드에는 doctor 명령, 명시적 live-check 명령, 기본 no-network 정책, secret 비공개, 데이터 전송 범위, 실패 시 fallback, 비용/자원 경고가 들어갑니다. 다만 실제 사용자 환경의 API 키, 요금제, localhost 서버 상태, 모델별 응답 품질은 `doctor-llm-provider --live-check`와 사용자 검토로 계속 확인해야 합니다.
 
 ## 보완 계획
 
@@ -103,6 +103,8 @@
 
 - 우선순위: OpenAI/Codex bridge, Ollama, LM Studio, OpenRouter.
 - 각 어댑터에 API 키/로컬 주소 점검, 실패 시 fallback, 외부 전송 경고, 데이터 최소화 로그를 넣습니다.
+- 현재 P0 반영: 공통 `LLMClient` 경로, provider doctor, secret redaction, private reasoning field 제거, live/auto fallback, chat/provider 경로, 온보딩 readiness card를 추가했습니다.
+- 남은 운영 검증: 실제 provider 계정/로컬 서버별 live smoke, 비용 리포트, 모델별 응답 품질 평가를 별도 장기 검증으로 운영합니다.
 
 ### 7단계: 설치형 제품 경험
 
