@@ -834,19 +834,34 @@ def doctor_agent_program(program_path: Path, *, output_path: Path | None = None)
     unsafe_imports = []
     for manifest_path in imported_skill_manifests:
         manifest = _read_json(manifest_path)
+        safety_contract = manifest.get("safety_contract", {})
         detail = {
             "path": str(manifest_path.relative_to(root)),
             "status": manifest.get("status"),
             "activation": manifest.get("activation", {}).get("status"),
             "risk_flags": manifest.get("risk_flags", []),
+            "safety_contract_status": safety_contract.get("status"),
+            "activation_allowed": safety_contract.get("activation_allowed"),
+            "sensitive_files_copied": safety_contract.get("sensitive_files_copied"),
+            "execute_imported_code": safety_contract.get("execute_imported_code"),
         }
         imported_skill_details.append(detail)
-        if manifest.get("activation", {}).get("status") != "disabled":
+        if (
+            manifest.get("activation", {}).get("status") != "disabled"
+            or safety_contract.get("schema") != "paideia-imported-skill-safety-contract/v1"
+            or safety_contract.get("activation_allowed") is not False
+            or safety_contract.get("execute_imported_code") is not False
+            or safety_contract.get("sensitive_files_copied") is not False
+            or safety_contract.get("default_permissions", {}).get("network") != "blocked"
+            or safety_contract.get("default_permissions", {}).get("subprocess") != "blocked"
+            or safety_contract.get("default_permissions", {}).get("credential_access") != "blocked"
+        ):
             unsafe_imports.append(detail)
     checks["imported_skills"] = {
         "passed": not unsafe_imports,
         "details": {
             "imported_count": len(imported_skill_manifests),
+            "contract_schema": "paideia-imported-skill-safety-contract/v1",
             "unsafe_enabled_imports": unsafe_imports,
             "skills": imported_skill_details,
         },

@@ -280,11 +280,13 @@ Each import receives:
 
 - a wrapper `SKILL.md`,
 - a `paideia_skill_manifest.json`,
+- a per-skill `safety_contract` and top-level migration `safety_contract`,
 - `activation.status = disabled`,
+- sensitive files such as `.env`, local credentials, private keys, token files, and certificate/key material are not copied,
 - risk flags for suspicious patterns such as remote shell installers, credential access, recursive delete, and network listeners,
 - a review checklist before promotion into a Paideia education axis or procedural skill.
 
-The rule is simple: **migration is easy; activation is deliberate**.
+The rule is simple: **migration is easy; activation is deliberate**. Imported code is never executed during migration, and default permissions stay `network=blocked`, `subprocess=blocked`, and `credential_access=blocked` until a reviewed allowlist exists.
 
 ## Agent Program Outputs
 
