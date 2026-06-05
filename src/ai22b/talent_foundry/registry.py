@@ -11,9 +11,12 @@ from ai22b.talent_foundry.dataflow_runtime import run_dataflow_job_from_manifest
 from ai22b.talent_foundry.learning_loop import (
     build_reasoning_kernel,
     create_learning_ledger,
+    delete_learning_experience,
+    refresh_learning_ledger,
     record_learning_experience,
     route_active_memory,
 )
+from ai22b.talent_foundry.memory_lifecycle import audit_learning_ledger
 from ai22b.talent_foundry.llm_clients import LLMClient
 from ai22b.talent_foundry.llm_runtime import build_llm_runtime_config, invoke_llm_application_engine
 from ai22b.talent_foundry.onboarding_choices import resolve_chat_surface, resolve_llm_service
@@ -31,6 +34,7 @@ HIRED_AGENT_TEAM_SCHEMA = "ai-talent-hired-agent-team/v1"
 HIRED_TEAM_CYCLE_SCHEMA = "ai-talent-hired-team-cycle/v1"
 HIRED_PROJECTION_SWARM_SCHEMA = "ai-talent-hired-projection-swarm/v1"
 HIRED_PROJECTION_SWARM_CYCLE_SCHEMA = "ai-talent-hired-projection-swarm-cycle/v1"
+MEMORY_LIFECYCLE_MAINTENANCE_SCHEMA = "paideia-memory-lifecycle-maintenance/v1"
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -157,6 +161,9 @@ def hire_installed_agent(
             "learning_ledger": installed_manifest["entrypoints"].get("learning_ledger", "learning_ledger.json"),
             "post_hire_learning_update": "post_hire_learning_update.json",
             "post_hire_learning_log": "post_hire_learning_log.jsonl",
+            "memory_lifecycle_maintenance": "memory_lifecycle_maintenance.json",
+            "memory_lifecycle_maintenance_log": "memory_lifecycle_maintenance_log.jsonl",
+            "learning_ledger_backup": "learning_ledger.backup.json",
             "employment_goal": "employment_goal.json",
             "employment_goal_log": "employment_goal_log.jsonl",
             "last_goal_cycle": "last_employment_goal_cycle.json",
@@ -594,6 +601,125 @@ def record_hired_learning_experience(
         file.write(json.dumps(update, ensure_ascii=False) + "\n")
 
     return update
+
+
+def _read_json_or_none(path: Path) -> dict[str, Any] | None:
+    try:
+        return _read_json(path)
+    except Exception:
+        return None
+
+
+def maintain_hired_memory_lifecycle(
+    employment_record_path: Path,
+    *,
+    action: str,
+    experience_id: str | None = None,
+    requested_by: str = "보스",
+    reason: str = "manual_memory_lifecycle_maintenance",
+    output_path: Path | None = None,
+) -> dict[str, Any]:
+    if action not in {"audit", "delete-experience", "migrate", "recover"}:
+        raise ValueError("action must be audit, delete-experience, migrate, or recover")
+    if action == "delete-experience" and not experience_id:
+        raise ValueError("experience_id is required for delete-experience")
+
+    employment_record, _agent_manifest, target_root = _load_active_employment(employment_record_path)
+    entrypoints = employment_record.get("entrypoints", {})
+    ledger_path = target_root / entrypoints.get("learning_ledger", "learning_ledger.json")
+    backup_path = target_root / entrypoints.get("learning_ledger_backup", "learning_ledger.backup.json")
+    maintenance_path = output_path or target_root / entrypoints.get(
+        "memory_lifecycle_maintenance",
+        "memory_lifecycle_maintenance.json",
+    )
+    log_path = target_root / entrypoints.get(
+        "memory_lifecycle_maintenance_log",
+        "memory_lifecycle_maintenance_log.jsonl",
+    )
+
+    loaded_from = "learning_ledger"
+    current_ledger = _read_json_or_none(ledger_path) if ledger_path.exists() else None
+    backup_ledger = _read_json_or_none(backup_path) if backup_path.exists() else None
+    if action == "recover":
+        if current_ledger is not None:
+            ledger = current_ledger
+            status = "recovery_not_needed"
+        elif backup_ledger is not None:
+            ledger = backup_ledger
+            loaded_from = "learning_ledger_backup"
+            status = "recovered_from_backup"
+        else:
+            ledger = create_learning_ledger(owner=employment_record["agent"]["name"])
+            loaded_from = "new_empty_ledger"
+            status = "recovered_as_empty_ledger"
+    else:
+        if ledger_path.exists() and current_ledger is None:
+            raise ValueError("learning ledger is unreadable; run recover before audit, migrate, or delete-experience")
+        ledger = current_ledger or create_learning_ledger(owner=employment_record["agent"]["name"])
+        status = "completed"
+        if current_ledger is not None:
+            _write_json(backup_path, current_ledger)
+
+    tombstone: dict[str, Any] | None = None
+    migration: dict[str, Any] | None = None
+    if action == "delete-experience":
+        ledger, tombstone = delete_learning_experience(
+            ledger,
+            experience_id=str(experience_id),
+            requested_by=requested_by,
+            reason=reason,
+        )
+    elif action == "migrate":
+        migration = {
+            "schema": "paideia-memory-ledger-migration/v1",
+            "migrated_at_utc": datetime.now(timezone.utc).isoformat(),
+            "from_schema": ledger.get("schema"),
+            "to_policy_version": "memory_lifecycle_p0_v1",
+            "summary_only": True,
+        }
+        ledger.setdefault("schema_migrations", []).append(migration)
+        ledger = refresh_learning_ledger(ledger)
+    else:
+        ledger = refresh_learning_ledger(ledger)
+        ledger["memory_lifecycle"] = audit_learning_ledger(ledger)
+
+    _write_json(ledger_path, ledger)
+    if action == "recover":
+        _write_json(backup_path, ledger)
+
+    record = {
+        "schema": MEMORY_LIFECYCLE_MAINTENANCE_SCHEMA,
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "action": action,
+        "status": status,
+        "requested_by": requested_by,
+        "reason": reason,
+        "employment_context": _employment_context(employment_record),
+        "learning_ledger": ledger_path.name,
+        "backup": backup_path.name,
+        "loaded_from": loaded_from,
+        "experience_id": experience_id,
+        "deleted_experience": tombstone,
+        "migration": migration,
+        "memory_lifecycle": ledger.get("memory_lifecycle", {}),
+        "counts": {
+            "promoted": len(ledger.get("promoted_experiences", [])),
+            "quarantined": len(ledger.get("quarantined_experiences", [])),
+            "deletion_tombstones": len(ledger.get("memory_deletion_log", [])),
+        },
+        "policy": {
+            "manual_delete_audit_log": True,
+            "backup_before_mutation": action != "recover",
+            "private_reasoning_trace": "do_not_store",
+            "safe_reference_retention_after_delete": "removed",
+        },
+    }
+    _write_json(maintenance_path, record)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with log_path.open("a", encoding="utf-8") as file:
+        file.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+    return record
 
 
 def _cycle_artifact_path(base_output_path: Path | None, target_root: Path, filename: str) -> Path:

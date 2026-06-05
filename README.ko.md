@@ -233,6 +233,17 @@ ai22b-talent-foundry onboard-agent `
 
 `learning_ledger.json`에는 `memory_lifecycle` 리포트가 포함됩니다. 이 리포트는 기억 쓰기 정책, 승격/격리 기준, 수동 삭제 정책, 복구/마이그레이션 방침, 검색 품질 상태, 개인정보/secret/로컬 경로 위생 검사를 기록합니다. 격리된 경험은 active context에서 제외되고, private reasoning trace 저장은 계속 금지됩니다.
 
+기억 수명주기 운영은 `maintain-hired-memory` 명령으로 실행합니다.
+
+```powershell
+ai22b-talent-foundry maintain-hired-memory --employment-record <employment_record.json> --action audit
+ai22b-talent-foundry maintain-hired-memory --employment-record <employment_record.json> --action delete-experience --experience-id <id> --reason owner_requested_forgetting
+ai22b-talent-foundry maintain-hired-memory --employment-record <employment_record.json> --action recover
+ai22b-talent-foundry maintain-hired-memory --employment-record <employment_record.json> --action migrate
+```
+
+각 작업은 `memory_lifecycle_maintenance.json`, `memory_lifecycle_maintenance_log.jsonl`, 복구용 `learning_ledger.backup.json`을 로컬에 남깁니다.
+
 졸업 패키지 생성:
 
 ```powershell

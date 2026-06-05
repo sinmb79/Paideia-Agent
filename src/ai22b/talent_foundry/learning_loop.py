@@ -181,6 +181,58 @@ def build_reasoning_kernel(ledger: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def refresh_learning_ledger(ledger: dict[str, Any], *, objective: str | None = None) -> dict[str, Any]:
+    """Rebuild derived learning-ledger fields after a maintenance operation."""
+
+    skills: list[str] = []
+    for entry in ledger.get("promoted_experiences", []):
+        for skill in entry.get("promoted_skills", []):
+            if skill not in skills:
+                skills.append(skill)
+    ledger["skill_candidates"] = skills
+    ledger["reasoning_kernel"] = build_reasoning_kernel(ledger)
+    ledger["memory_lifecycle"] = audit_learning_ledger(ledger, objective=objective)
+    return ledger
+
+
+def delete_learning_experience(
+    ledger: dict[str, Any],
+    *,
+    experience_id: str,
+    requested_by: str,
+    reason: str,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    removed: dict[str, Any] | None = None
+    removed_bucket = ""
+    for bucket in ("promoted_experiences", "quarantined_experiences"):
+        remaining = []
+        for entry in ledger.get(bucket, []):
+            if entry.get("id") == experience_id and removed is None:
+                removed = entry
+                removed_bucket = bucket
+            else:
+                remaining.append(entry)
+        ledger[bucket] = remaining
+    if removed is None:
+        raise ValueError(f"learning experience not found: {experience_id}")
+
+    tombstone = {
+        "schema": "paideia-memory-deletion-tombstone/v1",
+        "deleted_at_utc": datetime.now(timezone.utc).isoformat(),
+        "experience_id": experience_id,
+        "source_bucket": removed_bucket,
+        "source": removed.get("source"),
+        "summary": removed.get("summary"),
+        "removed_promoted_skills": removed.get("promoted_skills", []),
+        "requested_by": requested_by,
+        "reason": reason,
+        "safe_reference_removed": True,
+        "policy": "manual_delete_request_with_audit_log_required",
+    }
+    ledger.setdefault("memory_deletion_log", []).append(tombstone)
+    return refresh_learning_ledger(ledger), tombstone
+
+
 def _keywords(text: str) -> set[str]:
     words = re.findall(r"[A-Za-z0-9가-힣_]+", text.lower())
     return {word for word in words if len(word) >= 2}

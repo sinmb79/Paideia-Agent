@@ -421,6 +421,17 @@ Key files:
 
 The learning ledger carries a `memory_lifecycle` report. It records the write policy, promotion/quarantine criteria, manual deletion policy, recovery/migration posture, retrieval-quality status, and PII/secret/path hygiene checks. Quarantined experience is excluded from active context, and private reasoning traces remain forbidden.
 
+Memory lifecycle operations are available through `maintain-hired-memory`:
+
+```powershell
+ai22b-talent-foundry maintain-hired-memory --employment-record <employment_record.json> --action audit
+ai22b-talent-foundry maintain-hired-memory --employment-record <employment_record.json> --action delete-experience --experience-id <id> --reason owner_requested_forgetting
+ai22b-talent-foundry maintain-hired-memory --employment-record <employment_record.json> --action recover
+ai22b-talent-foundry maintain-hired-memory --employment-record <employment_record.json> --action migrate
+```
+
+Each operation writes `memory_lifecycle_maintenance.json`, appends `memory_lifecycle_maintenance_log.jsonl`, and keeps a local `learning_ledger.backup.json` for recovery.
+
 ## Research Basis
 
 Paideia Agent keeps a source-to-design map so users can inspect which papers, reports, and reference programs shaped the product. See [Research Basis](docs/research_basis.md) or [연구 근거와 반영 내용](docs/research_basis.ko.md).

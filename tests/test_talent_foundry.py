@@ -3822,6 +3822,84 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(update["employment_context"]["agent_role"], "증권 리서치 에이전트")
         self.assertIn("workspace_artifact_trace", installed_ledger["reasoning_kernel"]["procedural_skills"])
 
+    def test_maintain_hired_memory_deletes_experience_with_tombstone_and_backup(self) -> None:
+        from ai22b.talent_foundry.demo import run_demo
+        from ai22b.talent_foundry.registry import maintain_hired_memory_lifecycle
+
+        with tempfile.TemporaryDirectory() as tmp:
+            outputs = run_demo(output_dir=Path(tmp) / "runs")
+            ledger_path = outputs["local_employment_record"].parent / "learning_ledger.json"
+            ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
+            experience_id = ledger["promoted_experiences"][0]["id"]
+            record = maintain_hired_memory_lifecycle(
+                outputs["local_employment_record"],
+                action="delete-experience",
+                experience_id=experience_id,
+                requested_by="보스",
+                reason="owner_requested_forgetting",
+            )
+            maintained_ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
+            maintenance_log = outputs["local_employment_record"].parent / "memory_lifecycle_maintenance_log.jsonl"
+            backup_path = outputs["local_employment_record"].parent / "learning_ledger.backup.json"
+            backup_exists = backup_path.exists()
+            maintenance_log_exists = maintenance_log.exists()
+
+        remaining_ids = {
+            entry["id"]
+            for entry in maintained_ledger["promoted_experiences"] + maintained_ledger["quarantined_experiences"]
+        }
+        self.assertEqual(record["schema"], "paideia-memory-lifecycle-maintenance/v1")
+        self.assertEqual(record["action"], "delete-experience")
+        self.assertEqual(record["deleted_experience"]["experience_id"], experience_id)
+        self.assertNotIn(experience_id, remaining_ids)
+        self.assertTrue(maintained_ledger["memory_deletion_log"][0]["safe_reference_removed"])
+        self.assertEqual(maintained_ledger["memory_lifecycle"]["status"], "passed")
+        self.assertTrue(backup_exists)
+        self.assertTrue(maintenance_log_exists)
+
+    def test_cli_maintain_hired_memory_recovers_corrupted_ledger_from_backup(self) -> None:
+        from ai22b.talent_foundry.cli import main as cli_main
+        from ai22b.talent_foundry.demo import run_demo
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            outputs = run_demo(output_dir=tmp_path / "runs")
+            ledger_path = outputs["local_employment_record"].parent / "learning_ledger.json"
+            audit_path = tmp_path / "memory_audit.json"
+            recover_path = tmp_path / "memory_recover.json"
+            audit_exit = cli_main(
+                [
+                    "maintain-hired-memory",
+                    "--employment-record",
+                    str(outputs["local_employment_record"]),
+                    "--action",
+                    "audit",
+                    "--output",
+                    str(audit_path),
+                ]
+            )
+            ledger_path.write_text("{broken", encoding="utf-8")
+            recover_exit = cli_main(
+                [
+                    "maintain-hired-memory",
+                    "--employment-record",
+                    str(outputs["local_employment_record"]),
+                    "--action",
+                    "recover",
+                    "--output",
+                    str(recover_path),
+                ]
+            )
+            recovered = json.loads(recover_path.read_text(encoding="utf-8"))
+            ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(audit_exit, 0)
+        self.assertEqual(recover_exit, 0)
+        self.assertEqual(recovered["status"], "recovered_from_backup")
+        self.assertEqual(recovered["loaded_from"], "learning_ledger_backup")
+        self.assertEqual(ledger["schema"], "ai-talent-learning-ledger/v1")
+        self.assertEqual(ledger["memory_lifecycle"]["status"], "passed")
+
     def test_assign_hired_goal_records_long_running_employment_objective(self) -> None:
         from ai22b.talent_foundry.demo import run_demo
         from ai22b.talent_foundry.registry import assign_hired_goal

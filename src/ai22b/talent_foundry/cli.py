@@ -61,6 +61,7 @@ from ai22b.talent_foundry.registry import (
     assemble_hired_agent_team,
     assemble_hired_projection_swarm,
     hire_installed_agent,
+    maintain_hired_memory_lifecycle,
     record_hired_learning_experience,
     run_hired_dataflow_job,
     run_hired_goal_cycle,
@@ -494,6 +495,21 @@ def _build_parser() -> argparse.ArgumentParser:
     record_hired_learning.add_argument("--reviewed-by", default="보스")
     record_hired_learning.add_argument("--status", default="verified")
     record_hired_learning.add_argument("--output")
+
+    maintain_hired_memory = subparsers.add_parser(
+        "maintain-hired-memory",
+        help="Audit, delete, migrate, or recover a hired agent learning ledger with lifecycle logs.",
+    )
+    maintain_hired_memory.add_argument("--employment-record", required=True)
+    maintain_hired_memory.add_argument(
+        "--action",
+        required=True,
+        choices=["audit", "delete-experience", "migrate", "recover"],
+    )
+    maintain_hired_memory.add_argument("--experience-id")
+    maintain_hired_memory.add_argument("--requested-by", default="보스")
+    maintain_hired_memory.add_argument("--reason", default="manual_memory_lifecycle_maintenance")
+    maintain_hired_memory.add_argument("--output")
 
     assign_hired_goal_command = subparsers.add_parser(
         "assign-hired-goal",
@@ -1199,6 +1215,23 @@ def main(argv: Sequence[str] | None = None) -> int:
             Path(args.output)
             if args.output
             else Path(args.employment_record).parent / "post_hire_learning_update.json"
+        )
+        print(str(output_path))
+        return 0
+
+    if args.command == "maintain-hired-memory":
+        maintain_hired_memory_lifecycle(
+            Path(args.employment_record),
+            action=args.action,
+            experience_id=args.experience_id,
+            requested_by=args.requested_by,
+            reason=args.reason,
+            output_path=Path(args.output) if args.output else None,
+        )
+        output_path = (
+            Path(args.output)
+            if args.output
+            else Path(args.employment_record).parent / "memory_lifecycle_maintenance.json"
         )
         print(str(output_path))
         return 0
