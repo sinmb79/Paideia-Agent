@@ -414,7 +414,7 @@ ai22b-talent-foundry audit-tool-capabilities `
   --output .\tool_capability_audit.json
 ```
 
-For the full P0 runtime path, use `run-agent-runtime-smoke`. It sends the selected LLM through the actual agent loop: action intent policy, LLM application engine, registered tool executor, verification, review-gated memory candidate, runtime observability, and audit log. The default deterministic run makes no network calls; add `--live-check` only when you intentionally want the selected API or localhost provider to be called:
+For the full P0 runtime path, use `run-agent-runtime-smoke`. It sends the selected LLM through the actual agent loop: action intent policy, LLM application engine, registered tool executor, verification, review-gated memory candidate, runtime observability, and audit log. The default deterministic run makes no network calls; add `--live-check` only when you intentionally want the selected API or localhost provider to be called. If a live provider is not configured, the command fails closed before the agent loop starts, writes `status=needs_configuration`, and leaves no tool execution or memory candidate:
 
 ```powershell
 ai22b-talent-foundry run-agent-runtime-smoke `

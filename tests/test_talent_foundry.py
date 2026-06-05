@@ -1944,6 +1944,48 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertNotIn(secret, serialized)
         self.assertNotIn(hidden_trace, serialized)
 
+    def test_cli_agent_runtime_smoke_strict_fails_closed_when_live_provider_not_ready(self) -> None:
+        import os
+
+        from ai22b.talent_foundry.cli import main as cli_main
+
+        old_key = os.environ.pop("OPENROUTER_API_KEY", None)
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                output_path = Path(tmp) / "openrouter_agent_runtime_smoke.json"
+                exit_code = cli_main(
+                    [
+                        "run-agent-runtime-smoke",
+                        "--llm-engine",
+                        "openrouter_api",
+                        "--llm-model",
+                        "openai/gpt-4.1-mini",
+                        "--live-check",
+                        "--strict",
+                        "--output",
+                        str(output_path),
+                    ]
+                )
+                report = json.loads(output_path.read_text(encoding="utf-8"))
+        finally:
+            if old_key is not None:
+                os.environ["OPENROUTER_API_KEY"] = old_key
+
+        self.assertEqual(exit_code, 2)
+        self.assertEqual(report["schema"], "paideia-agent-runtime-smoke/v1")
+        self.assertFalse(report["passed"])
+        self.assertEqual(report["status"], "needs_configuration")
+        self.assertFalse(report["details"]["run_attempted"])
+        self.assertEqual(report["details"]["failure_mode"], "live_provider_not_ready")
+        self.assertEqual(report["details"]["llm_status"], "skipped_provider_not_ready")
+        self.assertEqual(report["details"]["preflight_status"], "needs_configuration")
+        self.assertTrue(report["details"]["preflight_live_path_selected"])
+        self.assertFalse(report["details"]["preflight_network_call_made"])
+        self.assertEqual(report["details"]["completed_tools"], [])
+        self.assertEqual(report["details"]["memory_decision"], "skipped_provider_not_ready")
+        self.assertFalse(report["details"]["memory_auto_promotion_performed"])
+        self.assertTrue(report["details"]["public_safe"])
+
     def test_cli_llm_application_smoke_strict_fails_when_provider_is_not_ready(self) -> None:
         import os
 

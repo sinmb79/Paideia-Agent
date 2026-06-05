@@ -202,7 +202,7 @@ ai22b-talent-foundry audit-tool-capabilities `
   --output .\tool_capability_audit.json
 ```
 
-전체 P0 런타임 경로를 확인하려면 `run-agent-runtime-smoke`를 사용합니다. 이 명령은 선택한 LLM을 action intent policy, LLM application engine, 등록 도구 executor, 검증, review-gated memory candidate, runtime observability, audit log까지 실제 agent loop로 통과시킵니다. 기본 deterministic 실행은 네트워크를 호출하지 않으며, 선택한 API 또는 localhost provider를 실제로 호출하려면 `--live-check`를 명시합니다.
+전체 P0 런타임 경로를 확인하려면 `run-agent-runtime-smoke`를 사용합니다. 이 명령은 선택한 LLM을 action intent policy, LLM application engine, 등록 도구 executor, 검증, review-gated memory candidate, runtime observability, audit log까지 실제 agent loop로 통과시킵니다. 기본 deterministic 실행은 네트워크를 호출하지 않으며, 선택한 API 또는 localhost provider를 실제로 호출하려면 `--live-check`를 명시합니다. live provider가 준비되지 않은 경우에는 agent loop를 시작하기 전에 fail-closed로 닫히고 `status=needs_configuration`을 기록하며, 도구 실행이나 memory candidate를 남기지 않습니다.
 
 ```powershell
 ai22b-talent-foundry run-agent-runtime-smoke `
