@@ -19,7 +19,7 @@ The hygiene script now checks two classes of release risk:
 - blocked paths and blocked content such as private folders, local owner paths, API keys, tokens, and generated runtime outputs;
 - required public-release files such as `README.md`, `README.ko.md`, `SECURITY.md`, `LICENSE`, and `pyproject.toml` with package license metadata.
 
-The Python readiness audit writes a reviewable `paideia-public-release-readiness/v1` report. It checks source repository metadata and CI gates only; it does not call the network, execute subprocesses, or inspect private generated runtime state.
+The Python readiness audit writes a reviewable `paideia-public-release-readiness/v1` report. It checks source repository metadata, CI gates, and public candidate files under roots such as `src`, `docs`, `tests`, `scripts`, `examples`, and `data/public`. It does not call the network, execute subprocesses, or inspect private generated runtime state.
 
 ## Agent Bundle Gates
 

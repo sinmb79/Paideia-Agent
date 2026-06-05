@@ -52,6 +52,76 @@ REQUIRED_SECURITY_FRAGMENTS = [
     "check_public_repo_hygiene.ps1",
 ]
 
+PUBLIC_SCAN_DIRS = [
+    ".github",
+    "data/public",
+    "docs",
+    "evals",
+    "examples",
+    "scripts",
+    "src",
+    "tests",
+]
+
+PUBLIC_SCAN_ROOT_FILES = [
+    "LICENSE",
+    "README.md",
+    "README.ko.md",
+    "SECURITY.md",
+    "pyproject.toml",
+]
+
+PUBLIC_SCAN_EXCLUDED_DIR_NAMES = {
+    ".git",
+    ".mypy_cache",
+    ".pytest_cache",
+    "__pycache__",
+    "node_modules",
+    "dist",
+    "target",
+}
+
+PUBLIC_SCAN_TEXT_SUFFIXES = {
+    "",
+    ".cfg",
+    ".csv",
+    ".ini",
+    ".json",
+    ".jsonl",
+    ".md",
+    ".ps1",
+    ".py",
+    ".toml",
+    ".txt",
+    ".yml",
+    ".yaml",
+}
+
+PATH_BLOCKLIST_PATTERNS = [
+    re.compile(r"^AGENTS\.md$"),
+    re.compile(r"^docs/log\.md$"),
+    re.compile(r"^data/private/"),
+    re.compile(r"^data/processed/"),
+    re.compile(r"^models/"),
+    re.compile(r"^runs/"),
+    re.compile(r"^apps/[^/]+/runs/"),
+    re.compile(r"(^|/)node_modules/"),
+    re.compile(r"(^|/)dist/"),
+    re.compile(r"(^|/)target/"),
+]
+
+_PRIVATE_USER = "sin" + "mb"
+CONTENT_BLOCKLIST_PATTERNS = [
+    ("local_windows_user_path", re.compile(r"C:[\\/]+Users[\\/]+" + re.escape(_PRIVATE_USER), re.I)),
+    ("local_posix_user_path", re.compile(r"[\\/]Users[\\/]+" + re.escape(_PRIVATE_USER), re.I)),
+    ("openai_key_assignment", re.compile(r"OPENAI_API_KEY\s*=\s*['\"]?[^'\",\s]{8,}", re.I)),
+    ("generic_openai_secret", re.compile(r"sk-[A-Za-z0-9_-]{32,}")),
+    ("github_pat", re.compile(r"gh[pousr]_[A-Za-z0-9_]{20,}")),
+    ("private_key", re.compile(r"BEGIN (RSA |OPENSSH |EC |DSA )?PRIVATE KEY")),
+    ("refresh_token", re.compile(r"refresh_token\s*[:=]", re.I)),
+    ("auth_token", re.compile(r"auth_token\s*[:=]", re.I)),
+]
+
 
 def _read_text(path: Path) -> str:
     try:
@@ -84,6 +154,76 @@ def _optional_dependency_groups(pyproject_text: str) -> list[str]:
             if match:
                 groups.append(match.group(1))
     return groups
+
+
+def _safe_rel(path: Path, root: Path) -> str:
+    try:
+        return path.resolve().relative_to(root).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
+def _is_excluded_scan_path(path: Path) -> bool:
+    return any(part in PUBLIC_SCAN_EXCLUDED_DIR_NAMES for part in path.parts)
+
+
+def _public_candidate_files(root: Path) -> list[Path]:
+    candidates: list[Path] = []
+    for root_file in PUBLIC_SCAN_ROOT_FILES:
+        path = root / root_file
+        if path.is_file():
+            candidates.append(path)
+    for scan_dir in PUBLIC_SCAN_DIRS:
+        directory = root / scan_dir
+        if not directory.is_dir():
+            continue
+        for path in directory.rglob("*"):
+            if not path.is_file() or _is_excluded_scan_path(path.relative_to(root)):
+                continue
+            if path.suffix.casefold() not in PUBLIC_SCAN_TEXT_SUFFIXES:
+                continue
+            candidates.append(path)
+    return sorted(set(candidates), key=lambda item: _safe_rel(item, root))
+
+
+def _scan_public_candidate_files(root: Path) -> dict[str, Any]:
+    candidate_files = _public_candidate_files(root)
+    issues: list[dict[str, Any]] = []
+
+    for path in candidate_files:
+        rel = _safe_rel(path, root)
+        normalized = rel.replace("\\", "/")
+        for pattern in PATH_BLOCKLIST_PATTERNS:
+            if pattern.search(normalized):
+                issues.append(
+                    {
+                        "type": "blocked_path",
+                        "file": rel,
+                        "rule": pattern.pattern,
+                    }
+                )
+
+        try:
+            text = _read_text(path)
+        except (OSError, UnicodeDecodeError):
+            continue
+
+        for name, pattern in CONTENT_BLOCKLIST_PATTERNS:
+            if pattern.search(text):
+                issues.append(
+                    {
+                        "type": "blocked_content",
+                        "file": rel,
+                        "rule": name,
+                    }
+                )
+
+    return {
+        "candidate_file_count": len(candidate_files),
+        "candidate_roots": PUBLIC_SCAN_ROOT_FILES + PUBLIC_SCAN_DIRS,
+        "issue_count": len(issues),
+        "issues": issues,
+    }
 
 
 def _check(
@@ -209,6 +349,21 @@ def audit_public_release_readiness(
         issue="security_policy_fragment_missing",
     )
 
+    public_scan = _scan_public_candidate_files(root)
+    _check(
+        checks,
+        issues,
+        check_id="public_candidate_content_scan",
+        passed=public_scan["issue_count"] == 0,
+        details={
+            "candidate_file_count": public_scan["candidate_file_count"],
+            "candidate_roots": public_scan["candidate_roots"],
+            "issue_count": public_scan["issue_count"],
+            "issues": public_scan["issues"],
+        },
+        issue="public_candidate_content_or_path_issue",
+    )
+
     report = {
         "schema": PUBLIC_RELEASE_READINESS_SCHEMA,
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -220,6 +375,8 @@ def audit_public_release_readiness(
             "check_count": len(checks),
             "failed_count": len(issues),
             "required_public_file_count": len(REQUIRED_PUBLIC_FILES),
+            "public_candidate_file_count": public_scan["candidate_file_count"],
+            "public_candidate_issue_count": public_scan["issue_count"],
             "network_call_performed": False,
             "subprocess_executed": False,
             "private_runtime_outputs_scanned": False,

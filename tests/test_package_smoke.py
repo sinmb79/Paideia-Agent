@@ -86,10 +86,15 @@ class PackageSmokeTests(unittest.TestCase):
         self.assertTrue(report["passed"])
         self.assertEqual(report["status"], "passed")
         self.assertEqual(report["summary"]["failed_count"], 0)
+        self.assertGreater(report["summary"]["public_candidate_file_count"], 20)
+        self.assertEqual(report["summary"]["public_candidate_issue_count"], 0)
         self.assertFalse(report["summary"]["network_call_performed"])
         self.assertFalse(report["summary"]["subprocess_executed"])
         self.assertFalse(report["summary"]["private_runtime_outputs_scanned"])
         self.assertFalse(report["policy"]["secret_values_exported"])
+        check_by_id = {item["id"]: item for item in report["checks"]}
+        self.assertTrue(check_by_id["public_candidate_content_scan"]["passed"])
+        self.assertEqual(check_by_id["public_candidate_content_scan"]["details"]["issue_count"], 0)
 
 
 if __name__ == "__main__":

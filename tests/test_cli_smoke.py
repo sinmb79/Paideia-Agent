@@ -161,9 +161,14 @@ class CliSmokeTests(unittest.TestCase):
         self.assertTrue(public_release["passed"])
         self.assertEqual(public_release["status"], "passed")
         self.assertEqual(public_release["summary"]["failed_count"], 0)
+        self.assertGreater(public_release["summary"]["public_candidate_file_count"], 20)
+        self.assertEqual(public_release["summary"]["public_candidate_issue_count"], 0)
         self.assertFalse(public_release["summary"]["network_call_performed"])
         self.assertFalse(public_release["summary"]["subprocess_executed"])
         self.assertFalse(public_release["policy"]["secret_values_exported"])
+        check_by_id = {item["id"]: item for item in public_release["checks"]}
+        self.assertTrue(check_by_id["public_candidate_content_scan"]["passed"])
+        self.assertEqual(check_by_id["public_candidate_content_scan"]["details"]["issue_count"], 0)
 
 
 if __name__ == "__main__":
