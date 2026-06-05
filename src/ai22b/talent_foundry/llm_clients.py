@@ -39,6 +39,10 @@ PRIVATE_REASONING_KEY_MARKERS = (
     "privatereasoning",
     "reasoningtrace",
 )
+SAFE_PRIVATE_REASONING_METADATA_KEYS = {
+    "privatereasoningfieldsomitted",
+    "privatereasoningfieldvaluesstored",
+}
 
 
 class LLMClient(Protocol):
@@ -134,6 +138,8 @@ def _normalized_key(key: Any) -> str:
 
 def _is_private_reasoning_key(key: Any) -> bool:
     normalized = _normalized_key(key)
+    if normalized in SAFE_PRIVATE_REASONING_METADATA_KEYS:
+        return False
     return any(marker in normalized for marker in PRIVATE_REASONING_KEY_MARKERS)
 
 

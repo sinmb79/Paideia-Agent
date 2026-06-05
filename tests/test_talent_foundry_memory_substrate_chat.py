@@ -446,14 +446,20 @@ class TalentFoundryMemorySubstrateChatTests(unittest.TestCase):
                         {
                             "assistant_reply": "보스, 선택한 범용 LLM provider를 통해 로컬 기억 맥락으로 답했습니다.",
                             "reviewable_reasoning_summary": [
-                                {"step": "context", "summary": "active memory route was supplied to the provider."}
+                                {
+                                    "step": "context",
+                                    "summary": "active memory route was supplied to the provider.",
+                                    "hidden_chain_of_thought": "do not store this hidden chat trace",
+                                }
                             ],
                             "learning_candidate": {
                                 "lesson": "chat live providers must share the same local identity context.",
                                 "reusable_principle": "route non-OpenAI providers through the common LLMClient interface.",
                                 "memory_tags": ["generic_live_chat_provider"],
                                 "confidence": 0.88,
+                                "private_reasoning_trace": "do not promote this private chat trace",
                             },
+                            "chain_of_thought": "do not persist top-level private chat reasoning",
                         },
                         ensure_ascii=False,
                     ),
@@ -498,7 +504,13 @@ class TalentFoundryMemorySubstrateChatTests(unittest.TestCase):
         self.assertEqual(chat["reply_generation_mode"], "live_generic_llm_client")
         self.assertEqual(chat["llm_runtime_result"]["provider_adapter"], "generic_llm_client")
         self.assertEqual(chat["llm_runtime_result"]["engine"], "openrouter_api")
+        self.assertEqual(chat["llm_runtime_result"]["private_reasoning_fields_omitted"], 3)
+        self.assertFalse(chat["llm_runtime_result"]["data_policy"]["private_reasoning_field_values_stored"])
         self.assertEqual(chat["assistant_answer"], "보스, 선택한 범용 LLM provider를 통해 로컬 기억 맥락으로 답했습니다.")
+        serialized = json.dumps(chat, ensure_ascii=False)
+        self.assertNotIn("do not store this hidden chat trace", serialized)
+        self.assertNotIn("do not promote this private chat trace", serialized)
+        self.assertNotIn("do not persist top-level private chat reasoning", serialized)
         self.assertTrue(captured["messages"])
         self.assertEqual(captured["policy"]["response_format"], "json_object")
         self.assertTrue(

@@ -14,7 +14,11 @@ from ai22b.talent_foundry.language_development import (
 from ai22b.talent_foundry.growth_profile import read_growth_profile
 from ai22b.talent_foundry.learning_loop import build_reasoning_kernel, record_learning_experience
 from ai22b.talent_foundry.life_trace import read_life_trace_jsonl
-from ai22b.talent_foundry.llm_clients import build_llm_client, sanitize_llm_result_packet
+from ai22b.talent_foundry.llm_clients import (
+    build_llm_client,
+    count_private_reasoning_fields,
+    sanitize_llm_result_packet,
+)
 from ai22b.talent_foundry.llm_runtime import invoke_llm_application_engine
 
 
@@ -1224,10 +1228,13 @@ def _normalize_live_chat_output(output_text: str) -> dict[str, Any]:
                 "confidence": 0.5,
             },
         }
+    private_reasoning_fields_omitted = count_private_reasoning_fields(parsed)
+    parsed = sanitize_llm_result_packet(parsed)
     return {
         "assistant_reply": str(parsed.get("assistant_reply", "")).strip(),
         "reviewable_reasoning_summary": parsed.get("reviewable_reasoning_summary") or [],
         "learning_candidate": parsed.get("learning_candidate") or {},
+        "private_reasoning_fields_omitted": private_reasoning_fields_omitted,
     }
 
 
@@ -1294,6 +1301,7 @@ def _call_openai_responses_chat(
         "assistant_reply": parsed["assistant_reply"],
         "reviewable_reasoning_summary": parsed["reviewable_reasoning_summary"],
         "learning_candidate": parsed["learning_candidate"],
+        "private_reasoning_fields_omitted": parsed["private_reasoning_fields_omitted"],
         "raw_output_saved": False,
         "identity_policy": "application_engine_not_identity",
         "network_access": "openai_api_data_minimized",
@@ -1301,6 +1309,7 @@ def _call_openai_responses_chat(
             "send_private_training_files": False,
             "send_selected_memory_and_recent_chat_summaries": True,
             "store_hidden_chain_of_thought": False,
+            "private_reasoning_field_values_stored": False,
         },
     }
 
@@ -1367,6 +1376,7 @@ def _invoke_generic_live_chat_llm(
         "assistant_reply": parsed["assistant_reply"],
         "reviewable_reasoning_summary": parsed["reviewable_reasoning_summary"],
         "learning_candidate": parsed["learning_candidate"],
+        "private_reasoning_fields_omitted": parsed["private_reasoning_fields_omitted"],
         "raw_output_saved": False,
         "identity_policy": "application_engine_not_identity",
         "network_access": client_result.get("network_access", runtime_config.get("network_access")),
@@ -1383,6 +1393,7 @@ def _invoke_generic_live_chat_llm(
             "send_private_training_files": False,
             "send_selected_memory_and_recent_chat_summaries": True,
             "store_hidden_chain_of_thought": False,
+            "private_reasoning_field_values_stored": False,
         },
     }
 
