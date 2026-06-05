@@ -447,6 +447,8 @@ Hired job specs can also declare workspace-local input files:
 
 When `input_files` is present, Paideia reads only those declared UTF-8 text files through `WorkspaceSandbox.read_text` and writes `input_review.json`. The review records file names, relative paths when safe, byte counts, content hashes, short previews, read/reject status, and a no-network/no-subprocess adapter policy. It does not export local absolute paths. The execution proof requires `input_review.json` and at least one successful declared input read when a job declares inputs.
 
+Hired jobs also materialize declared `deliverables` as workspace files under `deliverables/*.md` and write `deliverable_manifest.json`. The manifest records each deliverable id, description, relative path, byte count, content hash, and no-private-reasoning/no-network policy. The execution proof verifies the manifest, checks that every declared deliverable file exists inside the workspace root, and compares the saved content hash before treating the job as P0-ready.
+
 Every agent run now includes `runtime_observability`: estimated context size, estimated prompt tokens, selected-memory count, selected-tool count, provider usage presence, fallback state, review/promotion/quarantine counters, and privacy flags showing that full session replay and private reasoning traces were not stored. Dataflow jobs also write `runtime_observability.json` inside the workspace, so the memory-board claim can be measured instead of only described.
 
 After a workspace, hired-job, or dataflow run, create an execution proof before trusting the result:

@@ -23,6 +23,7 @@ LLM_PROVIDER_PREFLIGHT_SCHEMA = "paideia-llm-provider-preflight/v1"
 DATAFLOW_TRANSPOSE_VERIFICATION_SCHEMA = "ai-talent-dataflow-transpose-verification/v1"
 WORKSPACE_TOOL_ARTIFACTS_SCHEMA = "paideia-workspace-tool-artifacts/v1"
 WORKSPACE_INPUT_REVIEW_SCHEMA = "paideia-workspace-input-review/v1"
+DELIVERABLE_MANIFEST_SCHEMA = "paideia-workspace-job-deliverables/v1"
 
 
 def _now() -> str:
@@ -243,6 +244,7 @@ def _required_workspace_outputs(schema: str) -> list[str]:
 def _required_job_outputs(*, input_files_declared: bool = False) -> list[str]:
     required = [
         "job_spec",
+        "deliverable_manifest",
         "job_report",
         "acceptance_checklist",
         "trace",
@@ -251,6 +253,46 @@ def _required_job_outputs(*, input_files_declared: bool = False) -> list[str]:
     if input_files_declared:
         required.append("input_review")
     return required
+
+
+def _deliverable_files_verified(manifest_path: Path | None, deliverable_manifest: dict[str, Any]) -> tuple[bool, dict[str, Any]]:
+    if manifest_path is None or not manifest_path.exists():
+        return False, {"reason": "deliverable_manifest_missing"}
+    root = manifest_path.parent.resolve()
+    artifacts = deliverable_manifest.get("artifacts", [])
+    if not isinstance(artifacts, list) or not artifacts:
+        return False, {"reason": "deliverable_artifacts_missing", "artifact_count": 0}
+    verified = 0
+    rejected_paths = 0
+    hash_mismatches = 0
+    for item in artifacts:
+        if not isinstance(item, dict):
+            continue
+        relative = item.get("relative_path")
+        if not relative:
+            rejected_paths += 1
+            continue
+        relative_path = Path(str(relative))
+        if relative_path.is_absolute() or ".." in relative_path.parts:
+            rejected_paths += 1
+            continue
+        path = (root / relative_path).resolve()
+        if not _is_relative_to(path, root) or not path.exists() or not path.is_file():
+            rejected_paths += 1
+            continue
+        if item.get("content_sha256") != _file_sha256(path):
+            hash_mismatches += 1
+            continue
+        verified += 1
+    return (
+        verified == len(artifacts) and rejected_paths == 0 and hash_mismatches == 0,
+        {
+            "artifact_count": len(artifacts),
+            "verified_count": verified,
+            "rejected_paths": rejected_paths,
+            "hash_mismatches": hash_mismatches,
+        },
+    )
 
 
 def build_workspace_execution_proof(
@@ -311,6 +353,9 @@ def build_workspace_execution_proof(
     if not isinstance(declared_input_files, list):
         declared_input_files = []
     input_files_declared = bool(declared_input_files)
+    declared_deliverables = job_spec.get("deliverables", [])
+    if not isinstance(declared_deliverables, list):
+        declared_deliverables = []
 
     if schema == "ai-talent-hired-agent-job-run/v1":
         required_job = _required_job_outputs(input_files_declared=input_files_declared)
@@ -419,6 +464,31 @@ def build_workspace_execution_proof(
         )
         checklist = _load_declared_json(job_outputs, "acceptance_checklist") or {}
         criteria = checklist.get("criteria", [])
+        deliverable_manifest_path = _path(job_outputs.get("deliverable_manifest"))
+        deliverable_manifest = _load_declared_json(job_outputs, "deliverable_manifest") or {}
+        deliverable_files_ok, deliverable_evidence = _deliverable_files_verified(
+            deliverable_manifest_path,
+            deliverable_manifest,
+        )
+        _check(
+            checks,
+            "job_deliverables_materialized",
+            deliverable_manifest.get("schema") == DELIVERABLE_MANIFEST_SCHEMA
+            and deliverable_manifest.get("declared_deliverable_count") == len(declared_deliverables)
+            and deliverable_manifest.get("artifact_count") == len(declared_deliverables)
+            and deliverable_manifest.get("artifact_policy", {}).get("workspace_root_only") is True
+            and deliverable_manifest.get("artifact_policy", {}).get("relative_paths_only") is True
+            and deliverable_manifest.get("artifact_policy", {}).get("network_call_performed") is False
+            and deliverable_manifest.get("artifact_policy", {}).get("subprocess_executed") is False
+            and deliverable_manifest.get("artifact_policy", {}).get("private_reasoning_trace") == "do_not_store"
+            and deliverable_files_ok,
+            evidence={
+                "schema": deliverable_manifest.get("schema"),
+                "declared_deliverable_count": deliverable_manifest.get("declared_deliverable_count"),
+                "artifact_count": deliverable_manifest.get("artifact_count"),
+                **deliverable_evidence,
+            },
+        )
         _check(
             checks,
             "job_acceptance_checklist_passed",

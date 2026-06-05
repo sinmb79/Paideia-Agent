@@ -3522,7 +3522,7 @@ class TalentFoundryTests(unittest.TestCase):
                 }
             ],
             "resource_limits": {
-                "max_declared_outputs": 8,
+                "max_declared_outputs": 12,
                 "max_total_output_bytes": 5_000_000,
                 "max_runtime_seconds": 120,
                 "allowed_network_hosts": ["localhost"],
@@ -3546,13 +3546,19 @@ class TalentFoundryTests(unittest.TestCase):
             )
             saved_run = json.loads(output_path.read_text(encoding="utf-8"))
             job_report = Path(run["job_outputs"]["job_report"])
+            deliverable_manifest_path = Path(run["job_outputs"]["deliverable_manifest"])
+            deliverable_paths = {key: Path(value) for key, value in run["job_outputs"]["deliverables"].items()}
             acceptance_checklist = Path(run["job_outputs"]["acceptance_checklist"])
             input_review_path = Path(run["job_outputs"]["input_review"])
             rollback = Path(run["job_outputs"]["rollback_manifest"])
             job_report_exists = job_report.exists()
+            deliverable_manifest_exists = deliverable_manifest_path.exists()
+            deliverable_files_exist = all(path.exists() for path in deliverable_paths.values())
             acceptance_checklist_exists = acceptance_checklist.exists()
             input_review_exists = input_review_path.exists()
             rollback_exists = rollback.exists()
+            deliverable_manifest = json.loads(deliverable_manifest_path.read_text(encoding="utf-8"))
+            macro_deliverable_text = deliverable_paths["macro_questions"].read_text(encoding="utf-8")
             checklist = json.loads(acceptance_checklist.read_text(encoding="utf-8"))
             input_review = json.loads(input_review_path.read_text(encoding="utf-8"))
             serialized_input_review = json.dumps(input_review, ensure_ascii=False)
@@ -3562,9 +3568,21 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(run["runtime_model"], "openclaw_style_hired_agent_job")
         self.assertEqual(saved_run["employment_context"]["relationship"], "installed_ai_talent_hired_as_local_agent")
         self.assertTrue(job_report_exists)
+        self.assertTrue(deliverable_manifest_exists)
+        self.assertTrue(deliverable_files_exist)
         self.assertTrue(acceptance_checklist_exists)
         self.assertTrue(input_review_exists)
         self.assertTrue(rollback_exists)
+        self.assertEqual(deliverable_manifest["schema"], "paideia-workspace-job-deliverables/v1")
+        self.assertEqual(deliverable_manifest["declared_deliverable_count"], 2)
+        self.assertEqual(deliverable_manifest["artifact_count"], 2)
+        self.assertIn("macro_questions", deliverable_paths)
+        self.assertIn("risk_notes", deliverable_paths)
+        self.assertIn("Cash flow stayed strong", macro_deliverable_text)
+        self.assertIn("Private reasoning trace: not stored", macro_deliverable_text)
+        self.assertTrue(
+            all(item["status"] == "created_as_declared_deliverable_artifact" for item in checklist["deliverables"])
+        )
         self.assertTrue(all(item["status"] == "satisfied_by_workspace_artifact" for item in checklist["criteria"]))
         self.assertEqual(input_review["schema"], "paideia-workspace-input-review/v1")
         self.assertEqual(input_review["declared_input_count"], 1)
@@ -3573,8 +3591,9 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("Cash flow stayed strong", input_review["inputs"][0]["preview"])
         self.assertNotIn(str(tmp_path), serialized_input_review)
         self.assertEqual(run["tool_authorization"]["network_access"], "blocked")
-        self.assertEqual(run["tool_authorization"]["resource_limits"]["max_declared_outputs"], 8)
+        self.assertEqual(run["tool_authorization"]["resource_limits"]["max_declared_outputs"], 12)
         self.assertEqual(run["workspace_run"]["workspace_resource_usage"]["declared_output_count"], 7)
+        self.assertTrue(run["job_resource_usage"]["within_budget"])
         self.assertTrue(run["workspace_run"]["workspace_resource_usage"]["within_budget"])
         self.assertEqual(run["active_memory_route"]["schema"], "ai-talent-active-memory-route/v1")
         self.assertEqual(run["workspace_run"]["active_memory_route"]["compression_policy"], "summaries_and_skills_only")

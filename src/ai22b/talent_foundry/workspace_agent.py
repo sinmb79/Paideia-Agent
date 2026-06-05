@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -21,6 +22,7 @@ WORKSPACE_JOB_RUN_SCHEMA = "ai-talent-workspace-agent-job-run/v1"
 ACCEPTANCE_CHECKLIST_SCHEMA = "ai-talent-agent-job-acceptance-checklist/v1"
 WORKSPACE_TOOL_ARTIFACTS_SCHEMA = "paideia-workspace-tool-artifacts/v1"
 WORKSPACE_INPUT_REVIEW_SCHEMA = "paideia-workspace-input-review/v1"
+DELIVERABLE_MANIFEST_SCHEMA = "paideia-workspace-job-deliverables/v1"
 
 
 def _task_plan_text(manifest: dict[str, Any], task: str, base_run: dict[str, Any]) -> str:
@@ -225,6 +227,134 @@ def _workspace_input_review(sandbox: WorkspaceSandbox, input_files: list[dict[st
     }
 
 
+def _safe_deliverable_filename(deliverable_id: str, index: int) -> str:
+    slug = re.sub(r"[^A-Za-z0-9_.-]+", "_", deliverable_id.strip()).strip("._-").lower()
+    if not slug:
+        slug = f"deliverable_{index}"
+    return f"{index:02d}_{slug[:80]}.md"
+
+
+def _input_review_lines(input_review: dict[str, Any] | None) -> list[str]:
+    if not input_review:
+        return ["- Declared inputs: none"]
+    lines = [
+        (
+            f"- Declared inputs: {input_review.get('declared_input_count', 0)} "
+            f"(read {input_review.get('read_count', 0)}, rejected {input_review.get('rejected_count', 0)})"
+        )
+    ]
+    for item in input_review.get("inputs", [])[:5]:
+        if not isinstance(item, dict):
+            continue
+        preview = str(item.get("preview", "")).replace("\n", " ")[:240]
+        lines.append(
+            f"- {item.get('file_name')}: {item.get('status')} / {item.get('purpose')}"
+            + (f" / preview: {preview}" if preview else "")
+        )
+    return lines
+
+
+def _deliverable_text(
+    manifest: dict[str, Any],
+    job_spec: dict[str, Any],
+    deliverable: dict[str, Any],
+    workspace_run: dict[str, Any],
+    input_review: dict[str, Any] | None,
+) -> str:
+    agent = manifest["agent"]
+    llm_result = workspace_run.get("llm_runtime_result", {})
+    base_run = workspace_run.get("base_agent_run", {})
+    selected_tools = base_run.get("selected_tools", [])
+    evidence = workspace_run.get("workspace_outputs", {})
+    return "\n".join(
+        [
+            f"# {deliverable['id']}",
+            "",
+            f"- Agent: {agent.get('name')}",
+            f"- Role: {agent.get('role')}",
+            f"- Objective: {job_spec['objective']}",
+            f"- Deliverable: {deliverable['description']}",
+            f"- LLM engine: {llm_result.get('engine')}",
+            f"- LLM status: {llm_result.get('status')}",
+            f"- Selected tools: {', '.join(selected_tools) if selected_tools else 'none'}",
+            "- Network: blocked",
+            "- Private reasoning trace: not stored",
+            "",
+            "## Declared Inputs",
+            *_input_review_lines(input_review),
+            "",
+            "## Work Draft",
+            (
+                "This deliverable was materialized from the job objective, selected local memory summaries, "
+                "declared workspace inputs, registered tool review packets, and the local execution trace."
+            ),
+            "",
+            f"Boss-facing result: {deliverable['description']}",
+            "",
+            "## Evidence",
+            f"- task_plan: {Path(str(evidence.get('task_plan', 'task_plan.md'))).name}",
+            f"- result_summary: {Path(str(evidence.get('result_summary', 'result_summary.md'))).name}",
+            f"- trace: {Path(str(evidence.get('trace', 'trace.jsonl'))).name}",
+            "- verification: acceptance_checklist.json and workspace_execution_proof.json can verify this artifact.",
+            "",
+            "## Review Note",
+            "This file is a reviewable local work artifact. It is not an autonomous external action, trade, upload, or final human approval.",
+        ]
+    )
+
+
+def _write_deliverables(
+    sandbox: WorkspaceSandbox,
+    manifest: dict[str, Any],
+    job_spec: dict[str, Any],
+    workspace_run: dict[str, Any],
+    input_review: dict[str, Any] | None,
+) -> tuple[Path, dict[str, Any], dict[str, Path]]:
+    artifacts: list[dict[str, Any]] = []
+    paths: dict[str, Path] = {}
+    for index, deliverable in enumerate(job_spec["deliverables"], start=1):
+        deliverable_id = str(deliverable["id"])
+        relative_path = Path("deliverables") / _safe_deliverable_filename(deliverable_id, index)
+        text = _deliverable_text(manifest, job_spec, deliverable, workspace_run, input_review) + "\n"
+        path = sandbox.write_text(relative_path, text, purpose=f"job_deliverable:{deliverable_id}")
+        data = path.read_bytes()
+        paths[deliverable_id] = path
+        artifacts.append(
+            {
+                "id": deliverable_id,
+                "description": deliverable["description"],
+                "relative_path": path.relative_to(sandbox.root).as_posix(),
+                "file_name": path.name,
+                "byte_count": len(data),
+                "content_sha256": hashlib.sha256(data).hexdigest(),
+                "status": "created_as_declared_deliverable_artifact",
+                "private_reasoning_trace_stored": False,
+            }
+        )
+    deliverable_manifest = {
+        "schema": DELIVERABLE_MANIFEST_SCHEMA,
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "objective": job_spec["objective"],
+        "declared_deliverable_count": len(job_spec["deliverables"]),
+        "artifact_count": len(artifacts),
+        "artifacts": artifacts,
+        "artifact_policy": {
+            "workspace_root_only": True,
+            "relative_paths_only": True,
+            "network_call_performed": False,
+            "subprocess_executed": False,
+            "private_reasoning_trace": "do_not_store",
+            "boss_review_required": True,
+        },
+    }
+    manifest_path = sandbox.write_json(
+        "deliverable_manifest.json",
+        deliverable_manifest,
+        purpose="deliverable_manifest",
+    )
+    return manifest_path, deliverable_manifest, paths
+
+
 def _job_report_text(manifest: dict[str, Any], job_spec: dict[str, Any], workspace_run: dict[str, Any]) -> str:
     agent = manifest["agent"]
     deliverables = "\n".join(
@@ -260,6 +390,8 @@ def _acceptance_checklist(
     workspace_run: dict[str, Any],
     *,
     input_review_path: Path | None = None,
+    deliverable_manifest_path: Path | None = None,
+    deliverable_manifest: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     evidence = [
         workspace_run["workspace_outputs"].get("task_plan"),
@@ -268,7 +400,14 @@ def _acceptance_checklist(
     ]
     if input_review_path is not None:
         evidence.append(str(input_review_path))
+    if deliverable_manifest_path is not None:
+        evidence.append(str(deliverable_manifest_path))
     evidence = [item for item in evidence if item]
+    deliverable_artifacts = {
+        str(item.get("id")): item
+        for item in (deliverable_manifest or {}).get("artifacts", [])
+        if isinstance(item, dict)
+    }
     return {
         "schema": ACCEPTANCE_CHECKLIST_SCHEMA,
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -277,7 +416,9 @@ def _acceptance_checklist(
             {
                 "id": item["id"],
                 "description": item["description"],
-                "status": "created_as_workspace_artifact",
+                "status": "created_as_declared_deliverable_artifact",
+                "artifact": deliverable_artifacts.get(item["id"], {}).get("relative_path"),
+                "content_sha256": deliverable_artifacts.get(item["id"], {}).get("content_sha256"),
                 "review_required": "boss_or_oversight_committee",
             }
             for item in job_spec["deliverables"]
@@ -454,13 +595,22 @@ def run_workspace_agent_job_from_manifest(
     sandbox = WorkspaceSandbox(workspace_dir, **sandbox_kwargs_from_resource_limits(normalized.get("resource_limits")))
     sandbox.ensure_root()
     job_spec_path = sandbox.write_json("job_spec.json", normalized, purpose="job_spec")
+    input_review: dict[str, Any] | None = None
     input_review_path: Path | None = None
     if normalized.get("input_files"):
+        input_review = _workspace_input_review(sandbox, normalized["input_files"])
         input_review_path = sandbox.write_json(
             "input_review.json",
-            _workspace_input_review(sandbox, normalized["input_files"]),
+            input_review,
             purpose="workspace_input_review",
         )
+    deliverable_manifest_path, deliverable_manifest, deliverable_paths = _write_deliverables(
+        sandbox,
+        manifest,
+        normalized,
+        workspace_run,
+        input_review,
+    )
     job_report_path = sandbox.write_text(
         "job_report.md",
         _job_report_text(manifest, normalized, workspace_run) + "\n",
@@ -468,7 +618,13 @@ def run_workspace_agent_job_from_manifest(
     )
     checklist_path = sandbox.write_json(
         "acceptance_checklist.json",
-        _acceptance_checklist(normalized, workspace_run, input_review_path=input_review_path),
+        _acceptance_checklist(
+            normalized,
+            workspace_run,
+            input_review_path=input_review_path,
+            deliverable_manifest_path=deliverable_manifest_path,
+            deliverable_manifest=deliverable_manifest,
+        ),
         purpose="acceptance_checklist",
     )
     trace_path = sandbox.append_jsonl(
@@ -486,6 +642,11 @@ def run_workspace_agent_job_from_manifest(
                 if input_review_path is not None
                 else []
             ),
+            _trace_entry(
+                "declared_deliverables_materialized",
+                file=deliverable_manifest_path.name,
+                deliverable_count=len(normalized.get("deliverables", [])),
+            ),
             _trace_entry("local_file_write", file=job_report_path.name, purpose="job_report"),
             _trace_entry("acceptance_checklist", status="ready_for_boss_review"),
             _trace_entry("local_file_write", file="job_rollback_manifest.json", purpose="rollback_manifest"),
@@ -496,6 +657,8 @@ def run_workspace_agent_job_from_manifest(
 
     result["job_outputs"] = {
         "job_spec": str(job_spec_path),
+        "deliverable_manifest": str(deliverable_manifest_path),
+        "deliverables": {key: str(path) for key, path in deliverable_paths.items()},
         "job_report": str(job_report_path),
         "acceptance_checklist": str(checklist_path),
         "trace": str(trace_path),
