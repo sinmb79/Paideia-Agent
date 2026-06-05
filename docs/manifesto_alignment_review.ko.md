@@ -59,9 +59,9 @@
 
 본체 제어 분신 군체는 구현되어 있지만, 여러 시나리오를 동시에 굴려 성과를 비교하고, 가장 좋은 결과만 승격하는 simulation rollout scheduler는 아직 충분히 제품화되지 않았습니다.
 
-5. 토큰 절감과 성능 향상은 아직 계량되지 않았습니다.
+5. 토큰 절감과 성능 향상은 초기 계량 블록이 들어갔지만, 비교 리포트는 계속 보강해야 합니다.
 
-메모리 기판과 bounded context 구조는 있지만, 일반 프롬프트형 에이전트 대비 토큰 사용량, 비용, 정확도, 재작업률을 비교하는 리포트는 없습니다.
+Agent run과 dataflow run에 `runtime_observability`가 들어가 컨텍스트 크기, 추정 토큰, 선택된 메모리 수, 도구 수, provider usage 존재 여부, fallback, review/promotion/quarantine 카운터를 기록합니다. 다만 일반 프롬프트형 에이전트 대비 비용, 정확도, 재작업률을 비교하는 장기 리포트는 아직 별도 과제로 남아 있습니다.
 
 6. 외부 LLM 어댑터는 doctor 기반 운영 준비 상태로 올라왔지만, 실제 provider별 장기 운영 검증은 계속 필요합니다.
 
@@ -97,6 +97,7 @@
 ### 5단계: 비용/성능 계량
 
 - 각 작업의 컨텍스트 크기, 추정 토큰, 선택된 메모리 수, 재검토 횟수, promotion/quarantine 비율을 기록합니다.
+- 현재 P0 반영: agent/dataflow 실행 결과에 `runtime_observability`를 추가해 위 지표를 초기 기록합니다.
 - 일반 프롬프트형 에이전트와 Paideia memory-board 경로를 비교하는 리포트를 생성합니다.
 
 ### 6단계: 실제 LLM 어댑터 강화

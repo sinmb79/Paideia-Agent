@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from ai22b.talent_foundry.learning_loop import route_active_memory
+from ai22b.talent_foundry.runtime_observability import build_dataflow_runtime_observability
 from ai22b.talent_foundry.workspace_sandbox import WorkspaceSandbox
 
 
@@ -447,6 +448,14 @@ def run_dataflow_job_from_manifest(
         verification=verification,
         review_label=review,
     )
+    runtime_observability = build_dataflow_runtime_observability(
+        formatted_job=formatted_job,
+        active_memory_cache=active_memory_cache,
+        tile_matrix=tile_matrix,
+        shadow_buffers=shadow_buffers,
+        verification=verification,
+        growth_candidate=growth_candidate,
+    )
 
     paths = {
         "formatted_job": sandbox.safe_path("formatted_job.json"),
@@ -457,6 +466,7 @@ def run_dataflow_job_from_manifest(
         "synthesis": sandbox.safe_path("synthesis.json"),
         "transpose_verification": sandbox.safe_path("transpose_verification.json"),
         "growth_commit_candidate": sandbox.safe_path("growth_commit_candidate.json"),
+        "runtime_observability": sandbox.safe_path("runtime_observability.json"),
         "rollback_manifest": sandbox.safe_path("rollback_manifest.json"),
         "workspace_sandbox": sandbox.safe_path("workspace_sandbox.json"),
         "dataflow_run": sandbox.safe_path("dataflow_run.json"),
@@ -474,6 +484,7 @@ def run_dataflow_job_from_manifest(
     )
     sandbox.write_json("transpose_verification.json", verification, purpose="transpose_verification")
     sandbox.write_json("growth_commit_candidate.json", growth_candidate, purpose="growth_commit_candidate")
+    sandbox.write_json("runtime_observability.json", runtime_observability, purpose="runtime_observability")
     sandbox.write_rollback_manifest("rollback_manifest.json", operation_id="dataflow_job_run")
 
     agent = manifest.get("agent", {})
@@ -497,6 +508,7 @@ def run_dataflow_job_from_manifest(
         "synthesis": synthesis,
         "transpose_verification": verification,
         "growth_commit_candidate": growth_candidate,
+        "runtime_observability": runtime_observability,
         "workspace_sandbox": sandbox.snapshot(),
         "workspace_outputs": {key: str(value) for key, value in paths.items()},
     }

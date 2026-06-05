@@ -13,6 +13,7 @@ from ai22b.talent_foundry.action_policy import (
 )
 from ai22b.talent_foundry.llm_clients import LLMClient
 from ai22b.talent_foundry.llm_runtime import build_llm_runtime_config, invoke_llm_application_engine
+from ai22b.talent_foundry.runtime_observability import build_agent_runtime_observability
 from ai22b.talent_foundry.tool_registry import execute_registered_tools, tool_descriptors
 
 
@@ -220,6 +221,19 @@ def run_agent_execution_loop(
         "private_reasoning_trace_policy": "do_not_store",
         "promotion_requires": ["verification_passed", "boss_or_committee_review"],
     }
+    runtime_observability = build_agent_runtime_observability(
+        manifest=manifest,
+        task=task,
+        memory=memory,
+        selected_tools=selected_tools,
+        policy_decision=policy_decision,
+        tool_execution=tool_execution,
+        llm_result=llm_result,
+        verification=verification,
+        memory_write=memory_write,
+        llm_mode=llm_mode,
+        runtime_config=effective_runtime,
+    )
     audit_events = [
         {
             "recorded_at_utc": created_at,
@@ -237,6 +251,12 @@ def run_agent_execution_loop(
             "recorded_at_utc": _now(),
             "event": "tool_execution_verified",
             "status": verification["status"],
+        },
+        {
+            "recorded_at_utc": _now(),
+            "event": "runtime_observability_recorded",
+            "estimated_prompt_tokens": runtime_observability["context"]["prompt_context_estimated_tokens"],
+            "selected_memory_count": runtime_observability["context"]["selected_memory_count"],
         },
     ]
 
@@ -285,6 +305,7 @@ def run_agent_execution_loop(
         "tool_execution": tool_execution,
         "verification": verification,
         "memory_write": memory_write,
+        "runtime_observability": runtime_observability,
         "audit_events": audit_events,
         "response": response,
         "growth_update": growth_update,

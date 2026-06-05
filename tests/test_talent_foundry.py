@@ -1221,6 +1221,12 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(result["execution_loop"]["schema"], "paideia-agent-execution-loop/v1")
         self.assertEqual(result["policy_decision"]["decision_model"], "action_intent_capability_v1")
         self.assertEqual(result["verification"]["status"], "passed")
+        self.assertEqual(result["runtime_observability"]["schema"], "paideia-runtime-observability/v1")
+        self.assertGreater(result["runtime_observability"]["context"]["prompt_context_estimated_tokens"], 0)
+        self.assertGreaterEqual(result["runtime_observability"]["context"]["selected_memory_count"], 1)
+        self.assertFalse(result["runtime_observability"]["context"]["full_session_replay_used"])
+        self.assertEqual(result["runtime_observability"]["performance_proxy"]["selected_tool_count"], len(result["selected_tools"]))
+        self.assertEqual(result["runtime_observability"]["learning_flow"]["promotion_candidate_count"], 1)
         self.assertIn("local_file_read", result["selected_tools"])
         self.assertIn("local_file_write", result["selected_tools"])
         self.assertIn("evidence_packet", result["selected_tools"])
@@ -4589,6 +4595,7 @@ class TalentFoundryTests(unittest.TestCase):
                 "synthesis_report",
                 "transpose_verification",
                 "growth_commit_candidate",
+                "runtime_observability",
                 "rollback_manifest",
                 "workspace_sandbox",
             ]:
@@ -4597,10 +4604,16 @@ class TalentFoundryTests(unittest.TestCase):
             active_cache_path = Path(run["workspace_outputs"]["active_memory_cache"])
             active_cache_size = active_cache_path.stat().st_size
             active_cache = json.loads(active_cache_path.read_text(encoding="utf-8"))
+            observability = json.loads(Path(run["workspace_outputs"]["runtime_observability"]).read_text(encoding="utf-8"))
             rollback = json.loads(Path(run["workspace_outputs"]["rollback_manifest"]).read_text(encoding="utf-8"))
             sandbox = json.loads(Path(run["workspace_outputs"]["workspace_sandbox"]).read_text(encoding="utf-8"))
 
         self.assertTrue(run["workspace_sandbox"]["enforcement"]["enabled"])
+        self.assertEqual(run["runtime_observability"]["schema"], "paideia-runtime-observability/v1")
+        self.assertEqual(observability["schema"], "paideia-runtime-observability/v1")
+        self.assertEqual(run["runtime_observability"]["context"]["selected_memory_count"], len(active_cache["selected_memory_tiles"]))
+        self.assertFalse(run["runtime_observability"]["cost_proxy"]["billable_provider_possible"])
+        self.assertEqual(run["runtime_observability"]["performance_proxy"]["tile_count"], len(run["tile_matrix"]["tiles"]))
         self.assertLess(active_cache_size, 2_000_000)
         self.assertEqual(active_cache["cache_policy"]["safe_reference_detail"], "summary_keys_only")
         self.assertNotIn('"safe_reference":', json.dumps(active_cache, ensure_ascii=False))
