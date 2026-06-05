@@ -7,7 +7,12 @@ from pathlib import Path
 from typing import Any
 
 from ai22b.from_scratch.bigram import generate_text, load_model
-from ai22b.talent_foundry.llm_clients import LLMClient, build_llm_client, build_runtime_messages
+from ai22b.talent_foundry.llm_clients import (
+    LLMClient,
+    build_llm_client,
+    build_runtime_messages,
+    sanitize_llm_result_packet,
+)
 
 
 RUNTIME_SCHEMA = "ai-talent-llm-runtime/v1"
@@ -382,6 +387,7 @@ def _invoke_live_client(
     llm_client = client or build_llm_client(runtime_config)
     messages = build_runtime_messages(manifest=manifest, task=task, policy_context=policy_context)
     client_result = llm_client.generate(messages, tools=tools or [], policy=policy_context or {})
+    client_result = sanitize_llm_result_packet(client_result)
     engine = runtime_config["engine"]
     if client_result.get("status") != "completed":
         return {

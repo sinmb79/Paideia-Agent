@@ -1290,7 +1290,12 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertNotIn("보스 승인 없는 외부 업로드", upload_decision["policy_violations"])
 
     def test_llm_runtime_live_mode_uses_client_interface_and_auto_fallback(self) -> None:
+        import os
+        from unittest.mock import patch
+
         from ai22b.talent_foundry.llm_runtime import build_llm_runtime_config, invoke_llm_application_engine
+
+        secret = "fixture_runtime_injected_client_secret_12345"
 
         class FakeClient:
             def __init__(self, status: str) -> None:
@@ -1304,12 +1309,14 @@ class TalentFoundryTests(unittest.TestCase):
                         "status": "completed",
                         "text": "보스 검토용 live LLM 초안입니다.",
                         "model": "fake-model",
+                        "debug_headers": {"Authorization": f"Bearer {secret}"},
                     }
                 return {
                     "schema": "paideia-llm-client-result/v1",
                     "engine": "fake_live_llm",
                     "status": "unavailable",
                     "reason": "fake_offline",
+                    "error": f"https://example.invalid/provider?api_key={secret} Authorization: Bearer {secret}",
                 }
 
         config = build_llm_runtime_config(engine="openai_chatgpt_codex", model="fake-model")
@@ -1318,20 +1325,21 @@ class TalentFoundryTests(unittest.TestCase):
             "memory_profile": {"procedural_principles": ["검증"], "semantic_themes": ["근거"]},
         }
 
-        live = invoke_llm_application_engine(
-            config,
-            manifest=manifest,
-            task="거시경제 질문 정리",
-            llm_mode="live",
-            client=FakeClient("completed"),
-        )
-        fallback = invoke_llm_application_engine(
-            config,
-            manifest=manifest,
-            task="거시경제 질문 정리",
-            llm_mode="auto",
-            client=FakeClient("unavailable"),
-        )
+        with patch.dict(os.environ, {"OPENAI_API_KEY": secret}, clear=False):
+            live = invoke_llm_application_engine(
+                config,
+                manifest=manifest,
+                task="거시경제 질문 정리",
+                llm_mode="live",
+                client=FakeClient("completed"),
+            )
+            fallback = invoke_llm_application_engine(
+                config,
+                manifest=manifest,
+                task="거시경제 질문 정리",
+                llm_mode="auto",
+                client=FakeClient("unavailable"),
+            )
 
         self.assertEqual(live["status"], "completed")
         self.assertEqual(live["draft"], "보스 검토용 live LLM 초안입니다.")
@@ -1339,6 +1347,9 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(fallback["status"], "bridge_context_prepared")
         self.assertTrue(fallback["fallback_used"])
         self.assertEqual(fallback["live_attempt"]["reason"], "fake_offline")
+        serialized = json.dumps({"live": live, "fallback": fallback}, ensure_ascii=False)
+        self.assertNotIn(secret, serialized)
+        self.assertIn("[REDACTED_SECRET]", serialized)
 
     def test_external_live_clients_fail_closed_without_required_keys_or_models(self) -> None:
         import os
