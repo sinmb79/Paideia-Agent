@@ -423,9 +423,10 @@ ai22b-talent-foundry run-hired-dataflow-job `
   --llm-model openai/gpt-4.1-mini
 ```
 
-Workspace runs also write three P0 runtime artifacts inside the allowed workspace root:
+Workspace runs also write four P0 runtime artifacts inside the allowed workspace root:
 
 - `runtime_execution.json`: the action policy, LLM runtime result, registered tool execution, verification, and memory-write decision snapshot.
+- `workspace_tool_results.json`: materialized registered-tool outputs written through `WorkspaceSandbox`, including evidence packets and review adapters as local review artifacts rather than hidden in-memory state.
 - `rollback_manifest.json`: a manual-review rollback plan listing declared workspace outputs in safe delete order, never outside the workspace root.
 - `workspace_sandbox.json`: filesystem allowlist, blocked network/subprocess policy, per-file and total resource limits, runtime budget, rollback notes, audit requirements, and the `WorkspaceSandbox` enforcement audit for writes, path escapes, output size, trace limits, network/subprocess attempts, and whole-run budget usage.
 

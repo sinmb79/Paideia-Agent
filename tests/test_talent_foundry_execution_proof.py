@@ -38,6 +38,7 @@ class TalentFoundryExecutionProofTests(unittest.TestCase):
         self.assertEqual(saved["schema"], "paideia-workspace-execution-proof/v1")
         self.assertEqual(saved["status"], "passed")
         self.assertIn("job_acceptance_checklist_passed", {item["id"] for item in saved["checks"]})
+        self.assertIn("workspace_tool_artifacts_materialized", {item["id"] for item in saved["checks"]})
         self.assertIn("llm_provider_preflight_present", {item["id"] for item in saved["checks"]})
         self.assertTrue(saved["artifact_summary"]["absolute_paths_redacted"])
         self.assertNotIn(str(tmp_path), serialized)

@@ -211,9 +211,10 @@ ai22b-talent-foundry run-hired-dataflow-job `
   --llm-model openai/gpt-4.1-mini
 ```
 
-워크스페이스 실행은 허용된 workspace root 안에 세 가지 P0 런타임 산출물도 남깁니다.
+워크스페이스 실행은 허용된 workspace root 안에 네 가지 P0 런타임 산출물도 남깁니다.
 
 - `runtime_execution.json`: action policy, LLM runtime 결과, 등록형 도구 실행, 검증, 메모리 기록 판단 스냅샷
+- `workspace_tool_results.json`: 등록형 도구 결과를 `WorkspaceSandbox`를 통해 실제 로컬 검토 artifact로 남긴 파일입니다. evidence packet과 review adapter 결과가 in-memory 상태에만 머물지 않습니다.
 - `rollback_manifest.json`: workspace 내부에 선언된 산출물만 안전한 삭제 순서로 되돌릴 수 있게 하는 수동 검토용 rollback 계획
 - `workspace_sandbox.json`: 파일시스템 allowlist, 네트워크/서브프로세스 차단 정책, 파일별/전체 리소스 제한, 런타임 예산, rollback 메모, 감사 요구사항, 그리고 쓰기 경로/경로 탈출/출력 크기/trace 제한/네트워크·서브프로세스 시도/전체 작업 예산을 강제한 `WorkspaceSandbox` 감사 기록
 

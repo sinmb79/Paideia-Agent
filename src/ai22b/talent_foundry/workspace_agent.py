@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -16,6 +18,7 @@ from ai22b.talent_foundry.workspace_sandbox import (
 WORKSPACE_RUN_SCHEMA = "ai-talent-workspace-agent-run/v1"
 WORKSPACE_JOB_RUN_SCHEMA = "ai-talent-workspace-agent-job-run/v1"
 ACCEPTANCE_CHECKLIST_SCHEMA = "ai-talent-agent-job-acceptance-checklist/v1"
+WORKSPACE_TOOL_ARTIFACTS_SCHEMA = "paideia-workspace-tool-artifacts/v1"
 
 
 def _task_plan_text(manifest: dict[str, Any], task: str, base_run: dict[str, Any]) -> str:
@@ -57,6 +60,49 @@ def _trace_entry(action: str, **fields: Any) -> dict[str, Any]:
         "recorded_at_utc": datetime.now(timezone.utc).isoformat(),
         "action": action,
         **fields,
+    }
+
+
+def _digest(value: Any) -> str:
+    return hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
+
+
+def _workspace_tool_artifacts(base_run: dict[str, Any]) -> dict[str, Any]:
+    tool_execution = base_run.get("tool_execution", {})
+    tool_results = tool_execution.get("tool_results", []) if isinstance(tool_execution, dict) else []
+    artifacts = []
+    for item in tool_results:
+        if not isinstance(item, dict):
+            continue
+        output = item.get("output", {})
+        artifacts.append(
+            {
+                "tool": item.get("tool"),
+                "status": item.get("status"),
+                "capability": item.get("capability"),
+                "output_schema": output.get("schema") if isinstance(output, dict) else None,
+                "output_digest_sha256": _digest(output),
+                "output": output,
+                "workspace_side_effect": "materialized_review_artifact_only",
+                "private_reasoning_trace_stored": False,
+            }
+        )
+    return {
+        "schema": WORKSPACE_TOOL_ARTIFACTS_SCHEMA,
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "execution_model": tool_execution.get("execution_model"),
+        "selected_tools": base_run.get("selected_tools", []),
+        "capability_scope": tool_execution.get("capability_scope", {}),
+        "artifact_count": len(artifacts),
+        "artifacts": artifacts,
+        "adapter_policy": {
+            "source": "registered_capability_checked_local_tools_v1",
+            "materialized_by": "WorkspaceSandbox.write_json",
+            "network_call_performed": False,
+            "subprocess_executed": False,
+            "private_reasoning_trace": "do_not_store",
+            "learning_promotion_performed": False,
+        },
     }
 
 
@@ -216,6 +262,11 @@ def run_workspace_agent_from_manifest(
     plan_path = sandbox.write_text("task_plan.md", plan_text + "\n", purpose="task_plan")
     summary_path = sandbox.write_text("result_summary.md", summary_text + "\n", purpose="result_summary")
     runtime_execution_path = sandbox.write_json("runtime_execution.json", base_run, purpose="runtime_execution_snapshot")
+    workspace_tool_results_path = sandbox.write_json(
+        "workspace_tool_results.json",
+        _workspace_tool_artifacts(base_run),
+        purpose="workspace_tool_artifacts",
+    )
     trace_path = sandbox.write_jsonl(
         "trace.jsonl",
         [
@@ -228,6 +279,7 @@ def run_workspace_agent_from_manifest(
             _trace_entry("local_file_write", file=plan_path.name, purpose="task_plan"),
             _trace_entry("local_file_write", file=summary_path.name, purpose="result_summary"),
             _trace_entry("local_file_write", file=runtime_execution_path.name, purpose="runtime_execution_snapshot"),
+            _trace_entry("local_file_write", file=workspace_tool_results_path.name, purpose="workspace_tool_artifacts"),
             _trace_entry("local_file_write", file="rollback_manifest.json", purpose="rollback_manifest"),
             _trace_entry("local_file_write", file="workspace_sandbox.json", purpose="workspace_sandbox_policy"),
             _trace_entry("memory_growth_candidate", source="workspace_agent_run"),
@@ -242,6 +294,7 @@ def run_workspace_agent_from_manifest(
         "result_summary": str(summary_path),
         "trace": str(trace_path),
         "runtime_execution": str(runtime_execution_path),
+        "workspace_tool_results": str(workspace_tool_results_path),
         "rollback_manifest": str(rollback_path),
         "workspace_sandbox": str(sandbox_path),
     }

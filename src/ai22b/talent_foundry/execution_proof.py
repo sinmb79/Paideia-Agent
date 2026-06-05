@@ -21,6 +21,7 @@ SUPPORTED_RUN_SCHEMAS = {
 }
 LLM_PROVIDER_PREFLIGHT_SCHEMA = "paideia-llm-provider-preflight/v1"
 DATAFLOW_TRANSPOSE_VERIFICATION_SCHEMA = "ai-talent-dataflow-transpose-verification/v1"
+WORKSPACE_TOOL_ARTIFACTS_SCHEMA = "paideia-workspace-tool-artifacts/v1"
 
 
 def _now() -> str:
@@ -232,6 +233,7 @@ def _required_workspace_outputs(schema: str) -> list[str]:
         "result_summary",
         "trace",
         "runtime_execution",
+        "workspace_tool_results",
         "rollback_manifest",
         "workspace_sandbox",
     ]
@@ -477,6 +479,27 @@ def build_workspace_execution_proof(
             evidence={
                 "execution_model": tool_execution.get("execution_model"),
                 "tool_count": len(tool_execution.get("tool_results", [])) if isinstance(tool_execution, dict) else 0,
+            },
+        )
+        workspace_tool_results = _load_declared_json(workspace_outputs, "workspace_tool_results") or {}
+        artifacts = workspace_tool_results.get("artifacts", [])
+        _check(
+            checks,
+            "workspace_tool_artifacts_materialized",
+            workspace_tool_results.get("schema") == WORKSPACE_TOOL_ARTIFACTS_SCHEMA
+            and workspace_tool_results.get("execution_model") == "registered_capability_checked_local_tools_v1"
+            and bool(artifacts)
+            and all(
+                isinstance(item, dict)
+                and item.get("workspace_side_effect") == "materialized_review_artifact_only"
+                and item.get("private_reasoning_trace_stored") is False
+                for item in artifacts
+            ),
+            evidence={
+                "schema": workspace_tool_results.get("schema"),
+                "artifact_count": workspace_tool_results.get("artifact_count"),
+                "network_call_performed": workspace_tool_results.get("adapter_policy", {}).get("network_call_performed"),
+                "subprocess_executed": workspace_tool_results.get("adapter_policy", {}).get("subprocess_executed"),
             },
         )
 
