@@ -9,6 +9,10 @@ from typing import Any
 from ai22b.config import PROJECT_ROOT
 from ai22b.talent_foundry.agent_runner import run_agent_from_manifest
 from ai22b.talent_foundry.distribution import verify_agent_release_archive, verify_agent_release_bundle
+from ai22b.talent_foundry.execution_proof import (
+    WORKSPACE_EXECUTION_PROOF_SCHEMA,
+    verify_workspace_execution_file,
+)
 from ai22b.talent_foundry.policy_eval import (
     ACTION_POLICY_EVAL_REPORT_SCHEMA,
     DEFAULT_POLICY_EVAL_SUITE,
@@ -32,6 +36,7 @@ AGENT_EXECUTION_CONTRACT_SCHEMA = "paideia-agent-execution-contract/v1"
 CAPABILITY_AUTHORIZATION_SCHEMA = "paideia-capability-authorization/v1"
 MEMORY_REVIEW_CANDIDATE_SCHEMA = "paideia-memory-review-candidate/v1"
 RUNTIME_OBSERVABILITY_SCHEMA = "paideia-runtime-observability/v1"
+WORKSPACE_EXECUTION_PROOF_SAFETY_SCHEMA = "paideia-workspace-execution-proof-safety/v1"
 MAX_AUDITED_SAFE_REFERENCE_CHARS = 12000
 MAX_AUDITED_SAFE_REFERENCE_TEXT_CHARS = 900
 WINDOWS_ABSOLUTE_PATH = re.compile(r"[A-Za-z]:\\")
@@ -1962,6 +1967,118 @@ def _role_model_training_artifacts(run_dir: Path, installed_root: Path) -> dict[
     return _checkpoint(passed=passed, evidence=list(paths.values()), root=run_dir, details=details, missing=missing)
 
 
+def _first_existing_path(candidates: list[Path]) -> Path:
+    return next((path for path in candidates if path.exists()), candidates[0])
+
+
+def _workspace_execution_proof_safety(installed_root: Path, run_dir: Path) -> dict[str, Any]:
+    role_model_run = _is_role_model_run(run_dir)
+    dataflow_candidates = [
+        installed_root / "last_hired_dataflow_run.json",
+        installed_root / "manual_dataflow_run.json",
+    ]
+    path_by_label = {
+        "workspace_agent": installed_root / "last_hired_workspace_agent_run.json",
+        "hired_job": installed_root / "last_hired_agent_job_run.json",
+        "dataflow": _first_existing_path(dataflow_candidates),
+    }
+    required_labels = {"dataflow"} if role_model_run else {"workspace_agent", "hired_job", "dataflow"}
+    candidate_paths = list(path_by_label.values())
+    existing_candidates = [path for path in candidate_paths if path.exists()]
+    missing = [path for label, path in path_by_label.items() if label in required_labels and not path.exists()]
+
+    proofs: list[dict[str, Any]] = []
+    failures: list[dict[str, Any]] = []
+    for label, path in path_by_label.items():
+        if not path.exists():
+            continue
+        proof = verify_workspace_execution_file(path)
+        retention = proof.get("public_safe_retention", {}) if isinstance(proof.get("public_safe_retention"), dict) else {}
+        artifact_summary = proof.get("artifact_summary", {}) if isinstance(proof.get("artifact_summary"), dict) else {}
+        source = proof.get("source", {}) if isinstance(proof.get("source"), dict) else {}
+        record = {
+            "label": label,
+            "run_file": path.name,
+            "run_schema": source.get("run_schema"),
+            "run_status": source.get("run_status"),
+            "proof_schema": proof.get("schema"),
+            "proof_status": proof.get("status"),
+            "passed": proof.get("passed"),
+            "issue_count": len(proof.get("issues", [])),
+            "issues": proof.get("issues", []),
+            "check_count": len(proof.get("checks", [])),
+            "absolute_paths_redacted": artifact_summary.get("absolute_paths_redacted"),
+            "absolute_paths_are_fingerprinted": retention.get("absolute_paths_are_fingerprinted"),
+            "raw_provider_payload_saved": retention.get("raw_provider_payload_saved"),
+            "private_reasoning_trace_saved": retention.get("private_reasoning_trace_saved"),
+        }
+        proofs.append(record)
+        if (
+            record["proof_schema"] != WORKSPACE_EXECUTION_PROOF_SCHEMA
+            or record["passed"] is not True
+            or record["absolute_paths_redacted"] is not True
+            or record["absolute_paths_are_fingerprinted"] is not True
+            or record["raw_provider_payload_saved"] is not False
+            or record["private_reasoning_trace_saved"] is not False
+        ):
+            failures.append(
+                {
+                    "label": label,
+                    "run_file": path.name,
+                    "issues": record["issues"],
+                    "proof_status": record["proof_status"],
+                }
+            )
+
+    proof_by_label = {record["label"]: record for record in proofs}
+    required_proofs_passed = {
+        label: proof_by_label.get(label, {}).get("passed") is True for label in sorted(required_labels)
+    }
+    details = {
+        "schema": WORKSPACE_EXECUTION_PROOF_SAFETY_SCHEMA,
+        "mode": "role_model_runtime_minimum" if role_model_run else "full_demo_workspace_runtime",
+        "required_labels": sorted(required_labels),
+        "required_minimum": len(required_labels),
+        "proof_count": len(proofs),
+        "passed_proof_count": sum(1 for proof in proofs if proof["passed"] is True),
+        "required_proofs_passed": required_proofs_passed,
+        "workspace_agent_proof_passed": proof_by_label.get("workspace_agent", {}).get("passed") is True,
+        "hired_job_proof_passed": proof_by_label.get("hired_job", {}).get("passed") is True,
+        "dataflow_proof_passed": proof_by_label.get("dataflow", {}).get("passed") is True,
+        "all_required_proofs_passed": all(required_proofs_passed.values()),
+        "all_proofs_passed": bool(proofs) and all(proof["passed"] is True for proof in proofs),
+        "all_proofs_public_safe": bool(proofs)
+        and all(
+            proof["absolute_paths_are_fingerprinted"] is True
+            and proof["raw_provider_payload_saved"] is False
+            and proof["private_reasoning_trace_saved"] is False
+            for proof in proofs
+        ),
+        "all_required_artifacts_redacted": bool(proofs)
+        and all(proof["absolute_paths_redacted"] is True for proof in proofs),
+        "missing_required_files": [_rel(path, run_dir) for path in missing],
+        "failure_count": len(failures) + len(missing),
+        "failures": failures,
+        "proofs": proofs,
+    }
+    passed = (
+        not missing
+        and details["proof_count"] >= details["required_minimum"]
+        and details["all_required_proofs_passed"] is True
+        and details["all_proofs_passed"] is True
+        and details["all_proofs_public_safe"] is True
+        and details["all_required_artifacts_redacted"] is True
+        and not failures
+    )
+    return _checkpoint(
+        passed=passed,
+        evidence=existing_candidates,
+        root=run_dir,
+        details=details,
+        missing=missing,
+    )
+
+
 def _role_model_runtime(installed_root: Path, run_dir: Path) -> dict[str, Any]:
     agent_run_candidates = [
         installed_root / "last_hired_agent_run.json",
@@ -2025,6 +2142,7 @@ def audit_foundry_release(run_dir: Path, *, output_path: Path | None = None) -> 
             "public_program_manifest": _public_program_manifest(run_dir),
             "role_model_training_artifacts": _role_model_training_artifacts(run_dir, installed_root),
             "role_model_runtime": _role_model_runtime(installed_root, run_dir),
+            "workspace_execution_proof_safety": _workspace_execution_proof_safety(installed_root, run_dir),
             "learning_ledger_replay_safety": _learning_ledger_replay_safety(run_dir, installed_root),
             "runtime_observability_comparison": _runtime_observability_comparison(run_dir),
         }
@@ -2040,6 +2158,7 @@ def audit_foundry_release(run_dir: Path, *, output_path: Path | None = None) -> 
             "public_distribution": _public_distribution(run_dir, installed_root),
             "local_employment": _local_employment(installed_root, run_dir),
             "agent_job_runtime": _agent_job_runtime(installed_root, run_dir),
+            "workspace_execution_proof_safety": _workspace_execution_proof_safety(installed_root, run_dir),
             "post_hire_growth": _post_hire_growth(installed_root, run_dir),
             "family_lineage": _family_lineage(run_dir),
             "projection_swarm": _projection_swarm(installed_root, run_dir),
