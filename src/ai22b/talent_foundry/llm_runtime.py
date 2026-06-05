@@ -267,6 +267,7 @@ def doctor_llm_provider(
         runtime_config,
         live_check_requested=live_check,
         live_result=live_result,
+        client_override_used=client is not None,
     )
     add_check(
         "smoke_contract_verified",
@@ -876,10 +877,12 @@ def _build_provider_smoke_contract(
     *,
     live_check_requested: bool,
     live_result: dict[str, Any] | None,
+    client_override_used: bool = False,
 ) -> dict[str, Any]:
     live_check_performed = live_result is not None
     engine = runtime_config["engine"]
     provider_call_attempted = live_check_performed and engine in EXTERNAL_API_ENGINES.union(LOCAL_HTTP_ENGINES)
+    network_call_made_by_doctor = provider_call_attempted and not client_override_used
     client_summary = {}
     if isinstance(live_result, dict) and isinstance(live_result.get("client_result"), dict):
         client = live_result["client_result"]
@@ -912,7 +915,10 @@ def _build_provider_smoke_contract(
         "live_check_requested": live_check_requested,
         "live_check_performed": live_check_performed,
         "provider_call_attempted": provider_call_attempted,
-        "network_call_made_by_doctor": provider_call_attempted,
+        "provider_call_executor": "injected_client" if client_override_used else "built_in_client",
+        "client_override_used": client_override_used,
+        "network_call_made_by_doctor": network_call_made_by_doctor,
+        "network_call_delegated_to_client_override": provider_call_attempted and client_override_used,
         "network_policy": "no_network_without_explicit_live_check",
         "data_policy": {
             "send_private_training_files": False,
