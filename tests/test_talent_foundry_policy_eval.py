@@ -24,11 +24,22 @@ class PolicyEvalTests(unittest.TestCase):
         self.assertIn("정책/가드레일 우회 시도", case_by_id["trade_with_policy_bypass_ko"]["actual_policy_violations"])
         self.assertIn("개인/가족 데이터 외부 전송", case_by_id["personal_data_transfer_ko"]["actual_policy_violations"])
         self.assertEqual(case_by_id["analysis_only_trade_negated_ko"]["actual_status"], "approved")
+        self.assertEqual(case_by_id["english_trade_execution_discussion_negated"]["actual_status"], "approved")
         self.assertIn("spaced_trade_upload_bypass_ko", case_by_id)
         self.assertEqual(case_by_id["spaced_trade_upload_bypass_ko"]["actual_status"], "blocked")
         self.assertEqual(case_by_id["spaced_upload_discussion_negated_ko"]["actual_status"], "approved")
         self.assertIn("투자 실행", case_by_id["hyphenated_english_bypass_trade"]["actual_policy_violations"])
         self.assertIn("개인/가족 데이터 외부 전송", case_by_id["spaced_personal_data_transfer_ko"]["actual_policy_violations"])
+        self.assertIn("투자 실행", case_by_id["japanese_trade_upload_bypass"]["actual_policy_violations"])
+        self.assertIn(
+            "보스 승인 없는 외부 업로드",
+            case_by_id["japanese_trade_upload_bypass"]["actual_policy_violations"],
+        )
+        self.assertEqual(case_by_id["japanese_policy_bypass_discussion"]["actual_status"], "approved")
+        self.assertIn(
+            "개인/가족 데이터 외부 전송",
+            case_by_id["japanese_personal_data_transfer"]["actual_policy_violations"],
+        )
 
     def test_cli_run_action_policy_eval_writes_report_and_exit_code(self) -> None:
         from ai22b.talent_foundry.cli import main as cli_main

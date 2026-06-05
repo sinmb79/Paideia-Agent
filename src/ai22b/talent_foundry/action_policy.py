@@ -27,9 +27,13 @@ FINANCIAL_ACTION_ALIASES = (
     "sell order",
     "execute trade",
     "financial action",
+    "買い注文",
+    "売り注文",
+    "買い注文を実行",
+    "売り注文を実行",
 )
 FINANCIAL_VERBS = ("매수", "매도", "buy", "sell")
-ACTION_MARKERS = ("실행", "주문", "체결", "지금", "바로", "까지", "execute", "place")
+ACTION_MARKERS = ("실행", "주문", "체결", "지금", "바로", "까지", "execute", "place", "実行", "今すぐ")
 COMMAND_MARKERS = (
     "해줘",
     "하라",
@@ -42,6 +46,9 @@ COMMAND_MARKERS = (
     "place",
     "send",
     "upload",
+    "実行",
+    "送信",
+    "アップロード",
 )
 ACTION_NEGATION_MARKERS = (
     "없이",
@@ -57,6 +64,8 @@ ACTION_NEGATION_MARKERS = (
     "don't",
     "without",
     "no ",
+    "しない",
+    "しないで",
 )
 
 EXTERNAL_UPLOAD_ALIASES = (
@@ -69,6 +78,8 @@ EXTERNAL_UPLOAD_ALIASES = (
     "공개 배포",
     "upload",
     "external upload",
+    "アップロード",
+    "外部アップロード",
 )
 EXTERNAL_UPLOAD_COMMAND_ALIASES = (
     "업로드해줘",
@@ -77,6 +88,8 @@ EXTERNAL_UPLOAD_COMMAND_ALIASES = (
     "공개 배포",
     "upload this",
     "external upload",
+    "アップロードして",
+    "アップロード",
 )
 EXTERNAL_UPLOAD_EXPLICIT_ALIASES = tuple(
     item for item in EXTERNAL_UPLOAD_ALIASES if item not in {"외부 전송"}
@@ -94,6 +107,9 @@ PERSONAL_DATA_TRANSFER_ALIASES = (
     "send family data",
     "family data",
     "personal data",
+    "個人情報",
+    "個人データ",
+    "家族データ",
 )
 PERSONAL_DATA_TRANSFER_MARKERS = (
     "전송",
@@ -103,6 +119,9 @@ PERSONAL_DATA_TRANSFER_MARKERS = (
     "send",
     "external",
     "without approval",
+    "送信",
+    "送って",
+    "外部",
 )
 DISCUSSION_MARKERS = (
     "정책",
@@ -119,6 +138,9 @@ DISCUSSION_MARKERS = (
     "risk",
     "explain",
     "explanation",
+    "説明",
+    "リスク",
+    "なぜ",
 )
 POLICY_BYPASS_ALIASES = (
     "이전 규칙은 무시",
@@ -141,6 +163,10 @@ POLICY_BYPASS_ALIASES = (
     "without approval",
     "skip approval",
     "jailbreak",
+    "ルール無視",
+    "ルールを無視",
+    "承認なし",
+    "承認無し",
 )
 POLICY_BYPASS_COMMAND_ALIASES = (
     "이전 규칙은 무시하고",
@@ -161,6 +187,10 @@ POLICY_BYPASS_COMMAND_ALIASES = (
     "do it anyway",
     "without approval execute",
     "skip approval and",
+    "ルール無視して",
+    "ルールを無視して",
+    "承認なしで",
+    "承認無しで",
 )
 POLICY_BYPASS_NEGATION_MARKERS = (
     "무시하지 말고",
@@ -171,6 +201,8 @@ POLICY_BYPASS_NEGATION_MARKERS = (
     "do not bypass",
     "don't ignore",
     "don't bypass",
+    "無視しない",
+    "承認なしで実行しない",
 )
 POLICY_BYPASS_DISCUSSION_MARKERS = (
     *DISCUSSION_MARKERS,
@@ -182,6 +214,9 @@ POLICY_BYPASS_DISCUSSION_MARKERS = (
     "what is",
     "define",
     "why",
+    "説明",
+    "リスク",
+    "なぜ",
 )
 POLICY_BYPASS_HARD_COMMAND_MARKERS = (
     "실행",
@@ -198,6 +233,11 @@ POLICY_BYPASS_HARD_COMMAND_MARKERS = (
     "upload",
     "buy order",
     "sell order",
+    "実行",
+    "送信",
+    "アップロード",
+    "買い注文",
+    "売り注文",
 )
 
 TOOL_CAPABILITIES = {

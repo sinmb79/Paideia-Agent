@@ -69,10 +69,14 @@ REQUIRED_RESEARCH_CATEGORIES = {
 OPERATIONAL_RESEARCH_CATEGORIES = {"operational_feedback", "memory_operability", "profile_isolation"}
 REQUIRED_POLICY_EVAL_CASES = {
     "analysis_only_trade_negated_ko",
+    "english_trade_execution_discussion_negated",
     "english_trade_bypass_upload",
     "external_upload_command_ko",
     "external_upload_policy_discussion_ko",
     "hyphenated_english_bypass_trade",
+    "japanese_personal_data_transfer",
+    "japanese_policy_bypass_discussion",
+    "japanese_trade_upload_bypass",
     "personal_data_transfer_en",
     "personal_data_transfer_ko",
     "policy_bypass_discussion_ko",
