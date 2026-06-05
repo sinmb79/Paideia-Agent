@@ -1726,7 +1726,13 @@ class TalentFoundryTests(unittest.TestCase):
         from ai22b.talent_foundry.workspace_sandbox import SandboxViolation, WorkspaceSandbox
 
         with tempfile.TemporaryDirectory() as tmp:
-            sandbox = WorkspaceSandbox(Path(tmp) / "workspace", max_output_file_bytes=10, max_trace_events=2)
+            sandbox = WorkspaceSandbox(
+                Path(tmp) / "workspace",
+                max_output_file_bytes=10,
+                max_total_output_bytes=12,
+                max_declared_outputs=2,
+                max_trace_events=2,
+            )
             sandbox.ensure_root()
 
             with self.assertRaises(SandboxViolation):
@@ -1742,18 +1748,57 @@ class TalentFoundryTests(unittest.TestCase):
                 sandbox.deny_network()
 
             sandbox.write_text("ok.txt", "ok", purpose="ok")
+            sandbox.write_text("ok2.txt", "ok", purpose="ok")
+            with self.assertRaises(SandboxViolation):
+                sandbox.write_text("too_many_outputs.txt", "ok", purpose="too_many_outputs")
             rollback = sandbox.rollback_manifest(operation_id="unit_test")
             snapshot = sandbox.snapshot()
 
+        with tempfile.TemporaryDirectory() as tmp:
+            total_sandbox = WorkspaceSandbox(Path(tmp) / "workspace", max_total_output_bytes=4)
+            total_sandbox.ensure_root()
+            total_sandbox.write_text("a.txt", "1234", purpose="budget_seed")
+            with self.assertRaises(SandboxViolation):
+                total_sandbox.write_text("b.txt", "1", purpose="total_budget")
+            total_snapshot = total_sandbox.snapshot()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            runtime_sandbox = WorkspaceSandbox(Path(tmp) / "workspace", max_runtime_seconds=1)
+            runtime_sandbox.started_monotonic -= 2
+            with self.assertRaises(SandboxViolation):
+                runtime_sandbox.ensure_root()
+            runtime_snapshot = runtime_sandbox.snapshot()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            request_sandbox = WorkspaceSandbox(Path(tmp) / "workspace", allowed_network_hosts=["localhost"])
+            request_sandbox.ensure_root()
+            network_grant = request_sandbox.request_network("localhost", reason="loopback_status_check")
+            with self.assertRaises(SandboxViolation):
+                request_sandbox.request_network("example.com", reason="external_call")
+            with self.assertRaises(SandboxViolation):
+                request_sandbox.request_subprocess("powershell", reason="shell_attempt")
+            request_snapshot = request_sandbox.snapshot()
+
         self.assertEqual(snapshot["schema"], "paideia-workspace-sandbox-policy/v1")
         self.assertTrue(snapshot["enforcement"]["enabled"])
+        self.assertEqual(snapshot["resource_limits"]["max_total_output_bytes"], 12)
+        self.assertEqual(snapshot["resource_limits"]["max_declared_outputs"], 2)
+        self.assertEqual(snapshot["resource_usage"]["declared_output_count"], 2)
+        self.assertTrue(snapshot["resource_usage"]["within_budget"])
         self.assertEqual(rollback["schema"], "paideia-workspace-rollback-manifest/v1")
         self.assertEqual(rollback["operation_id"], "unit_test")
-        self.assertEqual(rollback["delete_order"][0]["relative_path"], "ok.txt")
+        self.assertEqual(rollback["delete_order"][0]["relative_path"], "ok2.txt")
         self.assertTrue(any(item["event"] == "path_escape_blocked" for item in snapshot["audit_events"]))
         self.assertTrue(any(item["event"] == "output_size_blocked" for item in snapshot["audit_events"]))
         self.assertTrue(any(item["event"] == "trace_event_limit_blocked" for item in snapshot["audit_events"]))
         self.assertTrue(any(item["event"] == "network_access_blocked" for item in snapshot["audit_events"]))
+        self.assertTrue(any(item["event"] == "declared_output_count_blocked" for item in snapshot["audit_events"]))
+        self.assertTrue(any(item["event"] == "total_output_budget_blocked" for item in total_snapshot["audit_events"]))
+        self.assertTrue(any(item["event"] == "runtime_budget_blocked" for item in runtime_snapshot["audit_events"]))
+        self.assertTrue(network_grant["granted"])
+        self.assertFalse(network_grant["network_call_performed"])
+        self.assertTrue(any(item["event"] == "network_access_granted_without_call" for item in request_snapshot["audit_events"]))
+        self.assertTrue(any(item["event"] == "subprocess_blocked" for item in request_snapshot["audit_events"]))
 
     def test_workspace_agent_blocks_forbidden_task_without_writing_artifacts(self) -> None:
         from ai22b.talent_foundry.demo import run_demo
@@ -3391,6 +3436,12 @@ class TalentFoundryTests(unittest.TestCase):
                 "모든 산출물은 로컬 워크스페이스에 남긴다.",
                 "투자 실행과 외부 업로드는 차단한다.",
             ],
+            "resource_limits": {
+                "max_declared_outputs": 8,
+                "max_total_output_bytes": 5_000_000,
+                "max_runtime_seconds": 120,
+                "allowed_network_hosts": ["localhost"],
+            },
         }
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
@@ -3421,6 +3472,9 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertTrue(rollback_exists)
         self.assertTrue(all(item["status"] == "satisfied_by_workspace_artifact" for item in checklist["criteria"]))
         self.assertEqual(run["tool_authorization"]["network_access"], "blocked")
+        self.assertEqual(run["tool_authorization"]["resource_limits"]["max_declared_outputs"], 8)
+        self.assertEqual(run["workspace_run"]["workspace_resource_usage"]["declared_output_count"], 6)
+        self.assertTrue(run["workspace_run"]["workspace_resource_usage"]["within_budget"])
         self.assertEqual(run["active_memory_route"]["schema"], "ai-talent-active-memory-route/v1")
         self.assertEqual(run["workspace_run"]["active_memory_route"]["compression_policy"], "summaries_and_skills_only")
 

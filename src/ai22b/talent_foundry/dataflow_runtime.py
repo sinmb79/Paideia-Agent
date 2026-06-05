@@ -7,6 +7,7 @@ from typing import Any
 from ai22b.talent_foundry.learning_loop import route_active_memory
 from ai22b.talent_foundry.runtime_observability import build_dataflow_runtime_observability
 from ai22b.talent_foundry.workspace_sandbox import WorkspaceSandbox
+from ai22b.talent_foundry.workspace_sandbox import sandbox_kwargs_from_resource_limits
 
 
 FORMATTED_JOB_SCHEMA = "ai-talent-dataflow-formatted-job/v1"
@@ -103,6 +104,7 @@ def format_dataflow_job(job_spec: dict[str, Any] | str) -> dict[str, Any]:
         "required_evidence": raw.get("required_evidence")
         or ["source_date_check", "artifact_trace", "risk_boundary_check"],
         "domain_hints": raw.get("domain_hints") or ["securities_research"],
+        "resource_limits": raw.get("resource_limits") if isinstance(raw.get("resource_limits"), dict) else {},
     }
 
 
@@ -419,11 +421,11 @@ def run_dataflow_job_from_manifest(
     workspace_dir: Path,
     review_label: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    sandbox = WorkspaceSandbox(workspace_dir)
+    formatted_job = format_dataflow_job(job_spec)
+    sandbox = WorkspaceSandbox(workspace_dir, **sandbox_kwargs_from_resource_limits(formatted_job.get("resource_limits")))
     sandbox.ensure_root()
     review = review_label or {"score": 0, "status": "needs_review", "reviewed_by": "boss_or_committee"}
 
-    formatted_job = format_dataflow_job(job_spec)
     active_memory_cache = build_active_memory_tile_cache(ledger, objective=formatted_job["objective"])
     tile_matrix = build_task_tile_matrix(
         formatted_job,
@@ -510,9 +512,11 @@ def run_dataflow_job_from_manifest(
         "growth_commit_candidate": growth_candidate,
         "runtime_observability": runtime_observability,
         "workspace_sandbox": sandbox.snapshot(),
+        "workspace_resource_usage": sandbox.resource_usage(),
         "workspace_outputs": {key: str(value) for key, value in paths.items()},
     }
     sandbox.write_json("workspace_sandbox.json", sandbox.snapshot(), purpose="workspace_sandbox_policy")
     run["workspace_sandbox"] = sandbox.snapshot()
+    run["workspace_resource_usage"] = sandbox.resource_usage()
     sandbox.write_json("dataflow_run.json", run, purpose="dataflow_run")
     return run

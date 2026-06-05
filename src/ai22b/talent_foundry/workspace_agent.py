@@ -9,6 +9,7 @@ from ai22b.talent_foundry.llm_clients import LLMClient
 from ai22b.talent_foundry.workspace_sandbox import (
     WORKSPACE_SANDBOX_SCHEMA,
     WorkspaceSandbox,
+    sandbox_kwargs_from_resource_limits,
 )
 
 
@@ -65,6 +66,7 @@ def _normalize_job_spec(job_spec: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("Job spec requires a non-empty objective")
     deliverables = job_spec.get("deliverables") or [{"id": "result_summary", "description": "보스 검토용 작업 결과"}]
     acceptance_criteria = job_spec.get("acceptance_criteria") or ["작업 보고서와 검증 흔적을 로컬 워크스페이스에 남긴다."]
+    resource_limits = job_spec.get("resource_limits") if isinstance(job_spec.get("resource_limits"), dict) else {}
     return {
         "schema": job_spec.get("schema", "ai-talent-workspace-agent-job/v1"),
         "objective": objective,
@@ -76,6 +78,7 @@ def _normalize_job_spec(job_spec: dict[str, Any]) -> dict[str, Any]:
             for index, item in enumerate(deliverables, start=1)
         ],
         "acceptance_criteria": [str(item) for item in acceptance_criteria],
+        "resource_limits": resource_limits,
     }
 
 
@@ -148,6 +151,7 @@ def run_workspace_agent_from_manifest(
     llm_mode: str = "offline",
     llm_model: str | None = None,
     llm_client: LLMClient | None = None,
+    resource_limits: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     base_run = run_agent_from_manifest(
         manifest,
@@ -158,7 +162,7 @@ def run_workspace_agent_from_manifest(
         llm_client=llm_client,
     )
     created_at = datetime.now(timezone.utc).isoformat()
-    sandbox = WorkspaceSandbox(workspace_dir)
+    sandbox = WorkspaceSandbox(workspace_dir, **sandbox_kwargs_from_resource_limits(resource_limits))
     workspace_root = sandbox.root
 
     result = {
@@ -177,6 +181,7 @@ def run_workspace_agent_from_manifest(
             "workspace_root": str(workspace_root),
             "sandbox_schema": WORKSPACE_SANDBOX_SCHEMA,
             "sandbox_enforced": True,
+            "resource_limits": sandbox.policy()["resource_limits"],
             "capability_grants": base_run.get("policy_decision", {}).get("capability_grants", {}),
             "capability_scope": base_run.get("tool_execution", {}).get("capability_scope", {}),
         },
@@ -239,6 +244,7 @@ def run_workspace_agent_from_manifest(
         "rollback_manifest": str(rollback_path),
         "workspace_sandbox": str(sandbox_path),
     }
+    result["workspace_resource_usage"] = sandbox.resource_usage()
     return result
 
 
@@ -261,6 +267,7 @@ def run_workspace_agent_job_from_manifest(
         llm_mode=llm_mode,
         llm_model=llm_model,
         llm_client=llm_client,
+        resource_limits=normalized.get("resource_limits"),
     )
     job_status = "completed" if workspace_run["run_status"] == "completed" else "blocked"
     result = {
@@ -285,7 +292,7 @@ def run_workspace_agent_job_from_manifest(
     if job_status == "blocked":
         return result
 
-    sandbox = WorkspaceSandbox(workspace_dir)
+    sandbox = WorkspaceSandbox(workspace_dir, **sandbox_kwargs_from_resource_limits(normalized.get("resource_limits")))
     job_spec_path = sandbox.write_json("job_spec.json", normalized, purpose="job_spec")
     job_report_path = sandbox.write_text(
         "job_report.md",
@@ -316,4 +323,5 @@ def run_workspace_agent_job_from_manifest(
         "trace": str(trace_path),
         "rollback_manifest": str(rollback_path),
     }
+    result["job_resource_usage"] = sandbox.resource_usage()
     return result
