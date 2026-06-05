@@ -36,6 +36,9 @@ HIRED_TEAM_CYCLE_SCHEMA = "ai-talent-hired-team-cycle/v1"
 HIRED_PROJECTION_SWARM_SCHEMA = "ai-talent-hired-projection-swarm/v1"
 HIRED_PROJECTION_SWARM_CYCLE_SCHEMA = "ai-talent-hired-projection-swarm-cycle/v1"
 MEMORY_LIFECYCLE_MAINTENANCE_SCHEMA = "paideia-memory-lifecycle-maintenance/v1"
+SIMULATION_ROLLOUT_EVALUATION_SCHEMA = "ai-talent-simulation-rollout-evaluation/v1"
+REVIEWED_ROLLOUT_LEARNING_EVENT_SCHEMA = "paideia-reviewed-rollout-learning-event/v1"
+REASONING_LEDGER_CANDIDATE_SCHEMA = "paideia-reasoning-ledger-candidate/v1"
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -617,6 +620,182 @@ def record_hired_learning_experience(
     with log_path.open("a", encoding="utf-8") as file:
         file.write(json.dumps(update, ensure_ascii=False) + "\n")
 
+    return update
+
+
+def _rollout_episode_for_promotion(evaluation: dict[str, Any], episode_id: str | None) -> dict[str, Any]:
+    winner = evaluation.get("winner") if isinstance(evaluation.get("winner"), dict) else {}
+    if episode_id is None:
+        selected = winner
+    else:
+        selected = next(
+            (
+                item
+                for item in evaluation.get("ranked_episodes", [])
+                if isinstance(item, dict) and item.get("episode_id") == episode_id
+            ),
+            {},
+        )
+    if not selected:
+        raise ValueError("No rollout episode selected for promotion")
+    eligible = set(evaluation.get("memory_update_gate", {}).get("eligible_episode_ids", []))
+    if selected.get("episode_id") not in eligible or selected.get("decision") != "promotion_candidate":
+        raise ValueError("Selected rollout episode is not eligible for reviewed promotion")
+    return selected
+
+
+def _reasoning_ledger_candidate_from_rollout(
+    *,
+    employment_record: dict[str, Any],
+    evaluation: dict[str, Any],
+    selected: dict[str, Any],
+    latest_experience_id: str | None,
+    quality_label: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "schema": REASONING_LEDGER_CANDIDATE_SCHEMA,
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "candidate_type": "reviewed_parallel_simulation_rollout",
+        "source_experience_id": latest_experience_id,
+        "employment_id": employment_record["employment_id"],
+        "agent_name": employment_record["agent"]["name"],
+        "objective": evaluation.get("objective"),
+        "episode_id": selected.get("episode_id"),
+        "scenario_id": selected.get("scenario_id"),
+        "review_summary": selected.get("review_summary"),
+        "learning_signal": selected.get("expected_learning_signal"),
+        "score": selected.get("score"),
+        "quality_label": quality_label,
+        "candidate_principles": [
+            "Compare parallel rollout outcomes before updating durable habits.",
+            "Promote only owner-reviewed winner summaries, not full private traces.",
+            "Keep failed rollout episodes as quarantine/recovery material unless reviewed later.",
+        ],
+        "policy": {
+            "automatic_promotion_performed": False,
+            "boss_review_required": True,
+            "boss_review_applied": True,
+            "private_reasoning_trace": "do_not_store",
+            "full_rollout_replay_stored": False,
+            "separate_consciousness_created": False,
+        },
+    }
+
+
+def promote_simulation_rollout_winner(
+    employment_record_path: Path,
+    *,
+    evaluation_path: Path,
+    quality_label: dict[str, Any],
+    output_path: Path | None = None,
+    episode_id: str | None = None,
+) -> dict[str, Any]:
+    employment_record, _agent_manifest, target_root = _load_active_employment(employment_record_path)
+    evaluation = _read_json(evaluation_path)
+    if evaluation.get("schema") != SIMULATION_ROLLOUT_EVALUATION_SCHEMA:
+        raise ValueError("Unsupported simulation rollout evaluation schema")
+    selected = _rollout_episode_for_promotion(evaluation, episode_id)
+    entrypoints = employment_record.get("entrypoints", {})
+    ledger_path = target_root / entrypoints.get("learning_ledger", "learning_ledger.json")
+    backup_path = target_root / entrypoints.get("learning_ledger_backup", "learning_ledger.backup.json")
+    ledger = _read_json(ledger_path) if ledger_path.exists() else create_learning_ledger(owner=employment_record["agent"]["name"])
+    if ledger_path.exists():
+        _write_json(backup_path, ledger)
+
+    event = {
+        "schema": REVIEWED_ROLLOUT_LEARNING_EVENT_SCHEMA,
+        "source_evaluation": evaluation_path.name,
+        "objective": evaluation.get("objective"),
+        "selected_episode": {
+            "episode_id": selected.get("episode_id"),
+            "scenario_id": selected.get("scenario_id"),
+            "label": selected.get("label"),
+            "score": selected.get("score"),
+            "decision": selected.get("decision"),
+            "stressors": selected.get("stressors", []),
+            "expected_learning_signal": selected.get("expected_learning_signal"),
+            "review_summary": selected.get("review_summary"),
+            "private_reasoning_trace_stored": False,
+            "merge_policy": "reviewed_summary_only_no_private_chain_of_thought",
+        },
+        "rollout_gate": {
+            "automatic_promotion_performed": False,
+            "boss_review_required": True,
+            "boss_review_applied": True,
+            "reasoning_ledger_write_policy": evaluation.get("memory_update_gate", {}).get(
+                "reasoning_ledger_write_policy",
+            ),
+            "separate_consciousness_created": False,
+        },
+    }
+
+    promoted_before = len(ledger.get("promoted_experiences", []))
+    quarantined_before = len(ledger.get("quarantined_experiences", []))
+    ledger = record_learning_experience(
+        ledger,
+        source="simulation_rollout_winner",
+        event=event,
+        quality_label=quality_label,
+    )
+    promoted_after = len(ledger.get("promoted_experiences", []))
+    quarantined_after = len(ledger.get("quarantined_experiences", []))
+    if promoted_after > promoted_before:
+        latest_entry = ledger["promoted_experiences"][-1]
+        decision = "promoted"
+    elif quarantined_after > quarantined_before:
+        latest_entry = ledger["quarantined_experiences"][-1]
+        decision = "quarantined"
+    else:
+        latest_entry = {}
+        decision = "unchanged"
+
+    reasoning_candidate = None
+    if decision == "promoted":
+        reasoning_candidate = _reasoning_ledger_candidate_from_rollout(
+            employment_record=employment_record,
+            evaluation=evaluation,
+            selected=selected,
+            latest_experience_id=latest_entry.get("id"),
+            quality_label=quality_label,
+        )
+        ledger.setdefault("reasoning_ledger_candidates", []).append(reasoning_candidate)
+    ledger["reasoning_kernel"] = build_reasoning_kernel(ledger)
+    ledger["memory_lifecycle"] = audit_learning_ledger(ledger)
+    _write_json(ledger_path, ledger)
+
+    update = {
+        "schema": POST_HIRE_LEARNING_UPDATE_SCHEMA,
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "source": "simulation_rollout_winner",
+        "source_run": evaluation_path.name,
+        "learning_ledger": ledger_path.name,
+        "employment_context": _employment_context(employment_record),
+        "quality_label": quality_label,
+        "decision": decision,
+        "latest_experience_id": latest_entry.get("id"),
+        "latest_promoted_skills": latest_entry.get("promoted_skills", []),
+        "reasoning_ledger_candidate": reasoning_candidate,
+        "reviewed_rollout_event": event,
+        "experience_counts": {
+            "promoted": promoted_after,
+            "quarantined": quarantined_after,
+        },
+        "reasoning_kernel": ledger["reasoning_kernel"],
+        "memory_lifecycle": ledger.get("memory_lifecycle", {}),
+        "policy": {
+            "stored_summary_only": True,
+            "private_reasoning_trace": "do_not_store",
+            "full_evaluation_replay_stored": False,
+            "automatic_promotion_performed": False,
+        },
+    }
+
+    update_path = output_path or target_root / "simulation_rollout_learning_update.json"
+    _write_json(update_path, update)
+    log_path = target_root / entrypoints.get("post_hire_learning_log", "post_hire_learning_log.jsonl")
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with log_path.open("a", encoding="utf-8") as file:
+        file.write(json.dumps(update, ensure_ascii=False) + "\n")
     return update
 
 

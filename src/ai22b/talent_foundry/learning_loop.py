@@ -74,6 +74,13 @@ def _summarize_event(source: str, event: dict[str, Any]) -> str:
         )
     if source == "chat_turn":
         return f"채팅 학습 경험: {event.get('lesson', event.get('message_summary', 'conversation_after_hire'))}"
+    if source == "simulation_rollout_winner":
+        episode = event.get("selected_episode", {})
+        return (
+            "검토된 병렬 시뮬레이션 winner 경험: "
+            f"{episode.get('label', episode.get('scenario_id', 'rollout'))} "
+            f"{episode.get('score', 'unscored')}점"
+        )
     return str(event)[:240]
 
 
@@ -107,6 +114,9 @@ def _skills_from_event(source: str, event: dict[str, Any]) -> list[str]:
         skills.append("recovery_log_reflection")
     if source == "chat_turn" or "대화" in text or "채팅" in text:
         skills.append("conversation_context_learning")
+    if source == "simulation_rollout_winner" or "simulation_rollout" in text or "rollout" in text:
+        skills.append("parallel_rollout_review")
+        skills.append("reviewed_simulation_learning")
     if "정체성" in text or "부모" in text or "가족" in text or "개인정보" in text:
         skills.append("identity_boundary_conversation")
     if "일반 대화" in text or "자연스럽" in text or "말투" in text:

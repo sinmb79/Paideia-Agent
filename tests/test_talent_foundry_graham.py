@@ -373,6 +373,7 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             rollouts_path = Path(tmp) / "simulation_rollouts.json"
             results_path = Path(tmp) / "simulation_rollout_results.json"
             output_path = Path(tmp) / "simulation_rollout_evaluation.json"
+            promotion_path = Path(tmp) / "simulation_rollout_learning_update.json"
             rollouts = build_simulation_rollouts(
                 employment_record,
                 objective="Compare parallel research recovery strategies.",
@@ -411,9 +412,29 @@ class GrahamTalentFoundryTests(unittest.TestCase):
                     str(output_path),
                 ]
             )
+            promote_code = cli_main(
+                [
+                    "promote-simulation-rollout-winner",
+                    "--employment-record",
+                    str(employment_record),
+                    "--evaluation",
+                    str(output_path),
+                    "--score",
+                    "94",
+                    "--reviewed-by",
+                    "Boss",
+                    "--status",
+                    "verified",
+                    "--output",
+                    str(promotion_path),
+                ]
+            )
             evaluation = json.loads(output_path.read_text(encoding="utf-8"))
+            promotion = json.loads(promotion_path.read_text(encoding="utf-8"))
+            ledger = json.loads((employment_record.parent / "learning_ledger.json").read_text(encoding="utf-8"))
 
         self.assertEqual(exit_code, 0)
+        self.assertEqual(promote_code, 0)
         self.assertEqual(evaluation["schema"], "ai-talent-simulation-rollout-evaluation/v1")
         self.assertEqual(evaluation["winner"]["episode_id"], episode_results[0]["episode_id"])
         self.assertEqual(evaluation["winner"]["score"], 96)
@@ -421,6 +442,20 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertIn(episode_results[1]["episode_id"], evaluation["memory_update_gate"]["quarantined_episode_ids"])
         self.assertFalse(evaluation["memory_update_gate"]["automatic_promotion_performed"])
         self.assertFalse(evaluation["winner"]["private_reasoning_trace_stored"])
+        self.assertEqual(promotion["schema"], "ai-talent-post-hire-learning-update/v1")
+        self.assertEqual(promotion["source"], "simulation_rollout_winner")
+        self.assertEqual(promotion["decision"], "promoted")
+        self.assertEqual(
+            promotion["reviewed_rollout_event"]["selected_episode"]["episode_id"],
+            episode_results[0]["episode_id"],
+        )
+        self.assertFalse(promotion["reviewed_rollout_event"]["rollout_gate"]["automatic_promotion_performed"])
+        self.assertEqual(promotion["reasoning_ledger_candidate"]["schema"], "paideia-reasoning-ledger-candidate/v1")
+        self.assertFalse(promotion["reasoning_ledger_candidate"]["policy"]["full_rollout_replay_stored"])
+        self.assertFalse(promotion["reasoning_ledger_candidate"]["policy"]["separate_consciousness_created"])
+        self.assertIn("parallel_rollout_review", promotion["latest_promoted_skills"])
+        self.assertTrue(ledger["reasoning_ledger_candidates"])
+        self.assertNotIn("Failed to ask a clarifying question before acting", json.dumps(promotion, ensure_ascii=False))
 
     def test_guided_console_owner_self_extension_writes_metadata_only_intake(self) -> None:
         from ai22b.talent_foundry.console import run_console_session

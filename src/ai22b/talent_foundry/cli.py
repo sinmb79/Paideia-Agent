@@ -70,6 +70,7 @@ from ai22b.talent_foundry.registry import (
     assemble_hired_projection_swarm,
     hire_installed_agent,
     maintain_hired_memory_lifecycle,
+    promote_simulation_rollout_winner,
     record_hired_learning_experience,
     run_hired_dataflow_job,
     run_hired_goal_cycle,
@@ -267,6 +268,18 @@ def _build_parser() -> argparse.ArgumentParser:
     rollout_eval.add_argument("--output", required=True)
     rollout_eval.add_argument("--promotion-threshold", type=int, default=92)
     rollout_eval.add_argument("--quarantine-threshold", type=int, default=70)
+
+    rollout_promote = subparsers.add_parser(
+        "promote-simulation-rollout-winner",
+        help="Promote only a reviewed simulation rollout winner summary into the hired talent learning ledger.",
+    )
+    rollout_promote.add_argument("--employment-record", required=True)
+    rollout_promote.add_argument("--evaluation", required=True)
+    rollout_promote.add_argument("--episode-id")
+    rollout_promote.add_argument("--score", type=int, required=True)
+    rollout_promote.add_argument("--reviewed-by", default="보스")
+    rollout_promote.add_argument("--status", default="verified")
+    rollout_promote.add_argument("--output", required=True)
 
     policy_eval = subparsers.add_parser(
         "run-action-policy-eval",
@@ -979,6 +992,22 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         print(str(output_path))
         return 0
+
+    if args.command == "promote-simulation-rollout-winner":
+        output_path = Path(args.output)
+        update = promote_simulation_rollout_winner(
+            Path(args.employment_record),
+            evaluation_path=Path(args.evaluation),
+            episode_id=args.episode_id,
+            quality_label={
+                "score": args.score,
+                "reviewed_by": args.reviewed_by,
+                "status": args.status,
+            },
+            output_path=output_path,
+        )
+        print(str(output_path))
+        return 0 if update["decision"] == "promoted" else 1
 
     if args.command == "run-action-policy-eval":
         output_path = Path(args.output)

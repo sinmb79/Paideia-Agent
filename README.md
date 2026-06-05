@@ -498,6 +498,20 @@ ai22b-talent-foundry evaluate-simulation-rollouts `
 
 The evaluator ranks parallel episodes, selects a winner, marks promotion and quarantine candidates, and keeps `automatic_promotion_performed=false`. A winner is a reviewed learning candidate for the parent agent, not a separate agent or separate consciousness.
 
+After the Boss reviews the winner, promote only that winner summary:
+
+```powershell
+ai22b-talent-foundry promote-simulation-rollout-winner `
+  --employment-record .\employment_record.json `
+  --evaluation .\simulation_rollout_evaluation.json `
+  --score 94 `
+  --reviewed-by Boss `
+  --status verified `
+  --output .\simulation_rollout_learning_update.json
+```
+
+This command writes a learning-ledger update and a Reasoning Ledger candidate from the reviewed winner summary only. It does not store the full rollout replay, private reasoning traces, or a separate projection identity.
+
 Registered research tool execution includes an `evidence_packet` tool. It turns the user request, LLM draft, policy decision, and selected local memory summaries into reviewable evidence items, a checklist, unsupported-claim policy, and open questions. If a research work-session runs without this packet, verification marks the run for review instead of treating it as cleanly passed.
 
 Every manifest agent run now also writes an `execution_contract`. It is the public-safe proof packet for the P0 loop: policy was checked before the LLM and tools, the LLM runtime was attempted or skipped by policy, registered tools were attempted or skipped by policy, evidence packets were present when research tools ran, verification status was recorded, and memory promotion stayed review-gated instead of automatic.

@@ -2321,6 +2321,7 @@ class TalentFoundryTests(unittest.TestCase):
                 "run-hired-agent-job-cycle",
                 "record-hired-learning",
                 "compare-runtime-observability",
+                "promote-simulation-rollout-winner",
                 "assign-hired-goal",
                 "assemble-hired-projection-swarm",
                 "assemble-hired-team",

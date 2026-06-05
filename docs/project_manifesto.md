@@ -57,7 +57,7 @@ This borrows a useful idea from physical-AI simulation: run many bounded variati
 
 Many expert agents rely on long prompts and repeated setup. Paideia aims to keep reusable know-how in local records and route only the most relevant memory into each task. That should reduce unnecessary token use and let each agent become more specialized over time.
 
-P0 runs now record an initial `runtime_observability` block with context size, estimated tokens, selected-memory count, review counters, and promotion/quarantine statistics. The next product step is comparing those records against generic prompt-wrapper agents for cost, quality, and rework rate.
+P0 runs now record a `runtime_observability` block with context size, estimated tokens, selected-memory count, review counters, and promotion/quarantine statistics. `compare-runtime-observability` turns those records into a public-safe report against a generic prompt-wrapper full-run replay baseline.
 
 ## External Identity
 
