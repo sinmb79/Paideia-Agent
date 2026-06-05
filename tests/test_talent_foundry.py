@@ -2384,7 +2384,19 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertTrue(audit["checkpoints"]["family_lineage"]["passed"])
         self.assertTrue(audit["checkpoints"]["research_foundation"]["passed"])
         self.assertTrue(audit["checkpoints"]["public_program_manifest"]["passed"])
+        self.assertTrue(audit["checkpoints"]["learning_ledger_replay_safety"]["passed"])
         self.assertTrue(audit["checkpoints"]["runtime_observability_comparison"]["passed"])
+        replay_details = audit["checkpoints"]["learning_ledger_replay_safety"]["details"]
+        self.assertGreaterEqual(replay_details["ledger_count"], 2)
+        self.assertGreater(replay_details["entry_count"], 0)
+        self.assertTrue(replay_details["installed_ledger_present"])
+        self.assertTrue(replay_details["all_safe_references_bounded"])
+        self.assertTrue(replay_details["all_safe_references_avoid_full_session_replay"])
+        self.assertTrue(replay_details["all_private_reasoning_trace_policy_do_not_store"])
+        self.assertLessEqual(
+            replay_details["max_safe_reference_chars"],
+            replay_details["max_allowed_safe_reference_chars"],
+        )
         self.assertGreater(
             audit["checkpoints"]["runtime_observability_comparison"]["details"]["context_reduction_ratio"],
             1,
@@ -2469,6 +2481,30 @@ class TalentFoundryTests(unittest.TestCase):
         )
         self.assertFalse(audit["checkpoints"]["projection_swarm"]["details"]["separate_consciousness_created"])
         self.assertEqual(saved_audit["overall_status"], audit["overall_status"])
+
+    def test_release_audit_rejects_learning_ledger_full_session_replay(self) -> None:
+        from ai22b.talent_foundry.audit import audit_foundry_release
+        from ai22b.talent_foundry.demo import run_demo
+
+        with tempfile.TemporaryDirectory() as tmp:
+            run_dir = Path(tmp)
+            outputs = run_demo(output_dir=run_dir)
+            ledger_path = outputs["local_employment_record"].parent / "learning_ledger.json"
+            ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
+            ledger["promoted_experiences"][0]["safe_reference"]["safe_reference_policy"][
+                "full_session_replay_stored"
+            ] = True
+            ledger["promoted_experiences"][0]["safe_reference"]["raw_provider_text"] = "raw replay " * 120
+            ledger_path.write_text(json.dumps(ledger, ensure_ascii=False, indent=2), encoding="utf-8")
+            audit = audit_foundry_release(run_dir)
+
+        checkpoint = audit["checkpoints"]["learning_ledger_replay_safety"]
+        failure_ids = {item["id"] for item in checkpoint["details"]["failures"]}
+        self.assertFalse(audit["public_release_ready"])
+        self.assertFalse(checkpoint["passed"])
+        self.assertFalse(checkpoint["details"]["all_safe_references_bounded"])
+        self.assertIn("safe_reference_policy_allows_full_session_replay", failure_ids)
+        self.assertIn("raw_provider_data_key_in_safe_reference", failure_ids)
 
     def test_cli_audit_release_command_writes_release_audit(self) -> None:
         from ai22b.talent_foundry.cli import main as cli_main

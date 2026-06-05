@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -15,6 +16,17 @@ AGENT_EXECUTION_CONTRACT_SCHEMA = "paideia-agent-execution-contract/v1"
 CAPABILITY_AUTHORIZATION_SCHEMA = "paideia-capability-authorization/v1"
 MEMORY_REVIEW_CANDIDATE_SCHEMA = "paideia-memory-review-candidate/v1"
 RUNTIME_OBSERVABILITY_SCHEMA = "paideia-runtime-observability/v1"
+MAX_AUDITED_SAFE_REFERENCE_CHARS = 12000
+MAX_AUDITED_SAFE_REFERENCE_TEXT_CHARS = 900
+WINDOWS_ABSOLUTE_PATH = re.compile(r"[A-Za-z]:\\")
+POSIX_HOME_PATH = re.compile(r"(/home/|/Users/)[^\s\"']+")
+SECRET_RE = re.compile(r"(sk-[A-Za-z0-9_-]{16,}|Bearer\s+[A-Za-z0-9._-]+|api[_-]?key\s*[:=])", re.I)
+PRIVATE_REASONING_KEYS = {
+    "chain_of_thought",
+    "private_reasoning_trace",
+    "hidden_reasoning",
+    "reasoning_trace",
+}
 REQUIRED_MAJOR_GATES = {"school_exam", "csat", "university_graduation", "doctoral_defense"}
 REQUIRED_RESEARCH_NAMES = {
     "Hermes Agent",
@@ -325,6 +337,341 @@ def _runtime_observability_comparison(run_dir: Path) -> dict[str, Any]:
         and all(item.get("local_absolute_paths_exported") is False for item in record_privacy)
     )
     return _checkpoint(passed=passed, evidence=[comparison_path], root=run_dir, details=details)
+
+
+def _unique_paths(paths: list[Path]) -> list[Path]:
+    seen: set[str] = set()
+    unique: list[Path] = []
+    for path in paths:
+        key = str(path)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(path)
+    return unique
+
+
+def _iter_learning_ledger_entries(ledger: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
+    entries: list[tuple[str, dict[str, Any]]] = []
+    for bucket in ("promoted_experiences", "quarantined_experiences"):
+        bucket_entries = ledger.get(bucket, [])
+        if not isinstance(bucket_entries, list):
+            continue
+        for entry in bucket_entries:
+            if isinstance(entry, dict):
+                entries.append((bucket, entry))
+    return entries
+
+
+def _scan_safe_reference_value(value: Any, *, path: str = "$") -> list[dict[str, Any]]:
+    issues: list[dict[str, Any]] = []
+    if isinstance(value, dict):
+        for key, item in value.items():
+            key_text = str(key)
+            item_path = f"{path}.{key_text}"
+            if key_text in PRIVATE_REASONING_KEYS:
+                issues.append(
+                    {
+                        "id": "private_reasoning_key_in_safe_reference",
+                        "path": item_path,
+                        "key": key_text,
+                    }
+                )
+            if key_text == "private_reasoning_trace_stored" and item is not False:
+                issues.append(
+                    {
+                        "id": "private_reasoning_trace_stored_flag_not_false",
+                        "path": item_path,
+                        "value": item,
+                    }
+                )
+            if key_text == "private_reasoning_trace_policy" and item != "do_not_store":
+                issues.append(
+                    {
+                        "id": "private_reasoning_trace_policy_not_do_not_store",
+                        "path": item_path,
+                        "value": item,
+                    }
+                )
+            if key_text == "full_session_replay_stored" and item is not False:
+                issues.append(
+                    {
+                        "id": "full_session_replay_stored_flag_not_false",
+                        "path": item_path,
+                        "value": item,
+                    }
+                )
+            if key_text == "full_session_replay_used" and item is not False:
+                issues.append(
+                    {
+                        "id": "full_session_replay_used_flag_not_false",
+                        "path": item_path,
+                        "value": item,
+                    }
+                )
+            if key_text in {"raw_provider_payload", "raw_provider_text", "raw_output"}:
+                issues.append(
+                    {
+                        "id": "raw_provider_data_key_in_safe_reference",
+                        "path": item_path,
+                        "key": key_text,
+                    }
+                )
+            if key_text in {"raw_provider_payload_saved", "raw_output_saved"} and item is not False:
+                issues.append(
+                    {
+                        "id": "raw_provider_payload_saved_flag_not_false",
+                        "path": item_path,
+                        "value": item,
+                    }
+                )
+            issues.extend(_scan_safe_reference_value(item, path=item_path))
+    elif isinstance(value, list):
+        for index, item in enumerate(value):
+            issues.extend(_scan_safe_reference_value(item, path=f"{path}[{index}]"))
+    elif isinstance(value, str):
+        if WINDOWS_ABSOLUTE_PATH.search(value) or POSIX_HOME_PATH.search(value):
+            issues.append(
+                {
+                    "id": "local_absolute_path_in_safe_reference",
+                    "path": path,
+                }
+            )
+        if SECRET_RE.search(value):
+            issues.append(
+                {
+                    "id": "secret_like_value_in_safe_reference",
+                    "path": path,
+                }
+            )
+        if len(value) > MAX_AUDITED_SAFE_REFERENCE_TEXT_CHARS:
+            issues.append(
+                {
+                    "id": "safe_reference_text_too_long",
+                    "path": path,
+                    "length": len(value),
+                    "max_length": MAX_AUDITED_SAFE_REFERENCE_TEXT_CHARS,
+                }
+            )
+    return issues
+
+
+def _audit_safe_reference(
+    *,
+    ledger_path: Path,
+    bucket: str,
+    entry: dict[str, Any],
+) -> tuple[int, list[dict[str, Any]]]:
+    safe_reference = entry.get("safe_reference")
+    if not isinstance(safe_reference, dict):
+        return 0, [
+            {
+                "id": "safe_reference_missing",
+                "ledger": ledger_path.name,
+                "bucket": bucket,
+                "experience_id": entry.get("id"),
+            }
+        ]
+
+    serialized = json.dumps(safe_reference, ensure_ascii=False, sort_keys=True)
+    issues: list[dict[str, Any]] = []
+    if len(serialized) > MAX_AUDITED_SAFE_REFERENCE_CHARS:
+        issues.append(
+            {
+                "id": "safe_reference_too_large",
+                "ledger": ledger_path.name,
+                "bucket": bucket,
+                "experience_id": entry.get("id"),
+                "length": len(serialized),
+                "max_length": MAX_AUDITED_SAFE_REFERENCE_CHARS,
+            }
+        )
+
+    policy = safe_reference.get("safe_reference_policy", {})
+    if not isinstance(policy, dict):
+        issues.append(
+            {
+                "id": "safe_reference_policy_missing",
+                "ledger": ledger_path.name,
+                "bucket": bucket,
+                "experience_id": entry.get("id"),
+            }
+        )
+    else:
+        if policy.get("bounded_summary_only") is not True:
+            issues.append(
+                {
+                    "id": "safe_reference_not_bounded_summary",
+                    "ledger": ledger_path.name,
+                    "bucket": bucket,
+                    "experience_id": entry.get("id"),
+                }
+            )
+        if policy.get("full_session_replay_stored") is not False:
+            issues.append(
+                {
+                    "id": "safe_reference_policy_allows_full_session_replay",
+                    "ledger": ledger_path.name,
+                    "bucket": bucket,
+                    "experience_id": entry.get("id"),
+                }
+            )
+        if policy.get("private_reasoning_trace_policy") != "do_not_store":
+            issues.append(
+                {
+                    "id": "safe_reference_policy_allows_private_reasoning",
+                    "ledger": ledger_path.name,
+                    "bucket": bucket,
+                    "experience_id": entry.get("id"),
+                    "policy": policy.get("private_reasoning_trace_policy"),
+                }
+            )
+
+    for issue in _scan_safe_reference_value(safe_reference):
+        issues.append(
+            {
+                "ledger": ledger_path.name,
+                "bucket": bucket,
+                "experience_id": entry.get("id"),
+                **issue,
+            }
+        )
+    return len(serialized), issues
+
+
+def _learning_ledger_replay_safety(run_dir: Path, installed_root: Path) -> dict[str, Any]:
+    run_ledger_candidates = sorted(run_dir.glob("*_learning_ledger.json"))
+    installed_ledger = installed_root / "learning_ledger.json"
+    candidate_paths = _unique_paths([run_dir / "shinyong_learning_ledger.json", *run_ledger_candidates, installed_ledger])
+    existing_paths = [path for path in candidate_paths if path.exists()]
+    missing = [] if existing_paths else [run_dir / "*_learning_ledger.json", installed_ledger]
+
+    ledger_reports: list[dict[str, Any]] = []
+    failures: list[dict[str, Any]] = []
+    entry_count = 0
+    max_safe_reference_chars = 0
+    lifecycle_passed = True
+    local_paths_redacted = True
+    private_reasoning_not_stored = True
+    secret_values_absent = True
+
+    for ledger_path in existing_paths:
+        try:
+            ledger = _read_json(ledger_path)
+        except (OSError, json.JSONDecodeError) as exc:
+            failures.append(
+                {
+                    "id": "learning_ledger_unreadable",
+                    "ledger": ledger_path.name,
+                    "error": type(exc).__name__,
+                }
+            )
+            continue
+
+        entries = _iter_learning_ledger_entries(ledger)
+        lifecycle = ledger.get("memory_lifecycle", {}) if isinstance(ledger.get("memory_lifecycle"), dict) else {}
+        checks = lifecycle.get("checks", {}) if isinstance(lifecycle.get("checks"), dict) else {}
+        lifecycle_status = lifecycle.get("status")
+        ledger_lifecycle_passed = lifecycle_status == "passed"
+        ledger_paths_redacted = checks.get("local_absolute_paths_redacted") is True
+        ledger_private_not_stored = checks.get("private_reasoning_trace_not_stored") is True
+        ledger_secrets_absent = checks.get("secret_like_values_absent") is True
+
+        lifecycle_passed = lifecycle_passed and ledger_lifecycle_passed
+        local_paths_redacted = local_paths_redacted and ledger_paths_redacted
+        private_reasoning_not_stored = private_reasoning_not_stored and ledger_private_not_stored
+        secret_values_absent = secret_values_absent and ledger_secrets_absent
+        if not ledger_lifecycle_passed:
+            failures.append(
+                {
+                    "id": "memory_lifecycle_not_passed",
+                    "ledger": ledger_path.name,
+                    "status": lifecycle_status,
+                }
+            )
+        if not ledger_paths_redacted:
+            failures.append({"id": "ledger_lifecycle_local_paths_not_redacted", "ledger": ledger_path.name})
+        if not ledger_private_not_stored:
+            failures.append({"id": "ledger_lifecycle_private_reasoning_not_blocked", "ledger": ledger_path.name})
+        if not ledger_secrets_absent:
+            failures.append({"id": "ledger_lifecycle_secret_values_present", "ledger": ledger_path.name})
+
+        promoted_count = len(ledger.get("promoted_experiences", [])) if isinstance(ledger.get("promoted_experiences"), list) else 0
+        quarantined_count = (
+            len(ledger.get("quarantined_experiences", []))
+            if isinstance(ledger.get("quarantined_experiences"), list)
+            else 0
+        )
+        for bucket, entry in entries:
+            entry_count += 1
+            safe_reference_chars, entry_issues = _audit_safe_reference(
+                ledger_path=ledger_path,
+                bucket=bucket,
+                entry=entry,
+            )
+            max_safe_reference_chars = max(max_safe_reference_chars, safe_reference_chars)
+            failures.extend(entry_issues)
+
+        ledger_reports.append(
+            {
+                "path": _rel(ledger_path, run_dir),
+                "schema": ledger.get("schema"),
+                "promoted_count": promoted_count,
+                "quarantined_count": quarantined_count,
+                "entry_count": len(entries),
+                "memory_lifecycle_status": lifecycle_status,
+                "private_reasoning_trace_not_stored": ledger_private_not_stored,
+                "local_absolute_paths_redacted": ledger_paths_redacted,
+                "secret_like_values_absent": ledger_secrets_absent,
+            }
+        )
+
+    run_ledger_count = sum(1 for path in existing_paths if path.parent == run_dir)
+    installed_ledger_present = installed_ledger.exists()
+    unsafe_entry_count = sum(1 for issue in failures if "experience_id" in issue)
+    full_session_failures = [
+        issue
+        for issue in failures
+        if "full_session_replay" in str(issue.get("id", "")) or "full_session_replay" in str(issue.get("path", ""))
+    ]
+    private_reasoning_failures = [
+        issue
+        for issue in failures
+        if "private_reasoning" in str(issue.get("id", "")) or "private_reasoning" in str(issue.get("path", ""))
+    ]
+    details = {
+        "ledger_count": len(existing_paths),
+        "run_ledger_count": run_ledger_count,
+        "installed_ledger_present": installed_ledger_present,
+        "entry_count": entry_count,
+        "max_safe_reference_chars": max_safe_reference_chars,
+        "max_allowed_safe_reference_chars": MAX_AUDITED_SAFE_REFERENCE_CHARS,
+        "all_safe_references_bounded": unsafe_entry_count == 0
+        and max_safe_reference_chars <= MAX_AUDITED_SAFE_REFERENCE_CHARS,
+        "all_safe_references_avoid_full_session_replay": not full_session_failures,
+        "all_private_reasoning_trace_policy_do_not_store": private_reasoning_not_stored
+        and not private_reasoning_failures,
+        "all_memory_lifecycle_passed": lifecycle_passed,
+        "all_local_absolute_paths_redacted": local_paths_redacted,
+        "all_secret_like_values_absent": secret_values_absent,
+        "ledger_reports": ledger_reports,
+        "failure_count": len(failures),
+        "failures": failures[:20],
+    }
+    passed = (
+        bool(existing_paths)
+        and run_ledger_count >= 1
+        and installed_ledger_present
+        and entry_count > 0
+        and details["all_safe_references_bounded"] is True
+        and details["all_safe_references_avoid_full_session_replay"] is True
+        and details["all_private_reasoning_trace_policy_do_not_store"] is True
+        and details["all_memory_lifecycle_passed"] is True
+        and details["all_local_absolute_paths_redacted"] is True
+        and details["all_secret_like_values_absent"] is True
+        and not failures
+    )
+    return _checkpoint(passed=passed, evidence=existing_paths, root=run_dir, details=details, missing=missing)
 
 
 def _checkpoint(
@@ -977,6 +1324,7 @@ def audit_foundry_release(run_dir: Path, *, output_path: Path | None = None) -> 
             "public_program_manifest": _public_program_manifest(run_dir),
             "role_model_training_artifacts": _role_model_training_artifacts(run_dir, installed_root),
             "role_model_runtime": _role_model_runtime(installed_root, run_dir),
+            "learning_ledger_replay_safety": _learning_ledger_replay_safety(run_dir, installed_root),
             "runtime_observability_comparison": _runtime_observability_comparison(run_dir),
         }
     else:
@@ -991,6 +1339,7 @@ def audit_foundry_release(run_dir: Path, *, output_path: Path | None = None) -> 
             "family_lineage": _family_lineage(run_dir),
             "projection_swarm": _projection_swarm(installed_root, run_dir),
             "specialist_team": _specialist_team(installed_root, run_dir),
+            "learning_ledger_replay_safety": _learning_ledger_replay_safety(run_dir, installed_root),
             "runtime_observability_comparison": _runtime_observability_comparison(run_dir),
         }
     failed = [name for name, checkpoint in checkpoints.items() if not checkpoint["passed"]]

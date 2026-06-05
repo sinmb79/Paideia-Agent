@@ -145,6 +145,7 @@ def _public_file_reference(value: Any) -> Any:
                 "file_name": normalized.split("/")[-1],
                 "path_fingerprint_sha256": hashlib.sha256(value.encode("utf-8")).hexdigest(),
                 "absolute_path_redacted": True,
+                "redaction_marker": "[local_path_redacted]",
             }
         return value[:MAX_SAFE_REFERENCE_TEXT_CHARS]
     return value
@@ -304,7 +305,29 @@ def _contribution_reference(item: dict[str, Any]) -> dict[str, Any]:
 
 
 def _safe_event_reference(source: str, event: dict[str, Any]) -> dict[str, Any]:
-    reference = _bounded_public_reference(event)
+    if source == "agent_run":
+        reference = _summary_of_named_packet("base_agent_run", event)
+        reference["policy_decision"] = _summary_of_named_packet(
+            "policy_decision",
+            event.get("policy_decision", {}),
+        )
+        reference["tool_execution"] = _summary_of_named_packet(
+            "tool_execution",
+            event.get("tool_execution", {}),
+        )
+        reference["execution_contract"] = _summary_of_named_packet(
+            "execution_contract",
+            event.get("execution_contract", {}),
+        )
+        reference["runtime_observability"] = _summary_of_named_packet(
+            "runtime_observability",
+            event.get("runtime_observability", {}),
+        )
+    elif source == "workspace_agent_run":
+        reference = _summary_of_named_packet("workspace_run", event)
+        reference["event_summary"] = _bounded_public_reference(event.get("summary", ""))
+    else:
+        reference = _bounded_public_reference(event)
     if isinstance(event.get("contributions"), list):
         reference["contributions"] = [
             _contribution_reference(item)
