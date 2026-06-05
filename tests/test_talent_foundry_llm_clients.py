@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import os
+import sys
+import types
 import unittest
 from unittest.mock import patch
 
@@ -25,6 +27,64 @@ def _headers(request) -> dict[str, str]:
 
 
 class TalentFoundryLlmClientTests(unittest.TestCase):
+    def test_openai_responses_client_calls_sdk_success_without_exporting_secret_or_payload(self) -> None:
+        from ai22b.talent_foundry.llm_clients import OpenAIResponsesClient
+
+        calls: list[dict] = []
+        secret = "fixture_openai_token_value_12345"
+
+        class FakeUsage:
+            def __str__(self) -> str:
+                return "input_tokens=9 output_tokens=10"
+
+        class FakeResponse:
+            id = "openai-response-1"
+            output_text = f"openai adapter ok {secret}"
+            usage = FakeUsage()
+
+        class FakeResponses:
+            def create(self, **kwargs):
+                calls.append(kwargs)
+                return FakeResponse()
+
+        class FakeOpenAI:
+            def __init__(self) -> None:
+                self.responses = FakeResponses()
+
+        fake_openai = types.ModuleType("openai")
+        fake_openai.OpenAI = FakeOpenAI
+
+        messages = [
+            {"role": "system", "content": "system note"},
+            {"role": "user", "content": "hello"},
+        ]
+        tools = [{"name": "evidence_packet", "description": "write a reviewable evidence packet"}]
+        policy = {"mode": "reviewable_summary_only"}
+        with patch.dict(os.environ, {"OPENAI_API_KEY": secret}, clear=False), patch.dict(
+            sys.modules,
+            {"openai": fake_openai},
+        ):
+            result = OpenAIResponsesClient(model="gpt-test").generate(messages, tools=tools, policy=policy)
+
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["engine"], "openai_responses_api")
+        self.assertEqual(result["model"], "gpt-test")
+        self.assertEqual(result["response_id"], "openai-response-1")
+        self.assertEqual(result["network_access"], "external_api_selected_data_minimized")
+        self.assertFalse(result["raw_output_saved"])
+        self.assertIn("[REDACTED_SECRET]", result["text"])
+        serialized = json.dumps(result, ensure_ascii=False)
+        self.assertNotIn(secret, serialized)
+
+        self.assertEqual(calls[0]["model"], "gpt-test")
+        self.assertEqual(calls[0]["instructions"], "system note")
+        self.assertEqual(calls[0]["max_output_tokens"], 900)
+        payload = json.loads(calls[0]["input"])
+        self.assertEqual(payload["messages"], messages)
+        self.assertEqual(payload["tools"], tools)
+        self.assertEqual(payload["policy"], policy)
+        self.assertIn("reviewable_reasoning_summary", payload["output_contract"])
+
     def test_external_api_clients_parse_successful_http_responses_without_storing_provider_payloads(self) -> None:
         from ai22b.talent_foundry.llm_clients import (
             AnthropicMessagesClient,
