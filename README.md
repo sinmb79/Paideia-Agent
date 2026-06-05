@@ -144,6 +144,8 @@ python -m pip install -e ".[rag]"        # retrieval/eval lab tools
 python -m pip install -e ".[dev]"        # tests
 ```
 
+CI runs a package smoke test that verifies the `pyproject.toml` console scripts import as callables, optional extras stay split by runtime capability, and package metadata does not reference private/local paths.
+
 Runtime artifacts are stored outside this source tree by default:
 
 ```powershell

@@ -100,6 +100,8 @@ python -m pip install -e ".[rag]"        # 검색/평가 실험 도구
 python -m pip install -e ".[dev]"        # 테스트
 ```
 
+CI의 package smoke 테스트는 `pyproject.toml`의 console script가 실제 callable로 import되는지, optional extras가 기능별로 분리되어 있는지, 패키지 메타데이터에 private/local path가 섞이지 않았는지 확인합니다.
+
 롤모델 목록:
 
 ```powershell
