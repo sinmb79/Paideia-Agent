@@ -15,6 +15,7 @@ class CliSmokeTests(unittest.TestCase):
             role_models_path = tmp_path / "role_models.json"
             doctor_path = tmp_path / "llm_provider_doctor.json"
             llm_smoke_path = tmp_path / "llm_application_smoke.json"
+            agent_runtime_smoke_path = tmp_path / "agent_runtime_smoke.json"
             tool_audit_path = tmp_path / "tool_capability_audit.json"
             policy_eval_path = tmp_path / "policy_eval_report.json"
 
@@ -47,6 +48,16 @@ class CliSmokeTests(unittest.TestCase):
                     str(llm_smoke_path),
                 ]
             )
+            agent_runtime_smoke_code = cli_main(
+                [
+                    "run-agent-runtime-smoke",
+                    "--llm-engine",
+                    "deterministic_local",
+                    "--strict",
+                    "--output",
+                    str(agent_runtime_smoke_path),
+                ]
+            )
             tool_audit_code = cli_main(
                 [
                     "audit-tool-capabilities",
@@ -60,12 +71,14 @@ class CliSmokeTests(unittest.TestCase):
             role_models = json.loads(role_models_path.read_text(encoding="utf-8"))
             doctor = json.loads(doctor_path.read_text(encoding="utf-8"))
             llm_smoke = json.loads(llm_smoke_path.read_text(encoding="utf-8"))
+            agent_runtime_smoke = json.loads(agent_runtime_smoke_path.read_text(encoding="utf-8"))
             tool_audit = json.loads(tool_audit_path.read_text(encoding="utf-8"))
             policy_eval = json.loads(policy_eval_path.read_text(encoding="utf-8"))
 
         self.assertEqual(role_models_code, 0)
         self.assertEqual(doctor_code, 0)
         self.assertEqual(llm_smoke_code, 0)
+        self.assertEqual(agent_runtime_smoke_code, 0)
         self.assertEqual(tool_audit_code, 0)
         self.assertEqual(policy_eval_code, 0)
 
@@ -92,6 +105,24 @@ class CliSmokeTests(unittest.TestCase):
         self.assertFalse(llm_smoke["preflight"]["network_call_made_by_preflight"])
         self.assertFalse(llm_smoke["data_policy"]["secret_values_exported"])
         self.assertEqual(llm_smoke["data_policy"]["private_reasoning_trace"], "do_not_store")
+
+        self.assertEqual(agent_runtime_smoke["schema"], "paideia-agent-runtime-smoke/v1")
+        self.assertTrue(agent_runtime_smoke["passed"])
+        self.assertEqual(agent_runtime_smoke["status"], "passed")
+        self.assertEqual(agent_runtime_smoke["details"]["engine"], "deterministic_local")
+        self.assertEqual(agent_runtime_smoke["details"]["llm_mode"], "offline")
+        self.assertEqual(agent_runtime_smoke["details"]["run_status"], "completed")
+        self.assertEqual(agent_runtime_smoke["details"]["llm_status"], "completed")
+        self.assertEqual(agent_runtime_smoke["details"]["verification_status"], "passed")
+        self.assertEqual(agent_runtime_smoke["details"]["execution_contract_status"], "passed")
+        self.assertIn("evidence_packet", agent_runtime_smoke["details"]["completed_tools"])
+        self.assertEqual(agent_runtime_smoke["details"]["missing_required_tools"], [])
+        self.assertEqual(agent_runtime_smoke["details"]["memory_decision"], "candidate_pending_boss_review")
+        self.assertFalse(agent_runtime_smoke["details"]["memory_auto_promotion_performed"])
+        self.assertFalse(agent_runtime_smoke["details"]["preflight_network_call_made"])
+        self.assertEqual(agent_runtime_smoke["details"]["network_default"], "blocked")
+        self.assertEqual(agent_runtime_smoke["details"]["subprocess_default"], "blocked")
+        self.assertTrue(agent_runtime_smoke["details"]["public_safe"])
 
         self.assertEqual(tool_audit["schema"], "paideia-tool-capability-audit/v1")
         self.assertTrue(tool_audit["passed"])

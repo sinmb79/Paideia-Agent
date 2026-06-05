@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from ai22b.config import PROJECT_ROOT
+from ai22b.talent_foundry.agent_runtime_smoke import AGENT_RUNTIME_SMOKE_SCHEMA, run_agent_runtime_smoke
 from ai22b.talent_foundry.agent_runner import run_agent_from_manifest
 from ai22b.talent_foundry.distribution import verify_agent_release_archive, verify_agent_release_bundle
 from ai22b.talent_foundry.execution_proof import (
@@ -124,6 +125,7 @@ REQUIRED_PUBLIC_PROGRAM_COMMANDS = {
     "raise",
     "doctor-llm-provider",
     "run-llm-application-smoke",
+    "run-agent-runtime-smoke",
     "audit-tool-capabilities",
     "doctor-bundle",
     "install-package",
@@ -160,6 +162,7 @@ PUBLIC_SAFE_FIRST_RUN_COMMANDS = {
     "list-role-models",
     "doctor-llm-provider",
     "run-llm-application-smoke",
+    "run-agent-runtime-smoke",
     "audit-tool-capabilities",
     "run-action-policy-eval",
 }
@@ -955,6 +958,7 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
         role_model_catalog_dir,
         PROJECT_ROOT / "src" / "ai22b" / "talent_foundry" / "role_models.py",
         PROJECT_ROOT / "src" / "ai22b" / "talent_foundry" / "llm_runtime.py",
+        PROJECT_ROOT / "src" / "ai22b" / "talent_foundry" / "agent_runtime_smoke.py",
         PROJECT_ROOT / "src" / "ai22b" / "talent_foundry" / "tool_registry.py",
         DEFAULT_POLICY_EVAL_SUITE,
     ]
@@ -968,6 +972,16 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
         engine="deterministic_local",
         llm_mode="offline",
         task="Public-safe first-run application-engine smoke.",
+    )
+    agent_runtime_smoke = run_agent_runtime_smoke(
+        engine="deterministic_local",
+        llm_mode="offline",
+        task="Public-safe first-run full agent runtime smoke.",
+    )
+    agent_runtime_details = (
+        agent_runtime_smoke.get("details", {})
+        if isinstance(agent_runtime_smoke.get("details"), dict)
+        else {}
     )
     tool_audit = audit_tool_capability_registry()
     tool_audit_details = tool_audit.get("details", {}) if isinstance(tool_audit.get("details"), dict) else {}
@@ -1049,6 +1063,27 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
         "application_smoke_secret_values_exported": application_policy.get("secret_values_exported"),
         "application_smoke_raw_provider_payload_saved": application_policy.get("raw_provider_payload_saved"),
         "application_smoke_private_reasoning_trace": application_policy.get("private_reasoning_trace"),
+        "agent_runtime_smoke_schema": agent_runtime_smoke.get("schema"),
+        "agent_runtime_smoke_passed": agent_runtime_smoke.get("passed"),
+        "agent_runtime_smoke_status": agent_runtime_smoke.get("status"),
+        "agent_runtime_smoke_engine": agent_runtime_details.get("engine"),
+        "agent_runtime_smoke_llm_mode": agent_runtime_details.get("llm_mode"),
+        "agent_runtime_smoke_run_status": agent_runtime_details.get("run_status"),
+        "agent_runtime_smoke_llm_status": agent_runtime_details.get("llm_status"),
+        "agent_runtime_smoke_policy_status": agent_runtime_details.get("policy_status"),
+        "agent_runtime_smoke_verification_status": agent_runtime_details.get("verification_status"),
+        "agent_runtime_smoke_execution_contract_status": agent_runtime_details.get("execution_contract_status"),
+        "agent_runtime_smoke_completed_tools": agent_runtime_details.get("completed_tools"),
+        "agent_runtime_smoke_missing_required_tools": agent_runtime_details.get("missing_required_tools"),
+        "agent_runtime_smoke_memory_decision": agent_runtime_details.get("memory_decision"),
+        "agent_runtime_smoke_memory_review_candidate_schema": agent_runtime_details.get("memory_review_candidate_schema"),
+        "agent_runtime_smoke_memory_auto_promotion_performed": agent_runtime_details.get(
+            "memory_auto_promotion_performed"
+        ),
+        "agent_runtime_smoke_preflight_network_call": agent_runtime_details.get("preflight_network_call_made"),
+        "agent_runtime_smoke_network_default": agent_runtime_details.get("network_default"),
+        "agent_runtime_smoke_subprocess_default": agent_runtime_details.get("subprocess_default"),
+        "agent_runtime_smoke_public_safe": agent_runtime_details.get("public_safe"),
         "tool_capability_audit_schema": tool_audit.get("schema"),
         "tool_capability_audit_passed": tool_audit.get("passed"),
         "tool_capability_audit_status": tool_audit.get("status"),
@@ -1082,6 +1117,9 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
             and smoke_contract.get("network_call_made_by_doctor") is False
             and application_runtime.get("network_access") == "blocked"
             and application_preflight.get("network_call_made_by_preflight") is False
+            and agent_runtime_details.get("preflight_network_call_made") is False
+            and agent_runtime_details.get("network_default") == "blocked"
+            and agent_runtime_details.get("subprocess_default") == "blocked"
             and tool_audit_public.get("network_call_performed") is False
             and tool_audit_public.get("subprocess_executed") is False
             and policy_runtime.get("network_call_performed") is False
@@ -1113,6 +1151,26 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
         and details["application_smoke_secret_values_exported"] is False
         and details["application_smoke_raw_provider_payload_saved"] is False
         and details["application_smoke_private_reasoning_trace"] == "do_not_store"
+        and details["agent_runtime_smoke_schema"] == AGENT_RUNTIME_SMOKE_SCHEMA
+        and details["agent_runtime_smoke_passed"] is True
+        and details["agent_runtime_smoke_status"] == "passed"
+        and details["agent_runtime_smoke_engine"] == "deterministic_local"
+        and details["agent_runtime_smoke_llm_mode"] == "offline"
+        and details["agent_runtime_smoke_run_status"] == "completed"
+        and details["agent_runtime_smoke_llm_status"] == "completed"
+        and details["agent_runtime_smoke_policy_status"] == "approved"
+        and details["agent_runtime_smoke_verification_status"] == "passed"
+        and details["agent_runtime_smoke_execution_contract_status"] == "passed"
+        and isinstance(details["agent_runtime_smoke_completed_tools"], list)
+        and "evidence_packet" in details["agent_runtime_smoke_completed_tools"]
+        and details["agent_runtime_smoke_missing_required_tools"] == []
+        and details["agent_runtime_smoke_memory_decision"] == "candidate_pending_boss_review"
+        and details["agent_runtime_smoke_memory_review_candidate_schema"] == MEMORY_REVIEW_CANDIDATE_SCHEMA
+        and details["agent_runtime_smoke_memory_auto_promotion_performed"] is False
+        and details["agent_runtime_smoke_preflight_network_call"] is False
+        and details["agent_runtime_smoke_network_default"] == "blocked"
+        and details["agent_runtime_smoke_subprocess_default"] == "blocked"
+        and details["agent_runtime_smoke_public_safe"] is True
         and details["tool_capability_audit_schema"] == TOOL_CAPABILITY_AUDIT_SCHEMA
         and details["tool_capability_audit_passed"] is True
         and details["tool_capability_audit_status"] == "passed"

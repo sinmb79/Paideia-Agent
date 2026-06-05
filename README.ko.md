@@ -102,7 +102,7 @@ python -m pip install -e ".[dev]"        # 테스트
 
 CI의 package smoke 테스트는 `pyproject.toml`의 console script가 실제 callable로 import되는지, optional extras가 기능별로 분리되어 있는지, 패키지 메타데이터에 private/local path가 섞이지 않았는지 확인합니다.
 
-CI는 공개 안전 first-run CLI smoke 테스트도 실행합니다. 이 테스트는 `list-role-models`, `doctor-llm-provider --llm-engine deterministic_local`, `run-llm-application-smoke --llm-engine deterministic_local`, `audit-tool-capabilities --strict`, `run-action-policy-eval`이 비공개 파일, API 키, 네트워크 접근 없이 실행되고 검토 가능한 JSON 리포트를 쓰는지 확인합니다.
+CI는 공개 안전 first-run CLI smoke 테스트도 실행합니다. 이 테스트는 `list-role-models`, `doctor-llm-provider --llm-engine deterministic_local`, `run-llm-application-smoke --llm-engine deterministic_local`, `run-agent-runtime-smoke --llm-engine deterministic_local`, `audit-tool-capabilities --strict`, `run-action-policy-eval`이 비공개 파일, API 키, 네트워크 접근 없이 실행되고 검토 가능한 JSON 리포트를 쓰는지 확인합니다.
 
 롤모델 목록:
 
@@ -200,6 +200,15 @@ ai22b-talent-foundry run-llm-application-smoke `
 ai22b-talent-foundry audit-tool-capabilities `
   --strict `
   --output .\tool_capability_audit.json
+```
+
+전체 P0 런타임 경로를 확인하려면 `run-agent-runtime-smoke`를 사용합니다. 이 명령은 선택한 LLM을 action intent policy, LLM application engine, 등록 도구 executor, 검증, review-gated memory candidate, runtime observability, audit log까지 실제 agent loop로 통과시킵니다. 기본 deterministic 실행은 네트워크를 호출하지 않으며, 선택한 API 또는 localhost provider를 실제로 호출하려면 `--live-check`를 명시합니다.
+
+```powershell
+ai22b-talent-foundry run-agent-runtime-smoke `
+  --llm-engine deterministic_local `
+  --strict `
+  --output .\agent_runtime_smoke.json
 ```
 
 완료, bridge-ready, adapter-ready 상태의 agent run에는 `llm_plan`도 포함됩니다. 이 packet은 `assistant_reply`, 검토 가능한 짧은 추론 요약, 다음 행동 제안, suggestion-only 도구 계획을 담습니다. raw provider text와 숨은 추론 trace는 저장하지 않으며, 실제 등록 도구 실행은 계속 policy gate를 통과한 local tool registry만 담당합니다. 각 실행은 `llm_tool_plan_alignment`도 남겨 LLM의 범위 밖 도구 제안이 실행되지 않았음을 증명합니다.

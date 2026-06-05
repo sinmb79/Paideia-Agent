@@ -1859,6 +1859,91 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertNotIn(secret, serialized)
         self.assertNotIn(hidden_trace, serialized)
 
+    def test_agent_runtime_smoke_runs_full_loop_with_review_gated_memory(self) -> None:
+        from ai22b.talent_foundry.agent_runtime_smoke import run_agent_runtime_smoke
+
+        report = run_agent_runtime_smoke(engine="deterministic_local", llm_mode="offline")
+
+        self.assertEqual(report["schema"], "paideia-agent-runtime-smoke/v1")
+        self.assertTrue(report["passed"])
+        self.assertEqual(report["status"], "passed")
+        self.assertEqual(report["details"]["run_status"], "completed")
+        self.assertEqual(report["details"]["llm_status"], "completed")
+        self.assertEqual(report["details"]["policy_status"], "approved")
+        self.assertEqual(report["details"]["verification_status"], "passed")
+        self.assertEqual(report["details"]["execution_contract_status"], "passed")
+        self.assertEqual(report["details"]["missing_required_tools"], [])
+        self.assertIn("work_session", report["details"]["completed_tools"])
+        self.assertIn("evidence_packet", report["details"]["completed_tools"])
+        self.assertIn("assessment", report["details"]["completed_tools"])
+        self.assertIn("memory_consolidation", report["details"]["completed_tools"])
+        self.assertEqual(report["details"]["memory_decision"], "candidate_pending_boss_review")
+        self.assertEqual(
+            report["details"]["memory_review_candidate_schema"],
+            "paideia-memory-review-candidate/v1",
+        )
+        self.assertFalse(report["details"]["memory_auto_promotion_performed"])
+        self.assertFalse(report["details"]["preflight_network_call_made"])
+        self.assertEqual(report["details"]["network_default"], "blocked")
+        self.assertEqual(report["details"]["subprocess_default"], "blocked")
+        self.assertTrue(report["details"]["public_safe"])
+
+    def test_agent_runtime_smoke_exercises_live_client_path_without_raw_provider_storage(self) -> None:
+        from ai22b.talent_foundry.agent_runtime_smoke import run_agent_runtime_smoke
+
+        secret = "fixture_agent_runtime_secret_12345"
+        hidden_trace = "hidden provider smoke trace"
+
+        class FakeLiveClient:
+            def generate(self, messages, *, tools=None, policy=None):
+                return {
+                    "schema": "paideia-llm-client-result/v1",
+                    "engine": "fake_live_provider",
+                    "status": "completed",
+                    "model": "fake-live-model",
+                    "raw_output_saved": False,
+                    "text": json.dumps(
+                        {
+                            "assistant_reply": "Agent runtime smoke reached live planning.",
+                            "reviewable_reasoning_summary": [
+                                {"step": "policy", "summary": "Policy was checked first."},
+                                {"step": "tools", "summary": "Registered tools remain authoritative."},
+                            ],
+                            "suggested_next_actions": ["Review evidence packet."],
+                            "tool_plan": [
+                                {"tool": "evidence_packet", "purpose": "Reviewable evidence."},
+                                {"tool": "external_upload", "purpose": "Must stay suggestion-only."},
+                            ],
+                            "chain_of_thought": hidden_trace,
+                        },
+                        ensure_ascii=False,
+                    ),
+                    "debug_headers": {"Authorization": f"Bearer {secret}"},
+                    "chain_of_thought": hidden_trace,
+                    "metadata": {"private_reasoning_trace": hidden_trace},
+                }
+
+        report = run_agent_runtime_smoke(
+            engine="openrouter_api",
+            model="fake/live-model",
+            llm_mode="live",
+            client=FakeLiveClient(),
+        )
+        serialized = json.dumps(report, ensure_ascii=False)
+
+        self.assertTrue(report["passed"])
+        self.assertEqual(report["details"]["llm_status"], "completed")
+        self.assertEqual(report["details"]["llm_mode"], "live")
+        self.assertEqual(report["details"]["llm_engine"], "openrouter_api")
+        self.assertTrue(report["details"]["client_result_text_omitted"])
+        self.assertFalse(report["details"]["client_result_raw_output_saved"])
+        self.assertGreaterEqual(report["details"]["client_result_private_reasoning_fields_omitted"], 1)
+        self.assertFalse(report["details"]["client_result_private_reasoning_values_stored"])
+        self.assertTrue(report["details"]["llm_tool_suggestion_only_enforced"])
+        self.assertEqual(report["details"]["out_of_scope_executed_count"], 0)
+        self.assertNotIn(secret, serialized)
+        self.assertNotIn(hidden_trace, serialized)
+
     def test_cli_llm_application_smoke_strict_fails_when_provider_is_not_ready(self) -> None:
         import os
 
@@ -2556,6 +2641,7 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("list-role-models", first_run_details["commands"])
         self.assertIn("doctor-llm-provider", first_run_details["commands"])
         self.assertIn("run-llm-application-smoke", first_run_details["commands"])
+        self.assertIn("run-agent-runtime-smoke", first_run_details["commands"])
         self.assertIn("audit-tool-capabilities", first_run_details["commands"])
         self.assertIn("run-action-policy-eval", first_run_details["commands"])
         self.assertTrue(first_run_details["console_script_present"])
@@ -2585,6 +2671,28 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertFalse(first_run_details["application_smoke_secret_values_exported"])
         self.assertFalse(first_run_details["application_smoke_raw_provider_payload_saved"])
         self.assertEqual(first_run_details["application_smoke_private_reasoning_trace"], "do_not_store")
+        self.assertEqual(first_run_details["agent_runtime_smoke_schema"], "paideia-agent-runtime-smoke/v1")
+        self.assertTrue(first_run_details["agent_runtime_smoke_passed"])
+        self.assertEqual(first_run_details["agent_runtime_smoke_status"], "passed")
+        self.assertEqual(first_run_details["agent_runtime_smoke_engine"], "deterministic_local")
+        self.assertEqual(first_run_details["agent_runtime_smoke_llm_mode"], "offline")
+        self.assertEqual(first_run_details["agent_runtime_smoke_run_status"], "completed")
+        self.assertEqual(first_run_details["agent_runtime_smoke_llm_status"], "completed")
+        self.assertEqual(first_run_details["agent_runtime_smoke_policy_status"], "approved")
+        self.assertEqual(first_run_details["agent_runtime_smoke_verification_status"], "passed")
+        self.assertEqual(first_run_details["agent_runtime_smoke_execution_contract_status"], "passed")
+        self.assertIn("evidence_packet", first_run_details["agent_runtime_smoke_completed_tools"])
+        self.assertEqual(first_run_details["agent_runtime_smoke_missing_required_tools"], [])
+        self.assertEqual(first_run_details["agent_runtime_smoke_memory_decision"], "candidate_pending_boss_review")
+        self.assertEqual(
+            first_run_details["agent_runtime_smoke_memory_review_candidate_schema"],
+            "paideia-memory-review-candidate/v1",
+        )
+        self.assertFalse(first_run_details["agent_runtime_smoke_memory_auto_promotion_performed"])
+        self.assertFalse(first_run_details["agent_runtime_smoke_preflight_network_call"])
+        self.assertEqual(first_run_details["agent_runtime_smoke_network_default"], "blocked")
+        self.assertEqual(first_run_details["agent_runtime_smoke_subprocess_default"], "blocked")
+        self.assertTrue(first_run_details["agent_runtime_smoke_public_safe"])
         self.assertEqual(first_run_details["tool_capability_audit_schema"], "paideia-tool-capability-audit/v1")
         self.assertTrue(first_run_details["tool_capability_audit_passed"])
         self.assertEqual(first_run_details["tool_capability_audit_status"], "passed")
@@ -2688,6 +2796,7 @@ class TalentFoundryTests(unittest.TestCase):
         )
         self.assertIn("hire-installed", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])
         self.assertIn("run-llm-application-smoke", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])
+        self.assertIn("run-agent-runtime-smoke", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])
         self.assertIn("audit-tool-capabilities", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])
         self.assertIn("doctor-bundle", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])
         self.assertIn("run-hired-agent-job", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])

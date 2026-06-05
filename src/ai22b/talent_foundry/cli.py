@@ -14,6 +14,7 @@ from ai22b.talent_foundry.agent_identity_card import (
     verify_agent_identity_artifacts,
 )
 from ai22b.talent_foundry.agent_manifest import build_agent_manifest
+from ai22b.talent_foundry.agent_runtime_smoke import run_agent_runtime_smoke
 from ai22b.talent_foundry.action_policy import build_boss_approval_artifact
 from ai22b.talent_foundry.agent_program import (
     build_agent_program,
@@ -449,6 +450,26 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Return exit code 2 when the application-engine smoke report does not pass.",
     )
     llm_smoke.add_argument("--output", required=True)
+    agent_runtime_smoke = subparsers.add_parser(
+        "run-agent-runtime-smoke",
+        help="Run one selected LLM through the full Paideia agent loop and write a public-safe report.",
+    )
+    agent_runtime_smoke.add_argument("--llm-engine", required=True)
+    agent_runtime_smoke.add_argument("--llm-service")
+    agent_runtime_smoke.add_argument("--llm-model")
+    agent_runtime_smoke.add_argument("--llm-model-path")
+    agent_runtime_smoke.add_argument("--llm-mode", choices=["offline", "auto", "live"], default="offline")
+    agent_runtime_smoke.add_argument("--live-check", action="store_true", help="Shortcut for --llm-mode live.")
+    agent_runtime_smoke.add_argument(
+        "--task",
+        default="Run a public-safe Paideia agent runtime smoke and leave a reviewable evidence packet.",
+    )
+    agent_runtime_smoke.add_argument(
+        "--strict",
+        action="store_true",
+        help="Return exit code 2 when the full agent runtime smoke report does not pass.",
+    )
+    agent_runtime_smoke.add_argument("--output", required=True)
 
     run_workspace_agent = subparsers.add_parser(
         "run-workspace-agent",
@@ -1266,6 +1287,24 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "run-llm-application-smoke":
         llm_mode = "live" if args.live_check else args.llm_mode
         report = run_llm_application_smoke(
+            engine=args.llm_engine,
+            service=args.llm_service,
+            model=args.llm_model,
+            model_path=args.llm_model_path,
+            llm_mode=llm_mode,
+            task=args.task,
+        )
+        output_path = Path(args.output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(str(output_path))
+        if args.strict and not report.get("passed"):
+            return 2
+        return 0
+
+    if args.command == "run-agent-runtime-smoke":
+        llm_mode = "live" if args.live_check else args.llm_mode
+        report = run_agent_runtime_smoke(
             engine=args.llm_engine,
             service=args.llm_service,
             model=args.llm_model,

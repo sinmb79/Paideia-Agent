@@ -146,7 +146,7 @@ python -m pip install -e ".[dev]"        # tests
 
 CI runs a package smoke test that verifies the `pyproject.toml` console scripts import as callables, optional extras stay split by runtime capability, and package metadata does not reference private/local paths.
 
-CI also runs a CLI smoke test for public-safe first-run commands. It verifies that `list-role-models`, `doctor-llm-provider --llm-engine deterministic_local`, `run-llm-application-smoke --llm-engine deterministic_local`, `audit-tool-capabilities --strict`, and `run-action-policy-eval` execute without private files, API keys, or network access while writing reviewable JSON reports.
+CI also runs a CLI smoke test for public-safe first-run commands. It verifies that `list-role-models`, `doctor-llm-provider --llm-engine deterministic_local`, `run-llm-application-smoke --llm-engine deterministic_local`, `run-agent-runtime-smoke --llm-engine deterministic_local`, `audit-tool-capabilities --strict`, and `run-action-policy-eval` execute without private files, API keys, or network access while writing reviewable JSON reports.
 
 Runtime artifacts are stored outside this source tree by default:
 
@@ -412,6 +412,15 @@ For a direct local tool-permission check, use `audit-tool-capabilities`. It veri
 ai22b-talent-foundry audit-tool-capabilities `
   --strict `
   --output .\tool_capability_audit.json
+```
+
+For the full P0 runtime path, use `run-agent-runtime-smoke`. It sends the selected LLM through the actual agent loop: action intent policy, LLM application engine, registered tool executor, verification, review-gated memory candidate, runtime observability, and audit log. The default deterministic run makes no network calls; add `--live-check` only when you intentionally want the selected API or localhost provider to be called:
+
+```powershell
+ai22b-talent-foundry run-agent-runtime-smoke `
+  --llm-engine deterministic_local `
+  --strict `
+  --output .\agent_runtime_smoke.json
 ```
 
 Provider doctor reports now include a `smoke_contract` packet. It states whether an explicit live check was requested, whether a provider call was attempted, whether the doctor made a network or localhost call, and whether the smoke passed, skipped, or failed closed. The contract also records the retention policy: no raw provider text, no raw provider payload, no hidden reasoning trace, and client-result summaries only. If the selected provider is unavailable during `--live-check`, Paideia marks the doctor report as `needs_configuration` and keeps only the redacted summary and failure reason.
