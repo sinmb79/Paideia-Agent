@@ -8,6 +8,7 @@ from typing import Any
 
 ACTION_POLICY_SCHEMA = "paideia-action-policy/v1"
 ACTION_INTENT_INFERENCE_SCHEMA = "paideia-action-intent-inference/v1"
+ACTION_APPROVAL_SCHEMA = "paideia-boss-approval/v1"
 INTENT_INFERENCE_MODEL = "hybrid_structured_lexical_v3"
 COMPACT_SEPARATOR_RE = re.compile(r"[\s\-_./\\|·•~`'\"“”‘’()\[\]{}:;,.!?]+")
 
@@ -599,6 +600,96 @@ def capabilities_from_tool_policy(manifest: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _approval_expired(approval: dict[str, Any]) -> bool:
+    expires_at = approval.get("expires_at_utc")
+    if not expires_at:
+        return False
+    try:
+        expires = datetime.fromisoformat(str(expires_at).replace("Z", "+00:00"))
+    except ValueError:
+        return True
+    if expires.tzinfo is None:
+        expires = expires.replace(tzinfo=timezone.utc)
+    return expires < datetime.now(timezone.utc)
+
+
+def _approval_matches_intent(approval: dict[str, Any], intent: dict[str, Any]) -> bool:
+    approved_capabilities = set(approval.get("capabilities", []))
+    if approval.get("capability"):
+        approved_capabilities.add(str(approval["capability"]))
+    action_type = approval.get("action_type", "*")
+    data_class = approval.get("data_class", "*")
+    return (
+        approval.get("schema") == ACTION_APPROVAL_SCHEMA
+        and approval.get("status") == "approved"
+        and bool(approval.get("approved_by"))
+        and not _approval_expired(approval)
+        and intent.get("capability") in approved_capabilities
+        and action_type in {"*", intent.get("action_type")}
+        and data_class in {"*", intent.get("data_class")}
+    )
+
+
+def approval_gate_from_tool_policy(manifest: dict[str, Any], intents: list[dict[str, Any]]) -> dict[str, Any]:
+    approvals = manifest.get("tool_policy", {}).get("boss_approvals", [])
+    requested_sensitive = [
+        intent
+        for intent in intents
+        if intent.get("requested")
+        and not intent.get("negated")
+        and intent.get("requires_boss_approval")
+    ]
+    accepted: list[dict[str, Any]] = []
+    rejected: list[dict[str, Any]] = []
+    for approval in approvals:
+        if not isinstance(approval, dict):
+            rejected.append({"reason": "approval_record_not_object"})
+            continue
+        matching = [intent for intent in requested_sensitive if _approval_matches_intent(approval, intent)]
+        packet = {
+            "approval_id": approval.get("approval_id"),
+            "approved_by": approval.get("approved_by"),
+            "capability": approval.get("capability"),
+            "action_type": approval.get("action_type"),
+            "scope": approval.get("scope", "unspecified"),
+        }
+        if matching:
+            accepted.append(
+                {
+                    **packet,
+                    "matched_intent_ids": [intent["intent_id"] for intent in matching],
+                }
+            )
+        else:
+            rejected.append(
+                {
+                    **packet,
+                    "reason": (
+                        "approval_expired_or_invalid"
+                        if _approval_expired(approval)
+                        else "approval_did_not_match_requested_sensitive_intent"
+                    ),
+                }
+            )
+    return {
+        "schema": "paideia-boss-approval-gate/v1",
+        "mode": "explicit_approval_artifact_required_for_sensitive_capabilities",
+        "provided_count": len(approvals),
+        "requested_sensitive_count": len(requested_sensitive),
+        "accepted_count": len(accepted),
+        "accepted_approvals": accepted,
+        "rejected_approvals": rejected,
+    }
+
+
+def _approval_for_intent(approval_gate: dict[str, Any], intent: dict[str, Any]) -> dict[str, Any] | None:
+    intent_id = intent.get("intent_id")
+    for approval in approval_gate.get("accepted_approvals", []):
+        if intent_id in approval.get("matched_intent_ids", []):
+            return approval
+    return None
+
+
 def select_tools_for_intents(manifest: dict[str, Any], intents: list[dict[str, Any]], policy_decision: dict[str, Any]) -> list[str]:
     if policy_decision.get("status") != "approved":
         return []
@@ -618,6 +709,7 @@ def select_tools_for_intents(manifest: dict[str, Any], intents: list[dict[str, A
 def evaluate_action_policy(manifest: dict[str, Any], intents: list[dict[str, Any]]) -> dict[str, Any]:
     blocked_actions = set(manifest.get("tool_policy", {}).get("blocked_tools", []))
     grants = capabilities_from_tool_policy(manifest)
+    approval_gate = approval_gate_from_tool_policy(manifest, intents)
     denied_actions: list[dict[str, Any]] = []
     approval_required: list[dict[str, Any]] = []
     approved_intents: list[dict[str, Any]] = []
@@ -649,23 +741,26 @@ def evaluate_action_policy(manifest: dict[str, Any], intents: list[dict[str, Any
                 }
             )
             continue
-        if intent.get("requires_boss_approval") and intent.get("capability") not in grants["allowed_capabilities"]:
+        approval = _approval_for_intent(approval_gate, intent) if intent.get("requires_boss_approval") else None
+        if intent.get("requires_boss_approval") and not approval:
             approval_required.append(
                 {
                     "intent_id": intent["intent_id"],
                     "action_type": intent["action_type"],
+                    "capability": intent["capability"],
                     "risk_level": intent["risk_level"],
                     "reason": "sensitive_capability_requires_explicit_boss_approval",
                 }
             )
             continue
-        if intent.get("capability") in grants["allowed_capabilities"] or intent.get("risk_level") == "low":
+        if intent.get("capability") in grants["allowed_capabilities"] or intent.get("risk_level") == "low" or approval:
             approved_intents.append(
                 {
                     "intent_id": intent["intent_id"],
                     "action_type": intent["action_type"],
                     "capability": intent["capability"],
                     "risk_level": intent["risk_level"],
+                    "approval_id": approval.get("approval_id") if approval else None,
                 }
             )
 
@@ -677,6 +772,7 @@ def evaluate_action_policy(manifest: dict[str, Any], intents: list[dict[str, Any
         "status": status,
         "decision_model": "action_intent_capability_v1",
         "capability_grants": grants,
+        "boss_approval_gate": approval_gate,
         "approved_intents": approved_intents,
         "approval_required": approval_required,
         "denied_actions": denied_actions,
@@ -688,6 +784,7 @@ def evaluate_action_policy(manifest: dict[str, Any], intents: list[dict[str, Any
                 "status": status,
                 "denied_count": len(denied_actions),
                 "approval_required_count": len(approval_required),
+                "boss_approval_accepted_count": approval_gate["accepted_count"],
             }
         ],
     }

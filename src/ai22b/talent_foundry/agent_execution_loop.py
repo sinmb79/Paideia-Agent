@@ -198,6 +198,7 @@ def _build_execution_contract(
             "checked_before_tools": True,
             "denied_count": len(policy_decision.get("denied_actions", [])),
             "approval_required_count": len(policy_decision.get("approval_required", [])),
+            "boss_approval_accepted_count": policy_decision.get("boss_approval_gate", {}).get("accepted_count", 0),
         },
         "llm_runtime": {
             "attempted": llm_attempted,
