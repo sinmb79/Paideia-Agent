@@ -330,6 +330,7 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             identity_payload = json.loads(Path(session["artifacts"]["agent_id_card_payload"]).read_text(encoding="utf-8"))
             identity_envelope = json.loads(Path(session["artifacts"]["agent_identity_envelope"]).read_text(encoding="utf-8"))
             rollouts = json.loads(Path(session["artifacts"]["simulation_rollouts"]).read_text(encoding="utf-8"))
+            rollout_evaluation = json.loads(Path(session["artifacts"]["simulation_rollout_evaluation"]).read_text(encoding="utf-8"))
 
         self.assertEqual(session["wizard"]["schema"], "ai22b-paideia-openclaw-style-onboarding/v1")
         self.assertEqual(config["schema"], "ai22b-paideia-openclaw-style-config/v1")
@@ -346,6 +347,80 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         )
         self.assertEqual(rollouts["schema"], "ai-talent-simulation-rollouts/v1")
         self.assertGreaterEqual(rollouts["summary"]["episode_count"], 4)
+        self.assertEqual(rollout_evaluation["schema"], "ai-talent-simulation-rollout-evaluation/v1")
+        self.assertEqual(rollout_evaluation["summary"]["episode_count"], rollouts["summary"]["episode_count"])
+        self.assertFalse(rollout_evaluation["memory_update_gate"]["automatic_promotion_performed"])
+        self.assertTrue(rollout_evaluation["memory_update_gate"]["boss_review_required"])
+        self.assertFalse(rollout_evaluation["memory_update_gate"]["separate_consciousness_created"])
+
+    def test_simulation_rollout_evaluation_cli_ranks_and_quarantines_episodes(self) -> None:
+        from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
+        from ai22b.talent_foundry.cli import main as cli_main
+        from ai22b.talent_foundry.simulation_rollouts import build_simulation_rollouts
+        from ai22b.talent_foundry.training_run import materialize_training_blueprint
+
+        blueprint = create_agent_training_blueprint(
+            owner="Boss",
+            request="Raise a securities research agent and compare rollout episodes.",
+            talent_name="rollout-eval-test",
+            gender="male",
+            domain="securities_research",
+            role_model_id="graham_value_investing",
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            run = materialize_training_blueprint(blueprint, output_dir=Path(tmp) / "rollout_eval")
+            employment_record = Path(run["artifacts"]["employment_record"])
+            rollouts_path = Path(tmp) / "simulation_rollouts.json"
+            results_path = Path(tmp) / "simulation_rollout_results.json"
+            output_path = Path(tmp) / "simulation_rollout_evaluation.json"
+            rollouts = build_simulation_rollouts(
+                employment_record,
+                objective="Compare parallel research recovery strategies.",
+                output_path=rollouts_path,
+            )
+            episode_results = [
+                {
+                    "episode_id": rollouts["episodes"][0]["episode_id"],
+                    "score": 96,
+                    "review_summary": "Best evidence reconciliation under stress.",
+                },
+                {
+                    "episode_id": rollouts["episodes"][1]["episode_id"],
+                    "score": 64,
+                    "review_summary": "Failed to ask a clarifying question before acting.",
+                },
+            ]
+            results_path.write_text(
+                json.dumps(
+                    {
+                        "schema": "ai-talent-simulation-rollout-results/v1",
+                        "episode_results": episode_results,
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            exit_code = cli_main(
+                [
+                    "evaluate-simulation-rollouts",
+                    "--rollouts",
+                    str(rollouts_path),
+                    "--results",
+                    str(results_path),
+                    "--output",
+                    str(output_path),
+                ]
+            )
+            evaluation = json.loads(output_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(evaluation["schema"], "ai-talent-simulation-rollout-evaluation/v1")
+        self.assertEqual(evaluation["winner"]["episode_id"], episode_results[0]["episode_id"])
+        self.assertEqual(evaluation["winner"]["score"], 96)
+        self.assertIn(episode_results[0]["episode_id"], evaluation["memory_update_gate"]["eligible_episode_ids"])
+        self.assertIn(episode_results[1]["episode_id"], evaluation["memory_update_gate"]["quarantined_episode_ids"])
+        self.assertFalse(evaluation["memory_update_gate"]["automatic_promotion_performed"])
+        self.assertFalse(evaluation["winner"]["private_reasoning_trace_stored"])
 
     def test_guided_console_owner_self_extension_writes_metadata_only_intake(self) -> None:
         from ai22b.talent_foundry.console import run_console_session

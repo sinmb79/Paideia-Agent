@@ -54,6 +54,7 @@ ai22b-talent-foundry onboard --answers examples\graham_junior_onboarding.answers
 - `agent_identity_verification.json`: Agent ID Card payload와 Agent_warrent envelope의 로컬 사전 검증 보고서
 - `agent_identity_registration_receipt.json`: 보스가 외부에서 등록한 결과를 로컬 envelope에 연결한 receipt
 - `simulation_rollouts.json`: 병렬 episode rollout 계획
+- `simulation_rollout_evaluation.json`: episode 순위, winner, 승격 후보, 격리 후보, 보스 검토 gate
 - `onboarding/onboarding_session.json`: 실제 육성, 설치, 고용, 첫 목표 사이클 기록
 
 Agent ID Card payload만 별도로 만들 수도 있습니다.

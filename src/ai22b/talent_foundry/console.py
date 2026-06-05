@@ -25,7 +25,7 @@ from ai22b.talent_foundry.registry import (
     run_hired_projection_swarm_cycle,
     run_hired_team_cycle,
 )
-from ai22b.talent_foundry.simulation_rollouts import build_simulation_rollouts
+from ai22b.talent_foundry.simulation_rollouts import build_simulation_rollouts, evaluate_simulation_rollouts
 
 
 CONSOLE_SESSION_SCHEMA = "ai-talent-guided-console-session/v1"
@@ -690,6 +690,7 @@ def run_console_session(
         }
     if normalized.get("simulation_rollouts_enabled", "yes") == "yes":
         simulation_path = output_dir / "simulation_rollouts.json"
+        simulation_evaluation_path = output_dir / "simulation_rollout_evaluation.json"
         simulation = build_simulation_rollouts(
             Path(onboarding["artifacts"]["employment_record"]),
             objective=normalized.get("cycle_note")
@@ -697,11 +698,18 @@ def run_console_session(
             or f"{normalized['talent_name']} first simulation rollout",
             output_path=simulation_path,
         )
+        simulation_evaluation = evaluate_simulation_rollouts(
+            simulation_path,
+            output_path=simulation_evaluation_path,
+        )
         artifacts["simulation_rollouts"] = str(simulation_path)
+        artifacts["simulation_rollout_evaluation"] = str(simulation_evaluation_path)
         post_hire_extensions["simulation_rollouts"] = {
             "schema": simulation["schema"],
+            "evaluation_schema": simulation_evaluation["schema"],
             "episode_count": simulation["summary"]["episode_count"],
             "promotion_candidate_count": simulation["summary"]["promotion_candidate_count"],
+            "winner_episode_id": simulation_evaluation["summary"]["winner_episode_id"],
             "not_separate_consciousnesses": simulation["control_model"]["not_separate_consciousnesses"],
         }
     if normalized.get("post_hire_mode") == "projection_swarm":

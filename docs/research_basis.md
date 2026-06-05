@@ -41,7 +41,7 @@ Detailed note: [Tesla-style dataflow board benchmark](tesla_board_benchmark.md).
 
 | Source | What It Shows | Reflected In Paideia Agent |
 | --- | --- | --- |
-| NVIDIA Isaac Gym / Isaac Lab | Massive parallel simulation can accelerate embodied-policy learning. | Paideia's planned life-simulation loop uses parallel episode rollouts from the same age/stage checkpoint. |
+| NVIDIA Isaac Gym / Isaac Lab | Massive parallel simulation can accelerate embodied-policy learning. | Paideia uses parent-controlled parallel episode rollouts from the same checkpoint, then ranks winner, promotion candidates, and quarantine candidates without automatic memory promotion. |
 | MuJoCo MJX / MuJoCo Playground | Vectorized environments can test many variations quickly. | Conversation, school, stress, social conflict, and research scenarios can be varied without breaking the growth timeline. |
 | OpenAI dexterous manipulation / domain randomization | Simulated variation helps reduce the reality gap before deployment. | Paideia uses domain-randomized questions, API failures, missing files, conflicting sources, and social stress cases before promotion. |
 | GR00T / robot foundation-model reports | Robot learning combines demonstrations, synthetic data, simulation, and deployment feedback. | Paideia treats generated episodes, exams, real chats, and real work as separate evidence classes with promotion/quarantine rules. |

@@ -418,6 +418,16 @@ Workspace runs also write three P0 runtime artifacts inside the allowed workspac
 
 Every agent run now includes `runtime_observability`: estimated context size, estimated prompt tokens, selected-memory count, selected-tool count, provider usage presence, fallback state, review/promotion/quarantine counters, and privacy flags showing that full session replay and private reasoning traces were not stored. Dataflow jobs also write `runtime_observability.json` inside the workspace, so the memory-board claim can be measured instead of only described.
 
+Parent-controlled projection work now has a rollout evaluator:
+
+```powershell
+ai22b-talent-foundry evaluate-simulation-rollouts `
+  --rollouts .\simulation_rollouts.json `
+  --output .\simulation_rollout_evaluation.json
+```
+
+The evaluator ranks parallel episodes, selects a winner, marks promotion and quarantine candidates, and keeps `automatic_promotion_performed=false`. A winner is a reviewed learning candidate for the parent agent, not a separate agent or separate consciousness.
+
 Registered research tool execution includes an `evidence_packet` tool. It turns the user request, LLM draft, policy decision, and selected local memory summaries into reviewable evidence items, a checklist, unsupported-claim policy, and open questions. If a research work-session runs without this packet, verification marks the run for review instead of treating it as cleanly passed.
 
 The manifest no longer exposes ghost tool permissions. `local_file_read`, `local_file_write`, `work_session`, `evidence_packet`, `assessment`, `memory_consolidation`, and projection-team tools are all registered with explicit capability scopes. File tools do not read or write arbitrary paths in generic agent runs; workspace writes are delegated to `WorkspaceSandbox` and declared in rollback-aware artifacts. Job specs may include `resource_limits` such as `max_declared_outputs`, `max_total_output_bytes`, `max_runtime_seconds`, `allowed_network_hosts`, and `allowed_subprocess_commands`. The `assessment` tool is selected as a post-run review step, so every approved run can leave a review packet instead of silently promoting learning.

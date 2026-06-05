@@ -206,6 +206,16 @@ ai22b-talent-foundry run-hired-dataflow-job `
 
 모든 agent run에는 `runtime_observability`가 포함됩니다. 여기에는 추정 컨텍스트 크기, 추정 prompt token, 선택된 메모리 수, 선택된 도구 수, provider usage 존재 여부, fallback 상태, review/promotion/quarantine 카운터, full session replay와 private reasoning trace를 저장하지 않았다는 privacy flag가 기록됩니다. Dataflow job은 workspace 안에 `runtime_observability.json`도 따로 써서, 기억기판이 토큰과 컨텍스트를 줄인다는 주장을 실제 지표로 검토할 수 있게 합니다.
 
+본체 제어 분신/군체 실험은 병렬 episode rollout 평가로 다룹니다.
+
+```powershell
+ai22b-talent-foundry evaluate-simulation-rollouts `
+  --rollouts .\simulation_rollouts.json `
+  --output .\simulation_rollout_evaluation.json
+```
+
+이 평가는 episode를 순위화하고 winner, 승격 후보, 격리 후보를 기록합니다. `automatic_promotion_performed=false`를 유지하므로 좋은 episode도 보스 검토 전에는 장기 기억이나 Reasoning Ledger로 자동 승격되지 않습니다. winner는 본체의 학습 후보이지, 별도 에이전트나 별도 의식이 아닙니다.
+
 등록형 리서치 도구 실행에는 `evidence_packet` 도구가 포함됩니다. 이 도구는 사용자 요청, LLM 초안, 정책 판단, 선택된 로컬 기억 요약을 검토 가능한 근거 항목, 체크리스트, 미지원 주장 처리 정책, 후속 질문으로 구조화합니다. 리서치 work-session이 이 evidence packet 없이 실행되면 검증은 통과가 아니라 review 필요로 표시됩니다.
 
 매니페스트에는 이름만 있는 ghost tool 권한을 남기지 않습니다. `local_file_read`, `local_file_write`, `work_session`, `evidence_packet`, `assessment`, `memory_consolidation`, projection-team 도구는 모두 명시적 capability scope와 함께 등록됩니다. 파일 도구는 일반 agent run에서 임의 경로를 직접 읽거나 쓰지 않고, workspace 쓰기는 `WorkspaceSandbox`에 위임되어 rollback 가능한 산출물로 선언됩니다. job spec에는 `max_declared_outputs`, `max_total_output_bytes`, `max_runtime_seconds`, `allowed_network_hosts`, `allowed_subprocess_commands` 같은 `resource_limits`를 넣을 수 있습니다. `assessment` 도구는 실행 후 검토 단계로 선택되어, 승인된 실행이 학습을 조용히 승격하지 않고 보스 검토용 review packet을 남기게 합니다.

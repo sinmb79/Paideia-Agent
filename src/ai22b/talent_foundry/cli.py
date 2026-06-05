@@ -59,6 +59,7 @@ from ai22b.talent_foundry.records import build_career_records
 from ai22b.talent_foundry.role_models import list_role_models, summarize_role_model
 from ai22b.talent_foundry.same_sky_eval import run_same_sky_eval
 from ai22b.talent_foundry.skill_migration import migrate_external_agent_assets
+from ai22b.talent_foundry.simulation_rollouts import evaluate_simulation_rollouts
 from ai22b.talent_foundry.registry import (
     assign_hired_goal,
     assemble_hired_agent_team,
@@ -227,6 +228,16 @@ def _build_parser() -> argparse.ArgumentParser:
     same_sky_eval.add_argument("--agent", action="append", required=True, help="Employment record path. Repeatable.")
     same_sky_eval.add_argument("--scene", required=True)
     same_sky_eval.add_argument("--output", required=True)
+
+    rollout_eval = subparsers.add_parser(
+        "evaluate-simulation-rollouts",
+        help="Rank parallel simulation rollout episodes and choose reviewed promotion/quarantine candidates.",
+    )
+    rollout_eval.add_argument("--rollouts", required=True)
+    rollout_eval.add_argument("--results")
+    rollout_eval.add_argument("--output", required=True)
+    rollout_eval.add_argument("--promotion-threshold", type=int, default=92)
+    rollout_eval.add_argument("--quarantine-threshold", type=int, default=70)
 
     graduate_package = subparsers.add_parser(
         "build-graduate-package",
@@ -837,6 +848,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         scene = json.loads(Path(args.scene).read_text(encoding="utf-8"))
         output_path = Path(args.output)
         run_same_sky_eval([Path(path) for path in args.agent], scene, output_path=output_path)
+        print(str(output_path))
+        return 0
+
+    if args.command == "evaluate-simulation-rollouts":
+        output_path = Path(args.output)
+        evaluate_simulation_rollouts(
+            Path(args.rollouts),
+            result_path=Path(args.results) if args.results else None,
+            output_path=output_path,
+            promotion_threshold=args.promotion_threshold,
+            quarantine_threshold=args.quarantine_threshold,
+        )
         print(str(output_path))
         return 0
 

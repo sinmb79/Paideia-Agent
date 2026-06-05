@@ -41,7 +41,7 @@
 
 | 출처 | 확인한 점 | Paideia Agent 반영 |
 | --- | --- | --- |
-| NVIDIA Isaac Gym / Isaac Lab | 대량 병렬 시뮬레이션은 embodied policy 학습을 빠르게 합니다. | 같은 나이/학년 체크포인트에서 여러 episode rollout을 병렬로 돌리는 구조를 계획했습니다. |
+| NVIDIA Isaac Gym / Isaac Lab | 대량 병렬 시뮬레이션은 embodied policy 학습을 빠르게 합니다. | 같은 체크포인트에서 본체 제어 병렬 episode rollout을 만들고, winner, 승격 후보, 격리 후보를 평가하되 자동 메모리 승격은 하지 않습니다. |
 | MuJoCo MJX / Playground | 벡터화된 환경은 다양한 변형을 빠르게 시험할 수 있습니다. | 대화, 학교생활, 스트레스, 친구 갈등, 리서치 상황을 다양화하되 성장 시간축은 유지합니다. |
 | OpenAI dexterous manipulation / domain randomization | 시뮬레이션 변형은 실제 배포 전 reality gap을 줄입니다. | 질문 표현, API 실패, 파일 누락, 상충 자료, 사회적 스트레스를 승격 전 평가합니다. |
 | GR00T 계열 로봇 보고서 | 시연, 합성 데이터, 시뮬레이션, 실제 피드백이 함께 필요합니다. | 생성 에피소드, 시험, 실제 대화, 실제 업무를 다른 evidence class로 구분하고 promotion/quarantine을 적용합니다. |
