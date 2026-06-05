@@ -582,6 +582,7 @@ def record_hired_learning_experience(
             "quarantined": quarantined_after,
         },
         "reasoning_kernel": ledger["reasoning_kernel"],
+        "memory_lifecycle": ledger.get("memory_lifecycle", {}),
     }
 
     update_path = output_path or target_root / entrypoints.get("post_hire_learning_update", "post_hire_learning_update.json")

@@ -419,6 +419,8 @@ Key files:
 - `learning_ledger.json`: verified learning experiences.
 - `reasoning_kibo.jsonl`: internal compatibility file for the Reasoning Ledger.
 
+The learning ledger carries a `memory_lifecycle` report. It records the write policy, promotion/quarantine criteria, manual deletion policy, recovery/migration posture, retrieval-quality status, and PII/secret/path hygiene checks. Quarantined experience is excluded from active context, and private reasoning traces remain forbidden.
+
 ## Research Basis
 
 Paideia Agent keeps a source-to-design map so users can inspect which papers, reports, and reference programs shaped the product. See [Research Basis](docs/research_basis.md) or [연구 근거와 반영 내용](docs/research_basis.ko.md).

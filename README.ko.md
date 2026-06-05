@@ -231,6 +231,8 @@ ai22b-talent-foundry onboard-agent `
 - Hermes/OpenClaw 스타일 어댑터 manifest
 - `agent_identity_envelope.json`: [Agent_warrent / Agent Identity Layer](https://github.com/sinmb79/Agent_warrent) `ail.v1` 로컬 미등록 신원 envelope
 
+`learning_ledger.json`에는 `memory_lifecycle` 리포트가 포함됩니다. 이 리포트는 기억 쓰기 정책, 승격/격리 기준, 수동 삭제 정책, 복구/마이그레이션 방침, 검색 품질 상태, 개인정보/secret/로컬 경로 위생 검사를 기록합니다. 격리된 경험은 active context에서 제외되고, private reasoning trace 저장은 계속 금지됩니다.
+
 졸업 패키지 생성:
 
 ```powershell

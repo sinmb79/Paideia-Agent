@@ -6,6 +6,8 @@ import re
 from datetime import datetime, timezone
 from typing import Any
 
+from ai22b.talent_foundry.memory_lifecycle import audit_learning_ledger
+
 
 LEDGER_SCHEMA = "ai-talent-learning-ledger/v1"
 KERNEL_SCHEMA = "ai-talent-reasoning-kernel/v1"
@@ -13,10 +15,11 @@ ACTIVE_MEMORY_ROUTE_SCHEMA = "ai-talent-active-memory-route/v1"
 PROMOTION_SCORE = 80
 WINDOWS_ABSOLUTE_PATH = re.compile(r"^[A-Za-z]:\\")
 POSIX_HOME_PATH_PREFIXES = ("/home/", "/Users/")
+SAFE_REFERENCE_OMIT_KEYS = {"chain_of_thought", "private_reasoning_trace"}
 
 
 def create_learning_ledger(*, owner: str) -> dict[str, Any]:
-    return {
+    ledger = {
         "schema": LEDGER_SCHEMA,
         "owner": owner,
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -29,6 +32,8 @@ def create_learning_ledger(*, owner: str) -> dict[str, Any]:
         "quarantined_experiences": [],
         "skill_candidates": [],
     }
+    ledger["memory_lifecycle"] = audit_learning_ledger(ledger)
+    return ledger
 
 
 def _experience_id(owner: str, source: str, event: dict[str, Any], quality_label: dict[str, Any]) -> str:
@@ -74,7 +79,11 @@ def _summarize_event(source: str, event: dict[str, Any]) -> str:
 
 def _sanitize_for_public_reference(value: Any) -> Any:
     if isinstance(value, dict):
-        return {key: _sanitize_for_public_reference(item) for key, item in value.items()}
+        return {
+            key: _sanitize_for_public_reference(item)
+            for key, item in value.items()
+            if key not in SAFE_REFERENCE_OMIT_KEYS
+        }
     if isinstance(value, list):
         return [_sanitize_for_public_reference(item) for item in value]
     if isinstance(value, str):
@@ -129,7 +138,7 @@ def record_learning_experience(
         "safe_reference": {
             key: _sanitize_for_public_reference(value)
             for key, value in event.items()
-            if key not in {"chain_of_thought", "private_reasoning_trace"}
+            if key not in SAFE_REFERENCE_OMIT_KEYS
         },
     }
 
@@ -143,6 +152,7 @@ def record_learning_experience(
     else:
         entry["flags"] = ["needs_human_review", "do_not_promote_to_reasoning_kernel"]
         ledger["quarantined_experiences"].append(entry)
+    ledger["memory_lifecycle"] = audit_learning_ledger(ledger)
     return ledger
 
 
@@ -254,4 +264,5 @@ def route_active_memory(
             "selected_experience_count": len(selected),
             "route_is_degraded": len(selected) == 0,
         },
+        "memory_lifecycle": audit_learning_ledger(ledger, objective=objective),
     }

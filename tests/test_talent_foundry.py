@@ -3737,8 +3737,55 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(update["source"], "workspace_agent_run")
         self.assertEqual(update["quality_label"]["status"], "verified")
         self.assertGreaterEqual(update["experience_counts"]["promoted"], 1)
+        self.assertEqual(update["memory_lifecycle"]["schema"], "paideia-memory-lifecycle/v1")
+        self.assertEqual(update["memory_lifecycle"]["status"], "passed")
+        self.assertEqual(update["memory_lifecycle"]["retention_policy"]["deletion"], "manual_delete_request_with_audit_log_required")
+        self.assertTrue(update["memory_lifecycle"]["checks"]["quarantined_excluded_from_active_context"])
         self.assertIn("workspace_artifact_trace", installed_ledger["reasoning_kernel"]["procedural_skills"])
+        self.assertEqual(installed_ledger["memory_lifecycle"]["schema"], "paideia-memory-lifecycle/v1")
         self.assertNotIn(r"C:\Users", serialized_ledger)
+
+    def test_memory_lifecycle_audits_pii_secrets_paths_and_retrieval_quality(self) -> None:
+        from ai22b.talent_foundry.learning_loop import create_learning_ledger, record_learning_experience, route_active_memory
+        from ai22b.talent_foundry.memory_lifecycle import audit_learning_ledger
+
+        ledger = create_learning_ledger(owner="Shin Yong")
+        ledger = record_learning_experience(
+            ledger,
+            source="workspace_agent_run",
+            event={
+                "run_status": "completed",
+                "summary": "거시경제 근거 검증 워크스페이스 실행",
+                "workspace_outputs": {"trace": r"C:\Users\Example\private\trace.jsonl"},
+                "contact": "boss@example.com",
+            },
+            quality_label={"score": 92, "status": "verified"},
+        )
+        route = route_active_memory(ledger, objective="거시경제 근거 검증")
+        lifecycle = audit_learning_ledger(
+            {
+                **ledger,
+                "promoted_experiences": [
+                    {
+                        "id": "bad",
+                        "source": "fixture",
+                        "summary": "bad memory",
+                        "safe_reference": {"token": "sk-fixture_secret_value_1234567890"},
+                    }
+                ],
+            },
+            objective="거시경제 근거 검증",
+        )
+
+        self.assertEqual(ledger["memory_lifecycle"]["schema"], "paideia-memory-lifecycle/v1")
+        self.assertEqual(ledger["memory_lifecycle"]["status"], "passed")
+        self.assertTrue(ledger["memory_lifecycle"]["checks"]["local_absolute_paths_redacted"])
+        self.assertTrue(ledger["memory_lifecycle"]["issues"])
+        self.assertEqual(ledger["memory_lifecycle"]["issues"][0]["id"], "possible_pii_in_memory")
+        self.assertEqual(route["memory_lifecycle"]["retrieval_quality"]["objective_supplied"], True)
+        self.assertGreaterEqual(route["memory_lifecycle"]["retrieval_quality"]["selected_candidate_count"], 1)
+        self.assertEqual(lifecycle["status"], "failed")
+        self.assertIn("secret_like_value_in_memory", {item["id"] for item in lifecycle["issues"]})
 
     def test_cli_record_hired_learning_command_updates_installed_ledger(self) -> None:
         from ai22b.talent_foundry.cli import main as cli_main
