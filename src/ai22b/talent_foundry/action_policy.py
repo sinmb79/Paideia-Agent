@@ -100,6 +100,7 @@ DISCUSSION_MARKERS = (
 
 TOOL_CAPABILITIES = {
     "work_session": ["research.analysis", "document.draft"],
+    "evidence_packet": ["research.analysis", "evidence.review"],
     "memory_consolidation": ["memory.write_candidate"],
     "parent_controlled_projection_team": ["projection.spawn_bounded"],
 }

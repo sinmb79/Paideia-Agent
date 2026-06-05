@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from typing import Any, Callable
 
@@ -62,6 +63,85 @@ def _work_session(context: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _evidence_packet(context: dict[str, Any]) -> dict[str, Any]:
+    manifest = context.get("manifest", {})
+    memory = manifest.get("memory_profile", {})
+    llm_result = context.get("llm_result", {})
+    policy_decision = context.get("policy_decision", {})
+    previous_tools = context.get("tool_results_so_far", [])
+    task = str(context.get("task", ""))
+    draft = str(llm_result.get("draft", "")).strip()
+    procedural = list(memory.get("procedural_principles", []))[:5]
+    semantic = list(memory.get("semantic_themes", []))[:5]
+    previous_completed = [item.get("tool") for item in previous_tools if item.get("status") == "completed"]
+    evidence_items = [
+        {
+            "id": "request",
+            "source": "boss_task",
+            "summary": task,
+            "trust_level": "direct_user_request",
+        },
+        {
+            "id": "runtime_draft",
+            "source": llm_result.get("engine", "unknown_runtime"),
+            "summary": draft or "No runtime draft was produced; keep conclusions tentative.",
+            "trust_level": "draft_requires_review",
+        },
+        {
+            "id": "memory_profile",
+            "source": "local_verified_memory_summaries",
+            "summary": "; ".join(procedural + semantic) or "No memory profile detail was selected.",
+            "trust_level": "local_summary_not_private_trace",
+        },
+        {
+            "id": "policy_boundary",
+            "source": "action_intent_capability_policy",
+            "summary": f"policy_status={policy_decision.get('status')}; violations={policy_decision.get('policy_violations', [])}",
+            "trust_level": "guardrail_record",
+        },
+    ]
+    checklist = [
+        {
+            "id": "request_understood",
+            "status": "satisfied",
+            "evidence": "boss_task",
+        },
+        {
+            "id": "policy_checked_before_tools",
+            "status": "satisfied" if policy_decision.get("schema") == "paideia-action-policy/v1" else "needs_review",
+            "evidence": "action_intent_capability_policy",
+        },
+        {
+            "id": "runtime_draft_marked_reviewable",
+            "status": "satisfied" if llm_result.get("status") in {"completed", "bridge_context_prepared", "adapter_manifest_ready"} else "needs_review",
+            "evidence": "runtime_draft",
+        },
+        {
+            "id": "source_dates_required_for_external_claims",
+            "status": "manual_review_required",
+            "evidence": "not_performed_by_local_in_memory_tool",
+        },
+        {
+            "id": "hidden_chain_of_thought_not_stored",
+            "status": "satisfied",
+            "evidence": "memory_profile",
+        },
+    ]
+    return {
+        "schema": "paideia-tool-evidence-packet/v1",
+        "task_fingerprint": hashlib.sha256(task.encode("utf-8")).hexdigest()[:16],
+        "evidence_items": evidence_items,
+        "checklist": checklist,
+        "previous_completed_tools": previous_completed,
+        "unsupported_claim_policy": "unsupported_external_claims_remain_open_questions",
+        "open_questions": [
+            "Which source date and document version support each external factual claim?",
+            "Which counterevidence would change the draft conclusion?",
+            "Does the boss want a full dataflow run before promoting this into memory?",
+        ],
+    }
+
+
 def _memory_consolidation(context: dict[str, Any]) -> dict[str, Any]:
     return {
         "candidate_only": True,
@@ -88,6 +168,14 @@ def build_default_tool_registry() -> dict[str, ToolSpec]:
             side_effects="none",
             handler=_work_session,
             data_classes=("task_context", "manifest_summary", "verified_memory_summaries"),
+        ),
+        ToolSpec(
+            tool_id="evidence_packet",
+            capability="research.analysis",
+            description="Create a reviewable evidence packet from task, runtime draft, policy decision, and local memory summaries.",
+            side_effects="none",
+            handler=_evidence_packet,
+            data_classes=("task_context", "runtime_draft", "policy_decision", "verified_memory_summaries"),
         ),
         ToolSpec(
             tool_id="memory_consolidation",
@@ -224,6 +312,7 @@ def execute_registered_tools(
                 "task": task,
                 "llm_result": llm_result,
                 "policy_decision": policy_decision,
+                "tool_results_so_far": results,
             }
         )
         results.append(

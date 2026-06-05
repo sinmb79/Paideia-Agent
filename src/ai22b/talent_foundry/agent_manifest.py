@@ -86,6 +86,7 @@ def build_agent_manifest(
                 "local_file_read",
                 "local_file_write",
                 "work_session",
+                "evidence_packet",
                 "assessment",
                 "parent_controlled_projection_team",
                 "memory_consolidation",

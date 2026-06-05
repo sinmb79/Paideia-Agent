@@ -1166,6 +1166,7 @@ class TalentFoundryTests(unittest.TestCase):
 
         self.assertEqual(manifest["agent"]["name"], "신용")
         self.assertEqual(manifest["llm_policy"]["role"], "application_engine_not_identity")
+        self.assertIn("evidence_packet", manifest["tool_policy"]["allowed_tools"])
         self.assertIn("투자 실행", manifest["tool_policy"]["blocked_tools"])
         self.assertIn("local_cli_runtime", manifest["compatible_targets"])
         self.assertEqual(
@@ -1216,8 +1217,15 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(result["execution_loop"]["schema"], "paideia-agent-execution-loop/v1")
         self.assertEqual(result["policy_decision"]["decision_model"], "action_intent_capability_v1")
         self.assertEqual(result["verification"]["status"], "passed")
+        self.assertIn("evidence_packet", result["selected_tools"])
         self.assertTrue(result["audit_events"])
         self.assertIn("llm_runtime_result", result)
+        tool_results = {item["tool"]: item for item in result["tool_execution"]["tool_results"]}
+        evidence = tool_results["evidence_packet"]["output"]
+        self.assertEqual(evidence["schema"], "paideia-tool-evidence-packet/v1")
+        self.assertTrue(evidence["evidence_items"])
+        self.assertTrue(evidence["checklist"])
+        self.assertEqual(evidence["unsupported_claim_policy"], "unsupported_external_claims_remain_open_questions")
 
     def test_action_policy_blocks_structured_sensitive_intents(self) -> None:
         from ai22b.talent_foundry.action_policy import evaluate_action_policy, infer_action_intents
@@ -1471,10 +1479,13 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("research.analysis", capability_scope["granted_capabilities"])
         tool_results = {item["tool"]: item for item in result["tool_execution"]["tool_results"]}
         self.assertIn("work_session", tool_results)
+        self.assertIn("evidence_packet", tool_results)
         self.assertIn("memory_consolidation", tool_results)
         self.assertIn("parent_controlled_projection_team", tool_results)
         self.assertEqual(tool_results["work_session"]["capability_scope"]["network_scope"], "blocked")
         self.assertIn("task_context", tool_results["work_session"]["capability_scope"]["data_classes"])
+        self.assertEqual(tool_results["evidence_packet"]["output"]["schema"], "paideia-tool-evidence-packet/v1")
+        self.assertIn("work_session", tool_results["evidence_packet"]["output"]["previous_completed_tools"])
         self.assertEqual(tool_results["parent_controlled_projection_team"]["output"]["separate_consciousness"], False)
 
     def test_policy_engine_blocks_prompt_injection_sensitive_actions_but_allows_policy_discussion(self) -> None:

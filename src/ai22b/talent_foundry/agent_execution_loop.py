@@ -30,11 +30,28 @@ def _run_id(agent_name: str, task: str, created_at: str) -> str:
 
 def _verify_execution(policy_decision: dict[str, Any], tool_execution: dict[str, Any], llm_result: dict[str, Any]) -> dict[str, Any]:
     issues: list[str] = []
+    completed_tools: set[str] = set()
+    evidence_packet: dict[str, Any] | None = None
     if policy_decision.get("status") == "blocked":
         issues.extend(policy_decision.get("policy_violations", []))
     for item in tool_execution.get("tool_results", []):
         if item.get("status") not in {"completed", "skipped"}:
             issues.append(f"tool_failed:{item.get('tool')}")
+            continue
+        if item.get("status") == "completed":
+            completed_tools.add(str(item.get("tool")))
+            if item.get("tool") == "evidence_packet":
+                evidence_packet = item.get("output", {})
+    if "work_session" in completed_tools and "evidence_packet" not in completed_tools:
+        issues.append("missing_evidence_packet_for_research_tool")
+    if evidence_packet is not None:
+        if evidence_packet.get("schema") != "paideia-tool-evidence-packet/v1":
+            issues.append("evidence_packet_schema_invalid")
+        checklist = evidence_packet.get("checklist", [])
+        if not checklist:
+            issues.append("evidence_packet_checklist_missing")
+        if any(item.get("status") == "failed" for item in checklist if isinstance(item, dict)):
+            issues.append("evidence_packet_checklist_failed")
     if llm_result.get("status") not in {"completed", "bridge_context_prepared", "adapter_manifest_ready", "unavailable", "skipped_policy_block"}:
         issues.append(f"llm_status_unexpected:{llm_result.get('status')}")
     return {
@@ -44,6 +61,7 @@ def _verify_execution(policy_decision: dict[str, Any], tool_execution: dict[str,
         "checks": {
             "policy_checked_before_tools": True,
             "capability_grants_enforced": True,
+            "evidence_packet_required_for_research_tool": True,
             "hidden_chain_of_thought_not_stored": True,
             "boss_review_required_for_learning_promotion": True,
         },

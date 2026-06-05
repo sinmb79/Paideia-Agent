@@ -397,6 +397,8 @@ Workspace runs also write three P0 runtime artifacts inside the allowed workspac
 - `rollback_manifest.json`: a manual-review rollback plan listing declared workspace outputs in safe delete order, never outside the workspace root.
 - `workspace_sandbox.json`: filesystem allowlist, blocked network/subprocess policy, resource limits, rollback notes, audit requirements, and the `WorkspaceSandbox` enforcement audit for writes, path escapes, output size, and trace limits.
 
+Registered research tool execution includes an `evidence_packet` tool. It turns the user request, LLM draft, policy decision, and selected local memory summaries into reviewable evidence items, a checklist, unsupported-claim policy, and open questions. If a research work-session runs without this packet, verification marks the run for review instead of treating it as cleanly passed.
+
 The P0 action policy now records a structured `hybrid_structured_lexical_v2` inference packet for sensitive intents. It distinguishes direct commands from discussion-only or negated requests, so "do not place a buy order; analyze only" is kept as safe research context instead of being treated as trade execution.
 
 ## Hiring Dossier
