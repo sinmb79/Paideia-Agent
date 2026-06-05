@@ -473,7 +473,7 @@ ai22b-talent-foundry verify-workspace-execution `
   --output .\workspace_execution_proof.json
 ```
 
-The proof checks the source run schema/status, required workspace artifacts, sandbox enforcement, rollback manifests, LLM identity boundary, provider preflight, agent `execution_contract`, private-reasoning retention policy, acceptance checklist, and dataflow transpose verification where applicable. Absolute local paths are fingerprinted instead of copied into the proof.
+The proof checks the source run schema/status, required workspace artifacts, sandbox enforcement, rollback manifests, LLM identity boundary, reviewable `llm_plan`, provider preflight, agent `execution_contract`, private-reasoning retention policy, acceptance checklist, and dataflow transpose verification where applicable. Absolute local paths are fingerprinted instead of copied into the proof.
 
 Parent-controlled projection work now has a rollout evaluator:
 

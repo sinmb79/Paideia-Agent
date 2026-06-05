@@ -20,6 +20,7 @@ SUPPORTED_RUN_SCHEMAS = {
     "ai-talent-dataflow-run/v1",
 }
 LLM_PROVIDER_PREFLIGHT_SCHEMA = "paideia-llm-provider-preflight/v1"
+LLM_REVIEWABLE_PLAN_SCHEMA = "paideia-llm-reviewable-plan/v1"
 DATAFLOW_TRANSPOSE_VERIFICATION_SCHEMA = "ai-talent-dataflow-transpose-verification/v1"
 WORKSPACE_TOOL_ARTIFACTS_SCHEMA = "paideia-workspace-tool-artifacts/v1"
 WORKSPACE_INPUT_REVIEW_SCHEMA = "paideia-workspace-input-review/v1"
@@ -673,6 +674,43 @@ def build_workspace_execution_proof(
             "engine": llm_result.get("engine"),
             "status": llm_result.get("status"),
             "identity_policy": llm_result.get("identity_policy"),
+        },
+    )
+    llm_plan = llm_result.get("llm_plan", {}) if isinstance(llm_result.get("llm_plan"), dict) else {}
+    llm_plan_required = llm_result.get("status") in {"completed", "bridge_context_prepared", "adapter_manifest_ready"}
+    _check(
+        checks,
+        "agent_llm_reviewable_plan_verified",
+        (not llm_plan_required)
+        or (
+            llm_plan.get("schema") == LLM_REVIEWABLE_PLAN_SCHEMA
+            and isinstance(llm_plan.get("assistant_reply"), str)
+            and bool(llm_plan.get("assistant_reply", "").strip())
+            and isinstance(llm_plan.get("reviewable_reasoning_summary"), list)
+            and bool(llm_plan.get("reviewable_reasoning_summary"))
+            and all(
+                isinstance(item, dict)
+                and isinstance(item.get("summary"), str)
+                and bool(item.get("summary", "").strip())
+                for item in llm_plan.get("reviewable_reasoning_summary", [])
+            )
+            and isinstance(llm_plan.get("suggested_next_actions"), list)
+            and isinstance(llm_plan.get("tool_plan"), list)
+            and llm_plan.get("tool_plan_policy") == "suggestions_only_registered_executor_decides"
+            and llm_plan.get("private_reasoning_trace") == "do_not_store"
+            and llm_plan.get("raw_provider_text_stored") is False
+        ),
+        evidence={
+            "required": llm_plan_required,
+            "schema": llm_plan.get("schema"),
+            "source": llm_plan.get("source"),
+            "reasoning_summary_count": len(llm_plan.get("reviewable_reasoning_summary", []))
+            if isinstance(llm_plan.get("reviewable_reasoning_summary"), list)
+            else 0,
+            "tool_plan_count": len(llm_plan.get("tool_plan", []))
+            if isinstance(llm_plan.get("tool_plan"), list)
+            else 0,
+            "raw_provider_text_stored": llm_plan.get("raw_provider_text_stored"),
         },
     )
     preflight = _llm_preflight(run, workspace_run)
