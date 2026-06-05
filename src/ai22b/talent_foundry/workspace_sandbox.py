@@ -10,6 +10,7 @@ from typing import Any
 WORKSPACE_SANDBOX_SCHEMA = "paideia-workspace-sandbox-policy/v1"
 WORKSPACE_ROLLBACK_MANIFEST_SCHEMA = "paideia-workspace-rollback-manifest/v1"
 DEFAULT_MAX_OUTPUT_FILE_BYTES = 2_000_000
+DEFAULT_MAX_INPUT_FILE_BYTES = 1_000_000
 DEFAULT_MAX_TOTAL_OUTPUT_BYTES = 10_000_000
 DEFAULT_MAX_DECLARED_OUTPUTS = 64
 DEFAULT_MAX_TRACE_EVENTS = 200
@@ -37,6 +38,7 @@ def sandbox_kwargs_from_resource_limits(resource_limits: dict[str, Any] | None) 
         return [str(item) for item in value if str(item).strip()]
 
     return {
+        "max_input_file_bytes": positive_int("max_input_file_bytes", DEFAULT_MAX_INPUT_FILE_BYTES),
         "max_output_file_bytes": positive_int("max_output_file_bytes", DEFAULT_MAX_OUTPUT_FILE_BYTES),
         "max_total_output_bytes": positive_int("max_total_output_bytes", DEFAULT_MAX_TOTAL_OUTPUT_BYTES),
         "max_declared_outputs": positive_int("max_declared_outputs", DEFAULT_MAX_DECLARED_OUTPUTS),
@@ -54,6 +56,7 @@ def _now() -> str:
 def workspace_sandbox_policy(
     workspace_root: Path,
     *,
+    max_input_file_bytes: int = DEFAULT_MAX_INPUT_FILE_BYTES,
     max_output_file_bytes: int = DEFAULT_MAX_OUTPUT_FILE_BYTES,
     max_total_output_bytes: int = DEFAULT_MAX_TOTAL_OUTPUT_BYTES,
     max_declared_outputs: int = DEFAULT_MAX_DECLARED_OUTPUTS,
@@ -72,6 +75,7 @@ def workspace_sandbox_policy(
             "mode": "allowlist",
             "allowed_roots": [str(root)],
             "path_traversal_guard": True,
+            "reads_must_use_workspace_sandbox": True,
             "writes_must_use_workspace_sandbox": True,
         },
         "network": {
@@ -84,6 +88,7 @@ def workspace_sandbox_policy(
             "allowlist": subprocess_allowlist,
         },
         "resource_limits": {
+            "max_input_file_bytes": max_input_file_bytes,
             "max_output_file_bytes": max_output_file_bytes,
             "max_total_output_bytes": max_total_output_bytes,
             "max_declared_outputs": max_declared_outputs,
@@ -105,6 +110,8 @@ def workspace_sandbox_policy(
             "enabled": True,
             "write_api": "WorkspaceSandbox",
             "path_escape_raises": "SandboxViolation",
+            "missing_input_raises": "SandboxViolation",
+            "oversized_input_raises": "SandboxViolation",
             "oversized_output_raises": "SandboxViolation",
             "trace_limit_raises": "SandboxViolation",
             "total_output_budget_raises": "SandboxViolation",
@@ -120,6 +127,7 @@ class WorkspaceSandbox:
         self,
         workspace_root: Path,
         *,
+        max_input_file_bytes: int = DEFAULT_MAX_INPUT_FILE_BYTES,
         max_output_file_bytes: int = DEFAULT_MAX_OUTPUT_FILE_BYTES,
         max_total_output_bytes: int = DEFAULT_MAX_TOTAL_OUTPUT_BYTES,
         max_declared_outputs: int = DEFAULT_MAX_DECLARED_OUTPUTS,
@@ -129,6 +137,7 @@ class WorkspaceSandbox:
         allowed_subprocess_commands: list[str] | None = None,
     ) -> None:
         self.root = workspace_root.resolve()
+        self.max_input_file_bytes = max_input_file_bytes
         self.max_output_file_bytes = max_output_file_bytes
         self.max_total_output_bytes = max_total_output_bytes
         self.max_declared_outputs = max_declared_outputs
@@ -138,7 +147,9 @@ class WorkspaceSandbox:
         self.allowed_subprocess_commands = allowed_subprocess_commands or []
         self.started_monotonic = monotonic()
         self.audit_events: list[dict[str, Any]] = []
+        self.declared_inputs: list[dict[str, Any]] = []
         self.declared_outputs: list[dict[str, Any]] = []
+        self.total_input_bytes = 0
         self.total_output_bytes = 0
 
     def ensure_root(self) -> Path:
@@ -155,8 +166,48 @@ class WorkspaceSandbox:
             path = (self.root / candidate).resolve()
         if self.root not in path.parents and path != self.root:
             self._audit("path_escape_blocked", requested=str(relative_path), resolved=str(path))
-            raise SandboxViolation("Workspace output escaped workspace directory")
+            raise SandboxViolation("Workspace path escaped workspace directory")
         return path
+
+    def read_text(self, relative_path: str | Path, *, purpose: str) -> str:
+        self._enforce_runtime_budget("read_text")
+        path = self.safe_path(relative_path)
+        if not path.exists():
+            self._audit(
+                "input_file_missing",
+                requested=self._safe_requested_path(relative_path),
+                purpose=purpose,
+            )
+            raise SandboxViolation("Workspace input file is missing")
+        if not path.is_file():
+            self._audit(
+                "input_file_not_regular",
+                requested=self._safe_requested_path(relative_path),
+                purpose=purpose,
+            )
+            raise SandboxViolation("Workspace input path is not a regular file")
+        byte_count = path.stat().st_size
+        if byte_count > self.max_input_file_bytes:
+            self._audit(
+                "input_size_blocked",
+                requested=self._safe_requested_path(relative_path),
+                byte_count=byte_count,
+                max_input_file_bytes=self.max_input_file_bytes,
+            )
+            raise SandboxViolation("Workspace input exceeded max_input_file_bytes")
+        try:
+            data = path.read_bytes()
+            text = data.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            self._audit(
+                "input_decode_blocked",
+                requested=self._safe_requested_path(relative_path),
+                encoding="utf-8",
+                error_type=type(exc).__name__,
+            )
+            raise SandboxViolation("Workspace input must be valid UTF-8 text") from exc
+        self._declare_input(path, purpose=purpose, bytes_read=len(data))
+        return text
 
     def write_text(self, relative_path: str | Path, text: str, *, purpose: str) -> Path:
         data = text.encode("utf-8")
@@ -237,6 +288,7 @@ class WorkspaceSandbox:
     def policy(self) -> dict[str, Any]:
         return workspace_sandbox_policy(
             self.root,
+            max_input_file_bytes=self.max_input_file_bytes,
             max_output_file_bytes=self.max_output_file_bytes,
             max_total_output_bytes=self.max_total_output_bytes,
             max_declared_outputs=self.max_declared_outputs,
@@ -248,6 +300,7 @@ class WorkspaceSandbox:
 
     def snapshot(self) -> dict[str, Any]:
         policy = self.policy()
+        policy["declared_inputs"] = self.declared_inputs
         policy["declared_outputs"] = self.declared_outputs
         policy["audit_events"] = self.audit_events
         policy["resource_usage"] = self.resource_usage()
@@ -257,7 +310,9 @@ class WorkspaceSandbox:
         elapsed = monotonic() - self.started_monotonic
         return {
             "elapsed_seconds": round(elapsed, 6),
+            "total_input_bytes": self.total_input_bytes,
             "total_output_bytes": self.total_output_bytes,
+            "declared_input_count": len(self.declared_inputs),
             "declared_output_count": len(self.declared_outputs),
             "remaining_total_output_bytes": max(0, self.max_total_output_bytes - self.total_output_bytes),
             "remaining_declared_outputs": max(0, self.max_declared_outputs - len(self.declared_outputs)),
@@ -303,6 +358,12 @@ class WorkspaceSandbox:
             self.rollback_manifest(operation_id=operation_id),
             purpose="rollback_manifest",
         )
+
+    def _safe_requested_path(self, relative_path: str | Path) -> str:
+        candidate = Path(relative_path)
+        if candidate.is_absolute():
+            return candidate.name
+        return candidate.as_posix()
 
     def _enforce_output_size(self, relative_path: str | Path, byte_count: int) -> None:
         if byte_count > self.max_output_file_bytes:
@@ -368,6 +429,17 @@ class WorkspaceSandbox:
         self.declared_outputs.append(entry)
         self.total_output_bytes += bytes_written
         self._audit("sandbox_file_write", **entry)
+
+    def _declare_input(self, path: Path, *, purpose: str, bytes_read: int) -> None:
+        entry = {
+            "path": str(path),
+            "relative_path": path.relative_to(self.root).as_posix(),
+            "purpose": purpose,
+            "bytes_read": bytes_read,
+        }
+        self.declared_inputs.append(entry)
+        self.total_input_bytes += bytes_read
+        self._audit("sandbox_file_read", **entry)
 
     def _audit(self, event: str, **fields: Any) -> None:
         self.audit_events.append(

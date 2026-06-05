@@ -218,6 +218,23 @@ ai22b-talent-foundry run-hired-dataflow-job `
 - `rollback_manifest.json`: workspace 내부에 선언된 산출물만 안전한 삭제 순서로 되돌릴 수 있게 하는 수동 검토용 rollback 계획
 - `workspace_sandbox.json`: 파일시스템 allowlist, 네트워크/서브프로세스 차단 정책, 파일별/전체 리소스 제한, 런타임 예산, rollback 메모, 감사 요구사항, 그리고 쓰기 경로/경로 탈출/출력 크기/trace 제한/네트워크·서브프로세스 시도/전체 작업 예산을 강제한 `WorkspaceSandbox` 감사 기록
 
+고용된 에이전트의 job spec은 workspace 안의 입력 파일도 선언할 수 있습니다.
+
+```json
+{
+  "objective": "로컬 리서치 메모를 읽고 보스 검토용 보고서를 작성한다.",
+  "input_files": [
+    {
+      "path": "company_note.txt",
+      "description": "보스가 제공한 로컬 회사 메모",
+      "purpose": "research_context"
+    }
+  ]
+}
+```
+
+`input_files`가 있으면 Paideia는 선언된 UTF-8 텍스트 파일만 `WorkspaceSandbox.read_text`로 읽고 `input_review.json`을 남깁니다. 이 파일에는 안전한 상대경로, 파일명, byte 수, content hash, 짧은 preview, 읽기/거부 상태, 네트워크/서브프로세스 미사용 정책이 기록됩니다. 로컬 절대경로는 내보내지 않습니다. 실행 증명은 입력 파일을 선언한 job에서 `input_review.json`과 최소 한 개 이상의 실제 선언 입력 read를 요구합니다.
+
 모든 agent run에는 `runtime_observability`가 포함됩니다. 여기에는 추정 컨텍스트 크기, 추정 prompt token, 선택된 메모리 수, 선택된 도구 수, provider usage 존재 여부, fallback 상태, review/promotion/quarantine 카운터, full session replay와 private reasoning trace를 저장하지 않았다는 privacy flag가 기록됩니다. Dataflow job은 workspace 안에 `runtime_observability.json`도 따로 써서, 기억기판이 토큰과 컨텍스트를 줄인다는 주장을 실제 지표로 검토할 수 있게 합니다.
 
 workspace, hired-job, dataflow 실행 후에는 결과를 신뢰하기 전에 실행 증명 파일을 만들 수 있습니다.
@@ -242,7 +259,7 @@ ai22b-talent-foundry evaluate-simulation-rollouts `
 
 등록형 리서치 도구 실행에는 `evidence_packet` 도구가 포함됩니다. 이 도구는 사용자 요청, LLM 초안, 정책 판단, 선택된 로컬 기억 요약을 검토 가능한 근거 항목, 체크리스트, 미지원 주장 처리 정책, 후속 질문으로 구조화합니다. 리서치 work-session이 이 evidence packet 없이 실행되면 검증은 통과가 아니라 review 필요로 표시됩니다.
 
-매니페스트에는 이름만 있는 ghost tool 권한을 남기지 않습니다. `local_file_read`, `local_file_write`, `work_session`, `evidence_packet`, `assessment`, `memory_consolidation`, projection-team 도구는 모두 명시적 capability scope와 함께 등록됩니다. 파일 도구는 일반 agent run에서 임의 경로를 직접 읽거나 쓰지 않고, workspace 쓰기는 `WorkspaceSandbox`에 위임되어 rollback 가능한 산출물로 선언됩니다. job spec에는 `max_declared_outputs`, `max_total_output_bytes`, `max_runtime_seconds`, `allowed_network_hosts`, `allowed_subprocess_commands` 같은 `resource_limits`를 넣을 수 있습니다. `assessment` 도구는 실행 후 검토 단계로 선택되어, 승인된 실행이 학습을 조용히 승격하지 않고 보스 검토용 review packet을 남기게 합니다.
+매니페스트에는 이름만 있는 ghost tool 권한을 남기지 않습니다. `local_file_read`, `local_file_write`, `work_session`, `evidence_packet`, `assessment`, `memory_consolidation`, projection-team 도구는 모두 명시적 capability scope와 함께 등록됩니다. 파일 도구는 일반 agent run에서 임의 경로를 직접 읽거나 쓰지 않고, workspace 읽기/쓰기는 `WorkspaceSandbox`에 위임되어 rollback 가능 산출물 또는 검토 artifact로 선언됩니다. job spec에는 `max_input_file_bytes`, `max_declared_outputs`, `max_total_output_bytes`, `max_runtime_seconds`, `allowed_network_hosts`, `allowed_subprocess_commands` 같은 `resource_limits`를 넣을 수 있습니다. `assessment` 도구는 실행 후 검토 단계로 선택되어, 승인된 실행이 학습을 조용히 승격하지 않고 보스 검토용 review packet을 남기게 합니다.
 
 P0 action policy는 민감 intent마다 `hybrid_structured_lexical_v2` 추론 패킷을 기록합니다. 직접 실행 명령, 정책/설명 질문, "하지 말고"로 부정된 요청을 구분하므로 "매수 주문은 하지 말고 분석만" 같은 문장은 거래 실행이 아니라 안전한 리서치 맥락으로 처리됩니다. 민감 행동이 완전 차단 대상은 아니지만 보스 승인이 필요한 경우에는 `needs_approval` 상태로 멈추며, 승인 전에는 LLM 계획, 도구 실행, 메모리 승격을 건너뜁니다.
 

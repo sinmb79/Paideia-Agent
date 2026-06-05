@@ -1785,6 +1785,8 @@ class TalentFoundryTests(unittest.TestCase):
                 max_trace_events=2,
             )
             sandbox.ensure_root()
+            (sandbox.root / "input_note.txt").write_text("seed input", encoding="utf-8")
+            read_input = sandbox.read_text("input_note.txt", purpose="unit_input")
 
             with self.assertRaises(SandboxViolation):
                 sandbox.write_text("../escape.txt", "nope", purpose="escape_attempt")
@@ -1804,6 +1806,16 @@ class TalentFoundryTests(unittest.TestCase):
                 sandbox.write_text("too_many_outputs.txt", "ok", purpose="too_many_outputs")
             rollback = sandbox.rollback_manifest(operation_id="unit_test")
             snapshot = sandbox.snapshot()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            input_sandbox = WorkspaceSandbox(Path(tmp) / "workspace", max_input_file_bytes=4)
+            input_sandbox.ensure_root()
+            (input_sandbox.root / "too_big.txt").write_text("12345", encoding="utf-8")
+            with self.assertRaises(SandboxViolation):
+                input_sandbox.read_text("too_big.txt", purpose="oversized_input")
+            with self.assertRaises(SandboxViolation):
+                input_sandbox.read_text("missing.txt", purpose="missing_input")
+            input_snapshot = input_sandbox.snapshot()
 
         with tempfile.TemporaryDirectory() as tmp:
             total_sandbox = WorkspaceSandbox(Path(tmp) / "workspace", max_total_output_bytes=4)
@@ -1834,6 +1846,8 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertTrue(snapshot["enforcement"]["enabled"])
         self.assertEqual(snapshot["resource_limits"]["max_total_output_bytes"], 12)
         self.assertEqual(snapshot["resource_limits"]["max_declared_outputs"], 2)
+        self.assertEqual(read_input, "seed input")
+        self.assertEqual(snapshot["resource_usage"]["declared_input_count"], 1)
         self.assertEqual(snapshot["resource_usage"]["declared_output_count"], 2)
         self.assertTrue(snapshot["resource_usage"]["within_budget"])
         self.assertEqual(rollback["schema"], "paideia-workspace-rollback-manifest/v1")
@@ -1844,6 +1858,9 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertTrue(any(item["event"] == "trace_event_limit_blocked" for item in snapshot["audit_events"]))
         self.assertTrue(any(item["event"] == "network_access_blocked" for item in snapshot["audit_events"]))
         self.assertTrue(any(item["event"] == "declared_output_count_blocked" for item in snapshot["audit_events"]))
+        self.assertTrue(any(item["event"] == "sandbox_file_read" for item in snapshot["audit_events"]))
+        self.assertTrue(any(item["event"] == "input_size_blocked" for item in input_snapshot["audit_events"]))
+        self.assertTrue(any(item["event"] == "input_file_missing" for item in input_snapshot["audit_events"]))
         self.assertTrue(any(item["event"] == "total_output_budget_blocked" for item in total_snapshot["audit_events"]))
         self.assertTrue(any(item["event"] == "runtime_budget_blocked" for item in runtime_snapshot["audit_events"]))
         self.assertTrue(network_grant["granted"])
@@ -3497,6 +3514,13 @@ class TalentFoundryTests(unittest.TestCase):
                 "모든 산출물은 로컬 워크스페이스에 남긴다.",
                 "투자 실행과 외부 업로드는 차단한다.",
             ],
+            "input_files": [
+                {
+                    "path": "company_note.txt",
+                    "description": "보스가 제공한 로컬 회사 메모",
+                    "purpose": "research_context",
+                }
+            ],
             "resource_limits": {
                 "max_declared_outputs": 8,
                 "max_total_output_bytes": 5_000_000,
@@ -3508,6 +3532,11 @@ class TalentFoundryTests(unittest.TestCase):
             tmp_path = Path(tmp)
             outputs = run_demo(output_dir=tmp_path / "runs")
             workspace = tmp_path / "agent_job_workspace"
+            workspace.mkdir(parents=True)
+            (workspace / "company_note.txt").write_text(
+                "Cash flow stayed strong while the headline earnings missed.",
+                encoding="utf-8",
+            )
             output_path = tmp_path / "hired_agent_job_run.json"
             run = run_hired_agent_job(
                 outputs["local_employment_record"],
@@ -3518,11 +3547,15 @@ class TalentFoundryTests(unittest.TestCase):
             saved_run = json.loads(output_path.read_text(encoding="utf-8"))
             job_report = Path(run["job_outputs"]["job_report"])
             acceptance_checklist = Path(run["job_outputs"]["acceptance_checklist"])
+            input_review_path = Path(run["job_outputs"]["input_review"])
             rollback = Path(run["job_outputs"]["rollback_manifest"])
             job_report_exists = job_report.exists()
             acceptance_checklist_exists = acceptance_checklist.exists()
+            input_review_exists = input_review_path.exists()
             rollback_exists = rollback.exists()
             checklist = json.loads(acceptance_checklist.read_text(encoding="utf-8"))
+            input_review = json.loads(input_review_path.read_text(encoding="utf-8"))
+            serialized_input_review = json.dumps(input_review, ensure_ascii=False)
 
         self.assertEqual(run["schema"], "ai-talent-hired-agent-job-run/v1")
         self.assertEqual(run["job_status"], "completed")
@@ -3530,8 +3563,15 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(saved_run["employment_context"]["relationship"], "installed_ai_talent_hired_as_local_agent")
         self.assertTrue(job_report_exists)
         self.assertTrue(acceptance_checklist_exists)
+        self.assertTrue(input_review_exists)
         self.assertTrue(rollback_exists)
         self.assertTrue(all(item["status"] == "satisfied_by_workspace_artifact" for item in checklist["criteria"]))
+        self.assertEqual(input_review["schema"], "paideia-workspace-input-review/v1")
+        self.assertEqual(input_review["declared_input_count"], 1)
+        self.assertEqual(input_review["read_count"], 1)
+        self.assertTrue(input_review["inputs"][0]["direct_file_read_performed"])
+        self.assertIn("Cash flow stayed strong", input_review["inputs"][0]["preview"])
+        self.assertNotIn(str(tmp_path), serialized_input_review)
         self.assertEqual(run["tool_authorization"]["network_access"], "blocked")
         self.assertEqual(run["tool_authorization"]["resource_limits"]["max_declared_outputs"], 8)
         self.assertEqual(run["workspace_run"]["workspace_resource_usage"]["declared_output_count"], 7)

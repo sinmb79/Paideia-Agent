@@ -22,6 +22,7 @@ SUPPORTED_RUN_SCHEMAS = {
 LLM_PROVIDER_PREFLIGHT_SCHEMA = "paideia-llm-provider-preflight/v1"
 DATAFLOW_TRANSPOSE_VERIFICATION_SCHEMA = "ai-talent-dataflow-transpose-verification/v1"
 WORKSPACE_TOOL_ARTIFACTS_SCHEMA = "paideia-workspace-tool-artifacts/v1"
+WORKSPACE_INPUT_REVIEW_SCHEMA = "paideia-workspace-input-review/v1"
 
 
 def _now() -> str:
@@ -239,14 +240,17 @@ def _required_workspace_outputs(schema: str) -> list[str]:
     ]
 
 
-def _required_job_outputs() -> list[str]:
-    return [
+def _required_job_outputs(*, input_files_declared: bool = False) -> list[str]:
+    required = [
         "job_spec",
         "job_report",
         "acceptance_checklist",
         "trace",
         "rollback_manifest",
     ]
+    if input_files_declared:
+        required.append("input_review")
+    return required
 
 
 def build_workspace_execution_proof(
@@ -300,8 +304,16 @@ def build_workspace_execution_proof(
         evidence={"missing": missing_workspace, "required": required_workspace},
     )
 
+    job_spec = run.get("job_spec", {})
+    if not isinstance(job_spec, dict):
+        job_spec = {}
+    declared_input_files = job_spec.get("input_files", [])
+    if not isinstance(declared_input_files, list):
+        declared_input_files = []
+    input_files_declared = bool(declared_input_files)
+
     if schema == "ai-talent-hired-agent-job-run/v1":
-        required_job = _required_job_outputs()
+        required_job = _required_job_outputs(input_files_declared=input_files_declared)
         job_artifacts = {
             key: _artifact_record(key, job_outputs.get(key))
             for key in required_job
@@ -415,6 +427,38 @@ def build_workspace_execution_proof(
             and all(isinstance(item, dict) and item.get("status") == "satisfied_by_workspace_artifact" for item in criteria),
             evidence={"schema": checklist.get("schema"), "criterion_count": len(criteria)},
         )
+        if input_files_declared:
+            input_review = _load_declared_json(job_outputs, "input_review") or {}
+            inputs = input_review.get("inputs", [])
+            _check(
+                checks,
+                "job_input_review_verified",
+                input_review.get("schema") == WORKSPACE_INPUT_REVIEW_SCHEMA
+                and input_review.get("declared_input_count") == len(declared_input_files)
+                and input_review.get("read_count", 0) >= 1
+                and input_review.get("path_policy", {}).get("workspace_root_only") is True
+                and input_review.get("path_policy", {}).get("path_escape_rejected") is True
+                and input_review.get("path_policy", {}).get("absolute_paths_exported") is False
+                and input_review.get("adapter_policy", {}).get("network_call_performed") is False
+                and input_review.get("adapter_policy", {}).get("subprocess_executed") is False
+                and input_review.get("adapter_policy", {}).get("private_reasoning_trace") == "do_not_store"
+                and any(
+                    isinstance(item, dict)
+                    and item.get("status") == "read"
+                    and item.get("direct_file_read_performed") is True
+                    for item in inputs
+                ),
+                evidence={
+                    "schema": input_review.get("schema"),
+                    "declared_input_count": input_review.get("declared_input_count"),
+                    "read_count": input_review.get("read_count"),
+                    "rejected_count": input_review.get("rejected_count"),
+                    "workspace_root_only": input_review.get("path_policy", {}).get("workspace_root_only"),
+                    "absolute_paths_exported": input_review.get("path_policy", {}).get("absolute_paths_exported"),
+                    "network_call_performed": input_review.get("adapter_policy", {}).get("network_call_performed"),
+                    "subprocess_executed": input_review.get("adapter_policy", {}).get("subprocess_executed"),
+                },
+            )
 
     observability = _runtime_observability(run, workspace_run)
     _check(

@@ -18,16 +18,29 @@ class TalentFoundryExecutionProofTests(unittest.TestCase):
             "objective": "Verify that a hired research agent leaves reviewable workspace evidence.",
             "deliverables": [{"id": "evidence_note", "description": "Reviewable local evidence note"}],
             "acceptance_criteria": ["Workspace outputs, rollback, and checklist are present."],
+            "input_files": [
+                {
+                    "path": "local_research_note.txt",
+                    "description": "Declared local input note",
+                    "purpose": "proof_context",
+                }
+            ],
         }
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             outputs = run_demo(output_dir=tmp_path / "runs")
             run_path = tmp_path / "hired_agent_job_run.json"
             proof_path = tmp_path / "workspace_execution_proof.json"
+            workspace = tmp_path / "workspace"
+            workspace.mkdir(parents=True)
+            (workspace / "local_research_note.txt").write_text(
+                "Declared input evidence for the workspace proof.",
+                encoding="utf-8",
+            )
             run = run_hired_agent_job(
                 outputs["local_employment_record"],
                 job_spec=job_spec,
-                workspace_dir=tmp_path / "workspace",
+                workspace_dir=workspace,
                 output_path=run_path,
             )
             proof = build_workspace_execution_proof(run, run_path=run_path, output_path=proof_path)
@@ -38,6 +51,7 @@ class TalentFoundryExecutionProofTests(unittest.TestCase):
         self.assertEqual(saved["schema"], "paideia-workspace-execution-proof/v1")
         self.assertEqual(saved["status"], "passed")
         self.assertIn("job_acceptance_checklist_passed", {item["id"] for item in saved["checks"]})
+        self.assertIn("job_input_review_verified", {item["id"] for item in saved["checks"]})
         self.assertIn("workspace_tool_artifacts_materialized", {item["id"] for item in saved["checks"]})
         self.assertIn("llm_provider_preflight_present", {item["id"] for item in saved["checks"]})
         self.assertTrue(saved["artifact_summary"]["absolute_paths_redacted"])

@@ -430,6 +430,23 @@ Workspace runs also write four P0 runtime artifacts inside the allowed workspace
 - `rollback_manifest.json`: a manual-review rollback plan listing declared workspace outputs in safe delete order, never outside the workspace root.
 - `workspace_sandbox.json`: filesystem allowlist, blocked network/subprocess policy, per-file and total resource limits, runtime budget, rollback notes, audit requirements, and the `WorkspaceSandbox` enforcement audit for writes, path escapes, output size, trace limits, network/subprocess attempts, and whole-run budget usage.
 
+Hired job specs can also declare workspace-local input files:
+
+```json
+{
+  "objective": "Review the local research note and produce a Boss-facing memo.",
+  "input_files": [
+    {
+      "path": "company_note.txt",
+      "description": "Owner-provided local company note",
+      "purpose": "research_context"
+    }
+  ]
+}
+```
+
+When `input_files` is present, Paideia reads only those declared UTF-8 text files through `WorkspaceSandbox.read_text` and writes `input_review.json`. The review records file names, relative paths when safe, byte counts, content hashes, short previews, read/reject status, and a no-network/no-subprocess adapter policy. It does not export local absolute paths. The execution proof requires `input_review.json` and at least one successful declared input read when a job declares inputs.
+
 Every agent run now includes `runtime_observability`: estimated context size, estimated prompt tokens, selected-memory count, selected-tool count, provider usage presence, fallback state, review/promotion/quarantine counters, and privacy flags showing that full session replay and private reasoning traces were not stored. Dataflow jobs also write `runtime_observability.json` inside the workspace, so the memory-board claim can be measured instead of only described.
 
 After a workspace, hired-job, or dataflow run, create an execution proof before trusting the result:
@@ -454,7 +471,7 @@ The evaluator ranks parallel episodes, selects a winner, marks promotion and qua
 
 Registered research tool execution includes an `evidence_packet` tool. It turns the user request, LLM draft, policy decision, and selected local memory summaries into reviewable evidence items, a checklist, unsupported-claim policy, and open questions. If a research work-session runs without this packet, verification marks the run for review instead of treating it as cleanly passed.
 
-The manifest no longer exposes ghost tool permissions. `local_file_read`, `local_file_write`, `work_session`, `evidence_packet`, `assessment`, `memory_consolidation`, and projection-team tools are all registered with explicit capability scopes. File tools do not read or write arbitrary paths in generic agent runs; workspace writes are delegated to `WorkspaceSandbox` and declared in rollback-aware artifacts. Job specs may include `resource_limits` such as `max_declared_outputs`, `max_total_output_bytes`, `max_runtime_seconds`, `allowed_network_hosts`, and `allowed_subprocess_commands`. The `assessment` tool is selected as a post-run review step, so every approved run can leave a review packet instead of silently promoting learning.
+The manifest no longer exposes ghost tool permissions. `local_file_read`, `local_file_write`, `work_session`, `evidence_packet`, `assessment`, `memory_consolidation`, and projection-team tools are all registered with explicit capability scopes. File tools do not read or write arbitrary paths in generic agent runs; workspace reads and writes are delegated to `WorkspaceSandbox` and declared in rollback-aware or review artifacts. Job specs may include `resource_limits` such as `max_input_file_bytes`, `max_declared_outputs`, `max_total_output_bytes`, `max_runtime_seconds`, `allowed_network_hosts`, and `allowed_subprocess_commands`. The `assessment` tool is selected as a post-run review step, so every approved run can leave a review packet instead of silently promoting learning.
 
 The P0 action policy now records a structured `hybrid_structured_lexical_v2` inference packet for sensitive intents. It distinguishes direct commands from discussion-only or negated requests, so "do not place a buy order; analyze only" is kept as safe research context instead of being treated as trade execution. If a requested sensitive action is not outright blocked but still requires Boss approval, the run enters `needs_approval` and skips LLM planning, tool execution, and memory promotion until approval exists.
 
