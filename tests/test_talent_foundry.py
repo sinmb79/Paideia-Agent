@@ -4230,6 +4230,63 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(lifecycle["status"], "failed")
         self.assertIn("secret_like_value_in_memory", {item["id"] for item in lifecycle["issues"]})
 
+    def test_learning_ledger_keeps_projection_events_as_bounded_summaries(self) -> None:
+        from ai22b.talent_foundry.learning_loop import create_learning_ledger, record_learning_experience
+
+        raw_trace = "raw workspace trace " * 1000
+        ledger = create_learning_ledger(owner="Shin Yong")
+        ledger = record_learning_experience(
+            ledger,
+            source="post_hire_run",
+            event={
+                "schema": "ai-talent-hired-projection-swarm-cycle/v1",
+                "cycle_status": "completed",
+                "objective": "Compare projection outputs without storing full session replay.",
+                "contributions": [
+                    {
+                        "projection_id": "projection_1",
+                        "projection_of": "Shin Yong",
+                        "role_id": "macro",
+                        "role_name": "Macro reviewer",
+                        "focus": "macro risks",
+                        "consciousness": "single_parent_identity",
+                        "run_status": "completed",
+                        "workspace_run": {
+                            "schema": "ai-talent-workspace-agent-run/v1",
+                            "run_status": "completed",
+                            "task": raw_trace,
+                            "workspace_outputs": {"trace": r"C:\Users\Example\private\trace.jsonl"},
+                            "base_agent_run": {
+                                "selected_tools": ["work_session", "evidence_packet"],
+                                "verification": {"status": "passed"},
+                                "execution_contract": {"status": "passed"},
+                                "llm_runtime_result": {"draft": raw_trace},
+                            },
+                        },
+                        "learning_update": {
+                            "schema": "ai-talent-post-hire-learning-update/v1",
+                            "decision": "promoted",
+                            "latest_promoted_skills": ["workspace_artifact_trace"],
+                            "memory_lifecycle": {"status": "passed"},
+                        },
+                    }
+                ],
+            },
+            quality_label={"score": 92, "status": "verified"},
+        )
+        entry = ledger["promoted_experiences"][-1]
+        safe = json.dumps(entry["safe_reference"], ensure_ascii=False)
+
+        self.assertLess(len(safe), 10000)
+        self.assertNotIn(raw_trace, safe)
+        self.assertNotIn(r"C:\Users", safe)
+        self.assertTrue(entry["safe_reference"]["safe_reference_policy"]["bounded_summary_only"])
+        self.assertFalse(entry["safe_reference"]["safe_reference_policy"]["full_session_replay_stored"])
+        self.assertEqual(
+            entry["safe_reference"]["contributions"][0]["workspace_run"]["workspace_outputs"]["trace"]["file_name"],
+            "trace.jsonl",
+        )
+
     def test_cli_record_hired_learning_command_updates_installed_ledger(self) -> None:
         from ai22b.talent_foundry.cli import main as cli_main
         from ai22b.talent_foundry.demo import run_demo
