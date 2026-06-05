@@ -22,8 +22,62 @@ WORKSPACE_JOB_RUN_SCHEMA = "ai-talent-workspace-agent-job-run/v1"
 ACCEPTANCE_CHECKLIST_SCHEMA = "ai-talent-agent-job-acceptance-checklist/v1"
 WORKSPACE_TOOL_ARTIFACTS_SCHEMA = "paideia-workspace-tool-artifacts/v1"
 WORKSPACE_INPUT_REVIEW_SCHEMA = "paideia-workspace-input-review/v1"
+RESEARCH_ANALYSIS_SCHEMA = "paideia-workspace-research-analysis/v1"
 DELIVERABLE_SYNTHESIS_SCHEMA = "paideia-workspace-deliverable-synthesis/v1"
 DELIVERABLE_MANIFEST_SCHEMA = "paideia-workspace-job-deliverables/v1"
+
+RESEARCH_SIGNAL_KEYWORDS: dict[str, dict[str, Any]] = {
+    "cash_flow_strength": {
+        "label": "Cash flow strength",
+        "keywords": ("cash flow stayed strong", "cash flow strong", "strong cash flow", "현금흐름", "영업현금"),
+        "review_question": "현금흐름 강세가 일회성인지 반복 가능한 영업 체력인지 확인합니다.",
+    },
+    "earnings_miss": {
+        "label": "Earnings miss",
+        "keywords": ("headline earnings missed", "earnings missed", "earnings miss", "실적 부진", "어닝 쇼크", "컨센서스 하회"),
+        "review_question": "실적 하회가 가격, 물량, 비용, 환율 중 어디에서 왔는지 분리합니다.",
+    },
+    "risk_review": {
+        "label": "Risk review",
+        "keywords": ("risk", "risks", "리스크", "위험", "downside"),
+        "review_question": "핵심 리스크가 투자 실행 금지 경계 안에서 검토 가능한 정보인지 구분합니다.",
+    },
+    "macro_context": {
+        "label": "Macro context",
+        "keywords": ("macro", "rates", "inflation", "fx", "거시경제", "금리", "물가", "환율"),
+        "review_question": "금리, 환율, 경기 순환이 기업 실적 가정에 어떤 민감도를 주는지 확인합니다.",
+    },
+    "valuation_gap": {
+        "label": "Valuation gap",
+        "keywords": ("valuation", "value", "margin of safety", "가치평가", "안전마진", "밸류에이션"),
+        "review_question": "가치평가에는 안전마진과 반례를 함께 붙입니다.",
+    },
+    "debt_liquidity": {
+        "label": "Debt and liquidity",
+        "keywords": ("debt", "liquidity", "leverage", "부채", "유동성", "레버리지"),
+        "review_question": "부채 만기와 유동성 여유가 스트레스 상황에서 견딜 수 있는지 확인합니다.",
+    },
+    "growth_execution": {
+        "label": "Growth and execution",
+        "keywords": ("growth", "execution", "capacity", "성장", "실행", "증설"),
+        "review_question": "성장 서사가 숫자와 실행 이력으로 뒷받침되는지 검토합니다.",
+    },
+    "shareholder_return": {
+        "label": "Shareholder return",
+        "keywords": ("dividend", "buyback", "shareholder", "배당", "자사주", "주주환원"),
+        "review_question": "주주환원이 현금흐름, 투자 계획, 재무 안정성과 충돌하지 않는지 확인합니다.",
+    },
+    "uncertainty_marker": {
+        "label": "Uncertainty marker",
+        "keywords": ("uncertain", "uncertainty", "unknown", "불확실", "미확인", "가정"),
+        "review_question": "확정 사실과 가정을 분리하고, 추가 확인 자료를 지정합니다.",
+    },
+    "policy_boundary": {
+        "label": "Policy boundary",
+        "keywords": ("투자 실행 없이", "외부 업로드는 차단", "without trade", "no trade", "blocked", "차단"),
+        "review_question": "이 분석이 거래 실행, 외부 업로드, 승인 없는 민감 행동으로 넘어가지 않는지 확인합니다.",
+    },
+}
 
 
 def _task_plan_text(manifest: dict[str, Any], task: str, base_run: dict[str, Any]) -> str:
@@ -228,6 +282,184 @@ def _workspace_input_review(sandbox: WorkspaceSandbox, input_files: list[dict[st
     }
 
 
+def _research_corpus(job_spec: dict[str, Any], input_review: dict[str, Any] | None) -> list[dict[str, Any]]:
+    corpus: list[dict[str, Any]] = [
+        {
+            "source_type": "objective",
+            "source_ref": "job_spec.objective",
+            "text": job_spec.get("objective", ""),
+        }
+    ]
+    for deliverable in job_spec.get("deliverables", []):
+        if not isinstance(deliverable, dict):
+            continue
+        deliverable_id = str(deliverable.get("id", "deliverable"))
+        corpus.append(
+            {
+                "source_type": "deliverable",
+                "source_ref": f"deliverable:{deliverable_id}",
+                "deliverable_id": deliverable_id,
+                "text": deliverable.get("description", ""),
+            }
+        )
+    for item in (input_review or {}).get("inputs", []):
+        if not isinstance(item, dict) or item.get("status") != "read":
+            continue
+        corpus.append(
+            {
+                "source_type": "declared_input",
+                "source_ref": f"input:{item.get('file_name', 'workspace_input')}",
+                "file_name": item.get("file_name"),
+                "purpose": item.get("purpose"),
+                "content_sha256": item.get("content_sha256"),
+                "text": item.get("preview", ""),
+            }
+        )
+    return corpus
+
+
+def _matched_signal_terms(text: str, keywords: tuple[str, ...]) -> list[str]:
+    folded = text.casefold()
+    return [keyword for keyword in keywords if keyword.casefold() in folded]
+
+
+def _extract_research_signals(corpus: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    signals: list[dict[str, Any]] = []
+    for signal_id, config in RESEARCH_SIGNAL_KEYWORDS.items():
+        matches: list[dict[str, Any]] = []
+        matched_terms: list[str] = []
+        source_input_refs: list[dict[str, Any]] = []
+        for source in corpus:
+            terms = _matched_signal_terms(str(source.get("text", "")), config["keywords"])
+            if not terms:
+                continue
+            matched_terms.extend(terms)
+            matches.append(
+                {
+                    "source_type": source.get("source_type"),
+                    "source_ref": source.get("source_ref"),
+                    "matched_terms": sorted(set(terms)),
+                }
+            )
+            if source.get("source_type") == "declared_input":
+                source_input_refs.append(
+                    {
+                        "file_name": source.get("file_name"),
+                        "purpose": source.get("purpose"),
+                        "content_sha256": source.get("content_sha256"),
+                    }
+                )
+        if not matches:
+            continue
+        signals.append(
+            {
+                "signal_id": signal_id,
+                "label": config["label"],
+                "matched_terms": sorted(set(matched_terms), key=str.casefold),
+                "source_matches": matches,
+                "source_input_refs": source_input_refs,
+                "review_question": config["review_question"],
+                "confidence": "deterministic_keyword_signal",
+                "private_reasoning_trace_stored": False,
+            }
+        )
+    return signals
+
+
+def _deliverable_research_briefs(job_spec: dict[str, Any], signals: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    briefs: list[dict[str, Any]] = []
+    all_signal_ids = [str(item["signal_id"]) for item in signals]
+    question_by_signal = {str(item["signal_id"]): str(item.get("review_question", "")) for item in signals}
+    for deliverable in job_spec["deliverables"]:
+        deliverable_text = f"{job_spec['objective']} {deliverable['description']}"
+        linked: list[str] = []
+        for signal in signals:
+            signal_id = str(signal["signal_id"])
+            terms = tuple(str(term) for term in signal.get("matched_terms", []))
+            if _matched_signal_terms(deliverable_text, terms):
+                linked.append(signal_id)
+        if not linked:
+            linked = all_signal_ids[:5]
+        review_questions = [question_by_signal[item] for item in linked if question_by_signal.get(item)]
+        if not review_questions:
+            review_questions = [
+                "입력 근거, 정책 경계, 반례를 확인한 뒤 보스 검토용 초안으로만 유지합니다."
+            ]
+        briefs.append(
+            {
+                "id": deliverable["id"],
+                "description": deliverable["description"],
+                "linked_signal_ids": linked,
+                "review_questions": review_questions[:5],
+                "draft_focus": (
+                    "Use local input signals as review prompts, then separate evidence, assumptions, "
+                    "risks, and blocked execution actions."
+                ),
+                "private_reasoning_trace_stored": False,
+            }
+        )
+    return briefs
+
+
+def _build_research_analysis(
+    job_spec: dict[str, Any],
+    workspace_run: dict[str, Any],
+    input_review: dict[str, Any] | None,
+) -> dict[str, Any]:
+    corpus = _research_corpus(job_spec, input_review)
+    signals = _extract_research_signals(corpus)
+    base_run = workspace_run.get("base_agent_run", {})
+    tool_execution = base_run.get("tool_execution", {}) if isinstance(base_run, dict) else {}
+    tool_results = tool_execution.get("tool_results", []) if isinstance(tool_execution, dict) else []
+    input_refs = [
+        {
+            "file_name": item.get("file_name"),
+            "purpose": item.get("purpose"),
+            "status": item.get("status"),
+            "content_sha256": item.get("content_sha256"),
+        }
+        for item in (input_review or {}).get("inputs", [])
+        if isinstance(item, dict)
+    ]
+    return {
+        "schema": RESEARCH_ANALYSIS_SCHEMA,
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "objective": job_spec["objective"],
+        "declared_input_count": (input_review or {}).get("declared_input_count", 0),
+        "read_count": (input_review or {}).get("read_count", 0),
+        "rejected_count": (input_review or {}).get("rejected_count", 0),
+        "corpus_summary": {
+            "source_count": len(corpus),
+            "source_types": sorted({str(item.get("source_type")) for item in corpus}),
+            "raw_input_body_exported": False,
+        },
+        "extracted_signals": signals,
+        "signal_count": len(signals),
+        "deliverable_briefs": _deliverable_research_briefs(job_spec, signals),
+        "evidence_refs": {
+            "input_content_refs": input_refs,
+            "registered_tool_summary_count": len(tool_results) if isinstance(tool_results, list) else 0,
+            "llm_runtime": {
+                "engine": workspace_run.get("llm_runtime_result", {}).get("engine"),
+                "status": workspace_run.get("llm_runtime_result", {}).get("status"),
+                "identity_policy": workspace_run.get("llm_runtime_result", {}).get("identity_policy"),
+            },
+            "workspace_trace": "trace.jsonl",
+        },
+        "artifact_policy": {
+            "source": "deterministic_local_research_analysis",
+            "workspace_root_only": True,
+            "absolute_paths_exported": False,
+            "network_call_performed": False,
+            "subprocess_executed": False,
+            "raw_provider_payload_saved": False,
+            "private_reasoning_trace": "do_not_store",
+            "boss_review_required": True,
+            "learning_promotion_performed": False,
+        },
+    }
+
+
 def _safe_deliverable_filename(deliverable_id: str, index: int) -> str:
     slug = re.sub(r"[^A-Za-z0-9_.-]+", "_", deliverable_id.strip()).strip("._-").lower()
     if not slug:
@@ -289,6 +521,7 @@ def _build_deliverable_synthesis(
     job_spec: dict[str, Any],
     workspace_run: dict[str, Any],
     input_review: dict[str, Any] | None,
+    research_analysis: dict[str, Any],
 ) -> dict[str, Any]:
     base_run = workspace_run.get("base_agent_run", {})
     llm_result = workspace_run.get("llm_runtime_result", {})
@@ -321,6 +554,20 @@ def _build_deliverable_synthesis(
                 if isinstance(item, dict)
             ],
         },
+        "research_analysis": {
+            "schema": research_analysis.get("schema"),
+            "signal_count": research_analysis.get("signal_count", 0),
+            "signal_ids": [
+                item.get("signal_id")
+                for item in research_analysis.get("extracted_signals", [])
+                if isinstance(item, dict)
+            ],
+            "deliverable_brief_count": len(research_analysis.get("deliverable_briefs", []))
+            if isinstance(research_analysis.get("deliverable_briefs"), list)
+            else 0,
+            "read_count": research_analysis.get("read_count", 0),
+            "artifact_policy": research_analysis.get("artifact_policy", {}),
+        },
         "memory_route": {
             "semantic_theme_count": len(memory.get("semantic_themes", [])) if isinstance(memory, dict) else 0,
             "procedural_principle_count": len(memory.get("procedural_principles", [])) if isinstance(memory, dict) else 0,
@@ -342,6 +589,7 @@ def _build_deliverable_synthesis(
                     "llm_runtime.draft_summary",
                     "registered_tools",
                     "declared_inputs",
+                    "research_analysis",
                     "memory_route",
                     "policy",
                     "workspace_trace",
@@ -361,7 +609,7 @@ def _build_deliverable_synthesis(
         "source_summaries": source_summaries,
         "deliverables": deliverable_records,
         "artifact_policy": {
-            "source": "llm_tool_input_memory_policy_synthesis",
+            "source": "llm_tool_input_research_analysis_memory_policy_synthesis",
             "workspace_root_only": True,
             "network_call_performed": False,
             "subprocess_executed": False,
@@ -392,6 +640,30 @@ def _synthesis_lines(synthesis: dict[str, Any]) -> list[str]:
     return lines
 
 
+def _research_analysis_lines(research_analysis: dict[str, Any]) -> list[str]:
+    signals = research_analysis.get("extracted_signals", [])
+    briefs = {
+        str(item.get("id")): item
+        for item in research_analysis.get("deliverable_briefs", [])
+        if isinstance(item, dict)
+    }
+    lines = [
+        (
+            f"- Local research signals: {research_analysis.get('signal_count', 0)} "
+            f"(inputs read {research_analysis.get('read_count', 0)} of {research_analysis.get('declared_input_count', 0)})"
+        )
+    ]
+    for item in signals[:8] if isinstance(signals, list) else []:
+        if not isinstance(item, dict):
+            continue
+        terms = ", ".join(str(term) for term in item.get("matched_terms", [])[:4])
+        lines.append(f"- {item.get('signal_id')}: {item.get('label')}" + (f" / terms: {terms}" if terms else ""))
+    if briefs:
+        lines.append("- Deliverable review briefs prepared: " + ", ".join(sorted(briefs.keys())[:8]))
+    lines.append("- Analysis policy: deterministic local analysis; no network, subprocess, raw provider payload, or hidden trace.")
+    return lines
+
+
 def _deliverable_text(
     manifest: dict[str, Any],
     job_spec: dict[str, Any],
@@ -399,6 +671,7 @@ def _deliverable_text(
     workspace_run: dict[str, Any],
     input_review: dict[str, Any] | None,
     synthesis: dict[str, Any],
+    research_analysis: dict[str, Any],
 ) -> str:
     agent = manifest["agent"]
     llm_result = workspace_run.get("llm_runtime_result", {})
@@ -425,10 +698,14 @@ def _deliverable_text(
             "## Synthesis Evidence",
             *_synthesis_lines(synthesis),
             "",
+            "## Local Research Analysis",
+            *_research_analysis_lines(research_analysis),
+            "",
             "## Work Draft",
             (
                 "This deliverable was materialized from the job objective, selected local memory summaries, "
-                "declared workspace inputs, registered tool review packets, and the local execution trace."
+                "declared workspace inputs, deterministic local research analysis, registered tool review packets, "
+                "and the local execution trace."
             ),
             "",
             f"Boss-facing result: {deliverable['description']}",
@@ -452,13 +729,22 @@ def _write_deliverables(
     workspace_run: dict[str, Any],
     input_review: dict[str, Any] | None,
     synthesis: dict[str, Any],
+    research_analysis: dict[str, Any],
 ) -> tuple[Path, dict[str, Any], dict[str, Path]]:
     artifacts: list[dict[str, Any]] = []
     paths: dict[str, Path] = {}
     for index, deliverable in enumerate(job_spec["deliverables"], start=1):
         deliverable_id = str(deliverable["id"])
         relative_path = Path("deliverables") / _safe_deliverable_filename(deliverable_id, index)
-        text = _deliverable_text(manifest, job_spec, deliverable, workspace_run, input_review, synthesis) + "\n"
+        text = _deliverable_text(
+            manifest,
+            job_spec,
+            deliverable,
+            workspace_run,
+            input_review,
+            synthesis,
+            research_analysis,
+        ) + "\n"
         path = sandbox.write_text(relative_path, text, purpose=f"job_deliverable:{deliverable_id}")
         data = path.read_bytes()
         paths[deliverable_id] = path
@@ -482,6 +768,8 @@ def _write_deliverables(
         "artifact_count": len(artifacts),
         "synthesis_schema": synthesis.get("schema"),
         "synthesis_digest_sha256": _digest(synthesis),
+        "research_analysis_schema": research_analysis.get("schema"),
+        "research_analysis_digest_sha256": _digest(research_analysis),
         "artifacts": artifacts,
         "artifact_policy": {
             "workspace_root_only": True,
@@ -535,6 +823,7 @@ def _acceptance_checklist(
     workspace_run: dict[str, Any],
     *,
     input_review_path: Path | None = None,
+    research_analysis_path: Path | None = None,
     deliverable_manifest_path: Path | None = None,
     deliverable_manifest: dict[str, Any] | None = None,
     synthesis_path: Path | None = None,
@@ -546,6 +835,8 @@ def _acceptance_checklist(
     ]
     if input_review_path is not None:
         evidence.append(str(input_review_path))
+    if research_analysis_path is not None:
+        evidence.append(str(research_analysis_path))
     if deliverable_manifest_path is not None:
         evidence.append(str(deliverable_manifest_path))
     if synthesis_path is not None:
@@ -752,7 +1043,19 @@ def run_workspace_agent_job_from_manifest(
             input_review,
             purpose="workspace_input_review",
         )
-    deliverable_synthesis = _build_deliverable_synthesis(manifest, normalized, workspace_run, input_review)
+    research_analysis = _build_research_analysis(normalized, workspace_run, input_review)
+    research_analysis_path = sandbox.write_json(
+        "research_analysis.json",
+        research_analysis,
+        purpose="workspace_research_analysis",
+    )
+    deliverable_synthesis = _build_deliverable_synthesis(
+        manifest,
+        normalized,
+        workspace_run,
+        input_review,
+        research_analysis,
+    )
     deliverable_synthesis_path = sandbox.write_json(
         "deliverable_synthesis.json",
         deliverable_synthesis,
@@ -765,6 +1068,7 @@ def run_workspace_agent_job_from_manifest(
         workspace_run,
         input_review,
         deliverable_synthesis,
+        research_analysis,
     )
     job_report_path = sandbox.write_text(
         "job_report.md",
@@ -777,6 +1081,7 @@ def run_workspace_agent_job_from_manifest(
             normalized,
             workspace_run,
             input_review_path=input_review_path,
+            research_analysis_path=research_analysis_path,
             deliverable_manifest_path=deliverable_manifest_path,
             deliverable_manifest=deliverable_manifest,
             synthesis_path=deliverable_synthesis_path,
@@ -799,9 +1104,14 @@ def run_workspace_agent_job_from_manifest(
                 else []
             ),
             _trace_entry(
+                "local_research_analysis_prepared",
+                file=research_analysis_path.name,
+                signal_count=research_analysis.get("signal_count", 0),
+            ),
+            _trace_entry(
                 "deliverable_synthesis_prepared",
                 file=deliverable_synthesis_path.name,
-                source="llm_tool_input_memory_policy_synthesis",
+                source="llm_tool_input_research_analysis_memory_policy_synthesis",
             ),
             _trace_entry(
                 "declared_deliverables_materialized",
@@ -818,6 +1128,7 @@ def run_workspace_agent_job_from_manifest(
 
     result["job_outputs"] = {
         "job_spec": str(job_spec_path),
+        "research_analysis": str(research_analysis_path),
         "deliverable_synthesis": str(deliverable_synthesis_path),
         "deliverable_manifest": str(deliverable_manifest_path),
         "deliverables": {key: str(path) for key, path in deliverable_paths.items()},

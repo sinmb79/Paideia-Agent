@@ -23,6 +23,7 @@ LLM_PROVIDER_PREFLIGHT_SCHEMA = "paideia-llm-provider-preflight/v1"
 DATAFLOW_TRANSPOSE_VERIFICATION_SCHEMA = "ai-talent-dataflow-transpose-verification/v1"
 WORKSPACE_TOOL_ARTIFACTS_SCHEMA = "paideia-workspace-tool-artifacts/v1"
 WORKSPACE_INPUT_REVIEW_SCHEMA = "paideia-workspace-input-review/v1"
+RESEARCH_ANALYSIS_SCHEMA = "paideia-workspace-research-analysis/v1"
 DELIVERABLE_SYNTHESIS_SCHEMA = "paideia-workspace-deliverable-synthesis/v1"
 DELIVERABLE_MANIFEST_SCHEMA = "paideia-workspace-job-deliverables/v1"
 
@@ -249,6 +250,7 @@ def _required_workspace_outputs(schema: str) -> list[str]:
 def _required_job_outputs(*, input_files_declared: bool = False) -> list[str]:
     required = [
         "job_spec",
+        "research_analysis",
         "deliverable_synthesis",
         "deliverable_manifest",
         "job_report",
@@ -470,8 +472,56 @@ def build_workspace_execution_proof(
         )
         checklist = _load_declared_json(job_outputs, "acceptance_checklist") or {}
         criteria = checklist.get("criteria", [])
+        input_review_for_analysis = _load_declared_json(job_outputs, "input_review") or {}
+        research_analysis = _load_declared_json(job_outputs, "research_analysis") or {}
+        research_policy = research_analysis.get("artifact_policy", {})
+        research_signals = research_analysis.get("extracted_signals", [])
+        research_briefs = research_analysis.get("deliverable_briefs", [])
+        if not isinstance(research_policy, dict):
+            research_policy = {}
+        if not isinstance(research_signals, list):
+            research_signals = []
+        if not isinstance(research_briefs, list):
+            research_briefs = []
+        _check(
+            checks,
+            "job_research_analysis_verified",
+            research_analysis.get("schema") == RESEARCH_ANALYSIS_SCHEMA
+            and research_analysis.get("objective") == job_spec.get("objective")
+            and research_analysis.get("declared_input_count", 0) == len(declared_input_files)
+            and (
+                not input_files_declared
+                or research_analysis.get("read_count") == input_review_for_analysis.get("read_count")
+            )
+            and research_analysis.get("signal_count") == len(research_signals)
+            and isinstance(research_briefs, list)
+            and len(research_briefs) == len(declared_deliverables)
+            and research_policy.get("workspace_root_only") is True
+            and research_policy.get("absolute_paths_exported") is False
+            and research_policy.get("network_call_performed") is False
+            and research_policy.get("subprocess_executed") is False
+            and research_policy.get("raw_provider_payload_saved") is False
+            and research_policy.get("private_reasoning_trace") == "do_not_store"
+            and research_policy.get("boss_review_required") is True
+            and all(
+                isinstance(item, dict) and item.get("private_reasoning_trace_stored") is False
+                for item in research_signals + research_briefs
+            ),
+            evidence={
+                "schema": research_analysis.get("schema"),
+                "signal_count": research_analysis.get("signal_count"),
+                "declared_input_count": research_analysis.get("declared_input_count"),
+                "read_count": research_analysis.get("read_count"),
+                "deliverable_brief_count": len(research_briefs) if isinstance(research_briefs, list) else None,
+                "network_call_performed": research_policy.get("network_call_performed"),
+                "subprocess_executed": research_policy.get("subprocess_executed"),
+            },
+        )
         deliverable_synthesis = _load_declared_json(job_outputs, "deliverable_synthesis") or {}
         synthesis_sources = deliverable_synthesis.get("source_summaries", {})
+        synthesis_research = synthesis_sources.get("research_analysis", {})
+        if not isinstance(synthesis_research, dict):
+            synthesis_research = {}
         synthesis_policy = deliverable_synthesis.get("artifact_policy", {})
         synthesis_deliverables = deliverable_synthesis.get("deliverables", [])
         _check(
@@ -482,6 +532,9 @@ def build_workspace_execution_proof(
             and synthesis_sources.get("llm_runtime", {}).get("identity_policy") == "application_engine_not_identity"
             and isinstance(synthesis_sources.get("registered_tools"), list)
             and synthesis_sources.get("declared_inputs", {}).get("declared_input_count") == len(declared_input_files)
+            and synthesis_research.get("schema") == RESEARCH_ANALYSIS_SCHEMA
+            and synthesis_research.get("signal_count") == research_analysis.get("signal_count")
+            and synthesis_research.get("deliverable_brief_count") == len(research_briefs)
             and synthesis_policy.get("workspace_root_only") is True
             and synthesis_policy.get("network_call_performed") is False
             and synthesis_policy.get("subprocess_executed") is False
@@ -499,6 +552,9 @@ def build_workspace_execution_proof(
                 else None,
                 "declared_input_count": synthesis_sources.get("declared_inputs", {}).get("declared_input_count")
                 if isinstance(synthesis_sources.get("declared_inputs"), dict)
+                else None,
+                "research_signal_count": synthesis_research.get("signal_count")
+                if isinstance(synthesis_research, dict)
                 else None,
                 "network_call_performed": synthesis_policy.get("network_call_performed"),
                 "subprocess_executed": synthesis_policy.get("subprocess_executed"),
@@ -518,6 +574,8 @@ def build_workspace_execution_proof(
             and deliverable_manifest.get("artifact_count") == len(declared_deliverables)
             and deliverable_manifest.get("synthesis_schema") == DELIVERABLE_SYNTHESIS_SCHEMA
             and deliverable_manifest.get("synthesis_digest_sha256") == _json_digest(deliverable_synthesis)
+            and deliverable_manifest.get("research_analysis_schema") == RESEARCH_ANALYSIS_SCHEMA
+            and deliverable_manifest.get("research_analysis_digest_sha256") == _json_digest(research_analysis)
             and deliverable_manifest.get("artifact_policy", {}).get("workspace_root_only") is True
             and deliverable_manifest.get("artifact_policy", {}).get("relative_paths_only") is True
             and deliverable_manifest.get("artifact_policy", {}).get("network_call_performed") is False
@@ -529,6 +587,7 @@ def build_workspace_execution_proof(
                 "declared_deliverable_count": deliverable_manifest.get("declared_deliverable_count"),
                 "artifact_count": deliverable_manifest.get("artifact_count"),
                 "synthesis_schema": deliverable_manifest.get("synthesis_schema"),
+                "research_analysis_schema": deliverable_manifest.get("research_analysis_schema"),
                 **deliverable_evidence,
             },
         )

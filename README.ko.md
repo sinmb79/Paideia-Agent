@@ -235,7 +235,9 @@ ai22b-talent-foundry run-hired-dataflow-job `
 
 `input_files`가 있으면 Paideia는 선언된 UTF-8 텍스트 파일만 `WorkspaceSandbox.read_text`로 읽고 `input_review.json`을 남깁니다. 이 파일에는 안전한 상대경로, 파일명, byte 수, content hash, 짧은 preview, 읽기/거부 상태, 네트워크/서브프로세스 미사용 정책이 기록됩니다. 로컬 절대경로는 내보내지 않습니다. 실행 증명은 입력 파일을 선언한 job에서 `input_review.json`과 최소 한 개 이상의 실제 선언 입력 read를 요구합니다.
 
-고용된 job은 `deliverable_synthesis.json`도 쓰고, 선언된 `deliverables`를 `deliverables/*.md` 파일로 실제 materialize하며, `deliverable_manifest.json`을 남깁니다. synthesis packet은 각 산출물이 LLM runtime 요약, 등록 도구 결과, 선언 입력 리뷰, 선택된 memory route, policy decision, workspace trace를 어떤 근거로 사용했는지 묶습니다. private reasoning이나 raw provider payload는 저장하지 않습니다. manifest에는 각 산출물 id, 설명, 상대경로, byte 수, content hash, synthesis digest, private reasoning trace 비저장, 네트워크 미사용 정책이 기록됩니다. 실행 증명은 synthesis packet과 모든 선언 산출물 파일이 workspace root 안에 존재하는지, 저장된 hash가 실제 파일과 맞는지 확인한 뒤에만 P0-ready로 봅니다.
+고용된 job은 입력 리뷰 직후 `research_analysis.json`도 씁니다. 이 파일은 선언 입력 preview, job objective, deliverable 설명을 바탕으로 한 결정론적 로컬 분석입니다. 현금흐름 강세, 실적 하회, 거시경제, 가치평가, 리스크, 유동성, 정책 경계 같은 검토 신호를 뽑고 산출물별 확인 질문을 만듭니다. content hash와 짧은 신호 요약만 저장하며, 네트워크 호출, 서브프로세스 실행, raw provider payload 저장, 숨은 추론 저장은 하지 않습니다.
+
+고용된 job은 `deliverable_synthesis.json`도 쓰고, 선언된 `deliverables`를 `deliverables/*.md` 파일로 실제 materialize하며, `deliverable_manifest.json`을 남깁니다. synthesis packet은 각 산출물이 LLM runtime 요약, 등록 도구 결과, 선언 입력 리뷰, 로컬 리서치 분석, 선택된 memory route, policy decision, workspace trace를 어떤 근거로 사용했는지 묶습니다. private reasoning이나 raw provider payload는 저장하지 않습니다. manifest에는 각 산출물 id, 설명, 상대경로, byte 수, content hash, synthesis digest, research-analysis digest, private reasoning trace 비저장, 네트워크 미사용 정책이 기록됩니다. 실행 증명은 research analysis, synthesis packet, 모든 선언 산출물 파일이 workspace root 안에 존재하는지 확인한 뒤에만 P0-ready로 봅니다.
 
 모든 agent run에는 `runtime_observability`가 포함됩니다. 여기에는 추정 컨텍스트 크기, 추정 prompt token, 선택된 메모리 수, 선택된 도구 수, provider usage 존재 여부, fallback 상태, review/promotion/quarantine 카운터, full session replay와 private reasoning trace를 저장하지 않았다는 privacy flag가 기록됩니다. Dataflow job은 workspace 안에 `runtime_observability.json`도 따로 써서, 기억기판이 토큰과 컨텍스트를 줄인다는 주장을 실제 지표로 검토할 수 있게 합니다.
 
