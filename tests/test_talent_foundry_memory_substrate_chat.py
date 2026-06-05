@@ -415,11 +415,97 @@ class TalentFoundryMemorySubstrateChatTests(unittest.TestCase):
         self.assertEqual(chat["reply_generation_mode"], "live_openai_responses")
         self.assertEqual(chat["active_operator"], "llm.dynamic_context_conversation")
         self.assertIn("그때그때 맥락을 해석", chat["assistant_answer"])
+        self.assertTrue(any(item["action"] == "live_llm_attempt" for item in chat["chat_execution_trace"]))
         self.assertEqual(chat["chat_learning_update"]["decision"], "promoted")
+        self.assertEqual(chat["chat_execution_trace"][-1]["action"], "chat_learning_update")
         self.assertEqual(ledger["promoted_experiences"][-1]["source"], "chat_turn")
         self.assertIn("conversation_context_learning", ledger["promoted_experiences"][-1]["promoted_skills"])
         self.assertTrue(
             any(node.get("source") == "learning_ledger_chat_turn" for node in substrate.get("nodes", []))
+        )
+
+    def test_live_chat_uses_generic_llm_client_for_non_openai_providers(self) -> None:
+        from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
+        from ai22b.talent_foundry.memory_substrate import run_chat_turn_from_employment
+        from ai22b.talent_foundry.registry import hire_installed_agent
+        from ai22b.talent_foundry.training_run import materialize_training_blueprint
+
+        captured: dict[str, object] = {}
+
+        class FakeGenericClient:
+            def generate(self, messages, *, tools=None, policy=None):
+                captured["messages"] = messages
+                captured["policy"] = policy
+                return {
+                    "schema": "paideia-llm-client-result/v1",
+                    "engine": "openrouter_api",
+                    "status": "completed",
+                    "model": "openai/gpt-test",
+                    "text": json.dumps(
+                        {
+                            "assistant_reply": "보스, 선택한 범용 LLM provider를 통해 로컬 기억 맥락으로 답했습니다.",
+                            "reviewable_reasoning_summary": [
+                                {"step": "context", "summary": "active memory route was supplied to the provider."}
+                            ],
+                            "learning_candidate": {
+                                "lesson": "chat live providers must share the same local identity context.",
+                                "reusable_principle": "route non-OpenAI providers through the common LLMClient interface.",
+                                "memory_tags": ["generic_live_chat_provider"],
+                                "confidence": 0.88,
+                            },
+                        },
+                        ensure_ascii=False,
+                    ),
+                    "identity_policy": "application_engine_not_identity",
+                    "raw_output_saved": False,
+                    "network_access": "external_api_selected_data_minimized",
+                }
+
+        blueprint = create_agent_training_blueprint(
+            owner="보스",
+            request="Graham 학습 경로를 재현하는 별도 샘플 AI를 만든다.",
+            talent_name="grham-주니어",
+            gender="남자",
+            domain="securities_research",
+            role_model_id="graham_value_investing",
+            agent_surface="cli-console",
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            run = materialize_training_blueprint(blueprint, output_dir=Path(tmp) / "grham_junior")
+            artifacts = {key: Path(value) for key, value in run["artifacts"].items()}
+            hiring = hire_installed_agent(
+                artifacts["installed_agent_manifest"],
+                employer="보스",
+                role="증권 리서치 AI 박사",
+                llm_engine="openrouter_api",
+                llm_model="openai/gpt-test",
+                record_name="employment_record_openrouter.json",
+            )
+            with patch(
+                "ai22b.talent_foundry.memory_substrate.build_llm_client",
+                return_value=FakeGenericClient(),
+            ):
+                chat = run_chat_turn_from_employment(
+                    hiring["employment_record"],
+                    message="오늘은 가볍게 대화하되 네가 배운 맥락을 사용해줘.",
+                    output_path=Path(tmp) / "generic_live_chat.json",
+                    llm_mode="live",
+                    llm_model="openai/gpt-test",
+                )
+
+        self.assertEqual(chat["reply_generation_mode"], "live_generic_llm_client")
+        self.assertEqual(chat["llm_runtime_result"]["provider_adapter"], "generic_llm_client")
+        self.assertEqual(chat["llm_runtime_result"]["engine"], "openrouter_api")
+        self.assertEqual(chat["assistant_answer"], "보스, 선택한 범용 LLM provider를 통해 로컬 기억 맥락으로 답했습니다.")
+        self.assertTrue(captured["messages"])
+        self.assertEqual(captured["policy"]["response_format"], "json_object")
+        self.assertTrue(
+            any(
+                item["action"] == "live_llm_attempt"
+                and item.get("provider_adapter") == "generic_llm_client"
+                for item in chat["chat_execution_trace"]
+            )
         )
 
     def test_live_llm_failure_fallback_does_not_promote_bad_chat_learning(self) -> None:

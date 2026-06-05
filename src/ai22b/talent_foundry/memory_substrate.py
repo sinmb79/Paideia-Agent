@@ -14,6 +14,7 @@ from ai22b.talent_foundry.language_development import (
 from ai22b.talent_foundry.growth_profile import read_growth_profile
 from ai22b.talent_foundry.learning_loop import build_reasoning_kernel, record_learning_experience
 from ai22b.talent_foundry.life_trace import read_life_trace_jsonl
+from ai22b.talent_foundry.llm_clients import build_llm_client
 from ai22b.talent_foundry.llm_runtime import invoke_llm_application_engine
 
 
@@ -132,6 +133,14 @@ CASUAL_GREETINGS = {
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _chat_trace_entry(action: str, **fields: Any) -> dict[str, Any]:
+    return {
+        "recorded_at_utc": _now(),
+        "action": action,
+        **fields,
+    }
 
 
 def _stable_id(prefix: str, *parts: Any) -> str:
@@ -1197,6 +1206,31 @@ def _parse_json_object(text: str) -> dict[str, Any] | None:
         return None
 
 
+def _normalize_live_chat_output(output_text: str) -> dict[str, Any]:
+    parsed = _parse_json_object(output_text)
+    if not parsed:
+        parsed = {
+            "assistant_reply": output_text.strip(),
+            "reviewable_reasoning_summary": [
+                {
+                    "step": "LLM output",
+                    "summary": "The model did not return strict JSON, so the raw text was used as the answer.",
+                }
+            ],
+            "learning_candidate": {
+                "lesson": "Live LLM chat output must be schema-checked before learning promotion.",
+                "reusable_principle": "Validate response shape before writing chat learning candidates.",
+                "memory_tags": ["live_llm_format_repair"],
+                "confidence": 0.5,
+            },
+        }
+    return {
+        "assistant_reply": str(parsed.get("assistant_reply", "")).strip(),
+        "reviewable_reasoning_summary": parsed.get("reviewable_reasoning_summary") or [],
+        "learning_candidate": parsed.get("learning_candidate") or {},
+    }
+
+
 def _call_openai_responses_chat(
     *,
     chat_context: dict[str, Any],
@@ -1248,23 +1282,7 @@ def _call_openai_responses_chat(
         }
 
     output_text = str(getattr(response, "output_text", "") or "")
-    parsed = _parse_json_object(output_text)
-    if not parsed:
-        parsed = {
-            "assistant_reply": output_text.strip(),
-            "reviewable_reasoning_summary": [
-                {
-                    "step": "LLM 응답",
-                    "summary": "모델이 JSON 형식을 완전히 지키지 않아 원문을 답변으로 사용했습니다.",
-                }
-            ],
-            "learning_candidate": {
-                "lesson": "실시간 LLM 응답 형식 검증이 필요하다.",
-                "reusable_principle": "응답은 저장 전에 스키마를 확인한다.",
-                "memory_tags": ["live_llm_format_repair"],
-                "confidence": 0.5,
-            },
-        }
+    parsed = _normalize_live_chat_output(output_text)
 
     return {
         "schema": "ai-talent-live-llm-result/v1",
@@ -1273,12 +1291,94 @@ def _call_openai_responses_chat(
         "model": model,
         "response_id": getattr(response, "id", None),
         "usage": _jsonable(getattr(response, "usage", None)),
-        "assistant_reply": str(parsed.get("assistant_reply", "")).strip(),
-        "reviewable_reasoning_summary": parsed.get("reviewable_reasoning_summary") or [],
-        "learning_candidate": parsed.get("learning_candidate") or {},
+        "assistant_reply": parsed["assistant_reply"],
+        "reviewable_reasoning_summary": parsed["reviewable_reasoning_summary"],
+        "learning_candidate": parsed["learning_candidate"],
         "raw_output_saved": False,
         "identity_policy": "application_engine_not_identity",
         "network_access": "openai_api_data_minimized",
+        "data_policy": {
+            "send_private_training_files": False,
+            "send_selected_memory_and_recent_chat_summaries": True,
+            "store_hidden_chain_of_thought": False,
+        },
+    }
+
+
+def _invoke_generic_live_chat_llm(
+    *,
+    chat_context: dict[str, Any],
+    runtime_config: dict[str, Any],
+    model: str | None,
+) -> dict[str, Any]:
+    effective_config = {**runtime_config}
+    if model:
+        effective_config["model"] = model
+    selected_model = model or runtime_config.get("model")
+    client = build_llm_client(effective_config, model_override=selected_model)
+    messages = [
+        {
+            "role": "system",
+            "content": _live_chat_instructions(chat_context["agent"]["name"]),
+        },
+        {
+            "role": "user",
+            "content": json.dumps(
+                {
+                    "task": "Generate one live chat turn for the hired local AI talent.",
+                    "local_talent_context": _compact_chat_context_for_live_llm(chat_context),
+                },
+                ensure_ascii=False,
+            ),
+        },
+    ]
+    client_result = client.generate(
+        messages,
+        tools=[],
+        policy={
+            "response_format": "json_object",
+            "store_hidden_chain_of_thought": False,
+            "identity_policy": runtime_config.get("identity_policy", "application_engine_not_identity"),
+        },
+    )
+    if client_result.get("status") != "completed":
+        return {
+            "schema": "ai-talent-live-llm-result/v1",
+            "engine": client_result.get("engine") or runtime_config.get("engine"),
+            "status": "unavailable",
+            "reason": client_result.get("reason", "llm_client_unavailable"),
+            "model": client_result.get("model") or selected_model,
+            "identity_policy": runtime_config.get("identity_policy"),
+            "network_access": client_result.get("network_access", runtime_config.get("network_access")),
+            "provider_adapter": "generic_llm_client",
+            "client_result": {
+                key: value
+                for key, value in client_result.items()
+                if key not in {"text"}
+            },
+        }
+
+    parsed = _normalize_live_chat_output(str(client_result.get("text", "")))
+    return {
+        "schema": "ai-talent-live-llm-result/v1",
+        "engine": client_result.get("engine") or runtime_config.get("engine"),
+        "status": "completed",
+        "model": client_result.get("model") or selected_model,
+        "assistant_reply": parsed["assistant_reply"],
+        "reviewable_reasoning_summary": parsed["reviewable_reasoning_summary"],
+        "learning_candidate": parsed["learning_candidate"],
+        "raw_output_saved": False,
+        "identity_policy": "application_engine_not_identity",
+        "network_access": client_result.get("network_access", runtime_config.get("network_access")),
+        "provider_adapter": "generic_llm_client",
+        "client_result_summary": {
+            "schema": client_result.get("schema"),
+            "engine": client_result.get("engine"),
+            "status": client_result.get("status"),
+            "model": client_result.get("model"),
+            "identity_policy": client_result.get("identity_policy"),
+            "raw_output_saved": client_result.get("raw_output_saved", False),
+        },
         "data_policy": {
             "send_private_training_files": False,
             "send_selected_memory_and_recent_chat_summaries": True,
@@ -1294,13 +1394,11 @@ def _invoke_live_chat_llm(
     model: str | None,
 ) -> dict[str, Any]:
     if runtime_config.get("engine") != "openai_chatgpt_codex":
-        return {
-            "schema": "ai-talent-live-llm-result/v1",
-            "engine": runtime_config.get("engine"),
-            "status": "unavailable",
-            "reason": "live_chat_requires_openai_chatgpt_codex_engine",
-            "identity_policy": runtime_config.get("identity_policy"),
-        }
+        return _invoke_generic_live_chat_llm(
+            chat_context=chat_context,
+            runtime_config=runtime_config,
+            model=model,
+        )
     selected_model = (
         model
         or runtime_config.get("model")
@@ -2034,7 +2132,11 @@ def run_chat_turn_from_employment(
             llm_result=live_llm_attempt,
             fallback_reasoning_summary=fallback_reasoning_summary,
         )
-        reply_generation_mode = "live_openai_responses"
+        reply_generation_mode = (
+            "live_generic_llm_client"
+            if live_llm_attempt.get("provider_adapter") == "generic_llm_client"
+            else "live_openai_responses"
+        )
     else:
         llm_runtime_result = base_runtime_result
         if live_llm_attempt:
@@ -2058,6 +2160,38 @@ def run_chat_turn_from_employment(
                 live_llm_attempt=live_llm_attempt,
             )
         reply_generation_mode = "deterministic_local_fallback"
+    selected_memory_count = len(chat_context.get("active_memory_route", {}).get("selected_nodes", []))
+    chat_execution_trace = [
+        _chat_trace_entry(
+            "employment_loaded",
+            employment_id=employment_record["employment_id"],
+            agent_name=employment_record["agent"]["name"],
+        ),
+        _chat_trace_entry(
+            "memory_route_built",
+            substrate=substrate_path.name,
+            selected_memory_count=selected_memory_count,
+            private_reasoning_trace=False,
+        ),
+        _chat_trace_entry(
+            "base_runtime_checked",
+            engine=base_runtime_result.get("engine"),
+            status=base_runtime_result.get("status"),
+        ),
+        _chat_trace_entry(
+            "live_llm_attempt",
+            requested=llm_mode in {"auto", "live"},
+            engine=(live_llm_attempt or {}).get("engine"),
+            status=(live_llm_attempt or {}).get("status", "skipped"),
+            provider_adapter=(live_llm_attempt or {}).get("provider_adapter"),
+        ),
+        _chat_trace_entry(
+            "reply_generated",
+            mode=reply_generation_mode,
+            active_operator=reply_packet["active_operator"],
+            conversation_intent=conversation_intent,
+        ),
+    ]
     run = {
         "schema": CHAT_RUN_SCHEMA,
         "created_at_utc": _now(),
@@ -2077,6 +2211,7 @@ def run_chat_turn_from_employment(
         "assistant_reply": reply_packet["reply"],
         "active_operator": reply_packet["active_operator"],
         "reviewable_reasoning_summary": reply_packet["reviewable_reasoning_summary"],
+        "chat_execution_trace": chat_execution_trace,
         "stored_private_reasoning_trace": False,
     }
     if learn_from_chat:
@@ -2089,6 +2224,13 @@ def run_chat_turn_from_employment(
             substrate_path=substrate_path,
             run=run,
             reply_packet=reply_packet,
+        )
+        run["chat_execution_trace"].append(
+            _chat_trace_entry(
+                "chat_learning_update",
+                decision=run["chat_learning_update"]["decision"],
+                latest_experience_id=run["chat_learning_update"].get("latest_experience_id"),
+            )
         )
 
     run_output_path = output_path or target_root / entrypoints.get("last_chat", "last_hired_agent_chat.json")
