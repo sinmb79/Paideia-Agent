@@ -556,6 +556,17 @@ ai22b-talent-foundry run-action-policy-eval `
 
 This uses public fixtures in `evals/policy_safety_cases.json` to check prompt-injection, trade execution, external upload, personal-data transfer, compact-normalized bypass attempts, negated analysis-only requests, and policy-discussion requests. It does not call an LLM or the network.
 
+Create a local Boss approval artifact when a sensitive action should move past the policy gate for one reviewed run. This still does not execute a network upload, subprocess, or trade by itself:
+
+```powershell
+ai22b-talent-foundry create-boss-approval `
+  --capability network.external_upload `
+  --action-type external_upload `
+  --data-class agent_or_owner_data `
+  --approved-by Boss `
+  --output .\boss_approval_upload.json
+```
+
 Run the workspace execution proof verifier against a generated run artifact before calling a workspace/dataflow change P0-ready:
 
 ```powershell

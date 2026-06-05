@@ -402,6 +402,17 @@ ai22b-talent-foundry run-action-policy-eval `
 
 이 명령은 `evals/policy_safety_cases.json`의 공개 fixture로 prompt injection, 투자 실행, 외부 업로드, 개인/가족 데이터 전송, 부정된 분석 전용 요청, 정책 설명 요청을 검사합니다. LLM이나 네트워크는 호출하지 않습니다.
 
+민감 행동을 한 번의 검토된 실행에서 policy gate 뒤로 넘겨야 한다면 로컬 Boss approval artifact를 생성합니다. 이 artifact 자체는 네트워크 업로드, 서브프로세스, 거래 실행을 수행하지 않습니다.
+
+```powershell
+ai22b-talent-foundry create-boss-approval `
+  --capability network.external_upload `
+  --action-type external_upload `
+  --data-class agent_or_owner_data `
+  --approved-by Boss `
+  --output .\boss_approval_upload.json
+```
+
 workspace/dataflow 변경을 P0-ready라고 부르기 전에는 생성된 실행 산출물에 대해 실행 증명 verifier를 돌립니다.
 
 ```powershell

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import json
+import tempfile
 import unittest
+from pathlib import Path
 
 
 def _manifest(*, approvals: list[dict] | None = None) -> dict:
@@ -85,6 +88,56 @@ class ActionApprovalTests(unittest.TestCase):
         self.assertEqual(result["tool_execution"]["capability_scope"]["subprocess_default"], "blocked")
         self.assertNotIn("network.external_upload", result["tool_execution"]["capability_scope"]["granted_capabilities"])
         self.assertEqual(result["memory_write"]["decision"], "candidate_pending_boss_review")
+
+    def test_cli_create_boss_approval_writes_artifact_usable_by_policy(self) -> None:
+        from ai22b.talent_foundry.action_policy import evaluate_action_policy, infer_action_intents
+        from ai22b.talent_foundry.cli import main as cli_main
+
+        with tempfile.TemporaryDirectory() as tmp:
+            approval_path = Path(tmp) / "boss_approval_upload.json"
+            exit_code = cli_main(
+                [
+                    "create-boss-approval",
+                    "--capability",
+                    "network.external_upload",
+                    "--action-type",
+                    "external_upload",
+                    "--data-class",
+                    "agent_or_owner_data",
+                    "--approved-by",
+                    "Boss",
+                    "--approval-id",
+                    "boss-approval-cli-001",
+                    "--output",
+                    str(approval_path),
+                ]
+            )
+            approval = json.loads(approval_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(approval["schema"], "paideia-boss-approval/v1")
+        self.assertEqual(approval["approval_id"], "boss-approval-cli-001")
+        self.assertEqual(approval["status"], "approved")
+        self.assertEqual(approval["capabilities"], ["network.external_upload"])
+        self.assertTrue(approval["runtime_safety_contract"]["approval_is_not_tool_execution"])
+        self.assertEqual(approval["runtime_safety_contract"]["network_default_after_approval"], "blocked")
+
+        manifest = _manifest(approvals=[approval])
+        intents = infer_action_intents("내 에이전트 기록을 외부 업로드해줘.", manifest)
+        decision = evaluate_action_policy(manifest, intents)
+
+        self.assertEqual(decision["status"], "approved")
+        self.assertEqual(decision["boss_approval_gate"]["accepted_count"], 1)
+
+    def test_public_program_manifest_lists_boss_approval_command(self) -> None:
+        from ai22b.talent_foundry.program_manifest import build_public_program_manifest
+
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest = build_public_program_manifest(Path(tmp))
+
+        commands = {item["id"]: item for item in manifest["commands"]}
+        self.assertIn("create-boss-approval", commands)
+        self.assertIn("approval artifact", commands["create-boss-approval"]["purpose"])
 
 
 if __name__ == "__main__":

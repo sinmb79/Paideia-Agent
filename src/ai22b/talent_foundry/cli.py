@@ -13,6 +13,7 @@ from ai22b.talent_foundry.agent_identity_card import (
     verify_agent_identity_artifacts,
 )
 from ai22b.talent_foundry.agent_manifest import build_agent_manifest
+from ai22b.talent_foundry.action_policy import build_boss_approval_artifact
 from ai22b.talent_foundry.agent_program import (
     build_agent_program,
     build_paideia_agent_install_kit,
@@ -248,6 +249,20 @@ def _build_parser() -> argparse.ArgumentParser:
     policy_eval.add_argument("--suite", default=str(DEFAULT_POLICY_EVAL_SUITE))
     policy_eval.add_argument("--manifest")
     policy_eval.add_argument("--output", required=True)
+
+    boss_approval = subparsers.add_parser(
+        "create-boss-approval",
+        help="Create a local boss approval artifact for one sensitive action gate without executing that action.",
+    )
+    boss_approval.add_argument("--capability", required=True)
+    boss_approval.add_argument("--action-type", required=True)
+    boss_approval.add_argument("--data-class", required=True)
+    boss_approval.add_argument("--approved-by", default="Boss")
+    boss_approval.add_argument("--scope", default="single_local_review_run")
+    boss_approval.add_argument("--reason")
+    boss_approval.add_argument("--expires-at-utc")
+    boss_approval.add_argument("--approval-id")
+    boss_approval.add_argument("--output", required=True)
 
     execution_proof = subparsers.add_parser(
         "verify-workspace-execution",
@@ -894,6 +909,23 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         print(str(output_path))
         return 0 if report["status"] == "passed" else 1
+
+    if args.command == "create-boss-approval":
+        output_path = Path(args.output)
+        approval = build_boss_approval_artifact(
+            capability=args.capability,
+            action_type=args.action_type,
+            data_class=args.data_class,
+            approved_by=args.approved_by,
+            scope=args.scope,
+            reason=args.reason,
+            expires_at_utc=args.expires_at_utc,
+            approval_id=args.approval_id,
+        )
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(json.dumps(approval, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(str(output_path))
+        return 0
 
     if args.command == "verify-workspace-execution":
         output_path = Path(args.output)

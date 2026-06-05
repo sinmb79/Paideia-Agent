@@ -214,6 +214,59 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def build_boss_approval_artifact(
+    *,
+    capability: str,
+    action_type: str,
+    data_class: str,
+    approved_by: str,
+    scope: str = "single_local_review_run",
+    reason: str | None = None,
+    expires_at_utc: str | None = None,
+    approval_id: str | None = None,
+) -> dict[str, Any]:
+    created_at = _now()
+    seed = json_dumps_stable(
+        {
+            "capability": capability,
+            "action_type": action_type,
+            "data_class": data_class,
+            "approved_by": approved_by,
+            "scope": scope,
+            "reason": reason,
+            "expires_at_utc": expires_at_utc,
+            "created_at_utc": created_at,
+        }
+    )
+    return {
+        "schema": ACTION_APPROVAL_SCHEMA,
+        "approval_id": approval_id or f"paideia-approval-{hashlib.sha256(seed.encode('utf-8')).hexdigest()[:12]}",
+        "created_at_utc": created_at,
+        "status": "approved",
+        "approved_by": approved_by,
+        "capability": capability,
+        "capabilities": [capability],
+        "action_type": action_type,
+        "data_class": data_class,
+        "scope": scope,
+        "reason": reason or "Explicit Boss approval artifact for one sensitive Paideia action gate.",
+        "expires_at_utc": expires_at_utc,
+        "runtime_safety_contract": {
+            "approval_is_not_tool_execution": True,
+            "network_default_after_approval": "blocked",
+            "subprocess_default_after_approval": "blocked",
+            "private_reasoning_trace": "do_not_store",
+            "manual_review_required_before_external_side_effect": True,
+        },
+    }
+
+
+def json_dumps_stable(value: dict[str, Any]) -> str:
+    import json
+
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
 def _compact_match_text(text: str) -> str:
     return COMPACT_SEPARATOR_RE.sub("", text.casefold())
 
