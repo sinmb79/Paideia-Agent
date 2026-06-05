@@ -63,7 +63,7 @@ P0 runs now record an initial `runtime_observability` block with context size, e
 
 Long term, generated agents should be able to connect to external identity systems such as [Agent ID Card](https://www.agentidcard.org/). A public identity layer can bind display name, owner, role, scope, credential status, and verification state to the local hiring dossier and install manifest.
 
-The current public release treats this as a planned integration. It should not register agents or upload data without explicit user action.
+The current public release supports local payload/envelope export, pre-registration verification, and owner-provided registration receipt import. It should not register agents or upload data without explicit user action.
 
 ## Project Nature
 

@@ -11,7 +11,12 @@ from typing import Any
 AGENT_ID_CARD_PAYLOAD_SCHEMA = "ai-talent-agent-id-card-payload/v1"
 AGENT_IDENTITY_LAYER_ENVELOPE_SCHEMA = "agent-identity-layer-envelope/ail.v1"
 AGENT_ID_CARD_VERIFICATION_SCHEMA = "paideia-agent-id-card-verification/v1"
+AGENT_ID_CARD_REGISTRATION_IMPORT_SCHEMA = "paideia-agent-id-card-registration-import/v1"
 AGENT_WARRENT_REPO_URL = "https://github.com/sinmb79/Agent_warrent"
+AGENT_WARRENT_EXTERNAL_REGISTRATION_STATES = {
+    "manual_owner_action_only",
+    "owner_completed_outside_paideia",
+}
 WINDOWS_ABSOLUTE_PATH_RE = re.compile(r"[A-Za-z]:\\")
 POSIX_HOME_PATH_RE = re.compile(r"(/home/|/Users/)[^\s\"']+")
 EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
@@ -35,6 +40,10 @@ def _fingerprint(*parts: str) -> str:
 def _canonical_hash(value: dict[str, Any]) -> str:
     raw = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return "sha256:" + hashlib.sha256(raw).hexdigest()
+
+
+def _secret_hash(value: str) -> str:
+    return "sha256:" + hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
 def _artifact_blob(value: dict[str, Any]) -> str:
@@ -80,6 +89,31 @@ def _privacy_issues(value: dict[str, Any]) -> list[dict[str, Any]]:
             }
         )
     return issues
+
+
+def _nested_value(value: dict[str, Any], path: tuple[str, ...]) -> Any:
+    cursor: Any = value
+    for key in path:
+        cursor = cursor.get(key) if isinstance(cursor, dict) else None
+    return cursor
+
+
+def _first_text(*values: Any) -> str | None:
+    for value in values:
+        if value is None:
+            continue
+        text = str(value).strip()
+        if text:
+            return text
+    return None
+
+
+def _to_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"true", "yes", "y", "1", "signed", "verified"}
+    return bool(value)
 
 
 def _slug(value: str | None, *, fallback: str = "agent") -> str:
@@ -452,12 +486,31 @@ def validate_agent_identity_layer_envelope(envelope: dict[str, Any]) -> dict[str
                 "message": "Credential tokens must not be present in an unsigned local envelope.",
             }
         )
-    if envelope.get("extensions", {}).get("agent_warrent", {}).get("external_registration") != "manual_owner_action_only":
+    agent_warrent = envelope.get("extensions", {}).get("agent_warrent", {})
+    external_registration = agent_warrent.get("external_registration")
+    registration_state = agent_warrent.get("registration_state")
+    if external_registration not in AGENT_WARRENT_EXTERNAL_REGISTRATION_STATES:
         issues.append(
             {
                 "id": "external_registration_not_manual",
                 "severity": "error",
-                "message": "Agent_warrent external registration must remain manual owner action only.",
+                "message": "Agent_warrent external registration must remain manual owner action only or owner-completed outside Paideia.",
+            }
+        )
+    if external_registration == "owner_completed_outside_paideia" and not envelope.get("ail_id"):
+        issues.append(
+            {
+                "id": "external_registration_missing_ail_id",
+                "severity": "error",
+                "message": "Owner-imported external registration requires an AIL ID.",
+            }
+        )
+    if registration_state == "owner_imported_registered" and not envelope.get("verification", {}).get("signed"):
+        issues.append(
+            {
+                "id": "registered_envelope_not_signed",
+                "severity": "error",
+                "message": "Owner-imported registered envelopes must mark verification as signed.",
             }
         )
     if missing:
@@ -475,7 +528,7 @@ def validate_agent_identity_layer_envelope(envelope: dict[str, Any]) -> dict[str
         "artifact_type": "agent_identity_layer_envelope",
         "valid": not blocking,
         "missing": missing,
-        "registered": bool(envelope.get("ail_id") and envelope.get("credential")),
+        "registered": bool(envelope.get("ail_id") and (envelope.get("credential") or envelope.get("credential_fingerprint_sha256"))),
         "signed": bool(envelope.get("verification", {}).get("signed")),
         "issues": issues,
         "privacy": {
@@ -534,4 +587,163 @@ def verify_agent_identity_artifacts(
     }
     if output_path is not None:
         _write_json(output_path, report)
+    return report
+
+
+def import_agent_identity_registration(
+    *,
+    envelope_path: Path,
+    registration_result_path: Path,
+    output_path: Path | None = None,
+    updated_envelope_path: Path | None = None,
+    include_credential_token: bool = False,
+) -> dict[str, Any]:
+    """Import an owner-performed external Agent ID Card/AIL registration result.
+
+    Paideia does not register or upload anything here. The owner provides a local
+    registration result file, and Paideia writes a redacted local receipt plus an
+    optional updated envelope. Credential tokens are omitted by default.
+    """
+
+    envelope = _read_json(envelope_path)
+    registration_result = _read_json(registration_result_path)
+    envelope_validation = validate_agent_identity_layer_envelope(envelope)
+    ail_id = _first_text(
+        registration_result.get("ail_id"),
+        registration_result.get("AIL_ID"),
+        registration_result.get("id"),
+        _nested_value(registration_result, ("agent_identity", "ail_id")),
+        _nested_value(registration_result, ("agent_id_card", "ail_id")),
+        _nested_value(registration_result, ("credential_subject", "ail_id")),
+    )
+    credential = _first_text(
+        registration_result.get("credential"),
+        registration_result.get("credential_token"),
+        registration_result.get("jwt"),
+        _nested_value(registration_result, ("agent_identity", "credential")),
+        _nested_value(registration_result, ("agent_id_card", "credential")),
+    )
+    signed = _to_bool(
+        _nested_value(registration_result, ("verification", "signed"))
+        if _nested_value(registration_result, ("verification", "signed")) is not None
+        else registration_result.get("signed")
+    )
+    verification_strength = _first_text(
+        _nested_value(registration_result, ("verification", "strength")),
+        registration_result.get("verification_strength"),
+        "owner_imported_external_registration",
+    )
+    attestation_ref = _first_text(
+        registration_result.get("attestation_ref"),
+        _nested_value(registration_result, ("verification", "attestation_ref")),
+        _nested_value(registration_result, ("agent_id_card", "attestation_ref")),
+    )
+    issues: list[dict[str, Any]] = []
+    if not envelope_validation["valid"]:
+        issues.append(
+            {
+                "id": "source_envelope_invalid",
+                "severity": "error",
+                "message": "Source Agent_warrent envelope must pass local validation before importing registration.",
+                "source_issues": envelope_validation.get("issues", []),
+            }
+        )
+    if not ail_id:
+        issues.append(
+            {
+                "id": "ail_id_missing",
+                "severity": "error",
+                "message": "Registration result must include an AIL ID or equivalent external agent identity id.",
+            }
+        )
+    if not signed:
+        issues.append(
+            {
+                "id": "signed_verification_missing",
+                "severity": "error",
+                "message": "Registration result must indicate signed or verified external identity status.",
+            }
+        )
+    blocking = [issue for issue in issues if issue["severity"] == "error"]
+    updated_envelope: dict[str, Any] | None = None
+    updated_envelope_validation: dict[str, Any] | None = None
+    credential_fingerprint = _secret_hash(credential) if credential else None
+    if not blocking:
+        updated_envelope = json.loads(json.dumps(envelope, ensure_ascii=False))
+        updated_envelope["ail_id"] = ail_id
+        updated_envelope["credential"] = credential if include_credential_token else None
+        if credential_fingerprint:
+            updated_envelope["credential_fingerprint_sha256"] = credential_fingerprint
+        verification = updated_envelope.setdefault("verification", {})
+        verification["signed"] = True
+        verification["strength"] = verification_strength
+        verification["attestation_ref"] = attestation_ref
+        agent_warrent = updated_envelope.setdefault("extensions", {}).setdefault("agent_warrent", {})
+        agent_warrent["registration_state"] = "owner_imported_registered"
+        agent_warrent["external_registration"] = "owner_completed_outside_paideia"
+        agent_warrent["credential_storage"] = (
+            "raw_token_included_by_explicit_owner_request"
+            if include_credential_token and credential
+            else "token_omitted_hash_only"
+        )
+        paideia = updated_envelope.setdefault("extensions", {}).setdefault("paideia", {})
+        privacy = paideia.setdefault("privacy", {})
+        privacy["credential_token_exported"] = bool(include_credential_token and credential)
+        privacy["network_action_performed"] = False
+        paideia["agent_id_card_import"] = {
+            "schema": AGENT_ID_CARD_REGISTRATION_IMPORT_SCHEMA,
+            "imported_at_utc": datetime.now(timezone.utc).isoformat(),
+            "source_result": registration_result_path.name,
+            "network_action_performed_by_paideia": False,
+            "credential_token_exported": bool(include_credential_token and credential),
+        }
+        updated_envelope_validation = validate_agent_identity_layer_envelope(updated_envelope)
+        if not updated_envelope_validation["valid"]:
+            issues.append(
+                {
+                    "id": "updated_envelope_invalid",
+                    "severity": "error",
+                    "message": "Updated envelope failed local validation after registration import.",
+                    "source_issues": updated_envelope_validation.get("issues", []),
+                }
+            )
+            blocking = [issue for issue in issues if issue["severity"] == "error"]
+            updated_envelope = None
+    report = {
+        "schema": AGENT_ID_CARD_REGISTRATION_IMPORT_SCHEMA,
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "status": "imported" if not blocking else "failed",
+        "valid": not blocking,
+        "network_action_performed": False,
+        "external_registration": "owner_completed_outside_paideia" if ail_id else "not_imported",
+        "source_envelope": envelope_path.name,
+        "registration_result": {
+            "file": registration_result_path.name,
+            "fingerprint_sha256": _canonical_hash(registration_result),
+            "ail_id_present": bool(ail_id),
+            "credential_token_present": bool(credential),
+            "credential_token_exported": bool(include_credential_token and credential),
+            "credential_fingerprint_sha256": credential_fingerprint,
+            "signed": signed,
+            "verification_strength": verification_strength,
+        },
+        "source_envelope_validation": envelope_validation,
+        "updated_envelope_validation": updated_envelope_validation,
+        "updated_envelope": updated_envelope_path.name if updated_envelope_path and updated_envelope else None,
+        "issues": issues,
+        "next_actions": (
+            [
+                "Keep any raw credential token outside public source control.",
+                "Use the updated envelope for local hiring dossier linkage and future Agent_warrent checks.",
+            ]
+            if not blocking
+            else [
+                "Fix the registration result or regenerate the source envelope before importing again.",
+            ]
+        ),
+    }
+    if output_path is not None:
+        _write_json(output_path, report)
+    if updated_envelope_path is not None and updated_envelope is not None:
+        _write_json(updated_envelope_path, updated_envelope)
     return report

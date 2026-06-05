@@ -9,6 +9,7 @@ from ai22b.config import talent_foundry_storage_path
 from ai22b.talent_foundry.agent_identity_card import (
     build_agent_id_card_payload,
     build_agent_identity_layer_envelope,
+    import_agent_identity_registration,
     verify_agent_identity_artifacts,
 )
 from ai22b.talent_foundry.agent_manifest import build_agent_manifest
@@ -360,6 +361,20 @@ def _build_parser() -> argparse.ArgumentParser:
     verify_agent_id_card.add_argument("--payload")
     verify_agent_id_card.add_argument("--envelope")
     verify_agent_id_card.add_argument("--output", required=True)
+
+    import_agent_id_card = subparsers.add_parser(
+        "import-agent-id-card-registration",
+        help="Import an owner-performed Agent ID Card/Agent_warrent registration result into local identity artifacts.",
+    )
+    import_agent_id_card.add_argument("--envelope", required=True)
+    import_agent_id_card.add_argument("--registration-result", required=True)
+    import_agent_id_card.add_argument("--output", required=True)
+    import_agent_id_card.add_argument("--updated-envelope")
+    import_agent_id_card.add_argument(
+        "--include-credential-token",
+        action="store_true",
+        help="Store the raw returned credential token in the updated envelope. Off by default; prefer hash-only storage.",
+    )
 
     hire_installed = subparsers.add_parser("hire-installed", help="Hire an installed AI talent as a local agent.")
     hire_installed.add_argument("--installed-manifest", required=True)
@@ -1074,6 +1089,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             payload_path=Path(args.payload) if args.payload else None,
             envelope_path=Path(args.envelope) if args.envelope else None,
             output_path=Path(args.output),
+        )
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return 0 if report["valid"] else 2
+
+    if args.command == "import-agent-id-card-registration":
+        report = import_agent_identity_registration(
+            envelope_path=Path(args.envelope),
+            registration_result_path=Path(args.registration_result),
+            output_path=Path(args.output),
+            updated_envelope_path=Path(args.updated_envelope) if args.updated_envelope else None,
+            include_credential_token=args.include_credential_token,
         )
         print(json.dumps(report, ensure_ascii=False, indent=2))
         return 0 if report["valid"] else 2

@@ -365,6 +365,9 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             payload_output = Path(tmp) / "agent_id_card_payload.json"
             output = Path(tmp) / "agent_identity_envelope.json"
             verify_output = Path(tmp) / "agent_identity_verification.json"
+            registration_result_output = Path(tmp) / "agent_id_card_registration_result.json"
+            registration_receipt_output = Path(tmp) / "agent_identity_registration_receipt.json"
+            registered_envelope_output = Path(tmp) / "agent_identity_envelope.registered.json"
             payload_exit = cli_main(
                 [
                     "export-agent-id-card-payload",
@@ -402,13 +405,44 @@ class GrahamTalentFoundryTests(unittest.TestCase):
                     str(verify_output),
                 ]
             )
+            registration_result_output.write_text(
+                json.dumps(
+                    {
+                        "ail_id": "ail_test_agent_warrent_001",
+                        "credential": "eyJlocal-test-credential.signature",
+                        "verification": {
+                            "signed": True,
+                            "strength": "agentidcard_owner_registered",
+                            "attestation_ref": "agentidcard-test-attestation",
+                        },
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            import_exit = cli_main(
+                [
+                    "import-agent-id-card-registration",
+                    "--envelope",
+                    str(output),
+                    "--registration-result",
+                    str(registration_result_output),
+                    "--output",
+                    str(registration_receipt_output),
+                    "--updated-envelope",
+                    str(registered_envelope_output),
+                ]
+            )
             payload = json.loads(payload_output.read_text(encoding="utf-8"))
             envelope = json.loads(output.read_text(encoding="utf-8"))
             verification = json.loads(verify_output.read_text(encoding="utf-8"))
+            registration_receipt = json.loads(registration_receipt_output.read_text(encoding="utf-8"))
+            registered_envelope = json.loads(registered_envelope_output.read_text(encoding="utf-8"))
 
         self.assertEqual(payload_exit, 0)
         self.assertEqual(exit_code, 0)
         self.assertEqual(verify_exit, 0)
+        self.assertEqual(import_exit, 0)
         self.assertEqual(payload["schema"], "ai-talent-agent-id-card-payload/v1")
         self.assertEqual(envelope["version"], "ail.v1")
         self.assertEqual(envelope["agent"]["display_name"], "agent-warrent-test")
@@ -424,6 +458,21 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertEqual(verification["external_registration"], "not_performed_manual_owner_action_only")
         self.assertFalse(verification["validations"]["payload"]["privacy"]["credential_like_values_exported"])
         self.assertFalse(verification["validations"]["envelope"]["privacy"]["local_absolute_paths_exported"])
+        self.assertEqual(registration_receipt["schema"], "paideia-agent-id-card-registration-import/v1")
+        self.assertTrue(registration_receipt["valid"])
+        self.assertEqual(registration_receipt["status"], "imported")
+        self.assertFalse(registration_receipt["network_action_performed"])
+        self.assertTrue(registration_receipt["registration_result"]["credential_token_present"])
+        self.assertFalse(registration_receipt["registration_result"]["credential_token_exported"])
+        self.assertIn("credential_fingerprint_sha256", registration_receipt["registration_result"])
+        self.assertEqual(registered_envelope["ail_id"], "ail_test_agent_warrent_001")
+        self.assertIsNone(registered_envelope["credential"])
+        self.assertEqual(registered_envelope["extensions"]["agent_warrent"]["registration_state"], "owner_imported_registered")
+        self.assertEqual(registered_envelope["extensions"]["agent_warrent"]["external_registration"], "owner_completed_outside_paideia")
+        self.assertTrue(registered_envelope["verification"]["signed"])
+        self.assertTrue(registration_receipt["updated_envelope_validation"]["registered"])
+        self.assertNotIn("eyJlocal-test-credential.signature", json.dumps(registration_receipt, ensure_ascii=False))
+        self.assertNotIn("eyJlocal-test-credential.signature", json.dumps(registered_envelope, ensure_ascii=False))
 
     def test_agent_identity_verifier_blocks_private_contact_and_local_paths(self) -> None:
         from ai22b.talent_foundry.agent_identity_card import (

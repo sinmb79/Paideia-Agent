@@ -51,6 +51,7 @@ ai22b-talent-foundry onboard --answers examples\graham_junior_onboarding.answers
 - `agent_id_card_payload.json`: 외부 등록 전 검토할 Agent ID Card payload
 - `agent_identity_envelope.json`: Agent_warrent `ail.v1` 로컬 미등록 envelope
 - `agent_identity_verification.json`: Agent ID Card payload와 Agent_warrent envelope의 로컬 사전 검증 보고서
+- `agent_identity_registration_receipt.json`: 보스가 외부에서 등록한 결과를 로컬 envelope에 연결한 receipt
 - `simulation_rollouts.json`: 병렬 episode rollout 계획
 - `onboarding/onboarding_session.json`: 실제 육성, 설치, 고용, 첫 목표 사이클 기록
 
@@ -79,6 +80,16 @@ ai22b-talent-foundry verify-agent-id-card `
   --payload agent_id_card_payload.json `
   --envelope agent_identity_envelope.json `
   --output agent_identity_verification.json
+```
+
+보스가 외부 사이트에서 수동 등록을 완료한 뒤에는 결과 파일을 로컬 envelope에 연결할 수 있습니다. 이 명령도 네트워크를 호출하지 않으며, credential token 원문은 기본적으로 저장하지 않습니다.
+
+```powershell
+ai22b-talent-foundry import-agent-id-card-registration `
+  --envelope agent_identity_envelope.json `
+  --registration-result agent_id_card_registration_result.json `
+  --output agent_identity_registration_receipt.json `
+  --updated-envelope agent_identity_envelope.registered.json
 ```
 
 ## 중요한 차이

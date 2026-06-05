@@ -518,9 +518,15 @@ ai22b-talent-foundry verify-agent-id-card `
   --payload .\agent_id_card_payload.json `
   --envelope .\agent_identity_envelope.json `
   --output .\agent_identity_verification.json
+
+ai22b-talent-foundry import-agent-id-card-registration `
+  --envelope .\agent_identity_envelope.json `
+  --registration-result .\agent_id_card_registration_result.json `
+  --output .\agent_identity_registration_receipt.json `
+  --updated-envelope .\agent_identity_envelope.registered.json
 ```
 
-The generated `agent_id_card_payload.json` and `agent_identity_envelope.json` are local-unregistered artifacts. `verify-agent-id-card` performs no network call and fails if required identity fields are missing, if credential-like values, raw owner emails, or local absolute paths leak into the artifacts, or if the external registration policy is not manual-owner-action-only.
+The generated `agent_id_card_payload.json` and `agent_identity_envelope.json` are local-unregistered artifacts. `verify-agent-id-card` performs no network call and fails if required identity fields are missing, if credential-like values, raw owner emails, or local absolute paths leak into the artifacts, or if the external registration policy is not manual-owner-action-only. After the owner manually registers outside Paideia, `import-agent-id-card-registration` can bind the returned AIL ID and signed verification status back into a local envelope. It stores only a credential fingerprint by default; raw credential tokens require the explicit `--include-credential-token` flag.
 
 Primary references:
 

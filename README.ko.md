@@ -283,9 +283,15 @@ ai22b-talent-foundry verify-agent-id-card `
   --payload .\agent_id_card_payload.json `
   --envelope .\agent_identity_envelope.json `
   --output .\agent_identity_verification.json
+
+ai22b-talent-foundry import-agent-id-card-registration `
+  --envelope .\agent_identity_envelope.json `
+  --registration-result .\agent_id_card_registration_result.json `
+  --output .\agent_identity_registration_receipt.json `
+  --updated-envelope .\agent_identity_envelope.registered.json
 ```
 
-이 파일들은 외부 등록 전 검토용입니다. `verify-agent-id-card`는 네트워크 호출을 하지 않고 필수 신원 필드, credential-like 값, 원문 이메일, 로컬 절대경로, 수동 등록 정책을 검사합니다. `ail_id`, credential token, 서명 검증은 외부 등록을 보스가 명시적으로 진행한 뒤에만 채워집니다.
+이 파일들은 외부 등록 전 검토용입니다. `verify-agent-id-card`는 네트워크 호출을 하지 않고 필수 신원 필드, credential-like 값, 원문 이메일, 로컬 절대경로, 수동 등록 정책을 검사합니다. 외부 등록을 보스가 직접 수행한 뒤에는 `import-agent-id-card-registration`으로 반환된 AIL ID와 서명 검증 상태를 로컬 envelope에 연결할 수 있습니다. credential token 원문은 기본 저장하지 않고 fingerprint만 남기며, 원문 저장은 `--include-credential-token`을 명시한 경우에만 수행합니다.
 
 ## 공개 저장소 규칙
 
