@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from ai22b.talent_foundry.learning_loop import route_active_memory
+from ai22b.talent_foundry.workspace_sandbox import WorkspaceSandbox
 
 
 FORMATTED_JOB_SCHEMA = "ai-talent-dataflow-formatted-job/v1"
@@ -22,17 +22,36 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _write_json(path: Path, data: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+def _compact_safe_reference(reference: Any) -> dict[str, Any]:
+    if not isinstance(reference, dict):
+        return {"summary": str(reference)[:500]}
+    workspace_outputs = reference.get("workspace_outputs", {})
+    job_outputs = reference.get("job_outputs", {})
+    growth_update = reference.get("growth_update", {})
+    compact = {
+        "schema": reference.get("schema"),
+        "run_status": reference.get("run_status") or reference.get("job_status"),
+        "workspace_output_keys": sorted(workspace_outputs) if isinstance(workspace_outputs, dict) else [],
+        "job_output_keys": sorted(job_outputs) if isinstance(job_outputs, dict) else [],
+        "growth_reflection": growth_update.get("reflection") if isinstance(growth_update, dict) else None,
+    }
+    return {
+        key: value
+        for key, value in compact.items()
+        if value is not None and value != "" and value != []
+    }
 
 
-def _safe_workspace_path(workspace_dir: Path, filename: str) -> Path:
-    root = workspace_dir.resolve()
-    path = (root / filename).resolve()
-    if root not in path.parents and path != root:
-        raise ValueError("Dataflow workspace output escaped workspace directory")
-    return path
+def _compact_selected_memory(memory: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "experience_id": memory.get("experience_id"),
+        "source": memory.get("source"),
+        "summary": memory.get("summary"),
+        "promoted_skills": memory.get("promoted_skills", []),
+        "relevance_score": memory.get("relevance_score"),
+        "safe_reference_summary": _compact_safe_reference(memory.get("safe_reference", {})),
+        "use_as": memory.get("use_as", "task_relevant_summary_and_procedural_cue"),
+    }
 
 
 def format_dataflow_job(job_spec: dict[str, Any] | str) -> dict[str, Any]:
@@ -93,6 +112,14 @@ def build_active_memory_tile_cache(
     max_items: int = 3,
 ) -> dict[str, Any]:
     route = route_active_memory(learning_ledger, objective=objective, max_items=max_items)
+    selected_memory_tiles = [
+        _compact_selected_memory(item)
+        for item in route.get("selected_memories", [])
+    ]
+    compact_route = {
+        **route,
+        "selected_memories": selected_memory_tiles,
+    }
     return {
         "schema": ACTIVE_MEMORY_CACHE_SCHEMA,
         "created_at_utc": _now(),
@@ -105,13 +132,14 @@ def build_active_memory_tile_cache(
         "cache_policy": {
             "source": "promoted_experiences_only",
             "compression": "summaries_and_procedural_cues",
+            "safe_reference_detail": "summary_keys_only",
             "local_absolute_paths": "redacted_in_safe_references",
         },
         "quarantined_experiences": "excluded",
-        "selected_memory_tiles": route.get("selected_memories", []),
+        "selected_memory_tiles": selected_memory_tiles,
         "procedural_rehearsal": route.get("rehearsal_plan", {}),
         "memory_health": route.get("memory_health", {}),
-        "active_memory_route": route,
+        "active_memory_route": compact_route,
     }
 
 
@@ -390,8 +418,8 @@ def run_dataflow_job_from_manifest(
     workspace_dir: Path,
     review_label: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    workspace_root = workspace_dir.resolve()
-    workspace_root.mkdir(parents=True, exist_ok=True)
+    sandbox = WorkspaceSandbox(workspace_dir)
+    sandbox.ensure_root()
     review = review_label or {"score": 0, "status": "needs_review", "reviewed_by": "boss_or_committee"}
 
     formatted_job = format_dataflow_job(job_spec)
@@ -421,28 +449,30 @@ def run_dataflow_job_from_manifest(
     )
 
     paths = {
-        "formatted_job": _safe_workspace_path(workspace_root, "formatted_job.json"),
-        "active_memory_cache": _safe_workspace_path(workspace_root, "active_memory_cache.json"),
-        "tile_matrix": _safe_workspace_path(workspace_root, "tile_matrix.json"),
-        "shadow_buffers": _safe_workspace_path(workspace_root, "shadow_buffers.json"),
-        "synthesis_report": _safe_workspace_path(workspace_root, "synthesis_report.md"),
-        "synthesis": _safe_workspace_path(workspace_root, "synthesis.json"),
-        "transpose_verification": _safe_workspace_path(workspace_root, "transpose_verification.json"),
-        "growth_commit_candidate": _safe_workspace_path(workspace_root, "growth_commit_candidate.json"),
-        "dataflow_run": _safe_workspace_path(workspace_root, "dataflow_run.json"),
+        "formatted_job": sandbox.safe_path("formatted_job.json"),
+        "active_memory_cache": sandbox.safe_path("active_memory_cache.json"),
+        "tile_matrix": sandbox.safe_path("tile_matrix.json"),
+        "shadow_buffers": sandbox.safe_path("shadow_buffers.json"),
+        "synthesis_report": sandbox.safe_path("synthesis_report.md"),
+        "synthesis": sandbox.safe_path("synthesis.json"),
+        "transpose_verification": sandbox.safe_path("transpose_verification.json"),
+        "growth_commit_candidate": sandbox.safe_path("growth_commit_candidate.json"),
+        "workspace_sandbox": sandbox.safe_path("workspace_sandbox.json"),
+        "dataflow_run": sandbox.safe_path("dataflow_run.json"),
     }
 
-    _write_json(paths["formatted_job"], formatted_job)
-    _write_json(paths["active_memory_cache"], active_memory_cache)
-    _write_json(paths["tile_matrix"], tile_matrix)
-    _write_json(paths["shadow_buffers"], shadow_buffers)
-    _write_json(paths["synthesis"], synthesis)
-    paths["synthesis_report"].write_text(
+    sandbox.write_json("formatted_job.json", formatted_job, purpose="formatted_job")
+    sandbox.write_json("active_memory_cache.json", active_memory_cache, purpose="active_memory_cache")
+    sandbox.write_json("tile_matrix.json", tile_matrix, purpose="tile_matrix")
+    sandbox.write_json("shadow_buffers.json", shadow_buffers, purpose="shadow_buffers")
+    sandbox.write_json("synthesis.json", synthesis, purpose="synthesis")
+    sandbox.write_text(
+        "synthesis_report.md",
         render_synthesis_markdown(synthesis, shadow_buffers) + "\n",
-        encoding="utf-8",
+        purpose="synthesis_report",
     )
-    _write_json(paths["transpose_verification"], verification)
-    _write_json(paths["growth_commit_candidate"], growth_candidate)
+    sandbox.write_json("transpose_verification.json", verification, purpose="transpose_verification")
+    sandbox.write_json("growth_commit_candidate.json", growth_candidate, purpose="growth_commit_candidate")
 
     agent = manifest.get("agent", {})
     run = {
@@ -465,8 +495,10 @@ def run_dataflow_job_from_manifest(
         "synthesis": synthesis,
         "transpose_verification": verification,
         "growth_commit_candidate": growth_candidate,
-        "workspace_outputs": {key: str(value) for key, value in paths.items() if key != "dataflow_run"},
+        "workspace_sandbox": sandbox.snapshot(),
+        "workspace_outputs": {key: str(value) for key, value in paths.items()},
     }
-    _write_json(paths["dataflow_run"], run)
-    run["workspace_outputs"]["dataflow_run"] = str(paths["dataflow_run"])
+    sandbox.write_json("workspace_sandbox.json", sandbox.snapshot(), purpose="workspace_sandbox_policy")
+    run["workspace_sandbox"] = sandbox.snapshot()
+    sandbox.write_json("dataflow_run.json", run, purpose="dataflow_run")
     return run

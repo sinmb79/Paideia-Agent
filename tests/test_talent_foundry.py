@@ -1548,11 +1548,43 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(runtime_snapshot["execution_loop"]["schema"], "paideia-agent-execution-loop/v1")
         self.assertEqual(sandbox["schema"], "paideia-workspace-sandbox-policy/v1")
         self.assertEqual(sandbox["network"]["default"], "blocked")
+        self.assertTrue(sandbox["enforcement"]["enabled"])
+        self.assertTrue(sandbox["declared_outputs"])
+        self.assertTrue(any(item["purpose"] == "runtime_execution_snapshot" for item in sandbox["declared_outputs"]))
+        self.assertTrue(result["tool_authorization"]["sandbox_enforced"])
         self.assertTrue(plan_inside_workspace)
         self.assertIn("거시경제", summary_text)
         self.assertTrue(any("local_file_write" in line for line in trace_lines))
         self.assertTrue(any("registered_tool_execution" in line for line in trace_lines))
         self.assertEqual(result["tool_authorization"]["network_access"], "blocked")
+
+    def test_workspace_sandbox_enforces_path_size_trace_and_network_limits(self) -> None:
+        from ai22b.talent_foundry.workspace_sandbox import SandboxViolation, WorkspaceSandbox
+
+        with tempfile.TemporaryDirectory() as tmp:
+            sandbox = WorkspaceSandbox(Path(tmp) / "workspace", max_output_file_bytes=10, max_trace_events=2)
+            sandbox.ensure_root()
+
+            with self.assertRaises(SandboxViolation):
+                sandbox.write_text("../escape.txt", "nope", purpose="escape_attempt")
+
+            with self.assertRaises(SandboxViolation):
+                sandbox.write_text("too_large.txt", "x" * 11, purpose="oversized_output")
+
+            with self.assertRaises(SandboxViolation):
+                sandbox.write_jsonl("trace.jsonl", [{"n": 1}, {"n": 2}, {"n": 3}], purpose="trace")
+
+            with self.assertRaises(SandboxViolation):
+                sandbox.deny_network()
+
+            snapshot = sandbox.snapshot()
+
+        self.assertEqual(snapshot["schema"], "paideia-workspace-sandbox-policy/v1")
+        self.assertTrue(snapshot["enforcement"]["enabled"])
+        self.assertTrue(any(item["event"] == "path_escape_blocked" for item in snapshot["audit_events"]))
+        self.assertTrue(any(item["event"] == "output_size_blocked" for item in snapshot["audit_events"]))
+        self.assertTrue(any(item["event"] == "trace_event_limit_blocked" for item in snapshot["audit_events"]))
+        self.assertTrue(any(item["event"] == "network_access_blocked" for item in snapshot["audit_events"]))
 
     def test_workspace_agent_blocks_forbidden_task_without_writing_artifacts(self) -> None:
         from ai22b.talent_foundry.demo import run_demo
@@ -3085,6 +3117,7 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(run["llm_runtime_result"]["engine"], "deterministic_local")
         self.assertEqual(runtime_snapshot["llm_runtime_result"]["engine"], "deterministic_local")
         self.assertEqual(sandbox["filesystem"]["mode"], "allowlist")
+        self.assertTrue(sandbox["enforcement"]["enabled"])
         self.assertEqual(run["employment_context"]["employer"], "보스")
         self.assertEqual(run["employment_context"]["relationship"], "installed_ai_talent_hired_as_local_agent")
         self.assertEqual(saved_run["employment_context"]["employment_id"], run["employment_context"]["employment_id"])
@@ -4236,10 +4269,21 @@ class TalentFoundryTests(unittest.TestCase):
                 "synthesis_report",
                 "transpose_verification",
                 "growth_commit_candidate",
+                "workspace_sandbox",
             ]:
                 self.assertIn(key, run["workspace_outputs"])
                 self.assertTrue(Path(run["workspace_outputs"][key]).exists())
+            active_cache_path = Path(run["workspace_outputs"]["active_memory_cache"])
+            active_cache_size = active_cache_path.stat().st_size
+            active_cache = json.loads(active_cache_path.read_text(encoding="utf-8"))
+            sandbox = json.loads(Path(run["workspace_outputs"]["workspace_sandbox"]).read_text(encoding="utf-8"))
 
+        self.assertTrue(run["workspace_sandbox"]["enforcement"]["enabled"])
+        self.assertLess(active_cache_size, 2_000_000)
+        self.assertEqual(active_cache["cache_policy"]["safe_reference_detail"], "summary_keys_only")
+        self.assertNotIn('"safe_reference":', json.dumps(active_cache, ensure_ascii=False))
+        self.assertTrue(sandbox["enforcement"]["enabled"])
+        self.assertTrue(any(item["purpose"] == "synthesis_report" for item in sandbox["declared_outputs"]))
 
 if __name__ == "__main__":
     unittest.main()
