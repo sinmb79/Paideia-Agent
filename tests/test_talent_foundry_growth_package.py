@@ -105,6 +105,11 @@ class PaideiaGrowthPackageTests(unittest.TestCase):
         self.assertTrue(first_run_details["application_smoke_passed"])
         self.assertEqual(first_run_details["application_smoke_network_access"], "blocked")
         self.assertEqual(first_run_details["application_smoke_private_reasoning_trace"], "do_not_store")
+        self.assertEqual(first_run_details["tool_capability_audit_schema"], "paideia-tool-capability-audit/v1")
+        self.assertTrue(first_run_details["tool_capability_audit_passed"])
+        self.assertTrue(first_run_details["tool_capability_public_safe"])
+        self.assertEqual(first_run_details["tool_capability_network_default"], "blocked")
+        self.assertEqual(first_run_details["tool_capability_subprocess_default"], "blocked")
         live_loop_details = release_audit["checkpoints"]["llm_live_agent_loop_contract"]["details"]
         self.assertEqual(live_loop_details["llm_mode"], "live")
         self.assertEqual(live_loop_details["llm_status"], "completed")

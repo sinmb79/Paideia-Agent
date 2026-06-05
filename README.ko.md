@@ -102,7 +102,7 @@ python -m pip install -e ".[dev]"        # 테스트
 
 CI의 package smoke 테스트는 `pyproject.toml`의 console script가 실제 callable로 import되는지, optional extras가 기능별로 분리되어 있는지, 패키지 메타데이터에 private/local path가 섞이지 않았는지 확인합니다.
 
-CI는 공개 안전 first-run CLI smoke 테스트도 실행합니다. 이 테스트는 `list-role-models`, `doctor-llm-provider --llm-engine deterministic_local`, `run-llm-application-smoke --llm-engine deterministic_local`, `run-action-policy-eval`이 비공개 파일, API 키, 네트워크 접근 없이 실행되고 검토 가능한 JSON 리포트를 쓰는지 확인합니다.
+CI는 공개 안전 first-run CLI smoke 테스트도 실행합니다. 이 테스트는 `list-role-models`, `doctor-llm-provider --llm-engine deterministic_local`, `run-llm-application-smoke --llm-engine deterministic_local`, `audit-tool-capabilities --strict`, `run-action-policy-eval`이 비공개 파일, API 키, 네트워크 접근 없이 실행되고 검토 가능한 JSON 리포트를 쓰는지 확인합니다.
 
 롤모델 목록:
 
@@ -192,6 +192,14 @@ ai22b-talent-foundry run-llm-application-smoke `
   --live-check `
   --strict `
   --output .\llm_application_smoke.json
+```
+
+로컬 도구 권한 경로를 직접 확인하려면 `audit-tool-capabilities`를 사용합니다. 이 명령은 등록된 도구 카탈로그, capability가 없을 때의 deny-by-default 차단, 명시적 capability grant 이후의 로컬 실행, 미등록 도구의 skipped 처리, 그리고 네트워크 호출/서브프로세스 실행/임의 파일 읽기·쓰기/raw provider payload/숨은 추론 trace가 저장되지 않는 공개 안전 불변식을 검증합니다.
+
+```powershell
+ai22b-talent-foundry audit-tool-capabilities `
+  --strict `
+  --output .\tool_capability_audit.json
 ```
 
 완료, bridge-ready, adapter-ready 상태의 agent run에는 `llm_plan`도 포함됩니다. 이 packet은 `assistant_reply`, 검토 가능한 짧은 추론 요약, 다음 행동 제안, suggestion-only 도구 계획을 담습니다. raw provider text와 숨은 추론 trace는 저장하지 않으며, 실제 등록 도구 실행은 계속 policy gate를 통과한 local tool registry만 담당합니다. 각 실행은 `llm_tool_plan_alignment`도 남겨 LLM의 범위 밖 도구 제안이 실행되지 않았음을 증명합니다.
@@ -312,6 +320,8 @@ ai22b-talent-foundry promote-simulation-rollout-winner `
 모든 manifest agent run은 `execution_contract`도 남깁니다. 이 패킷은 P0 실행 루프의 공개 가능한 증거입니다. 정책이 LLM과 도구보다 먼저 검사됐는지, LLM runtime이 실제로 시도됐는지 또는 정책 때문에 생략됐는지, 등록 도구가 실행/생략됐는지, 리서치 도구 실행 시 evidence packet이 있었는지, 검증 상태와 메모리 승격 차단 상태가 무엇인지를 기록합니다. 즉 실행 결과가 단순 응답 템플릿인지, 정책-실행-검증-메모리 후보 흐름을 실제로 탔는지를 확인할 수 있습니다.
 
 매니페스트에는 이름만 있는 ghost tool 권한을 남기지 않습니다. `local_file_read`, `local_file_write`, `work_session`, `evidence_packet`, `assessment`, `memory_consolidation`, projection-team 도구는 모두 명시적 capability scope와 함께 등록됩니다. 파일 도구는 일반 agent run에서 임의 경로를 직접 읽거나 쓰지 않고, workspace 읽기/쓰기는 `WorkspaceSandbox`에 위임되어 rollback 가능 산출물 또는 검토 artifact로 선언됩니다. job spec에는 `max_input_file_bytes`, `max_declared_outputs`, `max_total_output_bytes`, `max_runtime_seconds`, `allowed_network_hosts`, `allowed_subprocess_commands` 같은 `resource_limits`를 넣을 수 있습니다. `assessment` 도구는 실행 후 검토 단계로 선택되어, 승인된 실행이 학습을 조용히 승격하지 않고 보스 검토용 review packet을 남기게 합니다.
+
+Release audit에는 `paideia-tool-capability-audit/v1` 게이트도 포함됩니다. 따라서 사용자의 비공개 커리큘럼이나 live provider가 개입되기 전에도 도구 scope가 명시적이고, capability가 없으면 deny-by-default로 차단되며, 네트워크/서브프로세스/임의 파일 접근/숨은 추론 trace 저장이 발생하지 않는지 증명합니다.
 
 P0 action policy는 민감 intent마다 `hybrid_structured_lexical_v3` 추론 패킷을 기록합니다. 원문 매칭을 유지하면서 compact separator normalization을 추가해 `매 수 주 문`, `업 로 드`, `승인없이`, `place-buy-order`처럼 공백/하이픈으로 쪼갠 우회 표현도 action intent로 연결합니다. 직접 실행 명령, 정책/설명 질문, "하지 말고"로 부정된 요청을 구분하므로 "매수 주문은 하지 말고 분석만" 같은 문장은 거래 실행이 아니라 안전한 리서치 맥락으로 처리됩니다. 각 판단은 request → action → capability → approval → registered-tool eligibility를 연결한 deny-by-default `capability_authorization` packet도 남깁니다. 민감 행동이 완전 차단 대상은 아니지만 보스 승인이 필요한 경우에는 `boss_approvals` artifact가 있기 전까지 `needs_approval` 상태로 멈추며, 승인 전에는 LLM 계획, 도구 실행, 메모리 승격을 건너뜁니다. 승인된 artifact는 `boss_approval_gate`에 기록되지만, 런타임 도구 범위는 여전히 네트워크와 서브프로세스 기본 차단을 유지합니다.
 

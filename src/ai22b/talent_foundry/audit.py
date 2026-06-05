@@ -31,6 +31,7 @@ from ai22b.talent_foundry.llm_runtime import (
 from ai22b.talent_foundry.onboarding_choices import LLM_SERVICE_CATALOG
 from ai22b.talent_foundry.role_models import list_role_models, summarize_role_model
 from ai22b.talent_foundry.runtime_benchmark import RUNTIME_OBSERVABILITY_COMPARISON_SCHEMA
+from ai22b.talent_foundry.tool_registry import TOOL_CAPABILITY_AUDIT_SCHEMA, audit_tool_capability_registry
 
 
 AUDIT_SCHEMA = "ai-talent-foundry-release-audit/v1"
@@ -123,6 +124,7 @@ REQUIRED_PUBLIC_PROGRAM_COMMANDS = {
     "raise",
     "doctor-llm-provider",
     "run-llm-application-smoke",
+    "audit-tool-capabilities",
     "doctor-bundle",
     "install-package",
     "hire-installed",
@@ -158,6 +160,7 @@ PUBLIC_SAFE_FIRST_RUN_COMMANDS = {
     "list-role-models",
     "doctor-llm-provider",
     "run-llm-application-smoke",
+    "audit-tool-capabilities",
     "run-action-policy-eval",
 }
 
@@ -952,6 +955,7 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
         role_model_catalog_dir,
         PROJECT_ROOT / "src" / "ai22b" / "talent_foundry" / "role_models.py",
         PROJECT_ROOT / "src" / "ai22b" / "talent_foundry" / "llm_runtime.py",
+        PROJECT_ROOT / "src" / "ai22b" / "talent_foundry" / "tool_registry.py",
         DEFAULT_POLICY_EVAL_SUITE,
     ]
     missing = [path for path in evidence if not path.exists()]
@@ -965,6 +969,9 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
         llm_mode="offline",
         task="Public-safe first-run application-engine smoke.",
     )
+    tool_audit = audit_tool_capability_registry()
+    tool_audit_details = tool_audit.get("details", {}) if isinstance(tool_audit.get("details"), dict) else {}
+    tool_audit_public = tool_audit.get("public_safe", {}) if isinstance(tool_audit.get("public_safe"), dict) else {}
     application_runtime = (
         application_smoke.get("runtime_result", {})
         if isinstance(application_smoke.get("runtime_result"), dict)
@@ -1042,6 +1049,26 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
         "application_smoke_secret_values_exported": application_policy.get("secret_values_exported"),
         "application_smoke_raw_provider_payload_saved": application_policy.get("raw_provider_payload_saved"),
         "application_smoke_private_reasoning_trace": application_policy.get("private_reasoning_trace"),
+        "tool_capability_audit_schema": tool_audit.get("schema"),
+        "tool_capability_audit_passed": tool_audit.get("passed"),
+        "tool_capability_audit_status": tool_audit.get("status"),
+        "tool_capability_tool_count": tool_audit_details.get("tool_count"),
+        "tool_capability_missing_required_tools": tool_audit_details.get("missing_required_tools"),
+        "tool_capability_scope_failure_count": tool_audit_details.get("scope_failure_count"),
+        "tool_capability_denied_all_blocked": tool_audit_details.get("denied_all_blocked"),
+        "tool_capability_granted_all_completed": tool_audit_details.get("granted_all_completed"),
+        "tool_capability_unknown_tool_status": tool_audit_details.get("unknown_tool_status"),
+        "tool_capability_network_default": tool_audit_details.get("network_default"),
+        "tool_capability_subprocess_default": tool_audit_details.get("subprocess_default"),
+        "tool_capability_private_reasoning_trace": tool_audit_details.get("private_reasoning_trace"),
+        "tool_capability_public_safe": (
+            tool_audit_public.get("network_call_performed") is False
+            and tool_audit_public.get("subprocess_executed") is False
+            and tool_audit_public.get("direct_arbitrary_file_read") is False
+            and tool_audit_public.get("direct_arbitrary_file_write") is False
+            and tool_audit_public.get("private_reasoning_trace_stored") is False
+            and tool_audit_public.get("raw_provider_payload_saved") is False
+        ),
         "policy_eval_schema": policy_eval.get("schema"),
         "policy_eval_status": policy_eval.get("status"),
         "policy_eval_failed_count": policy_summary.get("failed_count"),
@@ -1055,6 +1082,8 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
             and smoke_contract.get("network_call_made_by_doctor") is False
             and application_runtime.get("network_access") == "blocked"
             and application_preflight.get("network_call_made_by_preflight") is False
+            and tool_audit_public.get("network_call_performed") is False
+            and tool_audit_public.get("subprocess_executed") is False
             and policy_runtime.get("network_call_performed") is False
             and policy_runtime.get("llm_called") is False
         ),
@@ -1084,6 +1113,20 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
         and details["application_smoke_secret_values_exported"] is False
         and details["application_smoke_raw_provider_payload_saved"] is False
         and details["application_smoke_private_reasoning_trace"] == "do_not_store"
+        and details["tool_capability_audit_schema"] == TOOL_CAPABILITY_AUDIT_SCHEMA
+        and details["tool_capability_audit_passed"] is True
+        and details["tool_capability_audit_status"] == "passed"
+        and isinstance(details["tool_capability_tool_count"], int)
+        and details["tool_capability_tool_count"] >= 7
+        and details["tool_capability_missing_required_tools"] == []
+        and details["tool_capability_scope_failure_count"] == 0
+        and details["tool_capability_denied_all_blocked"] is True
+        and details["tool_capability_granted_all_completed"] is True
+        and details["tool_capability_unknown_tool_status"] == "skipped"
+        and details["tool_capability_network_default"] == "blocked"
+        and details["tool_capability_subprocess_default"] == "blocked"
+        and details["tool_capability_private_reasoning_trace"] == "do_not_store"
+        and details["tool_capability_public_safe"] is True
         and details["policy_eval_schema"] == ACTION_POLICY_EVAL_REPORT_SCHEMA
         and details["policy_eval_status"] == "passed"
         and details["policy_eval_failed_count"] == 0

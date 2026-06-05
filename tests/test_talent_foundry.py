@@ -1178,6 +1178,36 @@ class TalentFoundryTests(unittest.TestCase):
             "store_summaries_not_private_traces",
         )
 
+    def test_tool_capability_audit_proves_deny_by_default_registry_contract(self) -> None:
+        from ai22b.talent_foundry.tool_registry import audit_tool_capability_registry
+
+        report = audit_tool_capability_registry()
+        details = report["details"]
+        public_safe = report["public_safe"]
+
+        self.assertEqual(report["schema"], "paideia-tool-capability-audit/v1")
+        self.assertTrue(report["passed"])
+        self.assertEqual(report["status"], "passed")
+        self.assertGreaterEqual(details["tool_count"], 7)
+        self.assertEqual(details["missing_required_tools"], [])
+        self.assertEqual(details["scope_failure_count"], 0)
+        self.assertTrue(details["denied_all_blocked"])
+        self.assertTrue(details["granted_all_completed"])
+        self.assertTrue(all(status == "blocked" for status in details["denied_statuses"].values()))
+        self.assertTrue(all(status == "completed" for status in details["granted_statuses"].values()))
+        self.assertTrue(all(details["output_checks"].values()))
+        self.assertEqual(details["unknown_tool_status"], "skipped")
+        self.assertFalse(details["unknown_tool_registered"])
+        self.assertEqual(details["network_default"], "blocked")
+        self.assertEqual(details["subprocess_default"], "blocked")
+        self.assertEqual(details["private_reasoning_trace"], "do_not_store")
+        self.assertFalse(public_safe["network_call_performed"])
+        self.assertFalse(public_safe["subprocess_executed"])
+        self.assertFalse(public_safe["direct_arbitrary_file_read"])
+        self.assertFalse(public_safe["direct_arbitrary_file_write"])
+        self.assertFalse(public_safe["private_reasoning_trace_stored"])
+        self.assertFalse(public_safe["raw_provider_payload_saved"])
+
     def test_cli_manifest_command_writes_agent_manifest(self) -> None:
         from ai22b.talent_foundry.cli import main as cli_main
         from ai22b.talent_foundry.demo import run_demo
@@ -2526,6 +2556,7 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("list-role-models", first_run_details["commands"])
         self.assertIn("doctor-llm-provider", first_run_details["commands"])
         self.assertIn("run-llm-application-smoke", first_run_details["commands"])
+        self.assertIn("audit-tool-capabilities", first_run_details["commands"])
         self.assertIn("run-action-policy-eval", first_run_details["commands"])
         self.assertTrue(first_run_details["console_script_present"])
         self.assertTrue(first_run_details["optional_dependency_groups_present"])
@@ -2554,6 +2585,19 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertFalse(first_run_details["application_smoke_secret_values_exported"])
         self.assertFalse(first_run_details["application_smoke_raw_provider_payload_saved"])
         self.assertEqual(first_run_details["application_smoke_private_reasoning_trace"], "do_not_store")
+        self.assertEqual(first_run_details["tool_capability_audit_schema"], "paideia-tool-capability-audit/v1")
+        self.assertTrue(first_run_details["tool_capability_audit_passed"])
+        self.assertEqual(first_run_details["tool_capability_audit_status"], "passed")
+        self.assertGreaterEqual(first_run_details["tool_capability_tool_count"], 7)
+        self.assertEqual(first_run_details["tool_capability_missing_required_tools"], [])
+        self.assertEqual(first_run_details["tool_capability_scope_failure_count"], 0)
+        self.assertTrue(first_run_details["tool_capability_denied_all_blocked"])
+        self.assertTrue(first_run_details["tool_capability_granted_all_completed"])
+        self.assertEqual(first_run_details["tool_capability_unknown_tool_status"], "skipped")
+        self.assertEqual(first_run_details["tool_capability_network_default"], "blocked")
+        self.assertEqual(first_run_details["tool_capability_subprocess_default"], "blocked")
+        self.assertEqual(first_run_details["tool_capability_private_reasoning_trace"], "do_not_store")
+        self.assertTrue(first_run_details["tool_capability_public_safe"])
         self.assertEqual(first_run_details["policy_eval_status"], "passed")
         self.assertEqual(first_run_details["policy_eval_failed_count"], 0)
         self.assertFalse(first_run_details["policy_eval_network_call_performed"])
@@ -2644,6 +2688,7 @@ class TalentFoundryTests(unittest.TestCase):
         )
         self.assertIn("hire-installed", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])
         self.assertIn("run-llm-application-smoke", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])
+        self.assertIn("audit-tool-capabilities", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])
         self.assertIn("doctor-bundle", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])
         self.assertIn("run-hired-agent-job", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])
         self.assertIn("run-hired-agent-job-cycle", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])

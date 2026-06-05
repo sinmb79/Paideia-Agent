@@ -146,7 +146,7 @@ python -m pip install -e ".[dev]"        # tests
 
 CI runs a package smoke test that verifies the `pyproject.toml` console scripts import as callables, optional extras stay split by runtime capability, and package metadata does not reference private/local paths.
 
-CI also runs a CLI smoke test for public-safe first-run commands. It verifies that `list-role-models`, `doctor-llm-provider --llm-engine deterministic_local`, `run-llm-application-smoke --llm-engine deterministic_local`, and `run-action-policy-eval` execute without private files, API keys, or network access while writing reviewable JSON reports.
+CI also runs a CLI smoke test for public-safe first-run commands. It verifies that `list-role-models`, `doctor-llm-provider --llm-engine deterministic_local`, `run-llm-application-smoke --llm-engine deterministic_local`, `audit-tool-capabilities --strict`, and `run-action-policy-eval` execute without private files, API keys, or network access while writing reviewable JSON reports.
 
 Runtime artifacts are stored outside this source tree by default:
 
@@ -406,6 +406,14 @@ ai22b-talent-foundry run-llm-application-smoke `
   --output .\llm_application_smoke.json
 ```
 
+For a direct local tool-permission check, use `audit-tool-capabilities`. It verifies the registered tool catalog, deny-by-default blocking with no granted capabilities, successful local execution only after explicit capability grants, skipped handling for unregistered tools, and the public-safe invariants that no network call, subprocess execution, arbitrary file read/write, raw provider payload, or hidden reasoning trace is stored:
+
+```powershell
+ai22b-talent-foundry audit-tool-capabilities `
+  --strict `
+  --output .\tool_capability_audit.json
+```
+
 Provider doctor reports now include a `smoke_contract` packet. It states whether an explicit live check was requested, whether a provider call was attempted, whether the doctor made a network or localhost call, and whether the smoke passed, skipped, or failed closed. The contract also records the retention policy: no raw provider text, no raw provider payload, no hidden reasoning trace, and client-result summaries only. If the selected provider is unavailable during `--live-check`, Paideia marks the doctor report as `needs_configuration` and keeps only the redacted summary and failure reason.
 
 The adapter regression suite uses fake SDK/HTTP success fixtures for OpenAI Responses, Anthropic, Gemini, OpenAI-compatible APIs, Ollama, and LM Studio. This proves the shared `LLMClient` path builds provider requests and parses successful responses without making live network calls during tests or saving raw provider payloads.
@@ -529,7 +537,7 @@ Registered research tool execution includes an `evidence_packet` tool. It turns 
 
 Every manifest agent run now also writes an `execution_contract`. It is the public-safe proof packet for the P0 loop: policy was checked before the LLM and tools, the LLM runtime was attempted or skipped by policy, registered tools were attempted or skipped by policy, evidence packets were present when research tools ran, verification status was recorded, and memory promotion stayed review-gated instead of automatic.
 
-The manifest no longer exposes ghost tool permissions. `local_file_read`, `local_file_write`, `work_session`, `evidence_packet`, `assessment`, `memory_consolidation`, and projection-team tools are all registered with explicit capability scopes. File tools do not read or write arbitrary paths in generic agent runs; workspace reads and writes are delegated to `WorkspaceSandbox` and declared in rollback-aware or review artifacts. Job specs may include `resource_limits` such as `max_input_file_bytes`, `max_declared_outputs`, `max_total_output_bytes`, `max_runtime_seconds`, `allowed_network_hosts`, and `allowed_subprocess_commands`. The `assessment` tool is selected as a post-run review step, so every approved run can leave a review packet instead of silently promoting learning.
+The manifest no longer exposes ghost tool permissions. `local_file_read`, `local_file_write`, `work_session`, `evidence_packet`, `assessment`, `memory_consolidation`, and projection-team tools are all registered with explicit capability scopes. File tools do not read or write arbitrary paths in generic agent runs; workspace reads and writes are delegated to `WorkspaceSandbox` and declared in rollback-aware or review artifacts. Job specs may include `resource_limits` such as `max_input_file_bytes`, `max_declared_outputs`, `max_total_output_bytes`, `max_runtime_seconds`, `allowed_network_hosts`, and `allowed_subprocess_commands`. The `assessment` tool is selected as a post-run review step, so every approved run can leave a review packet instead of silently promoting learning. Release audit now includes the `paideia-tool-capability-audit/v1` gate, so the public bundle proves these tool scopes are explicit, deny-by-default, and safe before any user-provided private curriculum or live provider is involved.
 
 The P0 action policy now records a structured `hybrid_structured_lexical_v3` inference packet for sensitive intents. It keeps raw text matching, then adds compact separator normalization so spaced or hyphenated attempts such as `매 수 주 문`, `업 로 드`, `승인없이`, or `place-buy-order` still map to action intents. It distinguishes direct commands from discussion-only or negated requests, so "do not place a buy order; analyze only" is kept as safe research context instead of being treated as trade execution. Each decision also embeds `capability_authorization`, a deny-by-default packet that maps request → action → capability → approval → registered-tool eligibility. If a requested sensitive action is not outright blocked but still requires Boss approval, the run enters `needs_approval` and skips LLM planning, tool execution, and memory promotion until a `boss_approvals` artifact is present. Accepted approvals are recorded in `boss_approval_gate`, but runtime tool scopes still default to blocked network and subprocess access.
 

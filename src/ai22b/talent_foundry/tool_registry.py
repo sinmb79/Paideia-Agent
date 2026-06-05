@@ -2,11 +2,35 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any, Callable
 
 
 TOOL_EXECUTION_SCHEMA = "paideia-tool-execution/v1"
 TOOL_CAPABILITY_SCOPE_SCHEMA = "paideia-tool-capability-scope/v1"
+TOOL_CAPABILITY_AUDIT_SCHEMA = "paideia-tool-capability-audit/v1"
+REQUIRED_DEFAULT_TOOLS = {
+    "local_file_read",
+    "local_file_write",
+    "work_session",
+    "evidence_packet",
+    "assessment",
+    "memory_consolidation",
+    "parent_controlled_projection_team",
+}
+SAFE_SIDE_EFFECTS = {
+    "none",
+    "sandbox_declared_outputs_only",
+    "review_packet_only",
+    "candidate_memory_only",
+    "bounded_projection_summary_only",
+}
+SAFE_FILESYSTEM_SCOPES = {
+    "none",
+    "declared_context_only",
+    "workspace_root_declared_outputs",
+    "local_learning_ledger_candidate",
+}
 
 ToolHandler = Callable[[dict[str, Any]], dict[str, Any]]
 
@@ -450,4 +474,202 @@ def execute_registered_tools(
         "selected_tools": selected_tools,
         "capability_scope": capability_scope,
         "tool_results": results,
+    }
+
+
+def _audit_manifest() -> dict[str, Any]:
+    return {
+        "schema": "ai-talent-agent-manifest/v1",
+        "agent": {
+            "name": "paideia-tool-auditor",
+            "role": "local tool capability audit agent",
+            "major_goal": "Verify registered tool capability contracts without executing external side effects.",
+        },
+        "memory_profile": {
+            "procedural_principles": ["deny by default", "review before memory promotion"],
+            "semantic_themes": ["tool capability safety", "local-first runtime"],
+        },
+    }
+
+
+def _audit_llm_result() -> dict[str, Any]:
+    return {
+        "schema": "ai-talent-llm-runtime-result/v1",
+        "engine": "deterministic_local",
+        "status": "completed",
+        "identity_policy": "application_engine_not_identity",
+        "network_access": "blocked",
+        "draft": "Review the local registered tool capability contract.",
+        "llm_plan": {
+            "schema": "paideia-llm-reviewable-plan/v1",
+            "source": "audit_fixture",
+            "reviewable_reasoning_summary": [
+                {"step": "tool_registry", "summary": "Registered tools must be capability-gated."}
+            ],
+            "suggested_next_actions": ["Keep tool execution under registered local executors."],
+            "tool_plan": [],
+            "tool_plan_policy": "suggestions_only_registered_executor_decides",
+            "private_reasoning_trace": "do_not_store",
+            "raw_provider_text_stored": False,
+        },
+    }
+
+
+def audit_tool_capability_registry(registry: dict[str, ToolSpec] | None = None) -> dict[str, Any]:
+    """Audit the default local tool registry as a public-safe P0 capability contract."""
+
+    active_registry = registry or build_default_tool_registry()
+    tool_ids = sorted(active_registry)
+    missing_required = sorted(REQUIRED_DEFAULT_TOOLS - set(tool_ids))
+    descriptors = [active_registry[tool_id].descriptor() for tool_id in tool_ids]
+    scope_failures: list[dict[str, Any]] = []
+    for tool_id in tool_ids:
+        tool = active_registry[tool_id]
+        scope = tool.capability_scope(granted=False)
+        failures: list[str] = []
+        if scope.get("registered") is not True:
+            failures.append("not_registered")
+        if not str(scope.get("capability", "")).strip():
+            failures.append("capability_missing")
+        if scope.get("network_scope") != "blocked":
+            failures.append("network_not_blocked")
+        if scope.get("subprocess_scope") != "blocked":
+            failures.append("subprocess_not_blocked")
+        if scope.get("filesystem_scope") not in SAFE_FILESYSTEM_SCOPES:
+            failures.append("filesystem_scope_not_safe")
+        if scope.get("side_effects") not in SAFE_SIDE_EFFECTS:
+            failures.append("side_effects_not_safe")
+        if failures:
+            scope_failures.append({"tool": tool_id, "failures": failures, "scope": scope})
+
+    denied_policy = {
+        "schema": "paideia-action-policy/v1",
+        "status": "approved",
+        "policy_violations": [],
+        "capability_grants": {
+            "schema": "paideia-capability-grants/v1",
+            "mode": "deny_by_default",
+            "allowed_capabilities": [],
+        },
+    }
+    denied_execution = execute_registered_tools(
+        selected_tools=tool_ids,
+        manifest=_audit_manifest(),
+        task="Audit deny-by-default tool behavior.",
+        llm_result=_audit_llm_result(),
+        policy_decision=denied_policy,
+        registry=active_registry,
+    )
+
+    allowed_capabilities = sorted({tool.capability for tool in active_registry.values()})
+    granted_policy = {
+        **denied_policy,
+        "capability_grants": {
+            "schema": "paideia-capability-grants/v1",
+            "mode": "deny_by_default",
+            "allowed_capabilities": allowed_capabilities,
+        },
+    }
+    granted_execution = execute_registered_tools(
+        selected_tools=tool_ids,
+        manifest=_audit_manifest(),
+        task="Audit granted local registered tool behavior.",
+        llm_result=_audit_llm_result(),
+        policy_decision=granted_policy,
+        registry=active_registry,
+    )
+    unknown_execution = execute_registered_tools(
+        selected_tools=["unknown_unregistered_tool"],
+        manifest=_audit_manifest(),
+        task="Audit unregistered tool behavior.",
+        llm_result=_audit_llm_result(),
+        policy_decision=granted_policy,
+        registry=active_registry,
+    )
+
+    denied_statuses = {item["tool"]: item["status"] for item in denied_execution["tool_results"]}
+    granted_results = {item["tool"]: item for item in granted_execution["tool_results"]}
+    granted_statuses = {tool: item["status"] for tool, item in granted_results.items()}
+    output_checks = {
+        "local_file_read_no_direct_read": granted_results.get("local_file_read", {})
+        .get("output", {})
+        .get("direct_file_read_performed")
+        is False,
+        "local_file_write_no_direct_write": granted_results.get("local_file_write", {})
+        .get("output", {})
+        .get("direct_file_write_performed")
+        is False,
+        "evidence_packet_schema": granted_results.get("evidence_packet", {}).get("output", {}).get("schema")
+        == "paideia-tool-evidence-packet/v1",
+        "assessment_requires_review": granted_results.get("assessment", {})
+        .get("output", {})
+        .get("recommended_review_label", {})
+        .get("status")
+        == "needs_boss_review",
+        "memory_candidate_only": granted_results.get("memory_consolidation", {})
+        .get("output", {})
+        .get("candidate_only")
+        is True,
+        "projection_not_separate_consciousness": granted_results.get("parent_controlled_projection_team", {})
+        .get("output", {})
+        .get("separate_consciousness")
+        is False,
+    }
+    unknown_result = unknown_execution["tool_results"][0] if unknown_execution["tool_results"] else {}
+    details = {
+        "tool_count": len(tool_ids),
+        "registered_tool_ids": tool_ids,
+        "required_tool_ids": sorted(REQUIRED_DEFAULT_TOOLS),
+        "missing_required_tools": missing_required,
+        "safe_side_effects": sorted(SAFE_SIDE_EFFECTS),
+        "safe_filesystem_scopes": sorted(SAFE_FILESYSTEM_SCOPES),
+        "scope_failure_count": len(scope_failures),
+        "scope_failures": scope_failures,
+        "denied_execution_schema": denied_execution.get("schema"),
+        "denied_execution_model": denied_execution.get("execution_model"),
+        "denied_all_blocked": bool(denied_statuses) and all(status == "blocked" for status in denied_statuses.values()),
+        "denied_statuses": denied_statuses,
+        "granted_execution_schema": granted_execution.get("schema"),
+        "granted_execution_model": granted_execution.get("execution_model"),
+        "granted_all_completed": bool(granted_statuses)
+        and all(status == "completed" for status in granted_statuses.values()),
+        "granted_statuses": granted_statuses,
+        "output_checks": output_checks,
+        "unknown_tool_status": unknown_result.get("status"),
+        "unknown_tool_registered": unknown_result.get("capability_scope", {}).get("registered"),
+        "network_default": denied_execution.get("capability_scope", {}).get("network_default"),
+        "subprocess_default": denied_execution.get("capability_scope", {}).get("subprocess_default"),
+        "private_reasoning_trace": denied_execution.get("capability_scope", {}).get("private_reasoning_trace"),
+    }
+    passed = (
+        not missing_required
+        and not scope_failures
+        and details["denied_execution_schema"] == TOOL_EXECUTION_SCHEMA
+        and details["denied_execution_model"] == "registered_capability_checked_local_tools_v1"
+        and details["denied_all_blocked"] is True
+        and details["granted_execution_schema"] == TOOL_EXECUTION_SCHEMA
+        and details["granted_execution_model"] == "registered_capability_checked_local_tools_v1"
+        and details["granted_all_completed"] is True
+        and all(output_checks.values())
+        and details["unknown_tool_status"] == "skipped"
+        and details["unknown_tool_registered"] is False
+        and details["network_default"] == "blocked"
+        and details["subprocess_default"] == "blocked"
+        and details["private_reasoning_trace"] == "do_not_store"
+    )
+    return {
+        "schema": TOOL_CAPABILITY_AUDIT_SCHEMA,
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "status": "passed" if passed else "failed",
+        "passed": passed,
+        "descriptors": descriptors,
+        "details": details,
+        "public_safe": {
+            "network_call_performed": False,
+            "subprocess_executed": False,
+            "direct_arbitrary_file_read": False,
+            "direct_arbitrary_file_write": False,
+            "private_reasoning_trace_stored": False,
+            "raw_provider_payload_saved": False,
+        },
     }

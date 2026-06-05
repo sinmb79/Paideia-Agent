@@ -89,6 +89,7 @@ from ai22b.talent_foundry.runtime import run_work_session
 from ai22b.talent_foundry.runtime_benchmark import build_runtime_observability_comparison
 from ai22b.talent_foundry.team import run_clone_team_session
 from ai22b.talent_foundry.training_run import materialize_training_blueprint
+from ai22b.talent_foundry.tool_registry import audit_tool_capability_registry
 from ai22b.talent_foundry.workspace_agent import run_workspace_agent_from_manifest
 
 
@@ -292,6 +293,17 @@ def _build_parser() -> argparse.ArgumentParser:
     policy_eval.add_argument("--suite", default=str(DEFAULT_POLICY_EVAL_SUITE))
     policy_eval.add_argument("--manifest")
     policy_eval.add_argument("--output", required=True)
+
+    tool_audit = subparsers.add_parser(
+        "audit-tool-capabilities",
+        help="Audit the registered local tool registry, capability grants, and deny-by-default execution contract.",
+    )
+    tool_audit.add_argument("--output", required=True)
+    tool_audit.add_argument(
+        "--strict",
+        action="store_true",
+        help="Return exit code 2 when the tool capability audit does not pass.",
+    )
 
     boss_approval = subparsers.add_parser(
         "create-boss-approval",
@@ -1045,6 +1057,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         print(str(output_path))
         return 0 if report["status"] == "passed" else 1
+
+    if args.command == "audit-tool-capabilities":
+        output_path = Path(args.output)
+        report = audit_tool_capability_registry()
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(str(output_path))
+        if args.strict and not report.get("passed"):
+            return 2
+        return 0
 
     if args.command == "create-boss-approval":
         output_path = Path(args.output)

@@ -15,6 +15,7 @@ class CliSmokeTests(unittest.TestCase):
             role_models_path = tmp_path / "role_models.json"
             doctor_path = tmp_path / "llm_provider_doctor.json"
             llm_smoke_path = tmp_path / "llm_application_smoke.json"
+            tool_audit_path = tmp_path / "tool_capability_audit.json"
             policy_eval_path = tmp_path / "policy_eval_report.json"
 
             role_models_code = cli_main(
@@ -46,16 +47,26 @@ class CliSmokeTests(unittest.TestCase):
                     str(llm_smoke_path),
                 ]
             )
+            tool_audit_code = cli_main(
+                [
+                    "audit-tool-capabilities",
+                    "--strict",
+                    "--output",
+                    str(tool_audit_path),
+                ]
+            )
             policy_eval_code = cli_main(["run-action-policy-eval", "--output", str(policy_eval_path)])
 
             role_models = json.loads(role_models_path.read_text(encoding="utf-8"))
             doctor = json.loads(doctor_path.read_text(encoding="utf-8"))
             llm_smoke = json.loads(llm_smoke_path.read_text(encoding="utf-8"))
+            tool_audit = json.loads(tool_audit_path.read_text(encoding="utf-8"))
             policy_eval = json.loads(policy_eval_path.read_text(encoding="utf-8"))
 
         self.assertEqual(role_models_code, 0)
         self.assertEqual(doctor_code, 0)
         self.assertEqual(llm_smoke_code, 0)
+        self.assertEqual(tool_audit_code, 0)
         self.assertEqual(policy_eval_code, 0)
 
         self.assertEqual(role_models["schema"], "ai-talent-role-model-list/v1")
@@ -81,6 +92,20 @@ class CliSmokeTests(unittest.TestCase):
         self.assertFalse(llm_smoke["preflight"]["network_call_made_by_preflight"])
         self.assertFalse(llm_smoke["data_policy"]["secret_values_exported"])
         self.assertEqual(llm_smoke["data_policy"]["private_reasoning_trace"], "do_not_store")
+
+        self.assertEqual(tool_audit["schema"], "paideia-tool-capability-audit/v1")
+        self.assertTrue(tool_audit["passed"])
+        self.assertEqual(tool_audit["status"], "passed")
+        self.assertGreaterEqual(tool_audit["details"]["tool_count"], 7)
+        self.assertEqual(tool_audit["details"]["missing_required_tools"], [])
+        self.assertEqual(tool_audit["details"]["scope_failure_count"], 0)
+        self.assertTrue(tool_audit["details"]["denied_all_blocked"])
+        self.assertTrue(tool_audit["details"]["granted_all_completed"])
+        self.assertEqual(tool_audit["details"]["unknown_tool_status"], "skipped")
+        self.assertEqual(tool_audit["details"]["network_default"], "blocked")
+        self.assertEqual(tool_audit["details"]["subprocess_default"], "blocked")
+        self.assertFalse(tool_audit["public_safe"]["network_call_performed"])
+        self.assertFalse(tool_audit["public_safe"]["subprocess_executed"])
 
         self.assertEqual(policy_eval["schema"], "paideia-action-policy-eval-report/v1")
         self.assertEqual(policy_eval["status"], "passed")
