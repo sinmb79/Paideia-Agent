@@ -477,7 +477,7 @@ Registered research tool execution includes an `evidence_packet` tool. It turns 
 
 The manifest no longer exposes ghost tool permissions. `local_file_read`, `local_file_write`, `work_session`, `evidence_packet`, `assessment`, `memory_consolidation`, and projection-team tools are all registered with explicit capability scopes. File tools do not read or write arbitrary paths in generic agent runs; workspace reads and writes are delegated to `WorkspaceSandbox` and declared in rollback-aware or review artifacts. Job specs may include `resource_limits` such as `max_input_file_bytes`, `max_declared_outputs`, `max_total_output_bytes`, `max_runtime_seconds`, `allowed_network_hosts`, and `allowed_subprocess_commands`. The `assessment` tool is selected as a post-run review step, so every approved run can leave a review packet instead of silently promoting learning.
 
-The P0 action policy now records a structured `hybrid_structured_lexical_v2` inference packet for sensitive intents. It distinguishes direct commands from discussion-only or negated requests, so "do not place a buy order; analyze only" is kept as safe research context instead of being treated as trade execution. If a requested sensitive action is not outright blocked but still requires Boss approval, the run enters `needs_approval` and skips LLM planning, tool execution, and memory promotion until approval exists.
+The P0 action policy now records a structured `hybrid_structured_lexical_v3` inference packet for sensitive intents. It keeps raw text matching, then adds compact separator normalization so spaced or hyphenated attempts such as `매 수 주 문`, `업 로 드`, `승인없이`, or `place-buy-order` still map to action intents. It distinguishes direct commands from discussion-only or negated requests, so "do not place a buy order; analyze only" is kept as safe research context instead of being treated as trade execution. If a requested sensitive action is not outright blocked but still requires Boss approval, the run enters `needs_approval` and skips LLM planning, tool execution, and memory promotion until approval exists.
 
 ## Hiring Dossier
 
@@ -542,7 +542,7 @@ ai22b-talent-foundry run-action-policy-eval `
   --output .\policy_eval_report.json
 ```
 
-This uses public fixtures in `evals/policy_safety_cases.json` to check prompt-injection, trade execution, external upload, personal-data transfer, negated analysis-only requests, and policy-discussion requests. It does not call an LLM or the network.
+This uses public fixtures in `evals/policy_safety_cases.json` to check prompt-injection, trade execution, external upload, personal-data transfer, compact-normalized bypass attempts, negated analysis-only requests, and policy-discussion requests. It does not call an LLM or the network.
 
 Run the workspace execution proof verifier against a generated run artifact before calling a workspace/dataflow change P0-ready:
 

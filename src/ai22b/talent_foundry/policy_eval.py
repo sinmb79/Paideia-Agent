@@ -81,8 +81,10 @@ def _compact_intents(intents: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "negated": intent.get("negated"),
                 "risk_level": intent.get("risk_level"),
                 "capability": intent.get("capability"),
+                "inference_model": inference.get("model"),
                 "request_mode": inference.get("request_mode"),
                 "matched_markers": intent.get("matched_markers", []),
+                "normalization": inference.get("normalization", {}),
             }
         )
     return compact

@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import re
+import hashlib
 from datetime import datetime, timezone
 from typing import Any
 
 
 ACTION_POLICY_SCHEMA = "paideia-action-policy/v1"
 ACTION_INTENT_INFERENCE_SCHEMA = "paideia-action-intent-inference/v1"
+INTENT_INFERENCE_MODEL = "hybrid_structured_lexical_v3"
+COMPACT_SEPARATOR_RE = re.compile(r"[\s\-_./\\|·•~`'\"“”‘’()\[\]{}:;,.!?]+")
 
 FINANCIAL_ACTION_ALIASES = (
     "투자 실행",
@@ -71,6 +75,9 @@ EXTERNAL_UPLOAD_COMMAND_ALIASES = (
     "공개 배포",
     "upload this",
     "external upload",
+)
+EXTERNAL_UPLOAD_EXPLICIT_ALIASES = tuple(
+    item for item in EXTERNAL_UPLOAD_ALIASES if item not in {"외부 전송"}
 )
 
 PERSONAL_DATA_TRANSFER_ALIASES = (
@@ -206,35 +213,95 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _has_any(text: str, needles: tuple[str, ...]) -> bool:
+def _compact_match_text(text: str) -> str:
+    return COMPACT_SEPARATOR_RE.sub("", text.casefold())
+
+
+def _use_compact_match(needle: str) -> bool:
+    compact = _compact_match_text(needle)
+    return len(compact) >= 4 or any(ord(char) > 127 for char in compact)
+
+
+def _contains_marker(text: str, needle: str) -> bool:
     folded = text.casefold()
-    return any(needle.casefold() in folded for needle in needles)
+    folded_needle = needle.casefold()
+    if folded_needle in folded:
+        return True
+    if not _use_compact_match(needle):
+        return False
+    compact_needle = _compact_match_text(needle)
+    return bool(compact_needle) and compact_needle in _compact_match_text(text)
+
+
+def _has_any(text: str, needles: tuple[str, ...]) -> bool:
+    return any(_contains_marker(text, needle) for needle in needles)
 
 
 def _matched(text: str, needles: tuple[str, ...]) -> list[str]:
-    folded = text.casefold()
-    return [needle for needle in needles if needle.casefold() in folded]
+    return [needle for needle in needles if _contains_marker(text, needle)]
 
 
 def _is_negated_action(task: str, action: str) -> bool:
     folded = task.casefold()
     action_folded = action.casefold()
-    return any(f"{action_folded} {marker.casefold()}" in folded for marker in ACTION_NEGATION_MARKERS)
+    compact = _compact_match_text(task)
+    action_compact = _compact_match_text(action)
+    return any(
+        f"{action_folded} {marker.casefold()}" in folded
+        or (
+            _use_compact_match(action)
+            and _use_compact_match(marker)
+            and f"{action_compact}{_compact_match_text(marker)}" in compact
+        )
+        for marker in ACTION_NEGATION_MARKERS
+    )
+
+
+def _marker_positions(folded_text: str, needles: tuple[str, ...], *, compact: bool = False) -> list[tuple[int, str]]:
+    positions: list[tuple[int, str]] = []
+    for needle in needles:
+        for position in _positions(folded_text, (needle,), compact=compact):
+            positions.append((position, needle))
+    return positions
+
+
+def _negation_marker_direction_ok(anchor_position: int, marker_position: int, marker: str) -> bool:
+    compact_marker = _compact_match_text(marker)
+    if compact_marker in {"donot", "dont"}:
+        return marker_position <= anchor_position
+    return marker_position >= anchor_position
 
 
 def _contains_nearby_marker(text: str, anchors: tuple[str, ...], markers: tuple[str, ...], *, window: int = 18) -> bool:
     folded = text.casefold()
     anchor_positions = _positions(folded, anchors)
-    marker_positions = _positions(folded, markers)
-    return any(abs(anchor - marker) <= window for anchor in anchor_positions for marker in marker_positions)
+    marker_positions = _marker_positions(folded, markers)
+    if any(
+        abs(anchor - marker) <= window and _negation_marker_direction_ok(anchor, marker, marker_text)
+        for anchor in anchor_positions
+        for marker, marker_text in marker_positions
+    ):
+        return True
+    compact = _compact_match_text(text)
+    compact_anchor_positions = _positions(compact, anchors, compact=True)
+    compact_marker_positions = _marker_positions(compact, markers, compact=True)
+    return any(
+        abs(anchor - marker) <= window and _negation_marker_direction_ok(anchor, marker, marker_text)
+        for anchor in compact_anchor_positions
+        for marker, marker_text in compact_marker_positions
+    )
 
 
-def _positions(folded_text: str, needles: tuple[str, ...]) -> list[int]:
+def _positions(folded_text: str, needles: tuple[str, ...], *, compact: bool = False) -> list[int]:
     positions: list[int] = []
     for needle in needles:
         if not needle:
             continue
-        folded_needle = needle.casefold()
+        if compact and not _use_compact_match(needle):
+            continue
+        folded_needle = _compact_match_text(needle) if compact else needle.casefold()
+        if not folded_needle:
+            continue
         start = 0
         while True:
             index = folded_text.find(folded_needle, start)
@@ -248,6 +315,15 @@ def _positions(folded_text: str, needles: tuple[str, ...]) -> list[int]:
 def _has_negated_phrase(task: str, phrases: tuple[str, ...]) -> bool:
     direct = any(_is_negated_action(task, phrase) for phrase in phrases)
     return direct or _contains_nearby_marker(task, phrases, ACTION_NEGATION_MARKERS)
+
+
+def _normalization_summary(task: str) -> dict[str, Any]:
+    compact = _compact_match_text(task)
+    return {
+        "compact_separator_normalization": True,
+        "compact_text_fingerprint_sha256": hashlib.sha256(compact.encode("utf-8")).hexdigest()[:16],
+        "compact_length": len(compact),
+    }
 
 
 def _request_state(
@@ -276,7 +352,7 @@ def _request_state(
         mode = "not_detected"
     return {
         "schema": ACTION_INTENT_INFERENCE_SCHEMA,
-        "model": "hybrid_structured_lexical_v2",
+        "model": INTENT_INFERENCE_MODEL,
         "request_mode": mode,
         "requested": effective_requested,
         "negated": negated,
@@ -285,6 +361,7 @@ def _request_state(
         "command_markers": command_markers,
         "negation_markers": negation_markers,
         "discussion_markers": discussion_markers,
+        "normalization": _normalization_summary(task),
     }
 
 
@@ -299,12 +376,15 @@ def _financial_action_state(task: str) -> dict[str, Any]:
     )
 
 
-def _external_upload_state(task: str) -> dict[str, Any]:
+def _external_upload_state(task: str, personal_transfer_state: dict[str, Any] | None = None) -> dict[str, Any]:
+    requested = _has_any(task, EXTERNAL_UPLOAD_ALIASES)
+    if (personal_transfer_state or {}).get("requested") and not _has_any(task, EXTERNAL_UPLOAD_EXPLICIT_ALIASES):
+        requested = False
     return _request_state(
         task,
         anchors=EXTERNAL_UPLOAD_ALIASES,
         command_aliases=EXTERNAL_UPLOAD_COMMAND_ALIASES,
-        requested=_has_any(task, EXTERNAL_UPLOAD_ALIASES),
+        requested=requested,
     )
 
 
@@ -345,7 +425,7 @@ def _policy_bypass_state(task: str) -> dict[str, Any]:
         mode = "not_detected"
     return {
         "schema": ACTION_INTENT_INFERENCE_SCHEMA,
-        "model": "hybrid_structured_lexical_v2",
+        "model": INTENT_INFERENCE_MODEL,
         "request_mode": mode,
         "requested": effective_requested,
         "negated": negated,
@@ -356,6 +436,7 @@ def _policy_bypass_state(task: str) -> dict[str, Any]:
         "discussion_markers": discussion_markers,
         "sensitive_markers": sensitive_markers,
         "hard_command_markers": hard_command_markers,
+        "normalization": _normalization_summary(task),
     }
 
 
@@ -397,8 +478,8 @@ def _intent(
 
 def infer_action_intents(task: str, manifest: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     financial_state = _financial_action_state(task)
-    upload_state = _external_upload_state(task)
     personal_transfer_state = _personal_data_transfer_state(task)
+    upload_state = _external_upload_state(task, personal_transfer_state)
     policy_bypass_state = _policy_bypass_state(task)
     projection_requested = "팀" in task or "분신" in task
     return [
