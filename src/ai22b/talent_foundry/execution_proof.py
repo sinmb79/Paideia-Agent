@@ -21,6 +21,7 @@ SUPPORTED_RUN_SCHEMAS = {
 }
 LLM_PROVIDER_PREFLIGHT_SCHEMA = "paideia-llm-provider-preflight/v1"
 LLM_REVIEWABLE_PLAN_SCHEMA = "paideia-llm-reviewable-plan/v1"
+LLM_TOOL_PLAN_ALIGNMENT_SCHEMA = "paideia-llm-tool-plan-alignment/v1"
 DATAFLOW_TRANSPOSE_VERIFICATION_SCHEMA = "ai-talent-dataflow-transpose-verification/v1"
 WORKSPACE_TOOL_ARTIFACTS_SCHEMA = "paideia-workspace-tool-artifacts/v1"
 WORKSPACE_INPUT_REVIEW_SCHEMA = "paideia-workspace-input-review/v1"
@@ -751,6 +752,7 @@ def build_workspace_execution_proof(
         contract_memory = execution_contract.get("memory_write", {})
         contract_policy = execution_contract.get("policy_gate", {})
         contract_llm = execution_contract.get("llm_runtime", {})
+        contract_alignment = execution_contract.get("llm_tool_plan_alignment", {})
         _check(
             checks,
             "agent_execution_contract_verified",
@@ -762,6 +764,9 @@ def build_workspace_execution_proof(
             and contract_policy.get("checked_before_tools") is True
             and contract_llm.get("attempted") is True
             and contract_llm.get("identity_policy") == "application_engine_not_identity"
+            and contract_alignment.get("schema") == LLM_TOOL_PLAN_ALIGNMENT_SCHEMA
+            and contract_alignment.get("suggestion_only_enforced") is True
+            and contract_alignment.get("execution_authority") == "policy_selected_registered_tool_executor"
             and contract_tool_execution.get("attempted") is True
             and contract_tool_execution.get("evidence_packet_required") is True
             and contract_tool_execution.get("evidence_packet_completed") is True
@@ -775,9 +780,30 @@ def build_workspace_execution_proof(
                 "issues": execution_contract.get("issues", []),
                 "policy_status": contract_policy.get("status"),
                 "llm_attempted": contract_llm.get("attempted"),
+                "llm_tool_plan_alignment": contract_alignment,
                 "tool_attempted": contract_tool_execution.get("attempted"),
                 "evidence_packet_completed": contract_tool_execution.get("evidence_packet_completed"),
                 "automatic_promotion_performed": contract_memory.get("automatic_promotion_performed"),
+            },
+        )
+        alignment = base.get("llm_tool_plan_alignment", {})
+        completed_tools = set(alignment.get("completed_tools", [])) if isinstance(alignment.get("completed_tools"), list) else set()
+        selected_tools = set(alignment.get("selected_tools", [])) if isinstance(alignment.get("selected_tools"), list) else set()
+        _check(
+            checks,
+            "llm_tool_plan_suggestion_boundary_verified",
+            alignment.get("schema") == LLM_TOOL_PLAN_ALIGNMENT_SCHEMA
+            and alignment.get("suggestion_only_enforced") is True
+            and alignment.get("execution_authority") == "policy_selected_registered_tool_executor"
+            and alignment.get("out_of_scope_executed_count") == 0
+            and completed_tools.issubset(selected_tools),
+            evidence={
+                "schema": alignment.get("schema"),
+                "planned_tool_count": alignment.get("planned_tool_count"),
+                "out_of_scope_suggestion_count": alignment.get("out_of_scope_suggestion_count"),
+                "out_of_scope_executed_count": alignment.get("out_of_scope_executed_count"),
+                "completed_tools": sorted(completed_tools),
+                "selected_tools": sorted(selected_tools),
             },
         )
         _check(

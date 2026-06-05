@@ -45,6 +45,7 @@ class FakePlanningClient:
                     "suggested_next_actions": ["근거 패킷 확인", "보스 검토 후 학습 후보로 남기기"],
                     "tool_plan": [
                         {"tool": "evidence_packet", "purpose": "근거와 정책 경계를 기록합니다."},
+                        {"tool": "external_upload", "purpose": "LLM이 제안해도 실행되면 안 되는 외부 업로드입니다."},
                     ],
                     "chain_of_thought": "private hidden trace must not be stored",
                 },
@@ -67,6 +68,7 @@ class TalentFoundryLlmPlanTests(unittest.TestCase):
         )
 
         llm_plan = result["llm_runtime_result"]["llm_plan"]
+        alignment = result["llm_tool_plan_alignment"]
         evidence_packet = next(
             item["output"]
             for item in result["tool_execution"]["tool_results"]
@@ -87,6 +89,16 @@ class TalentFoundryLlmPlanTests(unittest.TestCase):
         self.assertEqual(llm_plan["assistant_reply"], "보스 검토용 리서치 계획을 구조화했습니다.")
         self.assertEqual(llm_plan["tool_plan"][0]["tool"], "evidence_packet")
         self.assertEqual(llm_plan["tool_plan"][0]["registration_status"], "registered")
+        self.assertEqual(llm_plan["tool_plan"][1]["registration_status"], "not_in_selected_tool_set")
+        self.assertEqual(alignment["schema"], "paideia-llm-tool-plan-alignment/v1")
+        self.assertTrue(alignment["suggestion_only_enforced"])
+        self.assertEqual(alignment["out_of_scope_suggestion_count"], 1)
+        self.assertEqual(alignment["out_of_scope_executed_count"], 0)
+        self.assertNotIn("external_upload", alignment["completed_tools"])
+        self.assertEqual(
+            result["execution_contract"]["llm_tool_plan_alignment"]["execution_authority"],
+            "policy_selected_registered_tool_executor",
+        )
         self.assertEqual(work_session["llm_plan_schema"], "paideia-llm-reviewable-plan/v1")
         self.assertIn("llm_reviewable_plan", {item["id"] for item in evidence_packet["evidence_items"]})
         self.assertEqual(evidence_packet["llm_plan_policy"], "suggestions_only_registered_executor_decides")

@@ -23,6 +23,7 @@ from ai22b.talent_foundry.tool_registry import execute_registered_tools, tool_de
 
 RUN_SCHEMA = "ai-talent-agent-run/v1"
 EXECUTION_CONTRACT_SCHEMA = "paideia-agent-execution-contract/v1"
+LLM_TOOL_PLAN_ALIGNMENT_SCHEMA = "paideia-llm-tool-plan-alignment/v1"
 
 
 def _now() -> str:
@@ -94,6 +95,62 @@ def _verify_execution(policy_decision: dict[str, Any], tool_execution: dict[str,
     }
 
 
+def _build_llm_tool_plan_alignment(
+    *,
+    llm_result: dict[str, Any],
+    selected_tools: list[str],
+    tool_execution: dict[str, Any],
+) -> dict[str, Any]:
+    llm_plan = llm_result.get("llm_plan", {}) if isinstance(llm_result.get("llm_plan"), dict) else {}
+    raw_plan = llm_plan.get("tool_plan", []) if isinstance(llm_plan.get("tool_plan"), list) else []
+    planned_tools: list[dict[str, Any]] = []
+    out_of_scope_suggestions: list[dict[str, Any]] = []
+    selected = set(selected_tools)
+    completed = {
+        str(item.get("tool"))
+        for item in tool_execution.get("tool_results", [])
+        if isinstance(item, dict) and item.get("status") == "completed"
+    }
+    for item in raw_plan:
+        if not isinstance(item, dict):
+            continue
+        tool = str(item.get("tool", "")).strip()
+        if not tool:
+            continue
+        record = {
+            "tool": tool,
+            "registration_status": item.get("registration_status"),
+            "execution_policy": item.get("execution_policy"),
+            "selected_by_policy": tool in selected,
+            "executed_by_registry": tool in completed,
+            "requires_boss_approval": bool(item.get("requires_boss_approval", False)),
+        }
+        planned_tools.append(record)
+        if tool not in selected or item.get("registration_status") != "registered":
+            out_of_scope_suggestions.append(record)
+
+    out_of_scope_executed = [
+        item
+        for item in out_of_scope_suggestions
+        if item["executed_by_registry"]
+    ]
+    return {
+        "schema": LLM_TOOL_PLAN_ALIGNMENT_SCHEMA,
+        "llm_plan_schema": llm_plan.get("schema"),
+        "llm_plan_policy": llm_plan.get("tool_plan_policy"),
+        "selected_tools": selected_tools,
+        "completed_tools": sorted(completed),
+        "planned_tools": planned_tools,
+        "planned_tool_count": len(planned_tools),
+        "out_of_scope_suggestions": out_of_scope_suggestions,
+        "out_of_scope_suggestion_count": len(out_of_scope_suggestions),
+        "out_of_scope_executed_count": len(out_of_scope_executed),
+        "suggestion_only_enforced": len(out_of_scope_executed) == 0,
+        "execution_authority": "policy_selected_registered_tool_executor",
+        "private_reasoning_trace": "do_not_store",
+    }
+
+
 def _response_packet(agent: dict[str, Any], task: str, run_status: str, llm_result: dict[str, Any], policy_decision: dict[str, Any]) -> dict[str, Any]:
     if run_status == "blocked":
         return {
@@ -146,6 +203,7 @@ def _build_execution_contract(
     llm_result: dict[str, Any],
     llm_provider_preflight: dict[str, Any],
     tool_execution: dict[str, Any],
+    llm_tool_plan_alignment: dict[str, Any],
     verification: dict[str, Any],
     memory_write: dict[str, Any],
 ) -> dict[str, Any]:
@@ -181,6 +239,8 @@ def _build_execution_contract(
         issues.append("tools_attempted_after_policy_gate")
     if run_status == "completed" and evidence_required and not evidence_completed:
         issues.append("evidence_packet_missing_for_work_session")
+    if llm_tool_plan_alignment.get("suggestion_only_enforced") is not True:
+        issues.append("llm_tool_plan_suggestion_boundary_failed")
     if automatic_promotion_performed:
         issues.append("automatic_memory_promotion_performed")
 
@@ -230,6 +290,14 @@ def _build_execution_contract(
             "evidence_packet_completed": evidence_completed,
             "network_default": tool_execution.get("capability_scope", {}).get("network_default"),
             "subprocess_default": tool_execution.get("capability_scope", {}).get("subprocess_default"),
+        },
+        "llm_tool_plan_alignment": {
+            "schema": llm_tool_plan_alignment.get("schema"),
+            "suggestion_only_enforced": llm_tool_plan_alignment.get("suggestion_only_enforced"),
+            "planned_tool_count": llm_tool_plan_alignment.get("planned_tool_count"),
+            "out_of_scope_suggestion_count": llm_tool_plan_alignment.get("out_of_scope_suggestion_count"),
+            "out_of_scope_executed_count": llm_tool_plan_alignment.get("out_of_scope_executed_count"),
+            "execution_authority": llm_tool_plan_alignment.get("execution_authority"),
         },
         "verification_gate": {
             "status": verification.get("status"),
@@ -322,6 +390,11 @@ def run_agent_execution_loop(
         llm_result=llm_result,
         policy_decision=policy_decision,
     )
+    llm_tool_plan_alignment = _build_llm_tool_plan_alignment(
+        llm_result=llm_result,
+        selected_tools=selected_tools,
+        tool_execution=tool_execution,
+    )
     verification = _verify_execution(policy_decision, tool_execution, llm_result)
     response = _response_packet(agent, task, run_status, llm_result, policy_decision)
     growth_update = {
@@ -365,6 +438,7 @@ def run_agent_execution_loop(
         llm_result=llm_result,
         llm_provider_preflight=llm_provider_preflight,
         tool_execution=tool_execution,
+        llm_tool_plan_alignment=llm_tool_plan_alignment,
         verification=verification,
         memory_write=memory_write,
     )
@@ -458,6 +532,7 @@ def run_agent_execution_loop(
         },
         "execution_contract": execution_contract,
         "tool_execution": tool_execution,
+        "llm_tool_plan_alignment": llm_tool_plan_alignment,
         "verification": verification,
         "memory_write": memory_write,
         "runtime_observability": runtime_observability,
