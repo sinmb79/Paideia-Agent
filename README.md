@@ -370,9 +370,10 @@ ai22b-talent-foundry doctor-llm-provider `
 
 Add `--live-check` only when you intentionally want Paideia to call the selected API or localhost server. The report records provider readiness, model requirements, credential environment presence, local path checks, and a public-safe smoke result without exporting secret values.
 
-Workspace runs also write two P0 runtime artifacts inside the allowed workspace root:
+Workspace runs also write three P0 runtime artifacts inside the allowed workspace root:
 
 - `runtime_execution.json`: the action policy, LLM runtime result, registered tool execution, verification, and memory-write decision snapshot.
+- `rollback_manifest.json`: a manual-review rollback plan listing declared workspace outputs in safe delete order, never outside the workspace root.
 - `workspace_sandbox.json`: filesystem allowlist, blocked network/subprocess policy, resource limits, rollback notes, audit requirements, and the `WorkspaceSandbox` enforcement audit for writes, path escapes, output size, and trace limits.
 
 The P0 action policy now records a structured `hybrid_structured_lexical_v2` inference packet for sensitive intents. It distinguishes direct commands from discussion-only or negated requests, so "do not place a buy order; analyze only" is kept as safe research context instead of being treated as trade execution.

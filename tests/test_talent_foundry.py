@@ -1465,10 +1465,16 @@ class TalentFoundryTests(unittest.TestCase):
 
         self.assertEqual(result["tool_execution"]["schema"], "paideia-tool-execution/v1")
         self.assertEqual(result["tool_execution"]["execution_model"], "registered_capability_checked_local_tools_v1")
+        capability_scope = result["tool_execution"]["capability_scope"]
+        self.assertEqual(capability_scope["schema"], "paideia-tool-capability-scope/v1")
+        self.assertEqual(capability_scope["mode"], "deny_by_default")
+        self.assertIn("research.analysis", capability_scope["granted_capabilities"])
         tool_results = {item["tool"]: item for item in result["tool_execution"]["tool_results"]}
         self.assertIn("work_session", tool_results)
         self.assertIn("memory_consolidation", tool_results)
         self.assertIn("parent_controlled_projection_team", tool_results)
+        self.assertEqual(tool_results["work_session"]["capability_scope"]["network_scope"], "blocked")
+        self.assertIn("task_context", tool_results["work_session"]["capability_scope"]["data_classes"])
         self.assertEqual(tool_results["parent_controlled_projection_team"]["output"]["separate_consciousness"], False)
 
     def test_policy_engine_blocks_prompt_injection_sensitive_actions_but_allows_policy_discussion(self) -> None:
@@ -1529,12 +1535,14 @@ class TalentFoundryTests(unittest.TestCase):
             summary_path = Path(result["workspace_outputs"]["result_summary"])
             trace_path = Path(result["workspace_outputs"]["trace"])
             runtime_path = Path(result["workspace_outputs"]["runtime_execution"])
+            rollback_path = Path(result["workspace_outputs"]["rollback_manifest"])
             sandbox_path = Path(result["workspace_outputs"]["workspace_sandbox"])
             trace_lines = trace_path.read_text(encoding="utf-8").splitlines()
             plan_exists = plan_path.exists()
             summary_exists = summary_path.exists()
             trace_exists = trace_path.exists()
             runtime_snapshot = json.loads(runtime_path.read_text(encoding="utf-8"))
+            rollback = json.loads(rollback_path.read_text(encoding="utf-8"))
             sandbox = json.loads(sandbox_path.read_text(encoding="utf-8"))
             plan_inside_workspace = str(plan_path).startswith(str(workspace))
             summary_text = summary_path.read_text(encoding="utf-8")
@@ -1548,10 +1556,18 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(runtime_snapshot["execution_loop"]["schema"], "paideia-agent-execution-loop/v1")
         self.assertEqual(sandbox["schema"], "paideia-workspace-sandbox-policy/v1")
         self.assertEqual(sandbox["network"]["default"], "blocked")
+        self.assertTrue(sandbox["rollback"]["rollback_manifest_required"])
         self.assertTrue(sandbox["enforcement"]["enabled"])
         self.assertTrue(sandbox["declared_outputs"])
         self.assertTrue(any(item["purpose"] == "runtime_execution_snapshot" for item in sandbox["declared_outputs"]))
         self.assertTrue(result["tool_authorization"]["sandbox_enforced"])
+        self.assertEqual(result["tool_authorization"]["capability_scope"]["schema"], "paideia-tool-capability-scope/v1")
+        self.assertEqual(rollback["schema"], "paideia-workspace-rollback-manifest/v1")
+        self.assertTrue(rollback["never_delete_outside_workspace_root"])
+        self.assertIn(
+            "task_plan.md",
+            {item["relative_path"] for item in rollback["delete_order"]},
+        )
         self.assertTrue(plan_inside_workspace)
         self.assertIn("거시경제", summary_text)
         self.assertTrue(any("local_file_write" in line for line in trace_lines))
@@ -1577,10 +1593,15 @@ class TalentFoundryTests(unittest.TestCase):
             with self.assertRaises(SandboxViolation):
                 sandbox.deny_network()
 
+            sandbox.write_text("ok.txt", "ok", purpose="ok")
+            rollback = sandbox.rollback_manifest(operation_id="unit_test")
             snapshot = sandbox.snapshot()
 
         self.assertEqual(snapshot["schema"], "paideia-workspace-sandbox-policy/v1")
         self.assertTrue(snapshot["enforcement"]["enabled"])
+        self.assertEqual(rollback["schema"], "paideia-workspace-rollback-manifest/v1")
+        self.assertEqual(rollback["operation_id"], "unit_test")
+        self.assertEqual(rollback["delete_order"][0]["relative_path"], "ok.txt")
         self.assertTrue(any(item["event"] == "path_escape_blocked" for item in snapshot["audit_events"]))
         self.assertTrue(any(item["event"] == "output_size_blocked" for item in snapshot["audit_events"]))
         self.assertTrue(any(item["event"] == "trace_event_limit_blocked" for item in snapshot["audit_events"]))
@@ -2589,12 +2610,14 @@ class TalentFoundryTests(unittest.TestCase):
             task_plan_exists = Path(workspace_run["workspace_outputs"]["task_plan"]).exists()
             summary_exists = Path(workspace_run["workspace_outputs"]["result_summary"]).exists()
             trace_exists = Path(workspace_run["workspace_outputs"]["trace"]).exists()
+            rollback_exists = Path(workspace_run["workspace_outputs"]["rollback_manifest"]).exists()
 
         self.assertEqual(workspace_run["schema"], "ai-talent-workspace-agent-run/v1")
         self.assertEqual(workspace_run["run_status"], "completed")
         self.assertTrue(task_plan_exists)
         self.assertTrue(summary_exists)
         self.assertTrue(trace_exists)
+        self.assertTrue(rollback_exists)
 
     def test_demo_runner_writes_hired_workspace_agent_run(self) -> None:
         from ai22b.talent_foundry.demo import run_demo
@@ -3110,12 +3133,14 @@ class TalentFoundryTests(unittest.TestCase):
             task_plan_exists = Path(run["workspace_outputs"]["task_plan"]).exists()
             trace_exists = Path(run["workspace_outputs"]["trace"]).exists()
             runtime_snapshot = json.loads(Path(run["workspace_outputs"]["runtime_execution"]).read_text(encoding="utf-8"))
+            rollback = json.loads(Path(run["workspace_outputs"]["rollback_manifest"]).read_text(encoding="utf-8"))
             sandbox = json.loads(Path(run["workspace_outputs"]["workspace_sandbox"]).read_text(encoding="utf-8"))
 
         self.assertEqual(run["schema"], "ai-talent-workspace-agent-run/v1")
         self.assertEqual(run["run_status"], "completed")
         self.assertEqual(run["llm_runtime_result"]["engine"], "deterministic_local")
         self.assertEqual(runtime_snapshot["llm_runtime_result"]["engine"], "deterministic_local")
+        self.assertEqual(rollback["schema"], "paideia-workspace-rollback-manifest/v1")
         self.assertEqual(sandbox["filesystem"]["mode"], "allowlist")
         self.assertTrue(sandbox["enforcement"]["enabled"])
         self.assertEqual(run["employment_context"]["employer"], "보스")
@@ -3187,8 +3212,10 @@ class TalentFoundryTests(unittest.TestCase):
             saved_run = json.loads(output_path.read_text(encoding="utf-8"))
             job_report = Path(run["job_outputs"]["job_report"])
             acceptance_checklist = Path(run["job_outputs"]["acceptance_checklist"])
+            rollback = Path(run["job_outputs"]["rollback_manifest"])
             job_report_exists = job_report.exists()
             acceptance_checklist_exists = acceptance_checklist.exists()
+            rollback_exists = rollback.exists()
             checklist = json.loads(acceptance_checklist.read_text(encoding="utf-8"))
 
         self.assertEqual(run["schema"], "ai-talent-hired-agent-job-run/v1")
@@ -3197,6 +3224,7 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(saved_run["employment_context"]["relationship"], "installed_ai_talent_hired_as_local_agent")
         self.assertTrue(job_report_exists)
         self.assertTrue(acceptance_checklist_exists)
+        self.assertTrue(rollback_exists)
         self.assertTrue(all(item["status"] == "satisfied_by_workspace_artifact" for item in checklist["criteria"]))
         self.assertEqual(run["tool_authorization"]["network_access"], "blocked")
         self.assertEqual(run["active_memory_route"]["schema"], "ai-talent-active-memory-route/v1")
@@ -4269,6 +4297,7 @@ class TalentFoundryTests(unittest.TestCase):
                 "synthesis_report",
                 "transpose_verification",
                 "growth_commit_candidate",
+                "rollback_manifest",
                 "workspace_sandbox",
             ]:
                 self.assertIn(key, run["workspace_outputs"])
@@ -4276,12 +4305,16 @@ class TalentFoundryTests(unittest.TestCase):
             active_cache_path = Path(run["workspace_outputs"]["active_memory_cache"])
             active_cache_size = active_cache_path.stat().st_size
             active_cache = json.loads(active_cache_path.read_text(encoding="utf-8"))
+            rollback = json.loads(Path(run["workspace_outputs"]["rollback_manifest"]).read_text(encoding="utf-8"))
             sandbox = json.loads(Path(run["workspace_outputs"]["workspace_sandbox"]).read_text(encoding="utf-8"))
 
         self.assertTrue(run["workspace_sandbox"]["enforcement"]["enabled"])
         self.assertLess(active_cache_size, 2_000_000)
         self.assertEqual(active_cache["cache_policy"]["safe_reference_detail"], "summary_keys_only")
         self.assertNotIn('"safe_reference":', json.dumps(active_cache, ensure_ascii=False))
+        self.assertEqual(rollback["schema"], "paideia-workspace-rollback-manifest/v1")
+        self.assertTrue(rollback["never_delete_outside_workspace_root"])
+        self.assertIn("synthesis_report.md", {item["relative_path"] for item in rollback["delete_order"]})
         self.assertTrue(sandbox["enforcement"]["enabled"])
         self.assertTrue(any(item["purpose"] == "synthesis_report" for item in sandbox["declared_outputs"]))
 

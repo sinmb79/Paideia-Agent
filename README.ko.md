@@ -158,9 +158,10 @@ ai22b-talent-foundry doctor-llm-provider `
 
 선택한 API 또는 localhost 서버를 실제로 호출하려면 `--live-check`를 명시합니다. 리포트는 provider 준비 상태, 모델 요구사항, 환경변수 존재 여부, 로컬 경로 점검, 공개 안전 smoke 결과를 기록하며 secret 값은 내보내지 않습니다.
 
-워크스페이스 실행은 허용된 workspace root 안에 P0 런타임 산출물도 남깁니다.
+워크스페이스 실행은 허용된 workspace root 안에 세 가지 P0 런타임 산출물도 남깁니다.
 
 - `runtime_execution.json`: action policy, LLM runtime 결과, 등록형 도구 실행, 검증, 메모리 기록 판단 스냅샷
+- `rollback_manifest.json`: workspace 내부에 선언된 산출물만 안전한 삭제 순서로 되돌릴 수 있게 하는 수동 검토용 rollback 계획
 - `workspace_sandbox.json`: 파일시스템 allowlist, 네트워크/서브프로세스 차단 정책, 리소스 제한, rollback 메모, 감사 요구사항, 그리고 쓰기 경로/경로 탈출/출력 크기/trace 제한을 강제한 `WorkspaceSandbox` 감사 기록
 
 P0 action policy는 민감 intent마다 `hybrid_structured_lexical_v2` 추론 패킷을 기록합니다. 직접 실행 명령, 정책/설명 질문, "하지 말고"로 부정된 요청을 구분하므로 "매수 주문은 하지 말고 분석만" 같은 문장은 거래 실행이 아니라 안전한 리서치 맥락으로 처리됩니다.

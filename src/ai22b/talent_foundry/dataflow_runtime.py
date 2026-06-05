@@ -457,6 +457,7 @@ def run_dataflow_job_from_manifest(
         "synthesis": sandbox.safe_path("synthesis.json"),
         "transpose_verification": sandbox.safe_path("transpose_verification.json"),
         "growth_commit_candidate": sandbox.safe_path("growth_commit_candidate.json"),
+        "rollback_manifest": sandbox.safe_path("rollback_manifest.json"),
         "workspace_sandbox": sandbox.safe_path("workspace_sandbox.json"),
         "dataflow_run": sandbox.safe_path("dataflow_run.json"),
     }
@@ -473,6 +474,7 @@ def run_dataflow_job_from_manifest(
     )
     sandbox.write_json("transpose_verification.json", verification, purpose="transpose_verification")
     sandbox.write_json("growth_commit_candidate.json", growth_candidate, purpose="growth_commit_candidate")
+    sandbox.write_rollback_manifest("rollback_manifest.json", operation_id="dataflow_job_run")
 
     agent = manifest.get("agent", {})
     run = {

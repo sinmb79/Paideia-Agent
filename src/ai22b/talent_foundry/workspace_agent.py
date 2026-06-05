@@ -175,6 +175,7 @@ def run_workspace_agent_from_manifest(
             "sandbox_schema": WORKSPACE_SANDBOX_SCHEMA,
             "sandbox_enforced": True,
             "capability_grants": base_run.get("policy_decision", {}).get("capability_grants", {}),
+            "capability_scope": base_run.get("tool_execution", {}).get("capability_scope", {}),
         },
         "base_agent_run": base_run,
         "workspace_outputs": {},
@@ -218,11 +219,13 @@ def run_workspace_agent_from_manifest(
             _trace_entry("local_file_write", file=plan_path.name, purpose="task_plan"),
             _trace_entry("local_file_write", file=summary_path.name, purpose="result_summary"),
             _trace_entry("local_file_write", file=runtime_execution_path.name, purpose="runtime_execution_snapshot"),
+            _trace_entry("local_file_write", file="rollback_manifest.json", purpose="rollback_manifest"),
             _trace_entry("local_file_write", file="workspace_sandbox.json", purpose="workspace_sandbox_policy"),
             _trace_entry("memory_growth_candidate", source="workspace_agent_run"),
         ],
         purpose="workspace_trace",
     )
+    rollback_path = sandbox.write_rollback_manifest("rollback_manifest.json", operation_id="workspace_agent_run")
     sandbox_path = sandbox.write_json("workspace_sandbox.json", sandbox.snapshot(), purpose="workspace_sandbox_policy")
 
     result["workspace_outputs"] = {
@@ -230,6 +233,7 @@ def run_workspace_agent_from_manifest(
         "result_summary": str(summary_path),
         "trace": str(trace_path),
         "runtime_execution": str(runtime_execution_path),
+        "rollback_manifest": str(rollback_path),
         "workspace_sandbox": str(sandbox_path),
     }
     return result
@@ -288,14 +292,17 @@ def run_workspace_agent_job_from_manifest(
             _trace_entry("local_file_write", file=job_spec_path.name, purpose="job_spec"),
             _trace_entry("local_file_write", file=job_report_path.name, purpose="job_report"),
             _trace_entry("acceptance_checklist", status="ready_for_boss_review"),
+            _trace_entry("local_file_write", file="job_rollback_manifest.json", purpose="rollback_manifest"),
         ],
         purpose="job_trace_append",
     )
+    rollback_path = sandbox.write_rollback_manifest("job_rollback_manifest.json", operation_id="workspace_agent_job_run")
 
     result["job_outputs"] = {
         "job_spec": str(job_spec_path),
         "job_report": str(job_report_path),
         "acceptance_checklist": str(checklist_path),
         "trace": str(trace_path),
+        "rollback_manifest": str(rollback_path),
     }
     return result

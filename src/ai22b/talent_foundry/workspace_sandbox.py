@@ -7,6 +7,7 @@ from typing import Any
 
 
 WORKSPACE_SANDBOX_SCHEMA = "paideia-workspace-sandbox-policy/v1"
+WORKSPACE_ROLLBACK_MANIFEST_SCHEMA = "paideia-workspace-rollback-manifest/v1"
 DEFAULT_MAX_OUTPUT_FILE_BYTES = 2_000_000
 DEFAULT_MAX_TRACE_EVENTS = 200
 
@@ -50,6 +51,8 @@ def workspace_sandbox_policy(
         "rollback": {
             "generated_files_are_declared_in_workspace_outputs": True,
             "manual_delete_safe_within_workspace_root": True,
+            "rollback_manifest_required": True,
+            "rollback_manifest_schema": WORKSPACE_ROLLBACK_MANIFEST_SCHEMA,
         },
         "audit": {
             "trace_required": True,
@@ -149,6 +152,41 @@ class WorkspaceSandbox:
         policy["declared_outputs"] = self.declared_outputs
         policy["audit_events"] = self.audit_events
         return policy
+
+    def rollback_manifest(self, *, operation_id: str = "workspace_run") -> dict[str, Any]:
+        delete_order = [
+            {
+                "relative_path": output["relative_path"],
+                "path": output["path"],
+                "purpose": output["purpose"],
+                "action": "manual_review_append" if output.get("append") else "delete_file",
+                "safe_to_delete_within_workspace_root": True,
+            }
+            for output in reversed(self.declared_outputs)
+        ]
+        return {
+            "schema": WORKSPACE_ROLLBACK_MANIFEST_SCHEMA,
+            "created_at_utc": _now(),
+            "operation_id": operation_id,
+            "workspace_root": str(self.root),
+            "rollback_mode": "manual_reviewed_delete_declared_outputs_only",
+            "delete_order": delete_order,
+            "append_entries_require_review": any(output.get("append") for output in self.declared_outputs),
+            "never_delete_outside_workspace_root": True,
+            "audit_artifacts_to_keep": ["rollback_manifest.json", "workspace_sandbox.json"],
+        }
+
+    def write_rollback_manifest(
+        self,
+        relative_path: str | Path = "rollback_manifest.json",
+        *,
+        operation_id: str = "workspace_run",
+    ) -> Path:
+        return self.write_json(
+            relative_path,
+            self.rollback_manifest(operation_id=operation_id),
+            purpose="rollback_manifest",
+        )
 
     def _enforce_output_size(self, relative_path: str | Path, byte_count: int) -> None:
         if byte_count > self.max_output_file_bytes:
