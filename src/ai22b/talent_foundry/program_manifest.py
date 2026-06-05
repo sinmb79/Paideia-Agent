@@ -61,6 +61,7 @@ REQUIRED_INSTALLER_COMMANDS = [
     "family",
     "audit-release",
     "audit-public-release-readiness",
+    "build-source-sbom",
 ]
 
 EMPLOYMENT_LIFECYCLE_STEPS = [
@@ -161,6 +162,7 @@ def _commands() -> list[dict[str, str]]:
         "family": "Create a local AI family lineage, child seed, and child training blueprint.",
         "audit-release": "Audit public preview readiness across the lifecycle.",
         "audit-public-release-readiness": "Audit source repository release metadata, CI gates, license, and public hygiene policy.",
+        "build-source-sbom": "Build a public-safe source SBOM and file inventory without scanning private runtime state.",
     }
     return [
         {

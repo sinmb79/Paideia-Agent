@@ -463,9 +463,13 @@ ai22b-talent-foundry audit-public-release-readiness `
   --repo-root . `
   --strict `
   --output .\public_release_readiness.json
+
+ai22b-talent-foundry build-source-sbom `
+  --repo-root . `
+  --output .\source_sbom.json
 ```
 
-이 명령은 네트워크 호출이나 서브프로세스 실행 없이 공개 필수 파일, 패키지 라이선스 메타데이터, CI marker, 릴리스 준비도 문서, 보안 정책, 공개 hygiene 정책을 검사합니다.
+readiness audit는 네트워크 호출이나 서브프로세스 실행 없이 공개 필수 파일, 패키지 라이선스 메타데이터, CI marker, 릴리스 준비도 문서, 보안 정책, 공개 hygiene 정책을 검사합니다. source SBOM은 패키지 메타데이터, optional dependency group, console entrypoint, 공개 후보 파일 hash, repository digest를 기록합니다. 이것은 인벤토리이며 취약점 스캔은 아닙니다.
 
 P0 action policy 회귀 평가:
 

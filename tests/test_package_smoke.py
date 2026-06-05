@@ -96,6 +96,27 @@ class PackageSmokeTests(unittest.TestCase):
         self.assertTrue(check_by_id["public_candidate_content_scan"]["passed"])
         self.assertEqual(check_by_id["public_candidate_content_scan"]["details"]["issue_count"], 0)
 
+    def test_source_sbom_inventory_records_package_dependency_and_file_evidence(self) -> None:
+        from ai22b.talent_foundry.source_sbom import build_source_sbom
+
+        sbom = build_source_sbom(Path("."))
+
+        self.assertEqual(sbom["schema"], "paideia-source-sbom/v1")
+        self.assertEqual(sbom["package"]["name"], "paideia-agent")
+        self.assertEqual(sbom["package"]["version"], "0.1.0")
+        self.assertEqual(sbom["package"]["license_detected"], "MIT")
+        self.assertEqual(sbom["dependencies"]["direct"], [])
+        self.assertEqual(sbom["dependencies"]["direct_count"], 0)
+        self.assertIn("dev", sbom["dependencies"]["optional_groups"])
+        self.assertIn("live-llm", sbom["dependencies"]["optional_groups"])
+        self.assertIn("ai22b-talent-foundry", sbom["package"]["console_scripts"])
+        self.assertGreater(sbom["inventory"]["component_count"], 20)
+        self.assertIn("source_code", sbom["inventory"]["by_type"])
+        self.assertEqual(sbom["release_readiness"]["public_candidate_issue_count"], 0)
+        self.assertFalse(sbom["policy"]["network_call_performed"])
+        self.assertFalse(sbom["policy"]["subprocess_executed"])
+        self.assertTrue(sbom["policy"]["not_a_vulnerability_scan"])
+
 
 if __name__ == "__main__":
     unittest.main()

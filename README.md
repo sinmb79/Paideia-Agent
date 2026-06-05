@@ -617,9 +617,13 @@ ai22b-talent-foundry audit-public-release-readiness `
   --repo-root . `
   --strict `
   --output .\public_release_readiness.json
+
+ai22b-talent-foundry build-source-sbom `
+  --repo-root . `
+  --output .\source_sbom.json
 ```
 
-This checks required public files, package license metadata, CI markers, release-readiness docs, the security policy, and the public hygiene policy without network calls or subprocess execution.
+The readiness audit checks required public files, package license metadata, CI markers, release-readiness docs, the security policy, and the public hygiene policy without network calls or subprocess execution. The source SBOM records package metadata, optional dependency groups, console entrypoints, public candidate file hashes, and a repository digest. It is an inventory, not a vulnerability scan.
 
 Run the P0 action-policy safety corpus before trusting a runtime change:
 

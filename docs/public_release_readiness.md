@@ -12,6 +12,7 @@ $env:PYTHONPATH = "src"
 python -B -m pytest tests\test_package_smoke.py tests\test_cli_smoke.py -q
 .\scripts\check_public_repo_hygiene.ps1
 ai22b-talent-foundry audit-public-release-readiness --repo-root . --strict --output .\public_release_readiness.json
+ai22b-talent-foundry build-source-sbom --repo-root . --output .\source_sbom.json
 ```
 
 The hygiene script now checks two classes of release risk:
@@ -20,6 +21,8 @@ The hygiene script now checks two classes of release risk:
 - required public-release files such as `README.md`, `README.ko.md`, `SECURITY.md`, `LICENSE`, and `pyproject.toml` with package license metadata.
 
 The Python readiness audit writes a reviewable `paideia-public-release-readiness/v1` report. It checks source repository metadata, CI gates, and public candidate files under roots such as `src`, `docs`, `tests`, `scripts`, `examples`, and `data/public`. It does not call the network, execute subprocesses, or inspect private generated runtime state.
+
+The source SBOM writes `paideia-source-sbom/v1`. It records package metadata, optional dependency groups, console scripts, public candidate file SHA-256 values, and a repository public-candidate digest. It is a reproducible inventory for review; it is not a vulnerability scan.
 
 ## Agent Bundle Gates
 

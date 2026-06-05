@@ -19,6 +19,7 @@ class CliSmokeTests(unittest.TestCase):
             tool_audit_path = tmp_path / "tool_capability_audit.json"
             policy_eval_path = tmp_path / "policy_eval_report.json"
             public_release_path = tmp_path / "public_release_readiness.json"
+            source_sbom_path = tmp_path / "source_sbom.json"
 
             role_models_code = cli_main(
                 [
@@ -78,6 +79,15 @@ class CliSmokeTests(unittest.TestCase):
                     str(public_release_path),
                 ]
             )
+            source_sbom_code = cli_main(
+                [
+                    "build-source-sbom",
+                    "--repo-root",
+                    ".",
+                    "--output",
+                    str(source_sbom_path),
+                ]
+            )
 
             role_models = json.loads(role_models_path.read_text(encoding="utf-8"))
             doctor = json.loads(doctor_path.read_text(encoding="utf-8"))
@@ -86,6 +96,7 @@ class CliSmokeTests(unittest.TestCase):
             tool_audit = json.loads(tool_audit_path.read_text(encoding="utf-8"))
             policy_eval = json.loads(policy_eval_path.read_text(encoding="utf-8"))
             public_release = json.loads(public_release_path.read_text(encoding="utf-8"))
+            source_sbom = json.loads(source_sbom_path.read_text(encoding="utf-8"))
 
         self.assertEqual(role_models_code, 0)
         self.assertEqual(doctor_code, 0)
@@ -94,6 +105,7 @@ class CliSmokeTests(unittest.TestCase):
         self.assertEqual(tool_audit_code, 0)
         self.assertEqual(policy_eval_code, 0)
         self.assertEqual(public_release_code, 0)
+        self.assertEqual(source_sbom_code, 0)
 
         self.assertEqual(role_models["schema"], "ai-talent-role-model-list/v1")
         self.assertEqual(role_models["domain"], "securities_research")
@@ -169,6 +181,17 @@ class CliSmokeTests(unittest.TestCase):
         check_by_id = {item["id"]: item for item in public_release["checks"]}
         self.assertTrue(check_by_id["public_candidate_content_scan"]["passed"])
         self.assertEqual(check_by_id["public_candidate_content_scan"]["details"]["issue_count"], 0)
+
+        self.assertEqual(source_sbom["schema"], "paideia-source-sbom/v1")
+        self.assertEqual(source_sbom["package"]["name"], "paideia-agent")
+        self.assertEqual(source_sbom["package"]["license_detected"], "MIT")
+        self.assertEqual(source_sbom["dependencies"]["direct_count"], 0)
+        self.assertIn("dev", source_sbom["dependencies"]["optional_groups"])
+        self.assertIn("ai22b-talent-foundry", source_sbom["package"]["console_scripts"])
+        self.assertGreater(source_sbom["inventory"]["component_count"], 20)
+        self.assertEqual(source_sbom["release_readiness"]["public_candidate_issue_count"], 0)
+        self.assertFalse(source_sbom["policy"]["network_call_performed"])
+        self.assertFalse(source_sbom["policy"]["subprocess_executed"])
 
 
 if __name__ == "__main__":

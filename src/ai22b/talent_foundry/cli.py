@@ -70,6 +70,7 @@ from ai22b.talent_foundry.role_models import list_role_models, summarize_role_mo
 from ai22b.talent_foundry.same_sky_eval import run_same_sky_eval
 from ai22b.talent_foundry.skill_migration import migrate_external_agent_assets
 from ai22b.talent_foundry.simulation_rollouts import evaluate_simulation_rollouts
+from ai22b.talent_foundry.source_sbom import build_source_sbom
 from ai22b.talent_foundry.registry import (
     assign_hired_goal,
     assemble_hired_agent_team,
@@ -841,6 +842,13 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Return exit code 2 when the source repository is not public-release ready.",
     )
+
+    source_sbom = subparsers.add_parser(
+        "build-source-sbom",
+        help="Build a public-safe source SBOM/inventory from pyproject metadata and public candidate files.",
+    )
+    source_sbom.add_argument("--repo-root", default=".")
+    source_sbom.add_argument("--output", required=True)
 
     public_program_manifest = subparsers.add_parser(
         "build-public-program-manifest",
@@ -1775,6 +1783,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.strict and not report.get("passed"):
             return 2
         return 0 if report.get("passed") else 1
+
+    if args.command == "build-source-sbom":
+        build_source_sbom(
+            Path(args.repo_root),
+            output_path=Path(args.output),
+        )
+        print(str(Path(args.output)))
+        return 0
 
     if args.command == "build-public-program-manifest":
         build_public_program_manifest(
