@@ -107,18 +107,25 @@ DEFAULT_AGENT_RUN_LOG = DEFAULT_RUN_DIR / "shinyong_agent_run_log.jsonl"
 BOSS_APPROVAL_SCHEMA = "paideia-boss-approval/v1"
 
 
-def _manifest_with_boss_approvals(manifest: dict, approval_paths: Sequence[str] | None) -> dict:
-    if not approval_paths:
-        return manifest
-    merged = copy.deepcopy(manifest)
-    tool_policy = merged.setdefault("tool_policy", {})
-    approvals = list(tool_policy.get("boss_approvals", []))
-    for raw_path in approval_paths:
+def _read_boss_approval_artifacts(approval_paths: Sequence[str] | None) -> list[dict]:
+    approval_records: list[dict] = []
+    for raw_path in approval_paths or []:
         path = Path(raw_path)
         approval = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(approval, dict) or approval.get("schema") != BOSS_APPROVAL_SCHEMA:
             raise ValueError(f"Unsupported boss approval artifact schema: {path}")
-        approvals.append(approval)
+        approval_records.append(approval)
+    return approval_records
+
+
+def _manifest_with_boss_approvals(manifest: dict, approval_paths: Sequence[str] | None) -> dict:
+    approvals_to_attach = _read_boss_approval_artifacts(approval_paths)
+    if not approvals_to_attach:
+        return manifest
+    merged = copy.deepcopy(manifest)
+    tool_policy = merged.setdefault("tool_policy", {})
+    approvals = list(tool_policy.get("boss_approvals", []))
+    approvals.extend(copy.deepcopy(approvals_to_attach))
     tool_policy["boss_approvals"] = approvals
     return merged
 
@@ -500,6 +507,12 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     run_hired_agent_command.add_argument("--live-llm", action="store_true", help="Shortcut for --llm-mode live.")
     run_hired_agent_command.add_argument("--llm-model", help="Override the employment LLM model for this run.")
+    run_hired_agent_command.add_argument(
+        "--boss-approval",
+        action="append",
+        default=[],
+        help="Attach one explicit Boss approval artifact for this hired agent run. Repeatable.",
+    )
 
     chat_hired_agent_command = subparsers.add_parser(
         "chat-hired-agent",
@@ -550,6 +563,12 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     run_hired_workspace_agent_command.add_argument("--live-llm", action="store_true", help="Shortcut for --llm-mode live.")
     run_hired_workspace_agent_command.add_argument("--llm-model", help="Override the employment LLM model for this workspace run.")
+    run_hired_workspace_agent_command.add_argument(
+        "--boss-approval",
+        action="append",
+        default=[],
+        help="Attach one explicit Boss approval artifact for this hired workspace run. Repeatable.",
+    )
 
     run_hired_agent_job_command = subparsers.add_parser(
         "run-hired-agent-job",
@@ -567,6 +586,12 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     run_hired_agent_job_command.add_argument("--live-llm", action="store_true", help="Shortcut for --llm-mode live.")
     run_hired_agent_job_command.add_argument("--llm-model", help="Override the employment LLM model for this job run.")
+    run_hired_agent_job_command.add_argument(
+        "--boss-approval",
+        action="append",
+        default=[],
+        help="Attach one explicit Boss approval artifact for this hired job run. Repeatable.",
+    )
 
     run_hired_dataflow_job_command = subparsers.add_parser(
         "run-hired-dataflow-job",
@@ -587,6 +612,12 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     run_hired_dataflow_job_command.add_argument("--live-llm", action="store_true", help="Shortcut for --llm-mode live.")
     run_hired_dataflow_job_command.add_argument("--llm-model", help="Override the employment LLM model for this dataflow run.")
+    run_hired_dataflow_job_command.add_argument(
+        "--boss-approval",
+        action="append",
+        default=[],
+        help="Attach one explicit Boss approval artifact for this hired dataflow run. Repeatable.",
+    )
 
     run_hired_agent_job_cycle_command = subparsers.add_parser(
         "run-hired-agent-job-cycle",
@@ -607,6 +638,12 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     run_hired_agent_job_cycle_command.add_argument("--live-llm", action="store_true", help="Shortcut for --llm-mode live.")
     run_hired_agent_job_cycle_command.add_argument("--llm-model", help="Override the employment LLM model for this job cycle.")
+    run_hired_agent_job_cycle_command.add_argument(
+        "--boss-approval",
+        action="append",
+        default=[],
+        help="Attach one explicit Boss approval artifact for this hired job cycle. Repeatable.",
+    )
 
     record_hired_learning = subparsers.add_parser(
         "record-hired-learning",
@@ -1292,12 +1329,14 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "run-hired-agent":
         llm_mode = "live" if args.live_llm else args.llm_mode
+        boss_approvals = _read_boss_approval_artifacts(args.boss_approval)
         run = run_hired_agent(
             Path(args.employment_record),
             task=args.task,
             output_path=Path(args.output) if args.output else None,
             llm_mode=llm_mode,
             llm_model=args.llm_model,
+            boss_approvals=boss_approvals,
         )
         output_path = Path(args.output) if args.output else Path(args.employment_record).parent / "last_hired_agent_run.json"
         print(str(output_path))
@@ -1333,6 +1372,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "run-hired-workspace-agent":
         llm_mode = "live" if args.live_llm else args.llm_mode
+        boss_approvals = _read_boss_approval_artifacts(args.boss_approval)
         run_hired_workspace_agent(
             Path(args.employment_record),
             task=args.task,
@@ -1340,6 +1380,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             output_path=Path(args.output) if args.output else None,
             llm_mode=llm_mode,
             llm_model=args.llm_model,
+            boss_approvals=boss_approvals,
         )
         output_path = (
             Path(args.output)
@@ -1352,6 +1393,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "run-hired-agent-job":
         llm_mode = "live" if args.live_llm else args.llm_mode
         job_spec = json.loads(Path(args.job_spec).read_text(encoding="utf-8"))
+        boss_approvals = _read_boss_approval_artifacts(args.boss_approval)
         run_hired_agent_job(
             Path(args.employment_record),
             job_spec=job_spec,
@@ -1359,6 +1401,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             output_path=Path(args.output) if args.output else None,
             llm_mode=llm_mode,
             llm_model=args.llm_model,
+            boss_approvals=boss_approvals,
         )
         output_path = (
             Path(args.output)
@@ -1371,6 +1414,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "run-hired-dataflow-job":
         llm_mode = "live" if args.live_llm else args.llm_mode
         job_spec = json.loads(Path(args.job_spec).read_text(encoding="utf-8"))
+        boss_approvals = _read_boss_approval_artifacts(args.boss_approval)
         run_hired_dataflow_job(
             Path(args.employment_record),
             job_spec=job_spec,
@@ -1383,6 +1427,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             output_path=Path(args.output) if args.output else None,
             llm_mode=llm_mode,
             llm_model=args.llm_model,
+            boss_approvals=boss_approvals,
         )
         output_path = (
             Path(args.output)
@@ -1395,6 +1440,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "run-hired-agent-job-cycle":
         llm_mode = "live" if args.live_llm else args.llm_mode
         job_spec = json.loads(Path(args.job_spec).read_text(encoding="utf-8"))
+        boss_approvals = _read_boss_approval_artifacts(args.boss_approval)
         run_hired_agent_job_cycle(
             Path(args.employment_record),
             job_spec=job_spec,
@@ -1407,6 +1453,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             output_path=Path(args.output) if args.output else None,
             llm_mode=llm_mode,
             llm_model=args.llm_model,
+            boss_approvals=boss_approvals,
         )
         output_path = (
             Path(args.output)

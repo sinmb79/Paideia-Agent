@@ -577,6 +577,8 @@ ai22b-talent-foundry run-agent `
   --output .\agent_run_with_approval.json
 ```
 
+The same repeatable flag is available on hired-agent surfaces such as `run-hired-agent`, `run-hired-workspace-agent`, `run-hired-agent-job`, `run-hired-dataflow-job`, and `run-hired-agent-job-cycle`.
+
 Run the workspace execution proof verifier against a generated run artifact before calling a workspace/dataflow change P0-ready:
 
 ```powershell

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 from datetime import datetime, timezone
@@ -44,6 +45,20 @@ def _read_json(path: Path) -> dict[str, Any]:
 def _write_json(path: Path, data: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _manifest_with_runtime_boss_approvals(
+    agent_manifest: dict[str, Any],
+    boss_approvals: list[dict[str, Any]] | None,
+) -> dict[str, Any]:
+    if not boss_approvals:
+        return agent_manifest
+    merged = copy.deepcopy(agent_manifest)
+    tool_policy = merged.setdefault("tool_policy", {})
+    approvals = list(tool_policy.get("boss_approvals", []))
+    approvals.extend(copy.deepcopy(boss_approvals))
+    tool_policy["boss_approvals"] = approvals
+    return merged
 
 
 def _employment_id(
@@ -506,8 +521,10 @@ def run_hired_agent(
     output_path: Path | None = None,
     llm_mode: str = "offline",
     llm_model: str | None = None,
+    boss_approvals: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     employment_record, agent_manifest, target_root = _load_active_employment(employment_record_path)
+    agent_manifest = _manifest_with_runtime_boss_approvals(agent_manifest, boss_approvals)
     result = run_agent_from_manifest(
         agent_manifest,
         task=task,
@@ -1027,8 +1044,10 @@ def run_hired_workspace_agent(
     llm_mode: str = "offline",
     llm_model: str | None = None,
     llm_client: LLMClient | None = None,
+    boss_approvals: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     employment_record, agent_manifest, target_root = _load_active_employment(employment_record_path)
+    agent_manifest = _manifest_with_runtime_boss_approvals(agent_manifest, boss_approvals)
     result = run_workspace_agent_from_manifest(
         agent_manifest,
         task=task,
@@ -1066,8 +1085,10 @@ def run_hired_agent_job(
     llm_mode: str = "offline",
     llm_model: str | None = None,
     llm_client: LLMClient | None = None,
+    boss_approvals: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     employment_record, agent_manifest, target_root = _load_active_employment(employment_record_path)
+    agent_manifest = _manifest_with_runtime_boss_approvals(agent_manifest, boss_approvals)
     result = run_workspace_agent_job_from_manifest(
         agent_manifest,
         job_spec=job_spec,
@@ -1110,8 +1131,10 @@ def run_hired_dataflow_job(
     llm_mode: str = "offline",
     llm_model: str | None = None,
     llm_client: LLMClient | None = None,
+    boss_approvals: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     employment_record, agent_manifest, target_root = _load_active_employment(employment_record_path)
+    agent_manifest = _manifest_with_runtime_boss_approvals(agent_manifest, boss_approvals)
     entrypoints = employment_record.get("entrypoints", {})
     ledger_path = target_root / entrypoints.get("learning_ledger", "learning_ledger.json")
     if ledger_path.exists():
@@ -1159,6 +1182,7 @@ def run_hired_agent_job_cycle(
     llm_mode: str = "offline",
     llm_model: str | None = None,
     llm_client: LLMClient | None = None,
+    boss_approvals: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     employment_record, _agent_manifest, target_root = _load_active_employment(employment_record_path)
     entrypoints = employment_record.get("entrypoints", {})
@@ -1180,6 +1204,7 @@ def run_hired_agent_job_cycle(
         llm_mode=llm_mode,
         llm_model=llm_model,
         llm_client=llm_client,
+        boss_approvals=boss_approvals,
     )
     learning_update = record_hired_learning_experience(
         employment_record_path,

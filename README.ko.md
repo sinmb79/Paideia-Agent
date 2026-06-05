@@ -423,6 +423,8 @@ ai22b-talent-foundry run-agent `
   --output .\agent_run_with_approval.json
 ```
 
+같은 반복 입력 플래그는 `run-hired-agent`, `run-hired-workspace-agent`, `run-hired-agent-job`, `run-hired-dataflow-job`, `run-hired-agent-job-cycle` 같은 고용된 에이전트 실행 표면에서도 사용할 수 있습니다.
+
 workspace/dataflow 변경을 P0-ready라고 부르기 전에는 생성된 실행 산출물에 대해 실행 증명 verifier를 돌립니다.
 
 ```powershell

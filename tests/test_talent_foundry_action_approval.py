@@ -31,6 +31,60 @@ def _manifest(*, approvals: list[dict] | None = None) -> dict:
     }
 
 
+def _employment_record() -> dict:
+    return {
+        "schema": "ai-talent-local-employment/v1",
+        "employment_id": "approval-employment-001",
+        "employer": "보스",
+        "relationship": "installed_ai_talent_hired_as_local_agent",
+        "install_id": "approval-install-001",
+        "agent": {
+            "name": "approval-test-agent",
+            "role": "local research agent",
+            "major_goal": "Verify hired sensitive action approval gates.",
+        },
+        "entrypoints": {
+            "agent_manifest": "agent_manifest.json",
+            "learning_ledger": "learning_ledger.json",
+            "last_run": "last_hired_agent_run.json",
+            "run_log": "employment_run_log.jsonl",
+            "last_workspace_run": "last_hired_workspace_agent_run.json",
+            "workspace_run_log": "employment_workspace_run_log.jsonl",
+            "last_job_run": "last_hired_agent_job_run.json",
+            "job_run_log": "employment_job_run_log.jsonl",
+            "last_dataflow_run": "last_hired_dataflow_run.json",
+            "dataflow_run_log": "employment_dataflow_run_log.jsonl",
+            "last_job_cycle": "last_hired_agent_job_cycle.json",
+            "job_cycle_log": "employment_job_cycle_log.jsonl",
+        },
+        "llm_runtime": {
+            "schema": "ai-talent-llm-runtime/v1",
+            "engine": "deterministic_local",
+            "identity_policy": "application_engine_not_identity",
+            "network_access": "blocked",
+            "local_only": True,
+        },
+        "growth_after_hire": {
+            "continues": True,
+        },
+        "status": "active",
+    }
+
+
+def _approval_record(approval_id: str = "boss-approval-runtime-001") -> dict:
+    return {
+        "schema": "paideia-boss-approval/v1",
+        "approval_id": approval_id,
+        "status": "approved",
+        "approved_by": "Boss",
+        "capability": "network.external_upload",
+        "capabilities": ["network.external_upload"],
+        "action_type": "external_upload",
+        "data_class": "agent_or_owner_data",
+        "scope": "single_local_review_run",
+    }
+
+
 class ActionApprovalTests(unittest.TestCase):
     def test_sensitive_action_requires_explicit_boss_approval_artifact(self) -> None:
         from ai22b.talent_foundry.action_policy import evaluate_action_policy, infer_action_intents
@@ -248,6 +302,68 @@ class ActionApprovalTests(unittest.TestCase):
         self.assertEqual(result["tool_authorization"]["network_access"], "blocked")
         self.assertEqual(result["tool_authorization"]["capability_scope"]["network_default"], "blocked")
         self.assertTrue(task_plan_exists)
+
+    def test_registry_run_hired_agent_accepts_runtime_boss_approval_without_persisting(self) -> None:
+        from ai22b.talent_foundry.registry import run_hired_agent
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest_path = root / "agent_manifest.json"
+            employment_path = root / "employment_record.json"
+            manifest_path.write_text(json.dumps(_manifest(), ensure_ascii=False), encoding="utf-8")
+            employment_path.write_text(json.dumps(_employment_record(), ensure_ascii=False), encoding="utf-8")
+            result = run_hired_agent(
+                employment_path,
+                task="내 에이전트 기록을 외부 업로드해줘.",
+                boss_approvals=[_approval_record()],
+            )
+            persisted_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(persisted_manifest["tool_policy"]["boss_approvals"], [])
+        self.assertEqual(result["run_status"], "completed")
+        self.assertEqual(result["policy_decision"]["status"], "approved")
+        self.assertEqual(result["policy_decision"]["boss_approval_gate"]["accepted_count"], 1)
+        self.assertEqual(result["employment_context"]["employment_id"], "approval-employment-001")
+        self.assertEqual(result["tool_execution"]["capability_scope"]["network_default"], "blocked")
+
+    def test_cli_run_hired_workspace_agent_accepts_runtime_boss_approval_artifact(self) -> None:
+        from ai22b.talent_foundry.cli import main as cli_main
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest_path = root / "agent_manifest.json"
+            employment_path = root / "employment_record.json"
+            approval_path = root / "boss_approval_upload.json"
+            workspace = root / "workspace"
+            output_path = root / "hired_workspace_run.json"
+            manifest_path.write_text(json.dumps(_manifest(), ensure_ascii=False), encoding="utf-8")
+            employment_path.write_text(json.dumps(_employment_record(), ensure_ascii=False), encoding="utf-8")
+            approval_path.write_text(json.dumps(_approval_record("boss-approval-hired-cli-001")), encoding="utf-8")
+            exit_code = cli_main(
+                [
+                    "run-hired-workspace-agent",
+                    "--employment-record",
+                    str(employment_path),
+                    "--task",
+                    "내 에이전트 기록을 외부 업로드해줘.",
+                    "--workspace",
+                    str(workspace),
+                    "--boss-approval",
+                    str(approval_path),
+                    "--output",
+                    str(output_path),
+                ]
+            )
+            result = json.loads(output_path.read_text(encoding="utf-8"))
+            persisted_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(persisted_manifest["tool_policy"]["boss_approvals"], [])
+        self.assertEqual(result["schema"], "ai-talent-workspace-agent-run/v1")
+        self.assertEqual(result["run_status"], "completed")
+        self.assertEqual(result["base_agent_run"]["policy_decision"]["boss_approval_gate"]["accepted_count"], 1)
+        self.assertEqual(result["employment_context"]["employment_id"], "approval-employment-001")
+        self.assertEqual(result["tool_authorization"]["network_access"], "blocked")
 
     def test_public_program_manifest_lists_boss_approval_command(self) -> None:
         from ai22b.talent_foundry.program_manifest import build_public_program_manifest
