@@ -929,15 +929,40 @@ def run_workspace_agent_from_manifest(
         },
     }
 
-    if base_run["run_status"] == "blocked":
-        result["growth_update"] = {
-            "experience_type": "workspace_guardrail_block_after_hire",
-            "reflection": "워크스페이스 실행 전 정책 위반을 감지해 산출물 생성을 중단했다.",
-            "reasoning_delta": [
-                "금지 행동은 계획 파일로도 정당화하지 않는다.",
-                "외부 업로드와 실행 권한은 보스 승인 전 차단한다.",
-            ],
-        }
+    if base_run["run_status"] != "completed":
+        if base_run["run_status"] == "blocked":
+            result["growth_update"] = {
+                "experience_type": "workspace_guardrail_block_after_hire",
+                "reflection": "워크스페이스 실행 전 정책 위반을 감지해 산출물 생성을 중단했다.",
+                "reasoning_delta": [
+                    "금지 행동은 계획 파일로도 정당화하지 않는다.",
+                    "외부 업로드와 실행 권한은 보스 승인 전 차단한다.",
+                ],
+            }
+        elif base_run["run_status"] == "needs_approval":
+            result["growth_update"] = {
+                "experience_type": "workspace_approval_required_after_hire",
+                "reflection": "민감 행동은 보스 승인 전 워크스페이스 산출물 생성도 시작하지 않았다.",
+                "reasoning_delta": [
+                    "승인 대기 상태는 실행 실패가 아니라 실행 전 보류 상태로 기록한다.",
+                    "승인 전에는 계획 파일과 작업 결과 파일도 생성하지 않는다.",
+                ],
+            }
+        elif base_run["run_status"] == "needs_configuration":
+            result["growth_update"] = {
+                "experience_type": "workspace_provider_configuration_required_after_hire",
+                "reflection": "선택한 live LLM provider가 준비되지 않아 워크스페이스 산출물 생성을 시작하지 않았다.",
+                "reasoning_delta": [
+                    "live provider readiness는 워크스페이스 작업 파일 생성보다 먼저 확인한다.",
+                    "provider 미설정 실행은 완료나 작업 경험 후보로 저장하지 않는다.",
+                ],
+            }
+        else:
+            result["growth_update"] = {
+                "experience_type": "workspace_execution_not_started_after_hire",
+                "reflection": "기본 agent run이 완료되지 않아 워크스페이스 실행을 시작하지 않았다.",
+                "reasoning_delta": ["workspace artifacts require a completed base agent run."],
+            }
         return result
 
     sandbox.ensure_root()
@@ -1008,7 +1033,13 @@ def run_workspace_agent_job_from_manifest(
         llm_client=llm_client,
         resource_limits=normalized.get("resource_limits"),
     )
-    job_status = "completed" if workspace_run["run_status"] == "completed" else "blocked"
+    job_status = (
+        "completed"
+        if workspace_run["run_status"] == "completed"
+        else workspace_run["run_status"]
+        if workspace_run["run_status"] in {"blocked", "needs_approval", "needs_configuration"}
+        else "blocked"
+    )
     result = {
         "schema": WORKSPACE_JOB_RUN_SCHEMA,
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -1028,7 +1059,7 @@ def run_workspace_agent_job_from_manifest(
             ],
         },
     }
-    if job_status == "blocked":
+    if job_status != "completed":
         return result
 
     sandbox = WorkspaceSandbox(workspace_dir, **sandbox_kwargs_from_resource_limits(normalized.get("resource_limits")))

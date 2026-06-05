@@ -423,6 +423,8 @@ ai22b-talent-foundry run-agent-runtime-smoke `
   --output .\agent_runtime_smoke.json
 ```
 
+The same provider gate is enforced by installed/hired workspace, job, and dataflow runs. If a hired agent is run in live mode without a configured provider key or local endpoint, Paideia records `needs_configuration`, skips workspace artifact creation, skips job deliverables, skips dataflow synthesis, and leaves no learning promotion candidate beyond a quarantined configuration record.
+
 Provider doctor reports now include a `smoke_contract` packet. It states whether an explicit live check was requested, whether a provider call was attempted, whether the doctor made a network or localhost call, and whether the smoke passed, skipped, or failed closed. The contract also records the retention policy: no raw provider text, no raw provider payload, no hidden reasoning trace, and client-result summaries only. If the selected provider is unavailable during `--live-check`, Paideia marks the doctor report as `needs_configuration` and keeps only the redacted summary and failure reason.
 
 The adapter regression suite uses fake SDK/HTTP success fixtures for OpenAI Responses, Anthropic, Gemini, OpenAI-compatible APIs, Ollama, and LM Studio. This proves the shared `LLMClient` path builds provider requests and parses successful responses without making live network calls during tests or saving raw provider payloads.

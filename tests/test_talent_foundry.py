@@ -4513,6 +4513,108 @@ class TalentFoundryTests(unittest.TestCase):
             "paideia-llm-provider-preflight/v1",
         )
 
+    def test_hired_workspace_and_job_fail_closed_when_live_provider_not_ready(self) -> None:
+        import os
+
+        from ai22b.talent_foundry.demo import run_demo
+        from ai22b.talent_foundry.registry import (
+            hire_installed_agent,
+            run_hired_agent_job,
+            run_hired_workspace_agent,
+        )
+
+        old_key = os.environ.pop("OPENROUTER_API_KEY", None)
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                tmp_path = Path(tmp)
+                outputs = run_demo(output_dir=tmp_path / "runs")
+                hiring = hire_installed_agent(
+                    outputs["installed_agent_manifest"],
+                    employer="보스",
+                    role="증권 리서치 live provider 미설정 테스트",
+                    llm_engine="openrouter_api",
+                    llm_model="openrouter/base-model",
+                    record_name="employment_live_missing.json",
+                )
+                workspace_dir = tmp_path / "live_missing_workspace"
+                job_workspace_dir = tmp_path / "live_missing_job_workspace"
+                workspace_run = run_hired_workspace_agent(
+                    hiring["employment_record"],
+                    task="live provider 없이 워크스페이스 작업을 실행해줘.",
+                    workspace_dir=workspace_dir,
+                    output_path=tmp_path / "live_missing_workspace_run.json",
+                    llm_mode="live",
+                    llm_model="openrouter/job-model",
+                )
+                job_run = run_hired_agent_job(
+                    hiring["employment_record"],
+                    job_spec={
+                        "objective": "live provider 없이 job 산출물을 만들어줘.",
+                        "deliverables": [{"id": "report", "description": "보스 검토용 report"}],
+                    },
+                    workspace_dir=job_workspace_dir,
+                    output_path=tmp_path / "live_missing_job_run.json",
+                    llm_mode="live",
+                    llm_model="openrouter/job-model",
+                )
+        finally:
+            if old_key is not None:
+                os.environ["OPENROUTER_API_KEY"] = old_key
+
+        self.assertEqual(workspace_run["run_status"], "needs_configuration")
+        self.assertEqual(workspace_run["base_agent_run"]["run_status"], "needs_configuration")
+        self.assertEqual(workspace_run["llm_runtime_result"]["status"], "skipped_provider_not_ready")
+        self.assertEqual(workspace_run["llm_provider_preflight"]["status"], "needs_configuration")
+        self.assertEqual(workspace_run["workspace_outputs"], {})
+        self.assertFalse(workspace_dir.exists())
+        self.assertEqual(job_run["job_status"], "needs_configuration")
+        self.assertEqual(job_run["workspace_run"]["run_status"], "needs_configuration")
+        self.assertEqual(job_run["llm_runtime_result"]["status"], "skipped_provider_not_ready")
+        self.assertEqual(job_run["job_outputs"], {})
+        self.assertFalse(job_workspace_dir.exists())
+
+    def test_hired_dataflow_job_fails_closed_before_workspace_when_live_provider_not_ready(self) -> None:
+        import os
+
+        from ai22b.talent_foundry.demo import run_demo
+        from ai22b.talent_foundry.registry import hire_installed_agent, run_hired_dataflow_job
+
+        old_key = os.environ.pop("OPENROUTER_API_KEY", None)
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                tmp_path = Path(tmp)
+                outputs = run_demo(output_dir=tmp_path / "runs")
+                hiring = hire_installed_agent(
+                    outputs["installed_agent_manifest"],
+                    employer="보스",
+                    role="증권 리서치 dataflow live provider 미설정 테스트",
+                    llm_engine="openrouter_api",
+                    llm_model="openrouter/base-model",
+                    record_name="employment_dataflow_live_missing.json",
+                )
+                workspace_dir = tmp_path / "live_missing_dataflow_workspace"
+                run = run_hired_dataflow_job(
+                    hiring["employment_record"],
+                    job_spec={"objective": "live provider 없이 dataflow 작업을 실행해줘."},
+                    workspace_dir=workspace_dir,
+                    review_label={"score": 90, "status": "verified", "reviewed_by": "Boss"},
+                    output_path=tmp_path / "live_missing_dataflow_run.json",
+                    llm_mode="live",
+                    llm_model="openrouter/dataflow-model",
+                )
+        finally:
+            if old_key is not None:
+                os.environ["OPENROUTER_API_KEY"] = old_key
+
+        self.assertEqual(run["schema"], "ai-talent-dataflow-run/v1")
+        self.assertEqual(run["run_status"], "needs_configuration")
+        self.assertEqual(run["llm_runtime_result"]["status"], "skipped_provider_not_ready")
+        self.assertEqual(run["llm_provider_preflight"]["status"], "needs_configuration")
+        self.assertEqual(run["workspace_outputs"], {})
+        self.assertFalse(workspace_dir.exists())
+        self.assertEqual(run["growth_commit_candidate"]["promotion_status"], "quarantine")
+        self.assertEqual(run["growth_commit_candidate"]["verification_status"], "skipped_provider_not_ready")
+
     def test_cli_run_hired_agent_job_command_uses_job_spec_file(self) -> None:
         from ai22b.talent_foundry.cli import main as cli_main
         from ai22b.talent_foundry.demo import run_demo

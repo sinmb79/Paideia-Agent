@@ -8,7 +8,12 @@ from pathlib import Path
 from typing import Any
 
 from ai22b.talent_foundry.agent_runner import run_agent_from_manifest
-from ai22b.talent_foundry.dataflow_runtime import run_dataflow_job_from_manifest
+from ai22b.talent_foundry.dataflow_runtime import (
+    DATAFLOW_RUN_SCHEMA,
+    GROWTH_COMMIT_CANDIDATE_SCHEMA,
+    format_dataflow_job,
+    run_dataflow_job_from_manifest,
+)
 from ai22b.talent_foundry.learning_loop import (
     build_reasoning_kernel,
     create_learning_ledger,
@@ -19,7 +24,11 @@ from ai22b.talent_foundry.learning_loop import (
 )
 from ai22b.talent_foundry.memory_lifecycle import audit_learning_ledger
 from ai22b.talent_foundry.llm_clients import LLMClient
-from ai22b.talent_foundry.llm_runtime import build_llm_runtime_config, invoke_llm_application_engine
+from ai22b.talent_foundry.llm_runtime import (
+    build_llm_provider_preflight,
+    build_llm_runtime_config,
+    invoke_llm_application_engine,
+)
 from ai22b.talent_foundry.onboarding_choices import resolve_chat_surface, resolve_llm_service
 from ai22b.talent_foundry.team import DEFAULT_TEAM_ROLES
 from ai22b.talent_foundry.workspace_agent import run_workspace_agent_from_manifest, run_workspace_agent_job_from_manifest
@@ -1322,23 +1331,90 @@ def run_hired_dataflow_job(
         ledger = create_learning_ledger(owner=employment_record["agent"]["name"])
         ledger["reasoning_kernel"] = build_reasoning_kernel(ledger)
 
-    result = run_dataflow_job_from_manifest(
-        agent_manifest,
-        ledger=ledger,
-        job_spec=job_spec,
-        workspace_dir=workspace_dir,
-        review_label=review_label,
-    )
-    result["employment_context"] = _employment_context(employment_record)
-    result["llm_runtime_result"] = invoke_llm_application_engine(
+    formatted_job = format_dataflow_job(job_spec)
+    llm_provider_preflight = build_llm_provider_preflight(
         employment_record["llm_runtime"],
-        manifest=agent_manifest,
-        task=result["objective"],
         llm_mode=llm_mode,
         llm_model=llm_model,
-        client=llm_client,
     )
-    result["llm_provider_preflight"] = result["llm_runtime_result"].get("llm_provider_preflight")
+    provider_not_ready = (
+        llm_mode == "live"
+        and llm_client is None
+        and llm_provider_preflight.get("status") == "needs_configuration"
+    )
+    if provider_not_ready:
+        agent = agent_manifest.get("agent", {})
+        llm_runtime_result = {
+            "schema": "ai-talent-llm-runtime-result/v1",
+            "engine": employment_record["llm_runtime"].get("engine", "deterministic_local"),
+            "status": "skipped_provider_not_ready",
+            "reason": "live_provider_needs_configuration_before_dataflow_execution",
+            "identity_policy": employment_record["llm_runtime"].get(
+                "identity_policy",
+                "application_engine_not_identity",
+            ),
+            "network_access": employment_record["llm_runtime"].get("network_access", "blocked"),
+            "llm_mode": llm_mode,
+            "model": llm_model or employment_record["llm_runtime"].get("model"),
+            "llm_provider_preflight": llm_provider_preflight,
+        }
+        result = {
+            "schema": DATAFLOW_RUN_SCHEMA,
+            "created_at_utc": datetime.now(timezone.utc).isoformat(),
+            "runtime_model": "agent_dataflow_runtime_v1",
+            "run_status": "needs_configuration",
+            "agent": {
+                "name": agent.get("name"),
+                "role": agent.get("role"),
+                "major_goal": agent.get("major_goal"),
+            },
+            "objective": formatted_job["objective"],
+            "llm_policy": agent_manifest.get("llm_policy", {"role": "application_engine_not_identity"}),
+            "tool_policy": agent_manifest.get("tool_policy", {}),
+            "formatted_job": formatted_job,
+            "llm_runtime_result": llm_runtime_result,
+            "llm_provider_preflight": llm_provider_preflight,
+            "workspace_outputs": {},
+            "workspace_resource_usage": {
+                "status": "not_started_provider_configuration_required",
+                "workspace_root_created": False,
+            },
+            "growth_commit_candidate": {
+                "schema": GROWTH_COMMIT_CANDIDATE_SCHEMA,
+                "created_at_utc": datetime.now(timezone.utc).isoformat(),
+                "objective": formatted_job["objective"],
+                "promotion_status": "quarantine",
+                "review_label": review_label,
+                "verification_status": "skipped_provider_not_ready",
+                "verification_issues": ["live_provider_needs_configuration_before_dataflow_execution"],
+                "private_reasoning_trace_policy": "do_not_store",
+            },
+            "runtime_observability": {
+                "schema": "paideia-runtime-observability/v1",
+                "status": "skipped_provider_not_ready",
+                "provider_usage_present": False,
+                "private_reasoning_trace_stored": False,
+                "raw_provider_payload_saved": False,
+            },
+        }
+    else:
+        result = run_dataflow_job_from_manifest(
+            agent_manifest,
+            ledger=ledger,
+            job_spec=formatted_job,
+            workspace_dir=workspace_dir,
+            review_label=review_label,
+        )
+        result["llm_runtime_result"] = invoke_llm_application_engine(
+            employment_record["llm_runtime"],
+            manifest=agent_manifest,
+            task=result["objective"],
+            llm_mode=llm_mode,
+            llm_model=llm_model,
+            client=llm_client,
+        )
+        result["llm_provider_preflight"] = result["llm_runtime_result"].get("llm_provider_preflight")
+    result["employment_context"] = _employment_context(employment_record)
 
     run_output_path = output_path or target_root / entrypoints.get("last_dataflow_run", "last_hired_dataflow_run.json")
     _write_json(run_output_path, result)
