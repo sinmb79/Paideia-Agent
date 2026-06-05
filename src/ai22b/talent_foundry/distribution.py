@@ -206,6 +206,7 @@ powershell -ExecutionPolicy Bypass -File .\\doctor.ps1
 powershell -ExecutionPolicy Bypass -File .\\start_console.ps1 -Answers .\\console_answers.template.json
 powershell -ExecutionPolicy Bypass -File .\\run_agent.ps1 -Task "거시경제 질문을 정리해줘"
 powershell -ExecutionPolicy Bypass -File .\\run_job.ps1 -JobSpec .\\job_spec.template.json
+powershell -ExecutionPolicy Bypass -File .\\run_job.ps1 -JobSpec .\\job_spec.template.json -LlmMode auto -LlmModel "openai/gpt-4.1-mini"
 powershell -ExecutionPolicy Bypass -File .\\run_job_cycle.ps1 -JobSpec .\\job_spec.template.json -Score 94 -ReviewedBy "보스"
 powershell -ExecutionPolicy Bypass -File .\\run_dataflow_job.ps1 -JobSpec .\\dataflow_job.template.json -Score 94 -ReviewedBy "보스"
 powershell -ExecutionPolicy Bypass -File .\\assemble_projection_swarm.ps1 -SwarmName "신용 본체 제어 분신 군체" -Domain "증권 리서치"
@@ -246,6 +247,7 @@ powershell -ExecutionPolicy Bypass -File .\\doctor.ps1
 powershell -ExecutionPolicy Bypass -File .\\start_console.ps1 -Answers .\\console_answers.template.json
 powershell -ExecutionPolicy Bypass -File .\\run_agent.ps1 -Task "Summarize macroeconomic research questions"
 powershell -ExecutionPolicy Bypass -File .\\run_job.ps1 -JobSpec .\\job_spec.template.json
+powershell -ExecutionPolicy Bypass -File .\\run_job.ps1 -JobSpec .\\job_spec.template.json -LlmMode auto -LlmModel "openai/gpt-4.1-mini"
 powershell -ExecutionPolicy Bypass -File .\\run_job_cycle.ps1 -JobSpec .\\job_spec.template.json -Score 94 -ReviewedBy "Boss"
 powershell -ExecutionPolicy Bypass -File .\\run_dataflow_job.ps1 -JobSpec .\\dataflow_job.template.json -Score 94 -ReviewedBy "Boss"
 powershell -ExecutionPolicy Bypass -File .\\assemble_projection_swarm.ps1 -SwarmName "Shinyong parent projection swarm" -Domain "securities research"
@@ -482,7 +484,11 @@ param(
     [string]$EmploymentRecord = "",
     [string]$JobSpec = "",
     [string]$Workspace = "",
-    [string]$Output = ""
+    [string]$Output = "",
+    [ValidateSet("offline", "auto", "live")]
+    [string]$LlmMode = "offline",
+    [string]$LlmModel = "",
+    [switch]$LiveLlm
 )
 
 $ErrorActionPreference = "Stop"
@@ -505,7 +511,22 @@ if (-not (Test-Path $EmploymentRecord)) {
     throw "employment_record.json not found. Install this bundle and create a hire record first, or pass -EmploymentRecord."
 }
 
-python -m ai22b.talent_foundry.cli run-hired-agent-job --employment-record $EmploymentRecord --job-spec $JobSpec --workspace $Workspace --output $Output
+$ArgsList = @(
+    "-m", "ai22b.talent_foundry.cli",
+    "run-hired-agent-job",
+    "--employment-record", $EmploymentRecord,
+    "--job-spec", $JobSpec,
+    "--workspace", $Workspace,
+    "--output", $Output,
+    "--llm-mode", $LlmMode
+)
+if ($LiveLlm) {
+    $ArgsList += "--live-llm"
+}
+if (-not [string]::IsNullOrWhiteSpace($LlmModel)) {
+    $ArgsList += @("--llm-model", $LlmModel)
+}
+python @ArgsList
 Write-Host $Output
 """
 
@@ -519,7 +540,11 @@ param(
     [int]$Score = 94,
     [string]$ReviewedBy = "보스",
     [string]$Status = "verified",
-    [string]$Output = ""
+    [string]$Output = "",
+    [ValidateSet("offline", "auto", "live")]
+    [string]$LlmMode = "offline",
+    [string]$LlmModel = "",
+    [switch]$LiveLlm
 )
 
 $ErrorActionPreference = "Stop"
@@ -542,7 +567,25 @@ if (-not (Test-Path $EmploymentRecord)) {
     throw "employment_record.json not found. Install this bundle and create a hire record first, or pass -EmploymentRecord."
 }
 
-python -m ai22b.talent_foundry.cli run-hired-agent-job-cycle --employment-record $EmploymentRecord --job-spec $JobSpec --workspace $Workspace --score $Score --reviewed-by $ReviewedBy --status $Status --output $Output
+$ArgsList = @(
+    "-m", "ai22b.talent_foundry.cli",
+    "run-hired-agent-job-cycle",
+    "--employment-record", $EmploymentRecord,
+    "--job-spec", $JobSpec,
+    "--workspace", $Workspace,
+    "--score", $Score,
+    "--reviewed-by", $ReviewedBy,
+    "--status", $Status,
+    "--output", $Output,
+    "--llm-mode", $LlmMode
+)
+if ($LiveLlm) {
+    $ArgsList += "--live-llm"
+}
+if (-not [string]::IsNullOrWhiteSpace($LlmModel)) {
+    $ArgsList += @("--llm-model", $LlmModel)
+}
+python @ArgsList
 Write-Host $Output
 """
 
@@ -556,7 +599,11 @@ param(
     [int]$Score = 94,
     [string]$ReviewedBy = "Boss",
     [string]$Status = "verified",
-    [string]$Output = ""
+    [string]$Output = "",
+    [ValidateSet("offline", "auto", "live")]
+    [string]$LlmMode = "offline",
+    [string]$LlmModel = "",
+    [switch]$LiveLlm
 )
 
 $ErrorActionPreference = "Stop"
@@ -579,7 +626,25 @@ if (-not (Test-Path $EmploymentRecord)) {
     throw "employment_record.json not found. Install this bundle and create a hire record first, or pass -EmploymentRecord."
 }
 
-python -m ai22b.talent_foundry.cli run-hired-dataflow-job --employment-record $EmploymentRecord --job-spec $JobSpec --workspace $Workspace --score $Score --reviewed-by $ReviewedBy --status $Status --output $Output
+$ArgsList = @(
+    "-m", "ai22b.talent_foundry.cli",
+    "run-hired-dataflow-job",
+    "--employment-record", $EmploymentRecord,
+    "--job-spec", $JobSpec,
+    "--workspace", $Workspace,
+    "--score", $Score,
+    "--reviewed-by", $ReviewedBy,
+    "--status", $Status,
+    "--output", $Output,
+    "--llm-mode", $LlmMode
+)
+if ($LiveLlm) {
+    $ArgsList += "--live-llm"
+}
+if (-not [string]::IsNullOrWhiteSpace($LlmModel)) {
+    $ArgsList += @("--llm-model", $LlmModel)
+}
+python @ArgsList
 Write-Host $Output
 """
 
