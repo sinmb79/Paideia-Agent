@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -18,6 +19,17 @@ ANTHROPIC_MESSAGES_ENDPOINT = "https://api.anthropic.com/v1/messages"
 GEMINI_GENERATE_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/{model}:generateContent"
 MISTRAL_CHAT_COMPLETIONS_ENDPOINT = "https://api.mistral.ai/v1/chat/completions"
 OPENROUTER_CHAT_COMPLETIONS_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
+SECRET_ENV_KEYS = (
+    "OPENAI_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "GEMINI_API_KEY",
+    "GOOGLE_API_KEY",
+    "MISTRAL_API_KEY",
+    "OPENROUTER_API_KEY",
+)
+SECRET_QUERY_RE = re.compile(r"([?&](?:key|api_key|access_token|auth_token|refresh_token|token)=)([^&\s]+)", re.I)
+BEARER_RE = re.compile(r"((?:Authorization:\s*)?Bearer\s+)([A-Za-z0-9._\-]+)", re.I)
+OPENAI_SECRET_RE = re.compile(r"sk-[A-Za-z0-9_-]{16,}")
 
 
 class LLMClient(Protocol):
@@ -89,15 +101,45 @@ def _system_and_chat_messages(messages: list[dict[str, str]]) -> tuple[str, list
     return "\n\n".join(system_parts), chat
 
 
+def _secret_values() -> list[str]:
+    values = []
+    for key in SECRET_ENV_KEYS:
+        value = os.environ.get(key)
+        if value and len(value) >= 8:
+            values.append(value)
+    return sorted(set(values), key=len, reverse=True)
+
+
+def _redact_secret_text(text: str) -> str:
+    redacted = text
+    for value in _secret_values():
+        redacted = redacted.replace(value, "[REDACTED_SECRET]")
+    redacted = SECRET_QUERY_RE.sub(r"\1[REDACTED_SECRET]", redacted)
+    redacted = BEARER_RE.sub(r"\1[REDACTED_SECRET]", redacted)
+    return OPENAI_SECRET_RE.sub("[REDACTED_SECRET]", redacted)
+
+
+def _sanitize_value(value: Any) -> Any:
+    if isinstance(value, str):
+        return _redact_secret_text(value)
+    if isinstance(value, dict):
+        return {str(key): _sanitize_value(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_sanitize_value(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_sanitize_value(item) for item in value)
+    return value
+
+
 def _ok(engine: str, text: str, **fields: Any) -> dict[str, Any]:
     return {
         "schema": LLM_CLIENT_RESULT_SCHEMA,
         "engine": engine,
         "status": "completed",
-        "text": text.strip(),
+        "text": _redact_secret_text(text.strip()),
         "identity_policy": "application_engine_not_identity",
         "raw_output_saved": False,
-        **fields,
+        **_sanitize_value(fields),
     }
 
 
@@ -108,7 +150,7 @@ def _unavailable(engine: str, reason: str, **fields: Any) -> dict[str, Any]:
         "status": "unavailable",
         "reason": reason,
         "identity_policy": "application_engine_not_identity",
-        **fields,
+        **_sanitize_value(fields),
     }
 
 

@@ -1378,6 +1378,40 @@ class TalentFoundryTests(unittest.TestCase):
                 if value is not None:
                     os.environ[key] = value
 
+    def test_live_client_errors_redact_secret_values_from_result_packets(self) -> None:
+        import os
+        import urllib.error
+        from unittest.mock import patch
+
+        from ai22b.talent_foundry.llm_clients import build_llm_client
+        from ai22b.talent_foundry.llm_runtime import build_llm_runtime_config
+
+        secret = "fixture_gemini_secret_value_12345"
+        old_key = os.environ.get("GEMINI_API_KEY")
+        os.environ["GEMINI_API_KEY"] = secret
+
+        def raise_url_error(request, timeout=60):
+            raise urllib.error.URLError(
+                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-test:generateContent?key={secret} "
+                f"Authorization: Bearer {secret}"
+            )
+
+        try:
+            config = build_llm_runtime_config(engine="google_gemini_api", model="gemini-test")
+            with patch("urllib.request.urlopen", side_effect=raise_url_error):
+                result = build_llm_client(config).generate([{"role": "user", "content": "hello"}])
+        finally:
+            if old_key is None:
+                os.environ.pop("GEMINI_API_KEY", None)
+            else:
+                os.environ["GEMINI_API_KEY"] = old_key
+
+        serialized = json.dumps(result, ensure_ascii=False)
+        self.assertEqual(result["status"], "unavailable")
+        self.assertEqual(result["reason"], "gemini_generate_content_call_failed")
+        self.assertNotIn(secret, serialized)
+        self.assertIn("[REDACTED_SECRET]", serialized)
+
     def test_llm_provider_doctor_reports_readiness_without_exporting_secrets(self) -> None:
         import os
 
