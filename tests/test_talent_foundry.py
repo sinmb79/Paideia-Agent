@@ -5095,6 +5095,17 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(record["schema"], "paideia-memory-lifecycle-maintenance/v1")
         self.assertEqual(record["action"], "delete-experience")
         self.assertEqual(record["deleted_experience"]["experience_id"], experience_id)
+        self.assertTrue(record["integrity"]["current_ledger_readable_before"])
+        self.assertFalse(record["integrity"]["current_ledger_unreadable_before"])
+        self.assertTrue(record["integrity"]["backup_written_for_mutation"])
+        self.assertNotEqual(
+            record["integrity"]["ledger_digest_before_sha256"],
+            record["integrity"]["ledger_digest_after_sha256"],
+        )
+        self.assertEqual(
+            record["integrity"]["backup_digest_after_sha256"],
+            record["integrity"]["ledger_digest_before_sha256"],
+        )
         self.assertNotIn(experience_id, remaining_ids)
         self.assertTrue(maintained_ledger["memory_deletion_log"][0]["safe_reference_removed"])
         self.assertEqual(maintained_ledger["memory_lifecycle"]["status"], "passed")
@@ -5141,6 +5152,22 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(recover_exit, 0)
         self.assertEqual(recovered["status"], "recovered_from_backup")
         self.assertEqual(recovered["loaded_from"], "learning_ledger_backup")
+        self.assertTrue(recovered["integrity"]["current_ledger_existed_before"])
+        self.assertFalse(recovered["integrity"]["current_ledger_readable_before"])
+        self.assertTrue(recovered["integrity"]["current_ledger_unreadable_before"])
+        self.assertTrue(recovered["integrity"]["backup_available_before"])
+        self.assertIsNone(recovered["integrity"]["ledger_digest_before_sha256"])
+        self.assertEqual(
+            recovered["integrity"]["backup_digest_before_sha256"],
+            recovered["integrity"]["restored_source_digest_sha256"],
+        )
+        self.assertTrue(recovered["integrity"]["recovered_from_backup"])
+        self.assertEqual(
+            recovered["integrity"]["backup_digest_after_sha256"],
+            recovered["integrity"]["ledger_digest_after_sha256"],
+        )
+        self.assertTrue(recovered["integrity"]["backup_rewritten_to_recovered_digest"])
+        self.assertEqual(len(recovered["integrity"]["ledger_digest_after_sha256"]), 64)
         self.assertEqual(ledger["schema"], "ai-talent-learning-ledger/v1")
         self.assertEqual(ledger["memory_lifecycle"]["status"], "passed")
 

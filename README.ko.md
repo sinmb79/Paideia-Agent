@@ -389,7 +389,7 @@ ai22b-talent-foundry maintain-hired-memory --employment-record <employment_recor
 ai22b-talent-foundry maintain-hired-memory --employment-record <employment_record.json> --action migrate
 ```
 
-각 작업은 `memory_lifecycle_maintenance.json`, `memory_lifecycle_maintenance_log.jsonl`, 복구용 `learning_ledger.backup.json`을 로컬에 남깁니다.
+각 작업은 `memory_lifecycle_maintenance.json`, `memory_lifecycle_maintenance_log.jsonl`, 복구용 `learning_ledger.backup.json`을 로컬에 남깁니다. maintenance record에는 `integrity` 블록도 포함되어, ledger 변경 전후 SHA-256 digest, backup digest, 읽을 수 없는 ledger 감지 여부, 복구 시 backup digest에서 실제로 복구됐는지를 증거로 기록합니다.
 
 졸업 패키지 생성:
 

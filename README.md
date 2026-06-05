@@ -575,7 +575,7 @@ ai22b-talent-foundry maintain-hired-memory --employment-record <employment_recor
 ai22b-talent-foundry maintain-hired-memory --employment-record <employment_record.json> --action migrate
 ```
 
-Each operation writes `memory_lifecycle_maintenance.json`, appends `memory_lifecycle_maintenance_log.jsonl`, and keeps a local `learning_ledger.backup.json` for recovery.
+Each operation writes `memory_lifecycle_maintenance.json`, appends `memory_lifecycle_maintenance_log.jsonl`, and keeps a local `learning_ledger.backup.json` for recovery. The maintenance record includes an `integrity` block with before/after ledger SHA-256 digests, backup digests, unreadable-ledger detection, and proof that recovery came from the backup digest when applicable.
 
 ## Research Basis
 

@@ -815,6 +815,12 @@ def _read_json_or_none(path: Path) -> dict[str, Any] | None:
         return None
 
 
+def _json_digest(value: dict[str, Any] | None) -> str | None:
+    if value is None:
+        return None
+    return hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
+
+
 def maintain_hired_memory_lifecycle(
     employment_record_path: Path,
     *,
@@ -843,8 +849,12 @@ def maintain_hired_memory_lifecycle(
     )
 
     loaded_from = "learning_ledger"
-    current_ledger = _read_json_or_none(ledger_path) if ledger_path.exists() else None
+    ledger_existed_before = ledger_path.exists()
+    current_ledger = _read_json_or_none(ledger_path) if ledger_existed_before else None
     backup_ledger = _read_json_or_none(backup_path) if backup_path.exists() else None
+    current_unreadable = ledger_existed_before and current_ledger is None
+    current_digest_before = _json_digest(current_ledger)
+    backup_digest_before = _json_digest(backup_ledger)
     if action == "recover":
         if current_ledger is not None:
             ledger = current_ledger
@@ -891,6 +901,8 @@ def maintain_hired_memory_lifecycle(
     _write_json(ledger_path, ledger)
     if action == "recover":
         _write_json(backup_path, ledger)
+    ledger_digest_after = _json_digest(ledger)
+    backup_digest_after = _json_digest(_read_json_or_none(backup_path) if backup_path.exists() else None)
 
     record = {
         "schema": MEMORY_LIFECYCLE_MAINTENANCE_SCHEMA,
@@ -906,6 +918,32 @@ def maintain_hired_memory_lifecycle(
         "experience_id": experience_id,
         "deleted_experience": tombstone,
         "migration": migration,
+        "integrity": {
+            "current_ledger_existed_before": ledger_existed_before,
+            "current_ledger_readable_before": current_ledger is not None,
+            "current_ledger_unreadable_before": current_unreadable,
+            "backup_available_before": backup_ledger is not None,
+            "ledger_digest_before_sha256": current_digest_before,
+            "backup_digest_before_sha256": backup_digest_before,
+            "restored_source_digest_sha256": (
+                backup_digest_before
+                if action == "recover" and loaded_from == "learning_ledger_backup"
+                else current_digest_before
+            ),
+            "ledger_digest_after_sha256": ledger_digest_after,
+            "backup_digest_after_sha256": backup_digest_after,
+            "backup_written_for_mutation": (
+                action != "recover"
+                and current_digest_before is not None
+                and backup_digest_after == current_digest_before
+            ),
+            "recovered_from_backup": action == "recover" and loaded_from == "learning_ledger_backup",
+            "backup_rewritten_to_recovered_digest": (
+                action == "recover"
+                and loaded_from == "learning_ledger_backup"
+                and backup_digest_after == ledger_digest_after
+            ),
+        },
         "memory_lifecycle": ledger.get("memory_lifecycle", {}),
         "counts": {
             "promoted": len(ledger.get("promoted_experiences", [])),
