@@ -51,6 +51,51 @@ class ToolSpec:
         }
 
 
+def _local_file_read(context: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "schema": "paideia-tool-local-file-read-plan/v1",
+        "mode": "declared_local_context_only",
+        "direct_file_read_performed": False,
+        "read_sources": [
+            "agent_manifest",
+            "memory_profile_summary",
+            "policy_decision",
+            "workspace_outputs_declared_by_sandbox",
+        ],
+        "path_policy": {
+            "absolute_paths_rejected_for_public_artifacts": True,
+            "workspace_escape_rejected": True,
+            "private_training_files_not_read_by_default": True,
+        },
+        "delegated_runtime": "WorkspaceSandbox when workspace execution is requested",
+    }
+
+
+def _local_file_write(context: dict[str, Any]) -> dict[str, Any]:
+    task = str(context.get("task", ""))
+    return {
+        "schema": "paideia-tool-local-file-write-plan/v1",
+        "mode": "sandbox_declared_outputs_only",
+        "direct_file_write_performed": False,
+        "declared_output_candidates": [
+            "task_plan.md",
+            "result_summary.md",
+            "runtime_execution.json",
+            "trace.jsonl",
+            "rollback_manifest.json",
+            "workspace_sandbox.json",
+        ],
+        "task_fingerprint": hashlib.sha256(task.encode("utf-8")).hexdigest()[:16],
+        "path_policy": {
+            "write_root": "workspace_root_only",
+            "rollback_manifest_required": True,
+            "network_side_effects": "blocked",
+            "subprocess_side_effects": "blocked",
+        },
+        "delegated_runtime": "WorkspaceSandbox.safe_path/write_* methods",
+    }
+
+
 def _work_session(context: dict[str, Any]) -> dict[str, Any]:
     agent = context.get("manifest", {}).get("agent", {})
     task = context.get("task", "")
@@ -159,8 +204,46 @@ def _projection_team(context: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _assessment(context: dict[str, Any]) -> dict[str, Any]:
+    policy_decision = context.get("policy_decision", {})
+    llm_result = context.get("llm_result", {})
+    return {
+        "schema": "paideia-tool-assessment-review/v1",
+        "assessment_mode": "post_run_review_packet",
+        "status": "ready_for_boss_review",
+        "checks": {
+            "policy_status": policy_decision.get("status"),
+            "llm_status": llm_result.get("status"),
+            "hidden_chain_of_thought_not_stored": True,
+            "promotion_without_review": False,
+        },
+        "recommended_review_label": {
+            "status": "needs_boss_review",
+            "score": None,
+        },
+    }
+
+
 def build_default_tool_registry() -> dict[str, ToolSpec]:
     tools = [
+        ToolSpec(
+            tool_id="local_file_read",
+            capability="research.analysis",
+            description="Declare safe local read surfaces without reading arbitrary files.",
+            side_effects="none",
+            handler=_local_file_read,
+            data_classes=("manifest_summary", "verified_memory_summaries", "workspace_output_references"),
+            filesystem_scope="declared_context_only",
+        ),
+        ToolSpec(
+            tool_id="local_file_write",
+            capability="research.analysis",
+            description="Declare sandbox-only workspace write intentions; actual writes are performed by WorkspaceSandbox.",
+            side_effects="sandbox_declared_outputs_only",
+            handler=_local_file_write,
+            data_classes=("task_context", "workspace_output_manifest"),
+            filesystem_scope="workspace_root_declared_outputs",
+        ),
         ToolSpec(
             tool_id="work_session",
             capability="research.analysis",
@@ -176,6 +259,14 @@ def build_default_tool_registry() -> dict[str, ToolSpec]:
             side_effects="none",
             handler=_evidence_packet,
             data_classes=("task_context", "runtime_draft", "policy_decision", "verified_memory_summaries"),
+        ),
+        ToolSpec(
+            tool_id="assessment",
+            capability="assessment.review",
+            description="Prepare a post-run review packet; it does not promote learning by itself.",
+            side_effects="review_packet_only",
+            handler=_assessment,
+            data_classes=("policy_decision", "runtime_status", "review_label_candidate"),
         ),
         ToolSpec(
             tool_id="memory_consolidation",

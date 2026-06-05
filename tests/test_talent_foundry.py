@@ -1156,6 +1156,7 @@ class TalentFoundryTests(unittest.TestCase):
     def test_agent_manifest_exports_employed_talent_with_memory_and_tool_policy(self) -> None:
         from ai22b.talent_foundry.agent_manifest import build_agent_manifest
         from ai22b.talent_foundry.demo import run_demo
+        from ai22b.talent_foundry.tool_registry import build_default_tool_registry
 
         with tempfile.TemporaryDirectory() as tmp:
             outputs = run_demo(output_dir=Path(tmp))
@@ -1163,10 +1164,13 @@ class TalentFoundryTests(unittest.TestCase):
             memory_profile = json.loads(outputs["memory_profile"].read_text(encoding="utf-8"))
 
         manifest = build_agent_manifest(packet, memory_profile)
+        registered_tools = build_default_tool_registry()
+        ghost_tools = sorted(set(manifest["tool_policy"]["allowed_tools"]) - set(registered_tools))
 
         self.assertEqual(manifest["agent"]["name"], "신용")
         self.assertEqual(manifest["llm_policy"]["role"], "application_engine_not_identity")
         self.assertIn("evidence_packet", manifest["tool_policy"]["allowed_tools"])
+        self.assertEqual(ghost_tools, [])
         self.assertIn("투자 실행", manifest["tool_policy"]["blocked_tools"])
         self.assertIn("local_cli_runtime", manifest["compatible_targets"])
         self.assertEqual(
@@ -1217,10 +1221,16 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(result["execution_loop"]["schema"], "paideia-agent-execution-loop/v1")
         self.assertEqual(result["policy_decision"]["decision_model"], "action_intent_capability_v1")
         self.assertEqual(result["verification"]["status"], "passed")
+        self.assertIn("local_file_read", result["selected_tools"])
+        self.assertIn("local_file_write", result["selected_tools"])
         self.assertIn("evidence_packet", result["selected_tools"])
         self.assertTrue(result["audit_events"])
         self.assertIn("llm_runtime_result", result)
         tool_results = {item["tool"]: item for item in result["tool_execution"]["tool_results"]}
+        self.assertEqual(tool_results["local_file_read"]["output"]["schema"], "paideia-tool-local-file-read-plan/v1")
+        self.assertFalse(tool_results["local_file_read"]["output"]["direct_file_read_performed"])
+        self.assertEqual(tool_results["local_file_write"]["output"]["schema"], "paideia-tool-local-file-write-plan/v1")
+        self.assertFalse(tool_results["local_file_write"]["output"]["direct_file_write_performed"])
         evidence = tool_results["evidence_packet"]["output"]
         self.assertEqual(evidence["schema"], "paideia-tool-evidence-packet/v1")
         self.assertTrue(evidence["evidence_items"])
@@ -1478,13 +1488,23 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(capability_scope["mode"], "deny_by_default")
         self.assertIn("research.analysis", capability_scope["granted_capabilities"])
         tool_results = {item["tool"]: item for item in result["tool_execution"]["tool_results"]}
+        self.assertIn("local_file_read", tool_results)
+        self.assertIn("local_file_write", tool_results)
         self.assertIn("work_session", tool_results)
         self.assertIn("evidence_packet", tool_results)
         self.assertIn("memory_consolidation", tool_results)
         self.assertIn("parent_controlled_projection_team", tool_results)
+        self.assertEqual(tool_results["local_file_read"]["capability_scope"]["filesystem_scope"], "declared_context_only")
+        self.assertEqual(
+            tool_results["local_file_write"]["capability_scope"]["filesystem_scope"],
+            "workspace_root_declared_outputs",
+        )
+        self.assertEqual(tool_results["local_file_write"]["output"]["path_policy"]["write_root"], "workspace_root_only")
         self.assertEqual(tool_results["work_session"]["capability_scope"]["network_scope"], "blocked")
         self.assertIn("task_context", tool_results["work_session"]["capability_scope"]["data_classes"])
         self.assertEqual(tool_results["evidence_packet"]["output"]["schema"], "paideia-tool-evidence-packet/v1")
+        self.assertIn("local_file_read", tool_results["evidence_packet"]["output"]["previous_completed_tools"])
+        self.assertIn("local_file_write", tool_results["evidence_packet"]["output"]["previous_completed_tools"])
         self.assertIn("work_session", tool_results["evidence_packet"]["output"]["previous_completed_tools"])
         self.assertEqual(tool_results["parent_controlled_projection_team"]["output"]["separate_consciousness"], False)
 

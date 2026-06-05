@@ -99,8 +99,11 @@ DISCUSSION_MARKERS = (
 )
 
 TOOL_CAPABILITIES = {
+    "local_file_read": ["research.analysis", "filesystem.read_declared"],
+    "local_file_write": ["research.analysis", "filesystem.write_declared"],
     "work_session": ["research.analysis", "document.draft"],
     "evidence_packet": ["research.analysis", "evidence.review"],
+    "assessment": ["assessment.review"],
     "memory_consolidation": ["memory.write_candidate"],
     "parent_controlled_projection_team": ["projection.spawn_bounded"],
 }
