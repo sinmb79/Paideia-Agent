@@ -2384,6 +2384,17 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertTrue(audit["checkpoints"]["family_lineage"]["passed"])
         self.assertTrue(audit["checkpoints"]["research_foundation"]["passed"])
         self.assertTrue(audit["checkpoints"]["public_program_manifest"]["passed"])
+        self.assertTrue(audit["checkpoints"]["runtime_observability_comparison"]["passed"])
+        self.assertGreater(
+            audit["checkpoints"]["runtime_observability_comparison"]["details"]["context_reduction_ratio"],
+            1,
+        )
+        self.assertTrue(
+            audit["checkpoints"]["runtime_observability_comparison"]["details"]["all_records_use_selected_memory_only"]
+        )
+        self.assertTrue(
+            audit["checkpoints"]["runtime_observability_comparison"]["details"]["all_records_avoid_full_session_replay"]
+        )
         self.assertIn("hire-installed", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])
         self.assertIn("doctor-bundle", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])
         self.assertIn("run-hired-agent-job", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])

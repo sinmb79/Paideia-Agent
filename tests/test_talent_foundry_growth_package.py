@@ -86,11 +86,20 @@ class PaideiaGrowthPackageTests(unittest.TestCase):
         self.assertTrue(run["verification"]["runtime_observability_comparison_created"])
         self.assertTrue(run["verification"]["release_audit_public_ready"])
         self.assertTrue(release_audit["public_release_ready"])
+        self.assertTrue(release_audit["checkpoints"]["runtime_observability_comparison"]["passed"])
         self.assertTrue(release_audit["checkpoints"]["role_model_runtime"]["details"]["agent_run_p0_runtime_ready"])
         self.assertTrue(release_audit["checkpoints"]["role_model_runtime"]["details"]["dataflow_p0_runtime_ready"])
         self.assertEqual(runtime_benchmark["schema"], "paideia-runtime-observability-comparison/v1")
         self.assertTrue(runtime_benchmark["summary"]["public_safe"])
         self.assertGreater(runtime_benchmark["summary"]["context_reduction_ratio"], 1)
+        self.assertEqual(
+            release_audit["checkpoints"]["runtime_observability_comparison"]["details"]["schema"],
+            runtime_benchmark["schema"],
+        )
+        self.assertEqual(
+            release_audit["checkpoints"]["runtime_observability_comparison"]["details"]["record_count"],
+            runtime_benchmark["summary"]["record_count"],
+        )
         self.assertEqual(same_sky["schema"], "ai22b-paideia-same-sky-eval/v1")
         self.assertEqual(same_sky["agent_count"], 1)
         self.assertIn("growth_profile", same_sky["agent_views"][0]["response"]["evidence_links"])

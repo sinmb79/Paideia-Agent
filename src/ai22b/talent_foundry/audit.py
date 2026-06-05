@@ -7,6 +7,7 @@ from typing import Any
 
 from ai22b.config import PROJECT_ROOT
 from ai22b.talent_foundry.distribution import verify_agent_release_archive, verify_agent_release_bundle
+from ai22b.talent_foundry.runtime_benchmark import RUNTIME_OBSERVABILITY_COMPARISON_SCHEMA
 
 
 AUDIT_SCHEMA = "ai-talent-foundry-release-audit/v1"
@@ -247,6 +248,83 @@ def _dataflow_p0_runtime_details(run: dict[str, Any]) -> dict[str, Any]:
         and details["growth_candidate_private_reasoning_trace_policy"] == "do_not_store"
     )
     return details
+
+
+def _runtime_observability_comparison(run_dir: Path) -> dict[str, Any]:
+    comparison_path = run_dir / "runtime_observability_comparison.json"
+    if not comparison_path.exists():
+        return _checkpoint(
+            passed=False,
+            evidence=[comparison_path],
+            root=run_dir,
+            missing=[comparison_path],
+            details={"reason": "runtime_observability_comparison_missing"},
+        )
+
+    comparison = _read_json(comparison_path)
+    summary = comparison.get("summary", {}) if isinstance(comparison.get("summary"), dict) else {}
+    records = comparison.get("records", []) if isinstance(comparison.get("records"), list) else []
+    missing_observability = (
+        comparison.get("missing_observability", [])
+        if isinstance(comparison.get("missing_observability"), list)
+        else []
+    )
+    record_privacy = [
+        {
+            "source_file_name": item.get("source_file_name"),
+            "selected_memory_only": item.get("paideia_memory_board", {}).get("selected_memory_only")
+            if isinstance(item.get("paideia_memory_board"), dict)
+            else None,
+            "full_session_replay_used": item.get("paideia_memory_board", {}).get("full_session_replay_used")
+            if isinstance(item.get("paideia_memory_board"), dict)
+            else None,
+            "private_reasoning_trace_stored": item.get("privacy", {}).get("private_reasoning_trace_stored")
+            if isinstance(item.get("privacy"), dict)
+            else None,
+            "local_absolute_paths_exported": item.get("privacy", {}).get("local_absolute_paths_exported")
+            if isinstance(item.get("privacy"), dict)
+            else None,
+            "uses_less_context": item.get("comparison", {}).get("paideia_uses_less_context_than_replay_baseline")
+            if isinstance(item.get("comparison"), dict)
+            else None,
+        }
+        for item in records
+        if isinstance(item, dict)
+    ]
+    details = {
+        "schema": comparison.get("schema"),
+        "record_count": summary.get("record_count"),
+        "missing_observability_count": summary.get("missing_observability_count"),
+        "context_reduction_ratio": summary.get("context_reduction_ratio"),
+        "all_records_use_selected_memory_only": summary.get("all_records_use_selected_memory_only"),
+        "all_records_avoid_full_session_replay": summary.get("all_records_avoid_full_session_replay"),
+        "privacy_ok": summary.get("privacy_ok"),
+        "public_safe": summary.get("public_safe"),
+        "paideia_prompt_context_estimated_tokens": summary.get("paideia_prompt_context_estimated_tokens"),
+        "generic_prompt_wrapper_replay_estimated_tokens": summary.get(
+            "generic_prompt_wrapper_replay_estimated_tokens"
+        ),
+        "record_privacy": record_privacy,
+        "missing_observability": missing_observability,
+    }
+    passed = (
+        details["schema"] == RUNTIME_OBSERVABILITY_COMPARISON_SCHEMA
+        and isinstance(details["record_count"], int)
+        and details["record_count"] >= 2
+        and details["missing_observability_count"] == 0
+        and isinstance(details["context_reduction_ratio"], (int, float))
+        and details["context_reduction_ratio"] > 1
+        and details["all_records_use_selected_memory_only"] is True
+        and details["all_records_avoid_full_session_replay"] is True
+        and details["privacy_ok"] is True
+        and details["public_safe"] is True
+        and all(item.get("uses_less_context") is True for item in record_privacy)
+        and all(item.get("selected_memory_only") is True for item in record_privacy)
+        and all(item.get("full_session_replay_used") is False for item in record_privacy)
+        and all(item.get("private_reasoning_trace_stored") is False for item in record_privacy)
+        and all(item.get("local_absolute_paths_exported") is False for item in record_privacy)
+    )
+    return _checkpoint(passed=passed, evidence=[comparison_path], root=run_dir, details=details)
 
 
 def _checkpoint(
@@ -899,6 +977,7 @@ def audit_foundry_release(run_dir: Path, *, output_path: Path | None = None) -> 
             "public_program_manifest": _public_program_manifest(run_dir),
             "role_model_training_artifacts": _role_model_training_artifacts(run_dir, installed_root),
             "role_model_runtime": _role_model_runtime(installed_root, run_dir),
+            "runtime_observability_comparison": _runtime_observability_comparison(run_dir),
         }
     else:
         checkpoints = {
@@ -912,6 +991,7 @@ def audit_foundry_release(run_dir: Path, *, output_path: Path | None = None) -> 
             "family_lineage": _family_lineage(run_dir),
             "projection_swarm": _projection_swarm(installed_root, run_dir),
             "specialist_team": _specialist_team(installed_root, run_dir),
+            "runtime_observability_comparison": _runtime_observability_comparison(run_dir),
         }
     failed = [name for name, checkpoint in checkpoints.items() if not checkpoint["passed"]]
     public_release_ready = not failed
