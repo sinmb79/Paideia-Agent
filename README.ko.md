@@ -413,6 +413,16 @@ ai22b-talent-foundry create-boss-approval `
   --output .\boss_approval_upload.json
 ```
 
+생성한 artifact는 `--boss-approval`로 한 번의 manifest 또는 workspace 실행에 부착합니다. 원본 manifest 파일은 수정하지 않고, 해당 실행 기록 안에서만 approval을 병합합니다. 또한 승인 artifact는 정책 게이트 통과 기록일 뿐이며, 별도 검토된 capability 도구가 구현되지 않는 한 네트워크와 서브프로세스 기본값은 계속 차단됩니다.
+
+```powershell
+ai22b-talent-foundry run-agent `
+  --manifest .\agent_manifest.json `
+  --task "외부 부작용은 막은 채 검토용 업로드 패킷만 준비해줘." `
+  --boss-approval .\boss_approval_upload.json `
+  --output .\agent_run_with_approval.json
+```
+
 workspace/dataflow 변경을 P0-ready라고 부르기 전에는 생성된 실행 산출물에 대해 실행 증명 verifier를 돌립니다.
 
 ```powershell

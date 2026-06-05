@@ -567,6 +567,16 @@ ai22b-talent-foundry create-boss-approval `
   --output .\boss_approval_upload.json
 ```
 
+Attach that artifact to a single manifest or workspace run with `--boss-approval`. The source manifest is not modified; the approval is merged only for that execution record, and the runtime still keeps network and subprocess defaults blocked unless a separate capability-scoped tool is implemented and reviewed:
+
+```powershell
+ai22b-talent-foundry run-agent `
+  --manifest .\agent_manifest.json `
+  --task "Prepare the reviewed upload packet, but keep external side effects blocked." `
+  --boss-approval .\boss_approval_upload.json `
+  --output .\agent_run_with_approval.json
+```
+
 Run the workspace execution proof verifier against a generated run artifact before calling a workspace/dataflow change P0-ready:
 
 ```powershell

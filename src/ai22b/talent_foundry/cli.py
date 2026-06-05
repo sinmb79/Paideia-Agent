@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 from pathlib import Path
 from typing import Sequence
@@ -103,6 +104,23 @@ DEFAULT_BUNDLE_OUTPUT_DIR = DEFAULT_RUN_DIR / "shinyong_agent_release_bundle"
 DEFAULT_MANIFEST_OUTPUT = DEFAULT_RUN_DIR / "shinyong_agent_manifest.json"
 DEFAULT_AGENT_RUN_OUTPUT = DEFAULT_RUN_DIR / "shinyong_agent_run.json"
 DEFAULT_AGENT_RUN_LOG = DEFAULT_RUN_DIR / "shinyong_agent_run_log.jsonl"
+BOSS_APPROVAL_SCHEMA = "paideia-boss-approval/v1"
+
+
+def _manifest_with_boss_approvals(manifest: dict, approval_paths: Sequence[str] | None) -> dict:
+    if not approval_paths:
+        return manifest
+    merged = copy.deepcopy(manifest)
+    tool_policy = merged.setdefault("tool_policy", {})
+    approvals = list(tool_policy.get("boss_approvals", []))
+    for raw_path in approval_paths:
+        path = Path(raw_path)
+        approval = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(approval, dict) or approval.get("schema") != BOSS_APPROVAL_SCHEMA:
+            raise ValueError(f"Unsupported boss approval artifact schema: {path}")
+        approvals.append(approval)
+    tool_policy["boss_approvals"] = approvals
+    return merged
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -338,6 +356,12 @@ def _build_parser() -> argparse.ArgumentParser:
     run_agent.add_argument("--llm-model-path")
     run_agent.add_argument("--llm-mode", choices=["offline", "auto", "live"], default="offline")
     run_agent.add_argument("--live-llm", action="store_true", help="Shortcut for --llm-mode live.")
+    run_agent.add_argument(
+        "--boss-approval",
+        action="append",
+        default=[],
+        help="Attach one explicit Boss approval artifact for this manifest run. Repeatable.",
+    )
 
     doctor_llm = subparsers.add_parser(
         "doctor-llm-provider",
@@ -367,6 +391,12 @@ def _build_parser() -> argparse.ArgumentParser:
     run_workspace_agent.add_argument("--llm-model-path")
     run_workspace_agent.add_argument("--llm-mode", choices=["offline", "auto", "live"], default="offline")
     run_workspace_agent.add_argument("--live-llm", action="store_true", help="Shortcut for --llm-mode live.")
+    run_workspace_agent.add_argument(
+        "--boss-approval",
+        action="append",
+        default=[],
+        help="Attach one explicit Boss approval artifact for this workspace run. Repeatable.",
+    )
 
     learn = subparsers.add_parser("learn", help="Build a verified learning ledger and reasoning kernel.")
     learn.add_argument("--owner", default="신용")
@@ -1056,7 +1086,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if args.command == "run-agent":
-        manifest = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
+        manifest = _manifest_with_boss_approvals(
+            json.loads(Path(args.manifest).read_text(encoding="utf-8")),
+            args.boss_approval,
+        )
         llm_mode = "live" if args.live_llm else args.llm_mode
         runtime_config = build_llm_runtime_config(
             engine=args.llm_engine,
@@ -1092,7 +1125,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if args.command == "run-workspace-agent":
-        manifest = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
+        manifest = _manifest_with_boss_approvals(
+            json.loads(Path(args.manifest).read_text(encoding="utf-8")),
+            args.boss_approval,
+        )
         llm_mode = "live" if args.live_llm else args.llm_mode
         runtime_config = build_llm_runtime_config(
             engine=args.llm_engine,

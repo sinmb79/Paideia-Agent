@@ -129,6 +129,126 @@ class ActionApprovalTests(unittest.TestCase):
         self.assertEqual(decision["status"], "approved")
         self.assertEqual(decision["boss_approval_gate"]["accepted_count"], 1)
 
+    def test_cli_run_agent_accepts_one_run_boss_approval_artifact(self) -> None:
+        from ai22b.talent_foundry.cli import main as cli_main
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest_path = root / "manifest.json"
+            approval_path = root / "boss_approval_upload.json"
+            output_path = root / "agent_run.json"
+            log_path = root / "agent_run.jsonl"
+            manifest_path.write_text(json.dumps(_manifest(), ensure_ascii=False), encoding="utf-8")
+            create_exit = cli_main(
+                [
+                    "create-boss-approval",
+                    "--capability",
+                    "network.external_upload",
+                    "--action-type",
+                    "external_upload",
+                    "--data-class",
+                    "agent_or_owner_data",
+                    "--approved-by",
+                    "Boss",
+                    "--approval-id",
+                    "boss-approval-cli-run-001",
+                    "--output",
+                    str(approval_path),
+                ]
+            )
+            run_exit = cli_main(
+                [
+                    "run-agent",
+                    "--manifest",
+                    str(manifest_path),
+                    "--task",
+                    "내 에이전트 기록을 외부 업로드해줘.",
+                    "--boss-approval",
+                    str(approval_path),
+                    "--output",
+                    str(output_path),
+                    "--log",
+                    str(log_path),
+                ]
+            )
+            result = json.loads(output_path.read_text(encoding="utf-8"))
+            original_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(create_exit, 0)
+        self.assertEqual(run_exit, 0)
+        self.assertEqual(original_manifest["tool_policy"]["boss_approvals"], [])
+        self.assertEqual(result["run_status"], "completed")
+        self.assertEqual(result["policy_decision"]["status"], "approved")
+        self.assertEqual(result["policy_decision"]["boss_approval_gate"]["accepted_count"], 1)
+        self.assertEqual(
+            result["policy_decision"]["boss_approval_gate"]["accepted_approvals"][0]["approval_id"],
+            "boss-approval-cli-run-001",
+        )
+        self.assertEqual(result["execution_contract"]["policy_gate"]["boss_approval_accepted_count"], 1)
+        self.assertEqual(result["tool_execution"]["capability_scope"]["network_default"], "blocked")
+        self.assertEqual(result["tool_execution"]["capability_scope"]["subprocess_default"], "blocked")
+        self.assertNotIn("network.external_upload", result["tool_execution"]["capability_scope"]["granted_capabilities"])
+
+    def test_cli_run_workspace_agent_accepts_one_run_boss_approval_artifact(self) -> None:
+        from ai22b.talent_foundry.cli import main as cli_main
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest_path = root / "manifest.json"
+            approval_path = root / "boss_approval_upload.json"
+            output_path = root / "workspace_run.json"
+            workspace = root / "workspace"
+            manifest_path.write_text(json.dumps(_manifest(), ensure_ascii=False), encoding="utf-8")
+            create_exit = cli_main(
+                [
+                    "create-boss-approval",
+                    "--capability",
+                    "network.external_upload",
+                    "--action-type",
+                    "external_upload",
+                    "--data-class",
+                    "agent_or_owner_data",
+                    "--approved-by",
+                    "Boss",
+                    "--approval-id",
+                    "boss-approval-workspace-001",
+                    "--output",
+                    str(approval_path),
+                ]
+            )
+            run_exit = cli_main(
+                [
+                    "run-workspace-agent",
+                    "--manifest",
+                    str(manifest_path),
+                    "--task",
+                    "내 에이전트 기록을 외부 업로드해줘.",
+                    "--workspace",
+                    str(workspace),
+                    "--boss-approval",
+                    str(approval_path),
+                    "--output",
+                    str(output_path),
+                ]
+            )
+            result = json.loads(output_path.read_text(encoding="utf-8"))
+            task_plan_exists = Path(result["workspace_outputs"]["task_plan"]).exists()
+            original_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(create_exit, 0)
+        self.assertEqual(run_exit, 0)
+        self.assertEqual(original_manifest["tool_policy"]["boss_approvals"], [])
+        self.assertEqual(result["schema"], "ai-talent-workspace-agent-run/v1")
+        self.assertEqual(result["run_status"], "completed")
+        self.assertEqual(result["base_agent_run"]["policy_decision"]["boss_approval_gate"]["accepted_count"], 1)
+        self.assertEqual(
+            result["base_agent_run"]["execution_contract"]["policy_gate"]["boss_approval_accepted_count"],
+            1,
+        )
+        self.assertEqual(result["tool_authorization"]["network_access"], "blocked")
+        self.assertEqual(result["tool_authorization"]["capability_scope"]["network_default"], "blocked")
+        self.assertTrue(task_plan_exists)
+
     def test_public_program_manifest_lists_boss_approval_command(self) -> None:
         from ai22b.talent_foundry.program_manifest import build_public_program_manifest
 
