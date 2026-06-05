@@ -372,6 +372,25 @@ Add `--live-check` only when you intentionally want Paideia to call the selected
 
 Chat runs use the same selected provider contract. `openai_chatgpt_codex` keeps the dedicated OpenAI Responses chat bridge, while Anthropic, Gemini, Mistral, OpenRouter, Ollama, and LM Studio chat through the shared `LLMClient` adapter path. Every chat turn records `chat_execution_trace` with memory routing, live provider attempt/fallback, reply generation mode, and reviewed learning decision when `--learn-from-chat` is enabled.
 
+Hired job, dataflow, and job-cycle commands now use the same runtime flags, so the LLM service chosen during onboarding or hiring is carried into real work artifacts:
+
+```powershell
+ai22b-talent-foundry run-hired-agent-job `
+  --employment-record .\employment_record.json `
+  --job-spec .\job_spec.json `
+  --workspace .\workspace `
+  --llm-mode live `
+  --llm-model openai/gpt-4.1-mini
+
+ai22b-talent-foundry run-hired-dataflow-job `
+  --employment-record .\employment_record.json `
+  --job-spec .\dataflow_job.json `
+  --workspace .\workspace `
+  --score 90 `
+  --llm-mode auto `
+  --llm-model openai/gpt-4.1-mini
+```
+
 Workspace runs also write three P0 runtime artifacts inside the allowed workspace root:
 
 - `runtime_execution.json`: the action policy, LLM runtime result, registered tool execution, verification, and memory-write decision snapshot.

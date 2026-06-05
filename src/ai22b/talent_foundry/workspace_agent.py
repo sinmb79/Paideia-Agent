@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from ai22b.talent_foundry.agent_runner import run_agent_from_manifest
+from ai22b.talent_foundry.llm_clients import LLMClient
 from ai22b.talent_foundry.workspace_sandbox import (
     WORKSPACE_SANDBOX_SCHEMA,
     WorkspaceSandbox,
@@ -146,6 +147,7 @@ def run_workspace_agent_from_manifest(
     runtime_config: dict[str, Any] | None = None,
     llm_mode: str = "offline",
     llm_model: str | None = None,
+    llm_client: LLMClient | None = None,
 ) -> dict[str, Any]:
     base_run = run_agent_from_manifest(
         manifest,
@@ -153,6 +155,7 @@ def run_workspace_agent_from_manifest(
         runtime_config=runtime_config,
         llm_mode=llm_mode,
         llm_model=llm_model,
+        llm_client=llm_client,
     )
     created_at = datetime.now(timezone.utc).isoformat()
     sandbox = WorkspaceSandbox(workspace_dir)
@@ -244,12 +247,20 @@ def run_workspace_agent_job_from_manifest(
     *,
     job_spec: dict[str, Any],
     workspace_dir: Path,
+    runtime_config: dict[str, Any] | None = None,
+    llm_mode: str = "offline",
+    llm_model: str | None = None,
+    llm_client: LLMClient | None = None,
 ) -> dict[str, Any]:
     normalized = _normalize_job_spec(job_spec)
     workspace_run = run_workspace_agent_from_manifest(
         manifest,
         task=normalized["objective"],
         workspace_dir=workspace_dir,
+        runtime_config=runtime_config,
+        llm_mode=llm_mode,
+        llm_model=llm_model,
+        llm_client=llm_client,
     )
     job_status = "completed" if workspace_run["run_status"] == "completed" else "blocked"
     result = {

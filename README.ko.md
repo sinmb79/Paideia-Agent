@@ -160,6 +160,25 @@ ai22b-talent-foundry doctor-llm-provider `
 
 채팅 실행도 같은 provider 선택 계약을 따릅니다. `openai_chatgpt_codex`는 전용 OpenAI Responses 채팅 bridge를 유지하고, Anthropic, Gemini, Mistral, OpenRouter, Ollama, LM Studio는 공통 `LLMClient` adapter 경로로 채팅합니다. 각 채팅 턴은 `chat_execution_trace`에 메모리 라우팅, live provider 시도/fallback, 답변 생성 모드, `--learn-from-chat` 사용 시 검토된 학습 결정을 기록합니다.
 
+고용된 에이전트의 job, dataflow, job-cycle 명령도 같은 runtime 옵션을 사용합니다. 따라서 온보딩/고용 단계에서 선택한 LLM 서비스가 실제 업무 산출물 생성 경로까지 이어집니다.
+
+```powershell
+ai22b-talent-foundry run-hired-agent-job `
+  --employment-record .\employment_record.json `
+  --job-spec .\job_spec.json `
+  --workspace .\workspace `
+  --llm-mode live `
+  --llm-model openai/gpt-4.1-mini
+
+ai22b-talent-foundry run-hired-dataflow-job `
+  --employment-record .\employment_record.json `
+  --job-spec .\dataflow_job.json `
+  --workspace .\workspace `
+  --score 90 `
+  --llm-mode auto `
+  --llm-model openai/gpt-4.1-mini
+```
+
 워크스페이스 실행은 허용된 workspace root 안에 세 가지 P0 런타임 산출물도 남깁니다.
 
 - `runtime_execution.json`: action policy, LLM runtime 결과, 등록형 도구 실행, 검증, 메모리 기록 판단 스냅샷

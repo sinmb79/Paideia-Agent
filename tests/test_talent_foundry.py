@@ -3172,6 +3172,10 @@ class TalentFoundryTests(unittest.TestCase):
                     str(workspace),
                     "--output",
                     str(output_path),
+                    "--llm-mode",
+                    "auto",
+                    "--llm-model",
+                    "cli-job-model",
                 ]
             )
             data = json.loads(output_path.read_text(encoding="utf-8"))
@@ -3266,6 +3270,96 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("workspace_artifact_trace", installed_ledger["reasoning_kernel"]["procedural_skills"])
         self.assertEqual(saved_cycle["cycle_id"], cycle["cycle_id"])
 
+    def test_hired_job_dataflow_and_cycle_propagate_live_llm_runtime(self) -> None:
+        from ai22b.talent_foundry.demo import run_demo
+        from ai22b.talent_foundry.registry import (
+            hire_installed_agent,
+            run_hired_agent_job,
+            run_hired_agent_job_cycle,
+            run_hired_dataflow_job,
+        )
+
+        class FakeLiveClient:
+            def __init__(self) -> None:
+                self.calls: list[dict[str, object]] = []
+
+            def generate(self, messages, *, tools=None, policy=None):
+                self.calls.append({"messages": messages, "tools": tools or [], "policy": policy or {}})
+                return {
+                    "schema": "paideia-llm-client-result/v1",
+                    "engine": "fake_live_llm",
+                    "status": "completed",
+                    "text": "보스 검토용 live provider 작업 초안입니다.",
+                    "identity_policy": "application_engine_not_identity",
+                    "raw_output_saved": False,
+                }
+
+        job_spec = {
+            "schema": "ai-talent-workspace-agent-job/v1",
+            "objective": "live provider로 주간 증권 리서치 작업 보고서를 작성한다.",
+            "deliverables": [{"id": "weekly_report", "description": "보스 검토용 주간 보고서"}],
+            "acceptance_criteria": ["작업 보고서와 수락 체크리스트가 생성된다."],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            outputs = run_demo(output_dir=tmp_path / "runs")
+            hiring = hire_installed_agent(
+                outputs["installed_agent_manifest"],
+                employer="보스",
+                role="증권 리서치 live provider 테스트",
+                llm_engine="openrouter_api",
+                llm_model="openrouter/base-model",
+                record_name="employment_live_runtime.json",
+            )
+            fake_client = FakeLiveClient()
+            job_run = run_hired_agent_job(
+                hiring["employment_record"],
+                job_spec=job_spec,
+                workspace_dir=tmp_path / "live_job_workspace",
+                output_path=tmp_path / "live_job_run.json",
+                llm_mode="live",
+                llm_model="openrouter/job-model",
+                llm_client=fake_client,
+            )
+            dataflow_run = run_hired_dataflow_job(
+                hiring["employment_record"],
+                job_spec={"objective": "live provider로 dataflow 증권 리서치 검토를 실행한다."},
+                workspace_dir=tmp_path / "live_dataflow_workspace",
+                review_label={"score": 92, "reviewed_by": "보스", "status": "verified"},
+                output_path=tmp_path / "live_dataflow_run.json",
+                llm_mode="live",
+                llm_model="openrouter/dataflow-model",
+                llm_client=fake_client,
+            )
+            cycle = run_hired_agent_job_cycle(
+                hiring["employment_record"],
+                job_spec={
+                    **job_spec,
+                    "objective": "live provider로 검토와 학습 승격까지 실행한다.",
+                },
+                workspace_dir=tmp_path / "live_job_cycle_workspace",
+                quality_label={"score": 95, "reviewed_by": "보스", "status": "verified"},
+                output_path=tmp_path / "live_job_cycle.json",
+                llm_mode="live",
+                llm_model="openrouter/cycle-model",
+                llm_client=fake_client,
+            )
+
+        self.assertEqual(len(fake_client.calls), 3)
+        self.assertEqual(job_run["llm_runtime_result"], job_run["workspace_run"]["llm_runtime_result"])
+        self.assertEqual(job_run["llm_runtime_result"]["engine"], "openrouter_api")
+        self.assertEqual(job_run["llm_runtime_result"]["llm_mode"], "live")
+        self.assertEqual(job_run["llm_runtime_result"]["model"], "openrouter/job-model")
+        self.assertEqual(job_run["llm_runtime_result"]["client_result"]["engine"], "fake_live_llm")
+        self.assertEqual(
+            job_run["workspace_run"]["base_agent_run"]["execution_loop"]["runtime_config"]["engine"],
+            "openrouter_api",
+        )
+        self.assertEqual(dataflow_run["llm_runtime_result"]["llm_mode"], "live")
+        self.assertEqual(dataflow_run["llm_runtime_result"]["model"], "openrouter/dataflow-model")
+        self.assertEqual(cycle["job_run"]["llm_runtime_result"]["llm_mode"], "live")
+        self.assertEqual(cycle["job_run"]["llm_runtime_result"]["model"], "openrouter/cycle-model")
+
     def test_cli_run_hired_agent_job_command_uses_job_spec_file(self) -> None:
         from ai22b.talent_foundry.cli import main as cli_main
         from ai22b.talent_foundry.demo import run_demo
@@ -3299,6 +3393,10 @@ class TalentFoundryTests(unittest.TestCase):
                     str(workspace),
                     "--output",
                     str(output_path),
+                    "--llm-mode",
+                    "auto",
+                    "--llm-model",
+                    "cli-job-model",
                 ]
             )
             data = json.loads(output_path.read_text(encoding="utf-8"))
@@ -3364,6 +3462,10 @@ class TalentFoundryTests(unittest.TestCase):
                     "verified",
                     "--output",
                     str(output_path),
+                    "--llm-mode",
+                    "auto",
+                    "--llm-model",
+                    "cli-dataflow-model",
                 ]
             )
             data = json.loads(output_path.read_text(encoding="utf-8"))
@@ -3412,6 +3514,10 @@ class TalentFoundryTests(unittest.TestCase):
                     "verified",
                     "--output",
                     str(output_path),
+                    "--llm-mode",
+                    "auto",
+                    "--llm-model",
+                    "cli-cycle-model",
                 ]
             )
             cycle = json.loads(output_path.read_text(encoding="utf-8"))

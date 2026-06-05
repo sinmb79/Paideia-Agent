@@ -435,6 +435,14 @@ def _build_parser() -> argparse.ArgumentParser:
     run_hired_agent_job_command.add_argument("--job-spec", required=True)
     run_hired_agent_job_command.add_argument("--workspace", required=True)
     run_hired_agent_job_command.add_argument("--output")
+    run_hired_agent_job_command.add_argument(
+        "--llm-mode",
+        choices=["offline", "auto", "live"],
+        default="offline",
+        help="offline uses local manifest mode; auto tries live then falls back; live requires configured provider.",
+    )
+    run_hired_agent_job_command.add_argument("--live-llm", action="store_true", help="Shortcut for --llm-mode live.")
+    run_hired_agent_job_command.add_argument("--llm-model", help="Override the employment LLM model for this job run.")
 
     run_hired_dataflow_job_command = subparsers.add_parser(
         "run-hired-dataflow-job",
@@ -444,9 +452,17 @@ def _build_parser() -> argparse.ArgumentParser:
     run_hired_dataflow_job_command.add_argument("--job-spec", required=True)
     run_hired_dataflow_job_command.add_argument("--workspace", required=True)
     run_hired_dataflow_job_command.add_argument("--score", type=int, required=True)
-    run_hired_dataflow_job_command.add_argument("--reviewed-by", default="蹂댁뒪")
+    run_hired_dataflow_job_command.add_argument("--reviewed-by", default="보스")
     run_hired_dataflow_job_command.add_argument("--status", default="verified")
     run_hired_dataflow_job_command.add_argument("--output")
+    run_hired_dataflow_job_command.add_argument(
+        "--llm-mode",
+        choices=["offline", "auto", "live"],
+        default="offline",
+        help="offline uses local manifest mode; auto tries live then falls back; live requires configured provider.",
+    )
+    run_hired_dataflow_job_command.add_argument("--live-llm", action="store_true", help="Shortcut for --llm-mode live.")
+    run_hired_dataflow_job_command.add_argument("--llm-model", help="Override the employment LLM model for this dataflow run.")
 
     run_hired_agent_job_cycle_command = subparsers.add_parser(
         "run-hired-agent-job-cycle",
@@ -459,6 +475,14 @@ def _build_parser() -> argparse.ArgumentParser:
     run_hired_agent_job_cycle_command.add_argument("--reviewed-by", default="보스")
     run_hired_agent_job_cycle_command.add_argument("--status", default="verified")
     run_hired_agent_job_cycle_command.add_argument("--output")
+    run_hired_agent_job_cycle_command.add_argument(
+        "--llm-mode",
+        choices=["offline", "auto", "live"],
+        default="offline",
+        help="offline uses local manifest mode; auto tries live then falls back; live requires configured provider.",
+    )
+    run_hired_agent_job_cycle_command.add_argument("--live-llm", action="store_true", help="Shortcut for --llm-mode live.")
+    run_hired_agent_job_cycle_command.add_argument("--llm-model", help="Override the employment LLM model for this job cycle.")
 
     record_hired_learning = subparsers.add_parser(
         "record-hired-learning",
@@ -1094,12 +1118,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if args.command == "run-hired-agent-job":
+        llm_mode = "live" if args.live_llm else args.llm_mode
         job_spec = json.loads(Path(args.job_spec).read_text(encoding="utf-8"))
         run_hired_agent_job(
             Path(args.employment_record),
             job_spec=job_spec,
             workspace_dir=Path(args.workspace),
             output_path=Path(args.output) if args.output else None,
+            llm_mode=llm_mode,
+            llm_model=args.llm_model,
         )
         output_path = (
             Path(args.output)
@@ -1110,6 +1137,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if args.command == "run-hired-dataflow-job":
+        llm_mode = "live" if args.live_llm else args.llm_mode
         job_spec = json.loads(Path(args.job_spec).read_text(encoding="utf-8"))
         run_hired_dataflow_job(
             Path(args.employment_record),
@@ -1121,6 +1149,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "status": args.status,
             },
             output_path=Path(args.output) if args.output else None,
+            llm_mode=llm_mode,
+            llm_model=args.llm_model,
         )
         output_path = (
             Path(args.output)
@@ -1131,6 +1161,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if args.command == "run-hired-agent-job-cycle":
+        llm_mode = "live" if args.live_llm else args.llm_mode
         job_spec = json.loads(Path(args.job_spec).read_text(encoding="utf-8"))
         run_hired_agent_job_cycle(
             Path(args.employment_record),
@@ -1142,6 +1173,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "status": args.status,
             },
             output_path=Path(args.output) if args.output else None,
+            llm_mode=llm_mode,
+            llm_model=args.llm_model,
         )
         output_path = (
             Path(args.output)
