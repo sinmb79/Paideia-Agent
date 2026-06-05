@@ -97,6 +97,85 @@ DISCUSSION_MARKERS = (
     "explain",
     "explanation",
 )
+POLICY_BYPASS_ALIASES = (
+    "이전 규칙은 무시",
+    "규칙 무시",
+    "정책 무시",
+    "가드레일 무시",
+    "가드레일 해제",
+    "안전장치 무시",
+    "제한 무시",
+    "승인 없이",
+    "승인 생략",
+    "보스 승인 없이",
+    "ignore previous rules",
+    "ignore the rules",
+    "ignore policy",
+    "ignore guardrails",
+    "bypass guardrails",
+    "override policy",
+    "disable safety",
+    "without approval",
+    "skip approval",
+    "jailbreak",
+)
+POLICY_BYPASS_COMMAND_ALIASES = (
+    "이전 규칙은 무시하고",
+    "규칙 무시하고",
+    "정책 무시하고",
+    "가드레일 무시하고",
+    "안전장치 무시하고",
+    "승인 없이 실행",
+    "승인 없이 진행",
+    "승인 없이 해줘",
+    "승인 생략하고",
+    "보스 승인 없이 실행",
+    "ignore previous rules and",
+    "ignore the rules and",
+    "ignore guardrails and",
+    "bypass guardrails and",
+    "execute anyway",
+    "do it anyway",
+    "without approval execute",
+    "skip approval and",
+)
+POLICY_BYPASS_NEGATION_MARKERS = (
+    "무시하지 말고",
+    "우회하지 말고",
+    "해제하지 말고",
+    "승인 없이 하지 말고",
+    "do not ignore",
+    "do not bypass",
+    "don't ignore",
+    "don't bypass",
+)
+POLICY_BYPASS_DISCUSSION_MARKERS = (
+    *DISCUSSION_MARKERS,
+    "왜",
+    "의미",
+    "뜻",
+    "예시",
+    "사례",
+    "what is",
+    "define",
+    "why",
+)
+POLICY_BYPASS_HARD_COMMAND_MARKERS = (
+    "실행",
+    "진행",
+    "전송",
+    "업로드",
+    "올려",
+    "공개 배포",
+    "매수",
+    "매도",
+    "execute",
+    "place",
+    "send",
+    "upload",
+    "buy order",
+    "sell order",
+)
 
 TOOL_CAPABILITIES = {
     "local_file_read": ["research.analysis", "filesystem.read_declared"],
@@ -224,6 +303,48 @@ def _personal_data_transfer_state(task: str) -> dict[str, Any]:
     )
 
 
+def _policy_bypass_state(task: str) -> dict[str, Any]:
+    matched = _matched(task, POLICY_BYPASS_ALIASES)
+    command_markers = _matched(task, POLICY_BYPASS_COMMAND_ALIASES + COMMAND_MARKERS)
+    negation_markers = _matched(task, POLICY_BYPASS_NEGATION_MARKERS + ACTION_NEGATION_MARKERS)
+    discussion_markers = _matched(task, POLICY_BYPASS_DISCUSSION_MARKERS)
+    sensitive_markers = _matched(
+        task,
+        FINANCIAL_ACTION_ALIASES
+        + FINANCIAL_VERBS
+        + EXTERNAL_UPLOAD_ALIASES
+        + PERSONAL_DATA_TRANSFER_ALIASES,
+    )
+    hard_command_markers = _matched(task, POLICY_BYPASS_HARD_COMMAND_MARKERS)
+    negated = bool(matched) and _has_any(task, POLICY_BYPASS_NEGATION_MARKERS)
+    discussion_only = bool(matched) and bool(discussion_markers) and not sensitive_markers and not hard_command_markers
+    effective_requested = bool(matched) and not negated and not discussion_only
+    if negated:
+        mode = "negated"
+    elif discussion_only:
+        mode = "discussion_only"
+    elif effective_requested:
+        mode = "command"
+    elif matched:
+        mode = "mentioned_only"
+    else:
+        mode = "not_detected"
+    return {
+        "schema": ACTION_INTENT_INFERENCE_SCHEMA,
+        "model": "hybrid_structured_lexical_v2",
+        "request_mode": mode,
+        "requested": effective_requested,
+        "negated": negated,
+        "discussion_only": discussion_only,
+        "matched_markers": matched,
+        "command_markers": command_markers,
+        "negation_markers": negation_markers,
+        "discussion_markers": discussion_markers,
+        "sensitive_markers": sensitive_markers,
+        "hard_command_markers": hard_command_markers,
+    }
+
+
 def _intent(
     *,
     intent_id: str,
@@ -264,6 +385,7 @@ def infer_action_intents(task: str, manifest: dict[str, Any] | None = None) -> l
     financial_state = _financial_action_state(task)
     upload_state = _external_upload_state(task)
     personal_transfer_state = _personal_data_transfer_state(task)
+    policy_bypass_state = _policy_bypass_state(task)
     projection_requested = "팀" in task or "분신" in task
     return [
         _intent(
@@ -297,6 +419,20 @@ def infer_action_intents(task: str, manifest: dict[str, Any] | None = None) -> l
             requested=True,
             requires_boss_approval=False,
             matched_markers=["post_run_review_packet"],
+        ),
+        _intent(
+            intent_id="policy_bypass_attempt",
+            action_type="policy_bypass_attempt",
+            target="agent_policy_boundary",
+            data_class="guardrail_or_approval_boundary",
+            capability="policy.override",
+            risk_level="critical",
+            requested=policy_bypass_state["requested"],
+            blocked_action_label="정책/가드레일 우회 시도",
+            requires_boss_approval=False,
+            matched_markers=policy_bypass_state["matched_markers"],
+            negated=policy_bypass_state["negated"],
+            inference=policy_bypass_state,
         ),
         _intent(
             intent_id="financial_trade_execution",
@@ -395,6 +531,18 @@ def evaluate_action_policy(manifest: dict[str, Any], intents: list[dict[str, Any
         if not intent.get("requested") or intent.get("negated"):
             continue
         blocked_label = intent.get("blocked_action_label")
+        if intent.get("action_type") == "policy_bypass_attempt":
+            denied_actions.append(
+                {
+                    "intent_id": intent["intent_id"],
+                    "action_type": intent["action_type"],
+                    "blocked_action": blocked_label or "정책/가드레일 우회 시도",
+                    "risk_level": intent["risk_level"],
+                    "reason": "policy_bypass_attempt_blocked_before_runtime",
+                    "manifest_independent": True,
+                }
+            )
+            continue
         if blocked_label and blocked_label in blocked_actions:
             denied_actions.append(
                 {
