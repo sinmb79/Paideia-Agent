@@ -211,7 +211,7 @@ ai22b-talent-foundry run-agent-runtime-smoke `
   --output .\agent_runtime_smoke.json
 ```
 
-같은 provider gate는 설치/고용된 workspace, job, dataflow 실행에도 적용됩니다. 고용된 에이전트를 live mode로 실행했지만 provider API key 또는 로컬 endpoint가 준비되지 않았으면 Paideia는 `needs_configuration`을 기록하고, workspace 산출물 생성, job deliverable 생성, dataflow synthesis, 학습 승격 후보 생성을 모두 시작하지 않습니다. dataflow의 경우에도 promotion은 quarantine 상태의 설정 필요 기록으로만 남습니다.
+같은 provider gate는 설치/고용된 workspace, job, dataflow 실행에도 적용됩니다. 고용된 에이전트를 live mode로 실행했지만 provider API key 또는 로컬 endpoint가 준비되지 않았으면 Paideia는 `needs_configuration`을 기록하고, workspace 산출물 생성, job deliverable 생성, dataflow synthesis, 학습 승격 후보 생성을 모두 시작하지 않습니다. dataflow의 경우에도 promotion은 quarantine 상태의 설정 필요 기록으로만 남습니다. `audit-release`는 이제 `fail_closed_runtime_contract`를 포함해서 direct agent, hired workspace, hired job, dataflow, chat 경로를 live provider 미설정 상태로 직접 실행하고, 도구 실행, workspace artifact 생성, live로 위장한 fallback 답변, 학습 승격이 모두 시작되지 않았는지 검사합니다.
 
 완료, bridge-ready, adapter-ready 상태의 agent run에는 `llm_plan`도 포함됩니다. 이 packet은 `assistant_reply`, 검토 가능한 짧은 추론 요약, 다음 행동 제안, suggestion-only 도구 계획을 담습니다. raw provider text와 숨은 추론 trace는 저장하지 않으며, 실제 등록 도구 실행은 계속 policy gate를 통과한 local tool registry만 담당합니다. 각 실행은 `llm_tool_plan_alignment`도 남겨 LLM의 범위 밖 도구 제안이 실행되지 않았음을 증명합니다.
 

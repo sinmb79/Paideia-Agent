@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -29,6 +31,7 @@ from ai22b.talent_foundry.llm_runtime import (
     doctor_llm_provider,
     run_llm_application_smoke,
 )
+from ai22b.talent_foundry.learning_loop import build_reasoning_kernel, create_learning_ledger
 from ai22b.talent_foundry.onboarding_choices import LLM_SERVICE_CATALOG
 from ai22b.talent_foundry.role_models import list_role_models, summarize_role_model
 from ai22b.talent_foundry.runtime_benchmark import RUNTIME_OBSERVABILITY_COMPARISON_SCHEMA
@@ -1397,6 +1400,328 @@ def _llm_live_agent_loop_contract() -> dict[str, Any]:
     )
 
 
+def _write_fail_closed_runtime_fixture(root: Path) -> tuple[Path, dict[str, Any], dict[str, Any]]:
+    agent = {
+        "name": "paideia-audit-fail-closed-agent",
+        "role": "public-safe release audit fixture",
+        "major_goal": "Prove live provider configuration is required before execution.",
+        "birth": {
+            "datetime": "audit-fixture",
+            "place": "local-public-safe-fixture",
+        },
+    }
+    agent_manifest = {
+        "schema": "ai-talent-agent-manifest/v1",
+        "agent": agent,
+        "identity_source": {
+            "role_model_inspiration": {
+                "role_model_id": "graham_value_investing",
+                "boundary": "learning_path_only_not_impersonation",
+            }
+        },
+        "memory_profile": {
+            "procedural_principles": [
+                "Check provider readiness before LLM planning.",
+                "Do not create workspace artifacts when live provider configuration is missing.",
+                "Do not promote chat learning when the live provider path was skipped.",
+            ],
+            "semantic_themes": ["fail closed", "provider readiness", "runtime safety"],
+            "chain_of_thought_policy": "do_not_store_private_trace",
+        },
+        "llm_policy": {
+            "role": "application_engine_not_identity",
+            "private_reasoning_trace": "do_not_store",
+        },
+        "tool_policy": {
+            "allowed_tools": ["work_session", "evidence_packet", "assessment", "memory_consolidation"],
+            "blocked_tools": ["external_upload", "financial_action", "personal_data_transfer"],
+        },
+    }
+    ledger = create_learning_ledger(owner=agent["name"])
+    ledger["reasoning_kernel"] = build_reasoning_kernel(ledger)
+    runtime_config = build_llm_runtime_config(
+        engine="openrouter_api",
+        model="openrouter/audit-provider-missing-model",
+        service="openrouter_api",
+    )
+    employment_record = {
+        "schema": "ai-talent-local-employment/v1",
+        "employment_id": "audit-fail-closed-employment",
+        "hired_at_utc": datetime.now(timezone.utc).isoformat(),
+        "employer": "보스",
+        "relationship": "installed_ai_talent_hired_as_local_agent",
+        "install_id": "audit-fail-closed-install",
+        "agent": {
+            "name": agent["name"],
+            "role": "provider readiness audit agent",
+            "major_goal": agent["major_goal"],
+        },
+        "source": {
+            "installed_manifest": "audit_fixture",
+            "agent_manifest": "agent_manifest.json",
+            "source_archive": "audit_fixture",
+            "source_sha256": "audit_fixture",
+        },
+        "entrypoints": {
+            "agent_manifest": "agent_manifest.json",
+            "learning_ledger": "learning_ledger.json",
+            "memory_substrate": "memory_substrate.json",
+            "chat_log": "employment_chat_log.jsonl",
+            "last_chat": "last_hired_agent_chat.json",
+            "workspace_run_log": "employment_workspace_run_log.jsonl",
+            "last_workspace_run": "last_hired_workspace_agent_run.json",
+            "job_run_log": "employment_job_run_log.jsonl",
+            "last_job_run": "last_hired_agent_job_run.json",
+            "dataflow_run_log": "employment_dataflow_run_log.jsonl",
+            "last_dataflow_run": "last_hired_dataflow_run.json",
+        },
+        "guardrails": agent_manifest["tool_policy"]["blocked_tools"],
+        "llm_service": {
+            "service_id": "openrouter_api",
+            "engine": "openrouter_api",
+            "selected_model": "openrouter/audit-provider-missing-model",
+            "status": "requires_configuration",
+        },
+        "chat_surface": {
+            "id": "cli-console",
+            "label": "Paideia guided CLI console",
+        },
+        "llm_runtime": runtime_config,
+        "growth_after_hire": {
+            "continues": True,
+            "principle": "고용 후 실행도 provider readiness, policy, verification, review gate를 통과해야 한다.",
+            "record_policy": "미설정 provider 경로는 업무 경험이나 학습 승격으로 기록하지 않는다.",
+        },
+        "llm_policy": agent_manifest["llm_policy"],
+        "status": "active",
+    }
+    _write_json(root / "agent_manifest.json", agent_manifest)
+    _write_json(root / "learning_ledger.json", ledger)
+    employment_record_path = root / "employment_record.openrouter_missing.json"
+    _write_json(employment_record_path, employment_record)
+    return employment_record_path, agent_manifest, ledger
+
+
+def _fail_closed_runtime_contract() -> dict[str, Any]:
+    """Prove unconfigured explicit-live runs stop before tools, artifacts, and learning promotion."""
+
+    from ai22b.talent_foundry.memory_substrate import run_chat_turn_from_employment
+    from ai22b.talent_foundry.registry import (
+        run_hired_agent_job,
+        run_hired_dataflow_job,
+        run_hired_workspace_agent,
+    )
+
+    evidence = [
+        PROJECT_ROOT / "src" / "ai22b" / "talent_foundry" / "agent_execution_loop.py",
+        PROJECT_ROOT / "src" / "ai22b" / "talent_foundry" / "workspace_agent.py",
+        PROJECT_ROOT / "src" / "ai22b" / "talent_foundry" / "registry.py",
+        PROJECT_ROOT / "src" / "ai22b" / "talent_foundry" / "memory_substrate.py",
+    ]
+    model = "openrouter/audit-provider-missing-model"
+    old_key = os.environ.pop("OPENROUTER_API_KEY", None)
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_root = Path(tmp)
+            fixture_root = tmp_root / "agent"
+            employment_record_path, agent_manifest, ledger_before = _write_fail_closed_runtime_fixture(fixture_root)
+            runtime_config = build_llm_runtime_config(
+                engine="openrouter_api",
+                model=model,
+                service="openrouter_api",
+            )
+            agent_run = run_agent_from_manifest(
+                agent_manifest,
+                task="Prepare a public-safe evidence note through an unconfigured live provider.",
+                runtime_config=runtime_config,
+                llm_mode="live",
+                llm_model=model,
+            )
+            workspace_dir = tmp_root / "workspace_should_not_exist"
+            workspace_run = run_hired_workspace_agent(
+                employment_record_path,
+                task="Run a workspace task through an unconfigured live provider.",
+                workspace_dir=workspace_dir,
+                output_path=tmp_root / "workspace_run.json",
+                llm_mode="live",
+                llm_model=model,
+            )
+            job_workspace_dir = tmp_root / "job_workspace_should_not_exist"
+            job_run = run_hired_agent_job(
+                employment_record_path,
+                job_spec={
+                    "objective": "Create a report through an unconfigured live provider.",
+                    "deliverables": [{"id": "report", "description": "public-safe audit report"}],
+                },
+                workspace_dir=job_workspace_dir,
+                output_path=tmp_root / "job_run.json",
+                llm_mode="live",
+                llm_model=model,
+            )
+            dataflow_workspace_dir = tmp_root / "dataflow_workspace_should_not_exist"
+            dataflow_run = run_hired_dataflow_job(
+                employment_record_path,
+                job_spec={"objective": "Run dataflow through an unconfigured live provider."},
+                workspace_dir=dataflow_workspace_dir,
+                review_label={"score": 90, "status": "verified", "reviewed_by": "release-audit"},
+                output_path=tmp_root / "dataflow_run.json",
+                llm_mode="live",
+                llm_model=model,
+            )
+            chat_run = run_chat_turn_from_employment(
+                employment_record_path,
+                message="live provider로 자연스럽게 대화해줘.",
+                output_path=tmp_root / "chat_run.json",
+                llm_mode="live",
+                llm_model=model,
+                learn_from_chat=True,
+            )
+            ledger_after = _read_json(fixture_root / "learning_ledger.json")
+    except Exception as exc:
+        return _checkpoint(
+            passed=False,
+            evidence=evidence,
+            root=PROJECT_ROOT,
+            details={
+                "schema": "paideia-fail-closed-runtime-contract/v1",
+                "status": "audit_fixture_error",
+                "error_type": type(exc).__name__,
+            },
+        )
+    finally:
+        if old_key is not None:
+            os.environ["OPENROUTER_API_KEY"] = old_key
+
+    agent_contract = agent_run.get("execution_contract", {}) if isinstance(agent_run.get("execution_contract"), dict) else {}
+    agent_memory = agent_run.get("memory_write", {}) if isinstance(agent_run.get("memory_write"), dict) else {}
+    workspace_base = (
+        workspace_run.get("base_agent_run", {})
+        if isinstance(workspace_run.get("base_agent_run"), dict)
+        else {}
+    )
+    job_workspace = job_run.get("workspace_run", {}) if isinstance(job_run.get("workspace_run"), dict) else {}
+    dataflow_growth = (
+        dataflow_run.get("growth_commit_candidate", {})
+        if isinstance(dataflow_run.get("growth_commit_candidate"), dict)
+        else {}
+    )
+    chat_learning = (
+        chat_run.get("chat_learning_update", {})
+        if isinstance(chat_run.get("chat_learning_update"), dict)
+        else {}
+    )
+    promoted_before = len(ledger_before.get("promoted_experiences", []))
+    promoted_after = len(ledger_after.get("promoted_experiences", []))
+    quarantined_before = len(ledger_before.get("quarantined_experiences", []))
+    quarantined_after = len(ledger_after.get("quarantined_experiences", []))
+
+    details = {
+        "schema": "paideia-fail-closed-runtime-contract/v1",
+        "provider_engine": "openrouter_api",
+        "llm_mode": "live",
+        "direct_agent_run_status": agent_run.get("run_status"),
+        "direct_agent_llm_status": agent_run.get("llm_runtime_result", {}).get("status")
+        if isinstance(agent_run.get("llm_runtime_result"), dict)
+        else None,
+        "direct_agent_preflight_status": agent_run.get("llm_provider_preflight", {}).get("status")
+        if isinstance(agent_run.get("llm_provider_preflight"), dict)
+        else None,
+        "direct_agent_selected_tool_count": len(agent_run.get("selected_tools", [])),
+        "direct_agent_tool_result_count": len(agent_run.get("tool_execution", {}).get("tool_results", []))
+        if isinstance(agent_run.get("tool_execution"), dict)
+        else None,
+        "direct_agent_execution_contract_status": agent_contract.get("status"),
+        "direct_agent_llm_attempted": agent_contract.get("llm_runtime", {}).get("attempted")
+        if isinstance(agent_contract.get("llm_runtime"), dict)
+        else None,
+        "direct_agent_tool_attempted": agent_contract.get("tool_execution", {}).get("attempted")
+        if isinstance(agent_contract.get("tool_execution"), dict)
+        else None,
+        "direct_agent_memory_decision": agent_memory.get("decision"),
+        "direct_agent_review_candidate_written": "review_candidate" in agent_memory,
+        "workspace_run_status": workspace_run.get("run_status"),
+        "workspace_base_run_status": workspace_base.get("run_status"),
+        "workspace_llm_status": workspace_run.get("llm_runtime_result", {}).get("status")
+        if isinstance(workspace_run.get("llm_runtime_result"), dict)
+        else None,
+        "workspace_output_count": len(workspace_run.get("workspace_outputs", {})),
+        "workspace_root_created": workspace_dir.exists(),
+        "job_status": job_run.get("job_status"),
+        "job_workspace_status": job_workspace.get("run_status"),
+        "job_llm_status": job_run.get("llm_runtime_result", {}).get("status")
+        if isinstance(job_run.get("llm_runtime_result"), dict)
+        else None,
+        "job_output_count": len(job_run.get("job_outputs", {})),
+        "job_workspace_root_created": job_workspace_dir.exists(),
+        "dataflow_status": dataflow_run.get("run_status"),
+        "dataflow_llm_status": dataflow_run.get("llm_runtime_result", {}).get("status")
+        if isinstance(dataflow_run.get("llm_runtime_result"), dict)
+        else None,
+        "dataflow_preflight_status": dataflow_run.get("llm_provider_preflight", {}).get("status")
+        if isinstance(dataflow_run.get("llm_provider_preflight"), dict)
+        else None,
+        "dataflow_output_count": len(dataflow_run.get("workspace_outputs", {})),
+        "dataflow_workspace_root_created": dataflow_workspace_dir.exists(),
+        "dataflow_growth_promotion_status": dataflow_growth.get("promotion_status"),
+        "dataflow_growth_verification_status": dataflow_growth.get("verification_status"),
+        "chat_status": chat_run.get("chat_status"),
+        "chat_reply_generation_mode": chat_run.get("reply_generation_mode"),
+        "chat_llm_status": chat_run.get("llm_runtime_result", {}).get("status")
+        if isinstance(chat_run.get("llm_runtime_result"), dict)
+        else None,
+        "chat_preflight_status": chat_run.get("llm_provider_preflight", {}).get("status")
+        if isinstance(chat_run.get("llm_provider_preflight"), dict)
+        else None,
+        "chat_fallback_used": bool(
+            isinstance(chat_run.get("llm_runtime_result"), dict)
+            and "fallback_used" in chat_run.get("llm_runtime_result", {})
+        ),
+        "chat_learning_decision": chat_learning.get("decision"),
+        "chat_learning_ledger_write_performed": chat_learning.get("ledger_write_performed"),
+        "ledger_promoted_count_unchanged": promoted_before == promoted_after,
+        "ledger_quarantined_count_unchanged": quarantined_before == quarantined_after,
+    }
+    passed = (
+        details["direct_agent_run_status"] == "needs_configuration"
+        and details["direct_agent_llm_status"] == "skipped_provider_not_ready"
+        and details["direct_agent_preflight_status"] == "needs_configuration"
+        and details["direct_agent_selected_tool_count"] == 0
+        and details["direct_agent_tool_result_count"] == 0
+        and details["direct_agent_execution_contract_status"] == "provider_configuration_required_before_execution"
+        and details["direct_agent_llm_attempted"] is False
+        and details["direct_agent_tool_attempted"] is False
+        and details["direct_agent_memory_decision"] == "skipped_provider_not_ready"
+        and details["direct_agent_review_candidate_written"] is False
+        and details["workspace_run_status"] == "needs_configuration"
+        and details["workspace_base_run_status"] == "needs_configuration"
+        and details["workspace_llm_status"] == "skipped_provider_not_ready"
+        and details["workspace_output_count"] == 0
+        and details["workspace_root_created"] is False
+        and details["job_status"] == "needs_configuration"
+        and details["job_workspace_status"] == "needs_configuration"
+        and details["job_llm_status"] == "skipped_provider_not_ready"
+        and details["job_output_count"] == 0
+        and details["job_workspace_root_created"] is False
+        and details["dataflow_status"] == "needs_configuration"
+        and details["dataflow_llm_status"] == "skipped_provider_not_ready"
+        and details["dataflow_preflight_status"] == "needs_configuration"
+        and details["dataflow_output_count"] == 0
+        and details["dataflow_workspace_root_created"] is False
+        and details["dataflow_growth_promotion_status"] == "quarantine"
+        and details["dataflow_growth_verification_status"] == "skipped_provider_not_ready"
+        and details["chat_status"] == "needs_configuration"
+        and details["chat_reply_generation_mode"] == "skipped_provider_not_ready"
+        and details["chat_llm_status"] == "skipped_provider_not_ready"
+        and details["chat_preflight_status"] == "needs_configuration"
+        and details["chat_fallback_used"] is False
+        and details["chat_learning_decision"] == "skipped_provider_not_ready"
+        and details["chat_learning_ledger_write_performed"] is False
+        and details["ledger_promoted_count_unchanged"] is True
+        and details["ledger_quarantined_count_unchanged"] is True
+    )
+    return _checkpoint(passed=passed, evidence=evidence, root=PROJECT_ROOT, details=details)
+
+
 def _provider_audit_model(engine: str) -> str | None:
     if engine in {
         "anthropic_claude_api",
@@ -2287,6 +2612,7 @@ def audit_foundry_release(run_dir: Path, *, output_path: Path | None = None) -> 
             "action_policy_safety": _action_policy_safety(),
             "llm_provider_readiness": _llm_provider_readiness(),
             "llm_live_agent_loop_contract": _llm_live_agent_loop_contract(),
+            "fail_closed_runtime_contract": _fail_closed_runtime_contract(),
             "public_program_manifest": _public_program_manifest(run_dir),
             "role_model_training_artifacts": _role_model_training_artifacts(run_dir, installed_root),
             "role_model_runtime": _role_model_runtime(installed_root, run_dir),
@@ -2301,6 +2627,7 @@ def audit_foundry_release(run_dir: Path, *, output_path: Path | None = None) -> 
             "action_policy_safety": _action_policy_safety(),
             "llm_provider_readiness": _llm_provider_readiness(),
             "llm_live_agent_loop_contract": _llm_live_agent_loop_contract(),
+            "fail_closed_runtime_contract": _fail_closed_runtime_contract(),
             "public_program_manifest": _public_program_manifest(run_dir),
             "growth_governance": _growth_governance(run_dir),
             "public_distribution": _public_distribution(run_dir, installed_root),
