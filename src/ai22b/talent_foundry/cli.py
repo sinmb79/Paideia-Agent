@@ -347,6 +347,11 @@ def _build_parser() -> argparse.ArgumentParser:
     run_workspace_agent.add_argument("--task", required=True)
     run_workspace_agent.add_argument("--workspace", required=True)
     run_workspace_agent.add_argument("--output", required=True)
+    run_workspace_agent.add_argument("--llm-engine", default="deterministic_local")
+    run_workspace_agent.add_argument("--llm-model")
+    run_workspace_agent.add_argument("--llm-model-path")
+    run_workspace_agent.add_argument("--llm-mode", choices=["offline", "auto", "live"], default="offline")
+    run_workspace_agent.add_argument("--live-llm", action="store_true", help="Shortcut for --llm-mode live.")
 
     learn = subparsers.add_parser("learn", help="Build a verified learning ledger and reasoning kernel.")
     learn.add_argument("--owner", default="신용")
@@ -1056,10 +1061,19 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "run-workspace-agent":
         manifest = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
+        llm_mode = "live" if args.live_llm else args.llm_mode
+        runtime_config = build_llm_runtime_config(
+            engine=args.llm_engine,
+            model=args.llm_model,
+            model_path=args.llm_model_path,
+        )
         result = run_workspace_agent_from_manifest(
             manifest,
             task=args.task,
             workspace_dir=Path(args.workspace),
+            runtime_config=runtime_config,
+            llm_mode=llm_mode,
+            llm_model=args.llm_model,
         )
         output_path = Path(args.output)
         output_path.parent.mkdir(parents=True, exist_ok=True)

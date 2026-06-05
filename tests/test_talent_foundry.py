@@ -1884,6 +1884,12 @@ class TalentFoundryTests(unittest.TestCase):
                     str(workspace),
                     "--output",
                     str(output_path),
+                    "--llm-engine",
+                    "openrouter_api",
+                    "--llm-mode",
+                    "offline",
+                    "--llm-model",
+                    "openai/gpt-4.1-mini",
                 ]
             )
             data = json.loads(output_path.read_text(encoding="utf-8"))
@@ -1892,6 +1898,10 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertEqual(data["schema"], "ai-talent-workspace-agent-run/v1")
         self.assertEqual(data["run_status"], "completed")
+        self.assertEqual(data["llm_runtime_result"]["engine"], "openrouter_api")
+        self.assertEqual(data["llm_runtime_result"]["status"], "adapter_manifest_ready")
+        self.assertEqual(data["llm_provider_preflight"]["status"], "skipped_offline")
+        self.assertFalse(data["llm_provider_preflight"]["network_call_made_by_preflight"])
         self.assertTrue(task_plan_exists)
 
     def test_cli_run_agent_command_writes_agent_run_result(self) -> None:

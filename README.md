@@ -391,6 +391,19 @@ Every agent, hired job, and dataflow runtime result also embeds `llm_provider_pr
 
 Chat runs use the same selected provider contract. `openai_chatgpt_codex` keeps the dedicated OpenAI Responses chat bridge, while Anthropic, Gemini, Mistral, OpenRouter, Ollama, and LM Studio chat through the shared `LLMClient` adapter path. Every chat turn records `chat_execution_trace` with memory routing, live provider attempt/fallback, reply generation mode, and reviewed learning decision when `--learn-from-chat` is enabled.
 
+Manifest-based workspace runs also accept the same provider flags. This lets a pre-hire or lab workspace run use the selected LLM adapter while still writing sandboxed local artifacts:
+
+```powershell
+ai22b-talent-foundry run-workspace-agent `
+  --manifest .\agent_manifest.json `
+  --task "Create a reviewable local research workspace result." `
+  --workspace .\workspace `
+  --output .\workspace_run.json `
+  --llm-engine openrouter_api `
+  --llm-mode offline `
+  --llm-model openai/gpt-4.1-mini
+```
+
 Hired job, dataflow, and job-cycle commands now use the same runtime flags, so the LLM service chosen during onboarding or hiring is carried into real work artifacts:
 
 ```powershell
