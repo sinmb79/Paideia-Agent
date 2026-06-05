@@ -47,7 +47,11 @@ from ai22b.talent_foundry.learning_loop import (
     record_learning_experience,
 )
 from ai22b.talent_foundry.life_trace import build_life_trace, read_life_trace_jsonl, write_life_trace_jsonl
-from ai22b.talent_foundry.llm_runtime import build_llm_runtime_config, doctor_llm_provider
+from ai22b.talent_foundry.llm_runtime import (
+    build_llm_runtime_config,
+    doctor_llm_provider,
+    run_llm_application_smoke,
+)
 from ai22b.talent_foundry.memory_substrate import run_chat_turn_from_employment
 from ai22b.talent_foundry.onboarding import run_agent_onboarding
 from ai22b.talent_foundry.onboarding_choices import (
@@ -415,6 +419,24 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Return exit code 2 when the provider doctor report is not ready.",
     )
     doctor_llm.add_argument("--output", required=True)
+
+    llm_smoke = subparsers.add_parser(
+        "run-llm-application-smoke",
+        help="Run one selected LLM through the Paideia application-engine path and write a public-safe report.",
+    )
+    llm_smoke.add_argument("--llm-engine", required=True)
+    llm_smoke.add_argument("--llm-service")
+    llm_smoke.add_argument("--llm-model")
+    llm_smoke.add_argument("--llm-model-path")
+    llm_smoke.add_argument("--llm-mode", choices=["offline", "auto", "live"], default="offline")
+    llm_smoke.add_argument("--live-check", action="store_true", help="Shortcut for --llm-mode live.")
+    llm_smoke.add_argument("--task", default="Paideia application-engine smoke test. Reply briefly with OK.")
+    llm_smoke.add_argument(
+        "--strict",
+        action="store_true",
+        help="Return exit code 2 when the application-engine smoke report does not pass.",
+    )
+    llm_smoke.add_argument("--output", required=True)
 
     run_workspace_agent = subparsers.add_parser(
         "run-workspace-agent",
@@ -1210,6 +1232,24 @@ def main(argv: Sequence[str] | None = None) -> int:
             model=args.llm_model,
             model_path=args.llm_model_path,
             live_check=args.live_check,
+        )
+        output_path = Path(args.output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(str(output_path))
+        if args.strict and not report.get("passed"):
+            return 2
+        return 0
+
+    if args.command == "run-llm-application-smoke":
+        llm_mode = "live" if args.live_check else args.llm_mode
+        report = run_llm_application_smoke(
+            engine=args.llm_engine,
+            service=args.llm_service,
+            model=args.llm_model,
+            model_path=args.llm_model_path,
+            llm_mode=llm_mode,
+            task=args.task,
         )
         output_path = Path(args.output)
         output_path.parent.mkdir(parents=True, exist_ok=True)

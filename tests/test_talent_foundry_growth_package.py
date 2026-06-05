@@ -101,6 +101,10 @@ class PaideiaGrowthPackageTests(unittest.TestCase):
         self.assertTrue(first_run_details["graham_value_investing_present"])
         self.assertTrue(first_run_details["deterministic_doctor_ready"])
         self.assertTrue(first_run_details["no_network_or_llm_by_default"])
+        self.assertEqual(first_run_details["application_smoke_schema"], "paideia-llm-application-smoke/v1")
+        self.assertTrue(first_run_details["application_smoke_passed"])
+        self.assertEqual(first_run_details["application_smoke_network_access"], "blocked")
+        self.assertEqual(first_run_details["application_smoke_private_reasoning_trace"], "do_not_store")
         live_loop_details = release_audit["checkpoints"]["llm_live_agent_loop_contract"]["details"]
         self.assertEqual(live_loop_details["llm_mode"], "live")
         self.assertEqual(live_loop_details["llm_status"], "completed")

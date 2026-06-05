@@ -1768,6 +1768,102 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(checks["live_smoke"]["status"], "skipped")
         self.assertFalse(report["secret_values_exported"])
 
+    def test_llm_application_smoke_uses_runtime_path_without_raw_provider_storage(self) -> None:
+        import os
+
+        from ai22b.talent_foundry.llm_runtime import run_llm_application_smoke
+
+        secret = "fixture_application_smoke_secret_12345"
+        hidden_trace = "application smoke hidden reasoning must not be stored"
+
+        class FakeClient:
+            def generate(self, messages, *, tools=None, policy=None):
+                return {
+                    "schema": "paideia-llm-client-result/v1",
+                    "engine": "fake_live_llm",
+                    "status": "completed",
+                    "text": json.dumps(
+                        {
+                            "assistant_reply": "Application smoke OK.",
+                            "reviewable_reasoning_summary": [
+                                {"step": "runtime_path", "summary": "LLM is used as an application engine."}
+                            ],
+                        },
+                        ensure_ascii=False,
+                    ),
+                    "model": "fake-model",
+                    "raw_output_saved": False,
+                    "debug_headers": {"Authorization": f"Bearer {secret}"},
+                    "private_reasoning_trace": hidden_trace,
+                }
+
+        old_key = os.environ.get("OPENAI_API_KEY")
+        os.environ["OPENAI_API_KEY"] = secret
+        try:
+            report = run_llm_application_smoke(
+                engine="openai_chatgpt_codex",
+                model="fake-model",
+                llm_mode="live",
+                client=FakeClient(),
+            )
+        finally:
+            if old_key is None:
+                os.environ.pop("OPENAI_API_KEY", None)
+            else:
+                os.environ["OPENAI_API_KEY"] = old_key
+
+        serialized = json.dumps(report, ensure_ascii=False)
+
+        self.assertEqual(report["schema"], "paideia-llm-application-smoke/v1")
+        self.assertTrue(report["passed"])
+        self.assertEqual(report["status"], "passed")
+        self.assertEqual(report["runtime_result"]["status"], "completed")
+        self.assertEqual(report["runtime_result"]["llm_mode"], "live")
+        self.assertEqual(report["runtime_result"]["identity_policy"], "application_engine_not_identity")
+        self.assertEqual(report["runtime_contract"]["private_reasoning_trace"], "do_not_store")
+        self.assertFalse(report["runtime_contract"]["raw_provider_text_stored"])
+        self.assertFalse(report["runtime_contract"]["client_result_private_reasoning_values_stored"])
+        self.assertFalse(report["data_policy"]["secret_values_exported"])
+        self.assertFalse(report["data_policy"]["raw_provider_payload_saved"])
+        self.assertEqual(report["data_policy"]["private_reasoning_trace"], "do_not_store")
+        self.assertNotIn(secret, serialized)
+        self.assertNotIn(hidden_trace, serialized)
+
+    def test_cli_llm_application_smoke_strict_fails_when_provider_is_not_ready(self) -> None:
+        import os
+
+        from ai22b.talent_foundry.cli import main as cli_main
+
+        old_key = os.environ.pop("OPENROUTER_API_KEY", None)
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                output_path = Path(tmp) / "openrouter_application_smoke.json"
+                exit_code = cli_main(
+                    [
+                        "run-llm-application-smoke",
+                        "--llm-engine",
+                        "openrouter_api",
+                        "--llm-model",
+                        "openrouter-test-model",
+                        "--live-check",
+                        "--strict",
+                        "--output",
+                        str(output_path),
+                    ]
+                )
+                report = json.loads(output_path.read_text(encoding="utf-8"))
+        finally:
+            if old_key is not None:
+                os.environ["OPENROUTER_API_KEY"] = old_key
+
+        self.assertEqual(exit_code, 2)
+        self.assertEqual(report["schema"], "paideia-llm-application-smoke/v1")
+        self.assertFalse(report["passed"])
+        self.assertEqual(report["status"], "failed")
+        self.assertEqual(report["runtime_result"]["status"], "unavailable")
+        self.assertEqual(report["runtime_result"]["reason"], "OPENROUTER_API_KEY_not_set")
+        self.assertFalse(report["data_policy"]["secret_values_exported"])
+
     def test_agent_execution_uses_registered_tool_executor(self) -> None:
         from ai22b.talent_foundry.agent_runner import run_agent_from_manifest
         from ai22b.talent_foundry.demo import run_demo
@@ -2429,6 +2525,7 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(first_run_details["schema"], "paideia-public-safe-first-run-smoke/v1")
         self.assertIn("list-role-models", first_run_details["commands"])
         self.assertIn("doctor-llm-provider", first_run_details["commands"])
+        self.assertIn("run-llm-application-smoke", first_run_details["commands"])
         self.assertIn("run-action-policy-eval", first_run_details["commands"])
         self.assertTrue(first_run_details["console_script_present"])
         self.assertTrue(first_run_details["optional_dependency_groups_present"])
@@ -2442,6 +2539,21 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertFalse(first_run_details["smoke_raw_provider_text_saved"])
         self.assertFalse(first_run_details["smoke_raw_provider_payload_saved"])
         self.assertEqual(first_run_details["smoke_private_reasoning_trace"], "do_not_store")
+        self.assertEqual(first_run_details["application_smoke_schema"], "paideia-llm-application-smoke/v1")
+        self.assertTrue(first_run_details["application_smoke_passed"])
+        self.assertEqual(first_run_details["application_smoke_status"], "passed")
+        self.assertEqual(first_run_details["application_smoke_engine"], "deterministic_local")
+        self.assertEqual(first_run_details["application_smoke_llm_mode"], "offline")
+        self.assertEqual(first_run_details["application_smoke_runtime_status"], "completed")
+        self.assertEqual(first_run_details["application_smoke_network_access"], "blocked")
+        self.assertEqual(
+            first_run_details["application_smoke_identity_policy"],
+            "application_engine_not_identity",
+        )
+        self.assertFalse(first_run_details["application_smoke_preflight_network_call"])
+        self.assertFalse(first_run_details["application_smoke_secret_values_exported"])
+        self.assertFalse(first_run_details["application_smoke_raw_provider_payload_saved"])
+        self.assertEqual(first_run_details["application_smoke_private_reasoning_trace"], "do_not_store")
         self.assertEqual(first_run_details["policy_eval_status"], "passed")
         self.assertEqual(first_run_details["policy_eval_failed_count"], 0)
         self.assertFalse(first_run_details["policy_eval_network_call_performed"])
@@ -2531,6 +2643,7 @@ class TalentFoundryTests(unittest.TestCase):
             audit["checkpoints"]["runtime_observability_comparison"]["details"]["all_records_avoid_full_session_replay"]
         )
         self.assertIn("hire-installed", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])
+        self.assertIn("run-llm-application-smoke", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])
         self.assertIn("doctor-bundle", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])
         self.assertIn("run-hired-agent-job", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])
         self.assertIn("run-hired-agent-job-cycle", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])

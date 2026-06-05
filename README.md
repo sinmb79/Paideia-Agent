@@ -146,7 +146,7 @@ python -m pip install -e ".[dev]"        # tests
 
 CI runs a package smoke test that verifies the `pyproject.toml` console scripts import as callables, optional extras stay split by runtime capability, and package metadata does not reference private/local paths.
 
-CI also runs a CLI smoke test for public-safe first-run commands. It verifies that `list-role-models`, `doctor-llm-provider --llm-engine deterministic_local`, and `run-action-policy-eval` execute without private files, API keys, or network access while writing reviewable JSON reports.
+CI also runs a CLI smoke test for public-safe first-run commands. It verifies that `list-role-models`, `doctor-llm-provider --llm-engine deterministic_local`, `run-llm-application-smoke --llm-engine deterministic_local`, and `run-action-policy-eval` execute without private files, API keys, or network access while writing reviewable JSON reports.
 
 Runtime artifacts are stored outside this source tree by default:
 
@@ -394,6 +394,17 @@ ai22b-talent-foundry doctor-llm-provider `
 Add `--live-check` only when you intentionally want Paideia to call the selected API or localhost server. The report records provider readiness, model requirements, credential environment presence, local path checks, and a public-safe smoke result without exporting secret values. Live provider result packets also redact API key, bearer token, and query-token values from success or failure fields before they are saved.
 
 Add `--strict` when this doctor command is part of CI, release gating, or an onboarding checklist: the JSON report is still written, but the CLI returns exit code `2` if the selected provider is not ready.
+
+For a direct runtime-path check, use `run-llm-application-smoke`. It sends the selected provider through the same Paideia application-engine function used by agent runs, then stores only a redacted runtime summary:
+
+```powershell
+ai22b-talent-foundry run-llm-application-smoke `
+  --llm-engine openrouter_api `
+  --llm-model openai/gpt-4.1-mini `
+  --live-check `
+  --strict `
+  --output .\llm_application_smoke.json
+```
 
 Provider doctor reports now include a `smoke_contract` packet. It states whether an explicit live check was requested, whether a provider call was attempted, whether the doctor made a network or localhost call, and whether the smoke passed, skipped, or failed closed. The contract also records the retention policy: no raw provider text, no raw provider payload, no hidden reasoning trace, and client-result summaries only. If the selected provider is unavailable during `--live-check`, Paideia marks the doctor report as `needs_configuration` and keeps only the redacted summary and failure reason.
 

@@ -102,7 +102,7 @@ python -m pip install -e ".[dev]"        # 테스트
 
 CI의 package smoke 테스트는 `pyproject.toml`의 console script가 실제 callable로 import되는지, optional extras가 기능별로 분리되어 있는지, 패키지 메타데이터에 private/local path가 섞이지 않았는지 확인합니다.
 
-CI는 공개 안전 first-run CLI smoke 테스트도 실행합니다. 이 테스트는 `list-role-models`, `doctor-llm-provider --llm-engine deterministic_local`, `run-action-policy-eval`이 비공개 파일, API 키, 네트워크 접근 없이 실행되고 검토 가능한 JSON 리포트를 쓰는지 확인합니다.
+CI는 공개 안전 first-run CLI smoke 테스트도 실행합니다. 이 테스트는 `list-role-models`, `doctor-llm-provider --llm-engine deterministic_local`, `run-llm-application-smoke --llm-engine deterministic_local`, `run-action-policy-eval`이 비공개 파일, API 키, 네트워크 접근 없이 실행되고 검토 가능한 JSON 리포트를 쓰는지 확인합니다.
 
 롤모델 목록:
 
@@ -182,6 +182,17 @@ ai22b-talent-foundry doctor-llm-provider `
 선택한 API 또는 localhost 서버를 실제로 호출하려면 `--live-check`를 명시합니다. 리포트는 provider 준비 상태, 모델 요구사항, 환경변수 존재 여부, 로컬 경로 점검, 공개 안전 smoke 결과를 기록하며 secret 값은 내보내지 않습니다. Live provider 결과 packet도 성공/실패 필드를 저장하기 전에 API key, bearer token, query token 값을 제거합니다.
 
 CI, 릴리스 게이트, 온보딩 체크리스트에서 provider doctor를 사용할 때는 `--strict`를 추가합니다. JSON 리포트는 그대로 저장되지만, 선택한 provider가 준비되지 않았으면 CLI가 exit code `2`를 반환해 자동화가 실패를 놓치지 않게 합니다.
+
+실제 Paideia application-engine 경로까지 확인하려면 `run-llm-application-smoke`를 사용합니다. 이 명령은 agent run에서 사용하는 LLM runtime 함수로 선택한 provider를 통과시킨 뒤, raw provider text나 숨은 추론 trace 없이 redacted runtime summary만 저장합니다.
+
+```powershell
+ai22b-talent-foundry run-llm-application-smoke `
+  --llm-engine openrouter_api `
+  --llm-model openai/gpt-4.1-mini `
+  --live-check `
+  --strict `
+  --output .\llm_application_smoke.json
+```
 
 완료, bridge-ready, adapter-ready 상태의 agent run에는 `llm_plan`도 포함됩니다. 이 packet은 `assistant_reply`, 검토 가능한 짧은 추론 요약, 다음 행동 제안, suggestion-only 도구 계획을 담습니다. raw provider text와 숨은 추론 trace는 저장하지 않으며, 실제 등록 도구 실행은 계속 policy gate를 통과한 local tool registry만 담당합니다. 각 실행은 `llm_tool_plan_alignment`도 남겨 LLM의 범위 밖 도구 제안이 실행되지 않았음을 증명합니다.
 

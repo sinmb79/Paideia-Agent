@@ -14,6 +14,7 @@ class CliSmokeTests(unittest.TestCase):
             tmp_path = Path(tmp)
             role_models_path = tmp_path / "role_models.json"
             doctor_path = tmp_path / "llm_provider_doctor.json"
+            llm_smoke_path = tmp_path / "llm_application_smoke.json"
             policy_eval_path = tmp_path / "policy_eval_report.json"
 
             role_models_code = cli_main(
@@ -35,14 +36,26 @@ class CliSmokeTests(unittest.TestCase):
                     str(doctor_path),
                 ]
             )
+            llm_smoke_code = cli_main(
+                [
+                    "run-llm-application-smoke",
+                    "--llm-engine",
+                    "deterministic_local",
+                    "--strict",
+                    "--output",
+                    str(llm_smoke_path),
+                ]
+            )
             policy_eval_code = cli_main(["run-action-policy-eval", "--output", str(policy_eval_path)])
 
             role_models = json.loads(role_models_path.read_text(encoding="utf-8"))
             doctor = json.loads(doctor_path.read_text(encoding="utf-8"))
+            llm_smoke = json.loads(llm_smoke_path.read_text(encoding="utf-8"))
             policy_eval = json.loads(policy_eval_path.read_text(encoding="utf-8"))
 
         self.assertEqual(role_models_code, 0)
         self.assertEqual(doctor_code, 0)
+        self.assertEqual(llm_smoke_code, 0)
         self.assertEqual(policy_eval_code, 0)
 
         self.assertEqual(role_models["schema"], "ai-talent-role-model-list/v1")
@@ -57,6 +70,17 @@ class CliSmokeTests(unittest.TestCase):
         self.assertEqual(doctor["smoke_contract"]["schema"], "paideia-llm-provider-smoke-contract/v1")
         self.assertEqual(doctor["smoke_contract"]["status"], "skipped")
         self.assertFalse(doctor["smoke_contract"]["provider_call_attempted"])
+
+        self.assertEqual(llm_smoke["schema"], "paideia-llm-application-smoke/v1")
+        self.assertEqual(llm_smoke["engine"], "deterministic_local")
+        self.assertEqual(llm_smoke["llm_mode"], "offline")
+        self.assertTrue(llm_smoke["passed"])
+        self.assertEqual(llm_smoke["runtime_result"]["status"], "completed")
+        self.assertEqual(llm_smoke["runtime_result"]["network_access"], "blocked")
+        self.assertEqual(llm_smoke["runtime_result"]["identity_policy"], "application_engine_not_identity")
+        self.assertFalse(llm_smoke["preflight"]["network_call_made_by_preflight"])
+        self.assertFalse(llm_smoke["data_policy"]["secret_values_exported"])
+        self.assertEqual(llm_smoke["data_policy"]["private_reasoning_trace"], "do_not_store")
 
         self.assertEqual(policy_eval["schema"], "paideia-action-policy-eval-report/v1")
         self.assertEqual(policy_eval["status"], "passed")

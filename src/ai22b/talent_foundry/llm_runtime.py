@@ -50,6 +50,7 @@ LOCAL_HTTP_ENGINES = {"ollama_local_http", "lm_studio_local_http"}
 LLM_PROVIDER_DOCTOR_SCHEMA = "paideia-llm-provider-doctor/v1"
 LLM_PROVIDER_PREFLIGHT_SCHEMA = "paideia-llm-provider-preflight/v1"
 LLM_PROVIDER_SMOKE_CONTRACT_SCHEMA = "paideia-llm-provider-smoke-contract/v1"
+LLM_APPLICATION_SMOKE_SCHEMA = "paideia-llm-application-smoke/v1"
 LLM_REVIEWABLE_PLAN_SCHEMA = "paideia-llm-reviewable-plan/v1"
 MODEL_REQUIRED_ENGINES = {
     "anthropic_claude_api",
@@ -478,6 +479,97 @@ def invoke_llm_application_engine(
         _invoke_offline_or_local_engine(effective_config, manifest=manifest, task=task),
         preflight,
     )
+
+
+def run_llm_application_smoke(
+    *,
+    engine: str,
+    model: str | None = None,
+    model_path: str | None = None,
+    service: str | None = None,
+    llm_mode: str = "offline",
+    task: str = "Paideia application-engine smoke test. Reply with a short reviewable result.",
+    client: LLMClient | None = None,
+) -> dict[str, Any]:
+    """Run the selected LLM through the Paideia application-engine path and return a public-safe report."""
+
+    runtime_config = build_llm_runtime_config(
+        engine=engine,
+        model=model,
+        model_path=model_path,
+        service=service,
+    )
+    manifest = _doctor_manifest()
+    runtime_result = invoke_llm_application_engine(
+        runtime_config,
+        manifest=manifest,
+        task=task,
+        llm_mode=llm_mode,
+        llm_model=model,
+        client=client,
+        policy_context={
+            "schema": "paideia-llm-application-smoke-policy/v1",
+            "purpose": "verify_provider_as_language_engine_not_agent_identity",
+            "store_raw_provider_text": False,
+            "private_reasoning_trace": "do_not_store",
+        },
+        tools=[],
+    )
+    preflight = (
+        runtime_result.get("llm_provider_preflight", {})
+        if isinstance(runtime_result.get("llm_provider_preflight"), dict)
+        else {}
+    )
+    llm_plan = runtime_result.get("llm_plan", {}) if isinstance(runtime_result.get("llm_plan"), dict) else {}
+    client_result = (
+        runtime_result.get("client_result", {})
+        if isinstance(runtime_result.get("client_result"), dict)
+        else {}
+    )
+    public_safe = (
+        runtime_result.get("identity_policy") == "application_engine_not_identity"
+        and llm_plan.get("raw_provider_text_stored") is not True
+        and llm_plan.get("private_reasoning_trace") == "do_not_store"
+        and client_result.get("private_reasoning_field_values_stored", False) is False
+        and client_result.get("raw_output_saved", False) is False
+    )
+    report = {
+        "schema": LLM_APPLICATION_SMOKE_SCHEMA,
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "engine": engine,
+        "service": service or engine,
+        "model": model,
+        "model_path_present": bool(model_path),
+        "llm_mode": llm_mode,
+        "status": "passed" if runtime_result.get("status") == "completed" and public_safe else "failed",
+        "passed": runtime_result.get("status") == "completed" and public_safe,
+        "runtime_result": _sanitize_runtime_result(runtime_result),
+        "runtime_contract": {
+            "application_engine_only": runtime_result.get("identity_policy") == "application_engine_not_identity",
+            "raw_provider_text_stored": llm_plan.get("raw_provider_text_stored") is True,
+            "private_reasoning_trace": llm_plan.get("private_reasoning_trace"),
+            "client_result_summary_only": bool(client_result) and "text" not in client_result,
+            "client_result_private_reasoning_values_stored": client_result.get(
+                "private_reasoning_field_values_stored",
+                False,
+            ),
+        },
+        "preflight": {
+            "schema": preflight.get("schema"),
+            "status": preflight.get("status"),
+            "live_check_performed": preflight.get("live_check_performed"),
+            "network_call_made_by_preflight": preflight.get("network_call_made_by_preflight"),
+            "blocking_check_count": len(preflight.get("blocking_checks", [])),
+        },
+        "data_policy": {
+            "secret_values_exported": False,
+            "send_private_training_files": False,
+            "send_full_session_replay": False,
+            "private_reasoning_trace": "do_not_store",
+            "raw_provider_payload_saved": False,
+        },
+    }
+    return report
 
 
 def _invoke_offline_or_local_engine(

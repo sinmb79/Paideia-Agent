@@ -22,9 +22,11 @@ from ai22b.talent_foundry.llm_runtime import (
     LLM_PROVIDER_DOCTOR_SCHEMA,
     LLM_PROVIDER_PREFLIGHT_SCHEMA,
     LLM_PROVIDER_SMOKE_CONTRACT_SCHEMA,
+    LLM_APPLICATION_SMOKE_SCHEMA,
     build_llm_provider_preflight,
     build_llm_runtime_config,
     doctor_llm_provider,
+    run_llm_application_smoke,
 )
 from ai22b.talent_foundry.onboarding_choices import LLM_SERVICE_CATALOG
 from ai22b.talent_foundry.role_models import list_role_models, summarize_role_model
@@ -120,6 +122,7 @@ REQUIRED_PUBLIC_PROGRAM_COMMANDS = {
     "onboard-agent",
     "raise",
     "doctor-llm-provider",
+    "run-llm-application-smoke",
     "doctor-bundle",
     "install-package",
     "hire-installed",
@@ -154,6 +157,7 @@ REQUIRED_PUBLIC_PROGRAM_ROLES = {"education_committee", "home_care", "oversight_
 PUBLIC_SAFE_FIRST_RUN_COMMANDS = {
     "list-role-models",
     "doctor-llm-provider",
+    "run-llm-application-smoke",
     "run-action-policy-eval",
 }
 
@@ -956,6 +960,22 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
     role_models = [summarize_role_model(item) for item in list_role_models("securities_research")]
     role_model_ids = {str(item.get("role_model_id", "")) for item in role_models}
     doctor = doctor_llm_provider(engine="deterministic_local", live_check=False)
+    application_smoke = run_llm_application_smoke(
+        engine="deterministic_local",
+        llm_mode="offline",
+        task="Public-safe first-run application-engine smoke.",
+    )
+    application_runtime = (
+        application_smoke.get("runtime_result", {})
+        if isinstance(application_smoke.get("runtime_result"), dict)
+        else {}
+    )
+    application_preflight = (
+        application_smoke.get("preflight", {}) if isinstance(application_smoke.get("preflight"), dict) else {}
+    )
+    application_policy = (
+        application_smoke.get("data_policy", {}) if isinstance(application_smoke.get("data_policy"), dict) else {}
+    )
     smoke_contract = doctor.get("smoke_contract", {}) if isinstance(doctor.get("smoke_contract"), dict) else {}
     smoke_data_policy = (
         smoke_contract.get("data_policy", {}) if isinstance(smoke_contract.get("data_policy"), dict) else {}
@@ -1009,6 +1029,19 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
         "smoke_raw_provider_text_saved": smoke_retention.get("raw_provider_text_saved"),
         "smoke_raw_provider_payload_saved": smoke_retention.get("raw_provider_payload_saved"),
         "smoke_private_reasoning_trace": smoke_data_policy.get("private_reasoning_trace"),
+        "application_smoke_schema": application_smoke.get("schema"),
+        "application_smoke_passed": application_smoke.get("passed"),
+        "application_smoke_status": application_smoke.get("status"),
+        "application_smoke_engine": application_smoke.get("engine"),
+        "application_smoke_llm_mode": application_smoke.get("llm_mode"),
+        "application_smoke_runtime_status": application_runtime.get("status"),
+        "application_smoke_network_access": application_runtime.get("network_access"),
+        "application_smoke_identity_policy": application_runtime.get("identity_policy"),
+        "application_smoke_preflight_status": application_preflight.get("status"),
+        "application_smoke_preflight_network_call": application_preflight.get("network_call_made_by_preflight"),
+        "application_smoke_secret_values_exported": application_policy.get("secret_values_exported"),
+        "application_smoke_raw_provider_payload_saved": application_policy.get("raw_provider_payload_saved"),
+        "application_smoke_private_reasoning_trace": application_policy.get("private_reasoning_trace"),
         "policy_eval_schema": policy_eval.get("schema"),
         "policy_eval_status": policy_eval.get("status"),
         "policy_eval_failed_count": policy_summary.get("failed_count"),
@@ -1020,6 +1053,8 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
             and doctor.get("live_check_requested") is False
             and smoke_contract.get("provider_call_attempted") is False
             and smoke_contract.get("network_call_made_by_doctor") is False
+            and application_runtime.get("network_access") == "blocked"
+            and application_preflight.get("network_call_made_by_preflight") is False
             and policy_runtime.get("network_call_performed") is False
             and policy_runtime.get("llm_called") is False
         ),
@@ -1037,6 +1072,18 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
         and details["smoke_raw_provider_text_saved"] is False
         and details["smoke_raw_provider_payload_saved"] is False
         and details["smoke_private_reasoning_trace"] == "do_not_store"
+        and details["application_smoke_schema"] == LLM_APPLICATION_SMOKE_SCHEMA
+        and details["application_smoke_passed"] is True
+        and details["application_smoke_status"] == "passed"
+        and details["application_smoke_engine"] == "deterministic_local"
+        and details["application_smoke_llm_mode"] == "offline"
+        and details["application_smoke_runtime_status"] == "completed"
+        and details["application_smoke_network_access"] == "blocked"
+        and details["application_smoke_identity_policy"] == "application_engine_not_identity"
+        and details["application_smoke_preflight_network_call"] is False
+        and details["application_smoke_secret_values_exported"] is False
+        and details["application_smoke_raw_provider_payload_saved"] is False
+        and details["application_smoke_private_reasoning_trace"] == "do_not_store"
         and details["policy_eval_schema"] == ACTION_POLICY_EVAL_REPORT_SCHEMA
         and details["policy_eval_status"] == "passed"
         and details["policy_eval_failed_count"] == 0
