@@ -288,6 +288,17 @@ def infer_action_intents(task: str, manifest: dict[str, Any] | None = None) -> l
             matched_markers=["post_run_learning_candidate"],
         ),
         _intent(
+            intent_id="post_run_assessment_review",
+            action_type="assessment_review",
+            target="local_review_packet",
+            data_class="policy_runtime_tool_summary",
+            capability="assessment.review",
+            risk_level="medium",
+            requested=True,
+            requires_boss_approval=False,
+            matched_markers=["post_run_review_packet"],
+        ),
+        _intent(
             intent_id="financial_trade_execution",
             action_type="financial_trade_execution",
             target="brokerage_or_market",

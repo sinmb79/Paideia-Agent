@@ -187,7 +187,7 @@ ai22b-talent-foundry run-hired-dataflow-job `
 
 등록형 리서치 도구 실행에는 `evidence_packet` 도구가 포함됩니다. 이 도구는 사용자 요청, LLM 초안, 정책 판단, 선택된 로컬 기억 요약을 검토 가능한 근거 항목, 체크리스트, 미지원 주장 처리 정책, 후속 질문으로 구조화합니다. 리서치 work-session이 이 evidence packet 없이 실행되면 검증은 통과가 아니라 review 필요로 표시됩니다.
 
-매니페스트에는 이름만 있는 ghost tool 권한을 남기지 않습니다. `local_file_read`, `local_file_write`, `work_session`, `evidence_packet`, `assessment`, `memory_consolidation`, projection-team 도구는 모두 명시적 capability scope와 함께 등록됩니다. 파일 도구는 일반 agent run에서 임의 경로를 직접 읽거나 쓰지 않고, workspace 쓰기는 `WorkspaceSandbox`에 위임되어 rollback 가능한 산출물로 선언됩니다.
+매니페스트에는 이름만 있는 ghost tool 권한을 남기지 않습니다. `local_file_read`, `local_file_write`, `work_session`, `evidence_packet`, `assessment`, `memory_consolidation`, projection-team 도구는 모두 명시적 capability scope와 함께 등록됩니다. 파일 도구는 일반 agent run에서 임의 경로를 직접 읽거나 쓰지 않고, workspace 쓰기는 `WorkspaceSandbox`에 위임되어 rollback 가능한 산출물로 선언됩니다. `assessment` 도구는 실행 후 검토 단계로 선택되어, 승인된 실행이 학습을 조용히 승격하지 않고 보스 검토용 review packet을 남기게 합니다.
 
 P0 action policy는 민감 intent마다 `hybrid_structured_lexical_v2` 추론 패킷을 기록합니다. 직접 실행 명령, 정책/설명 질문, "하지 말고"로 부정된 요청을 구분하므로 "매수 주문은 하지 말고 분석만" 같은 문장은 거래 실행이 아니라 안전한 리서치 맥락으로 처리됩니다.
 
@@ -275,6 +275,8 @@ ai22b-talent-foundry export-agent-identity-envelope `
 ```powershell
 .\scripts\check_public_repo_hygiene.ps1
 ```
+
+GitHub Actions 설정은 `.github/workflows/ci.yml`에 있으며, pull request와 push에서 패키지 컴파일, 회귀 테스트, 공개 저장소 위생 검사를 실행합니다.
 
 ## 더 보기
 

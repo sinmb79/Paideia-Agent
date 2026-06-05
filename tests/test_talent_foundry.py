@@ -1224,6 +1224,7 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("local_file_read", result["selected_tools"])
         self.assertIn("local_file_write", result["selected_tools"])
         self.assertIn("evidence_packet", result["selected_tools"])
+        self.assertIn("assessment", result["selected_tools"])
         self.assertTrue(result["audit_events"])
         self.assertIn("llm_runtime_result", result)
         tool_results = {item["tool"]: item for item in result["tool_execution"]["tool_results"]}
@@ -1236,6 +1237,10 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertTrue(evidence["evidence_items"])
         self.assertTrue(evidence["checklist"])
         self.assertEqual(evidence["unsupported_claim_policy"], "unsupported_external_claims_remain_open_questions")
+        assessment = tool_results["assessment"]["output"]
+        self.assertEqual(assessment["schema"], "paideia-tool-assessment-review/v1")
+        self.assertEqual(assessment["recommended_review_label"]["status"], "needs_boss_review")
+        self.assertTrue(assessment["checks"]["evidence_packet_seen"])
 
     def test_action_policy_blocks_structured_sensitive_intents(self) -> None:
         from ai22b.talent_foundry.action_policy import evaluate_action_policy, infer_action_intents
@@ -1492,6 +1497,7 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("local_file_write", tool_results)
         self.assertIn("work_session", tool_results)
         self.assertIn("evidence_packet", tool_results)
+        self.assertIn("assessment", tool_results)
         self.assertIn("memory_consolidation", tool_results)
         self.assertIn("parent_controlled_projection_team", tool_results)
         self.assertEqual(tool_results["local_file_read"]["capability_scope"]["filesystem_scope"], "declared_context_only")
@@ -1506,6 +1512,8 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("local_file_read", tool_results["evidence_packet"]["output"]["previous_completed_tools"])
         self.assertIn("local_file_write", tool_results["evidence_packet"]["output"]["previous_completed_tools"])
         self.assertIn("work_session", tool_results["evidence_packet"]["output"]["previous_completed_tools"])
+        self.assertIn("evidence_packet", tool_results["assessment"]["output"]["previous_completed_tools"])
+        self.assertTrue(tool_results["assessment"]["output"]["checks"]["evidence_packet_seen"])
         self.assertEqual(tool_results["parent_controlled_projection_team"]["output"]["separate_consciousness"], False)
 
     def test_policy_engine_blocks_prompt_injection_sensitive_actions_but_allows_policy_discussion(self) -> None:

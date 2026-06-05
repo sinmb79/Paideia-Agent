@@ -207,6 +207,9 @@ def _projection_team(context: dict[str, Any]) -> dict[str, Any]:
 def _assessment(context: dict[str, Any]) -> dict[str, Any]:
     policy_decision = context.get("policy_decision", {})
     llm_result = context.get("llm_result", {})
+    previous_tools = context.get("tool_results_so_far", [])
+    previous_completed = [item.get("tool") for item in previous_tools if item.get("status") == "completed"]
+    evidence_packet_seen = "evidence_packet" in previous_completed
     return {
         "schema": "paideia-tool-assessment-review/v1",
         "assessment_mode": "post_run_review_packet",
@@ -214,9 +217,11 @@ def _assessment(context: dict[str, Any]) -> dict[str, Any]:
         "checks": {
             "policy_status": policy_decision.get("status"),
             "llm_status": llm_result.get("status"),
+            "evidence_packet_seen": evidence_packet_seen,
             "hidden_chain_of_thought_not_stored": True,
             "promotion_without_review": False,
         },
+        "previous_completed_tools": previous_completed,
         "recommended_review_label": {
             "status": "needs_boss_review",
             "score": None,

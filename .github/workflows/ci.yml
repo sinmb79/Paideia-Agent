@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - "codex/**"
+
+jobs:
+  python:
+    name: Python checks
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install test dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Compile package
+        shell: pwsh
+        run: |
+          python -m compileall src\ai22b\talent_foundry
+
+      - name: Run regression tests
+        shell: pwsh
+        run: |
+          $env:PYTHONPATH = "src"
+          python -B -m pytest tests\test_talent_foundry.py -k "agent_runner_executes_manifest_with_tool_policy_and_memory or agent_execution_uses_registered_tool_executor or policy_engine_blocks_prompt_injection_sensitive_actions_but_allows_policy_discussion or llm_runtime_live_mode_uses_client_interface_and_auto_fallback or external_live_clients_fail_closed_without_required_keys_or_models or llm_provider_doctor_live_check_uses_client_interface or workspace_agent_writes_plan_summary_and_trace_inside_workspace or workspace_sandbox_enforces_path_size_trace_and_network_limits or hired_job_dataflow_and_cycle_propagate_live_llm_runtime" -q
+          python -B -m pytest tests\test_talent_foundry_memory_substrate_chat.py tests\test_talent_foundry_graham.py tests\test_talent_foundry_graham_kibo_lifecycle.py tests\test_talent_foundry_growth_package.py -q
+
+      - name: Public repository hygiene
+        shell: pwsh
+        run: |
+          .\scripts\check_public_repo_hygiene.ps1
