@@ -9,6 +9,7 @@ from ai22b.config import talent_foundry_storage_path
 from ai22b.talent_foundry.agent_identity_card import (
     build_agent_id_card_payload,
     build_agent_identity_layer_envelope,
+    verify_agent_identity_artifacts,
 )
 from ai22b.talent_foundry.agent_manifest import build_agent_manifest
 from ai22b.talent_foundry.agent_program import (
@@ -351,6 +352,14 @@ def _build_parser() -> argparse.ArgumentParser:
     agent_identity_envelope.add_argument("--surface", default="paideia_cli")
     agent_identity_envelope.add_argument("--task-ref")
     agent_identity_envelope.add_argument("--output", required=True)
+
+    verify_agent_id_card = subparsers.add_parser(
+        "verify-agent-id-card",
+        help="Verify local Agent ID Card payload and Agent_warrent envelope artifacts without registering or uploading them.",
+    )
+    verify_agent_id_card.add_argument("--payload")
+    verify_agent_id_card.add_argument("--envelope")
+    verify_agent_id_card.add_argument("--output", required=True)
 
     hire_installed = subparsers.add_parser("hire-installed", help="Hire an installed AI talent as a local agent.")
     hire_installed.add_argument("--installed-manifest", required=True)
@@ -1059,6 +1068,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         print(json.dumps(envelope, ensure_ascii=False, indent=2))
         return 0
+
+    if args.command == "verify-agent-id-card":
+        report = verify_agent_identity_artifacts(
+            payload_path=Path(args.payload) if args.payload else None,
+            envelope_path=Path(args.envelope) if args.envelope else None,
+            output_path=Path(args.output),
+        )
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return 0 if report["valid"] else 2
 
     if args.command == "hire-installed":
         hiring = hire_installed_agent(

@@ -11,7 +11,7 @@
 | OpenClaw agent runtime 문서 | OpenAI/Codex는 런타임 표면일 수 있지만, 그 자체가 에이전트 정체성은 아닙니다. | `llm_identity_policy: application_engine_not_identity`를 기록하고, 정체성은 로컬 교육 산출물에서 오도록 했습니다. |
 | Hermes Agent | 설치, 모델 전환, CLI 채팅, 도구, 스킬, 메모리, 게이트웨이, OpenClaw 마이그레이션을 강조합니다. | 설치 키트, doctor 검사, 스킬 마이그레이션 wrapper, adapter manifest, Reasoning Ledger를 추가했습니다. |
 | OpenHands | 워크스페이스 에이전트는 계획, 결과, trace 같은 검증 가능한 파일을 남겨야 합니다. | 고용 에이전트의 workspace/dataflow 실행이 계획, 결과, trace, 학습 승격 기록을 남깁니다. |
-| Agent ID Card | 에이전트 신원은 display name, owner, role, scope, credential, verification status와 연결되어야 합니다. | 계획 반영: hiring dossier와 설치 매니페스트에서 Agent ID Card payload를 export하되, 등록은 사용자가 명시적으로 실행할 때만 수행합니다. |
+| Agent ID Card | 에이전트 신원은 display name, owner, role, scope, credential, verification status와 연결되어야 합니다. | 로컬 hiring 산출물에서 Agent ID Card payload와 Agent_warrent `ail.v1` envelope를 export하고, 외부 등록 전 필수 필드, 개인정보 누출, 수동 등록 정책을 검증합니다. |
 
 ## 하드웨어와 데이터플로우 벤치마크
 

@@ -501,16 +501,26 @@ Paideia borrows useful operational patterns from agent runtimes while keeping a 
 - Hermes Agent foregrounds a learning loop, skills, persistent memory, MCP integration, and migration from OpenClaw.
 - OpenClaw foregrounds workspace files, skills, multi-channel routing, and configurable local agent workspaces.
 - Paideia keeps the education record as the source of identity and treats the LLM as an application engine, not the agent's self.
-- Agent identity systems such as [Agent ID Card](https://www.agentidcard.org/) and Boss's [Agent_warrent / Agent Identity Layer](https://github.com/sinmb79/Agent_warrent) are supported as local identity export paths. Registration and external upload must remain explicit user actions.
+- Agent identity systems such as [Agent ID Card](https://www.agentidcard.org/) and Boss's [Agent_warrent / Agent Identity Layer](https://github.com/sinmb79/Agent_warrent) are supported as local identity export and verification paths. Registration and external upload must remain explicit user actions.
 
 ```powershell
+ai22b-talent-foundry export-agent-id-card-payload `
+  --installed-manifest .\installed_agent_manifest.json `
+  --employment-record .\employment_record.json `
+  --output .\agent_id_card_payload.json
+
 ai22b-talent-foundry export-agent-identity-envelope `
   --installed-manifest .\installed_agent_manifest.json `
   --employment-record .\employment_record.json `
   --output .\agent_identity_envelope.json
+
+ai22b-talent-foundry verify-agent-id-card `
+  --payload .\agent_id_card_payload.json `
+  --envelope .\agent_identity_envelope.json `
+  --output .\agent_identity_verification.json
 ```
 
-The generated `agent_identity_envelope.json` follows the Agent_warrent `ail.v1` local-unregistered shape. It contains no credential token, no raw owner email, and no automatic network registration.
+The generated `agent_id_card_payload.json` and `agent_identity_envelope.json` are local-unregistered artifacts. `verify-agent-id-card` performs no network call and fails if required identity fields are missing, if credential-like values, raw owner emails, or local absolute paths leak into the artifacts, or if the external registration policy is not manual-owner-action-only.
 
 Primary references:
 

@@ -11,7 +11,7 @@ This document maps reference programs, papers, and reports to concrete Paideia A
 | OpenClaw agent runtime docs | OpenAI/Codex can be a runtime surface without making the model provider equal to the agent identity. | Paideia records `llm_identity_policy: application_engine_not_identity` and stores talent identity in local education artifacts. |
 | Hermes Agent repository | Modern agents expose setup, model switching, CLI chat, tools, skills, memory, gateways, and migration. | Paideia adds install kits, doctor checks, skill migration wrappers, adapter manifests, and the `Reasoning Ledger` as a growth record. |
 | OpenHands | Workspace agents should leave inspectable files, plans, traces, and runnable evidence. | Hired-agent workspace/dataflow runs write local plans, results, traces, and learning promotion records. |
-| Agent ID Card | Agent identity should bind display name, owner, role, scope, credentials, and verification status. | Planned integration: export an Agent ID Card payload from the hiring dossier and installed manifest, with registration disabled unless the owner explicitly runs it. |
+| Agent ID Card | Agent identity should bind display name, owner, role, scope, credentials, and verification status. | Paideia exports an Agent ID Card payload and Agent_warrent `ail.v1` envelope from local hiring artifacts, then verifies required fields, privacy leaks, and manual-registration policy before any owner-run external registration. |
 
 ## Hardware And Dataflow Benchmarks
 

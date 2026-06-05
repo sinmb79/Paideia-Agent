@@ -50,6 +50,7 @@ ai22b-talent-foundry onboard --answers examples\graham_junior_onboarding.answers
 - `paideia_onboarding_config.json`: OpenClaw식 설정 요약
 - `agent_id_card_payload.json`: 외부 등록 전 검토할 Agent ID Card payload
 - `agent_identity_envelope.json`: Agent_warrent `ail.v1` 로컬 미등록 envelope
+- `agent_identity_verification.json`: Agent ID Card payload와 Agent_warrent envelope의 로컬 사전 검증 보고서
 - `simulation_rollouts.json`: 병렬 episode rollout 계획
 - `onboarding/onboarding_session.json`: 실제 육성, 설치, 고용, 첫 목표 사이클 기록
 
@@ -69,6 +70,15 @@ ai22b-talent-foundry export-agent-identity-envelope `
   --installed-manifest <installed_agent_manifest.json> `
   --employment-record <employment_record.json> `
   --output agent_identity_envelope.json
+```
+
+외부 등록 전에는 두 산출물을 함께 검증합니다. 이 명령은 네트워크를 사용하지 않고, 필수 필드, credential-like 값, 원문 이메일, 로컬 절대경로, 수동 등록 정책을 검사합니다.
+
+```powershell
+ai22b-talent-foundry verify-agent-id-card `
+  --payload agent_id_card_payload.json `
+  --envelope agent_identity_envelope.json `
+  --output agent_identity_verification.json
 ```
 
 ## 중요한 차이

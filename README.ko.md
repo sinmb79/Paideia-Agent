@@ -266,16 +266,26 @@ ai22b-talent-foundry run-same-sky-eval `
 
 세부 설명은 [Growth Profile v0.5-v0.7](docs/growth_profile_v05.ko.md)을 참고하세요.
 
-Agent_warrent 호환 신원 envelope만 별도로 만들 수도 있습니다.
+Agent ID Card payload와 Agent_warrent 호환 신원 envelope를 별도로 만들고, 외부 등록 전에 로컬 검증까지 실행할 수 있습니다.
 
 ```powershell
+ai22b-talent-foundry export-agent-id-card-payload `
+  --installed-manifest .\installed_agent_manifest.json `
+  --employment-record .\employment_record.json `
+  --output .\agent_id_card_payload.json
+
 ai22b-talent-foundry export-agent-identity-envelope `
   --installed-manifest .\installed_agent_manifest.json `
   --employment-record .\employment_record.json `
   --output .\agent_identity_envelope.json
+
+ai22b-talent-foundry verify-agent-id-card `
+  --payload .\agent_id_card_payload.json `
+  --envelope .\agent_identity_envelope.json `
+  --output .\agent_identity_verification.json
 ```
 
-이 파일은 외부 등록 전 검토용입니다. `ail_id`, credential token, 서명 검증은 외부 등록을 보스가 명시적으로 진행한 뒤에만 채워집니다.
+이 파일들은 외부 등록 전 검토용입니다. `verify-agent-id-card`는 네트워크 호출을 하지 않고 필수 신원 필드, credential-like 값, 원문 이메일, 로컬 절대경로, 수동 등록 정책을 검사합니다. `ail_id`, credential token, 서명 검증은 외부 등록을 보스가 명시적으로 진행한 뒤에만 채워집니다.
 
 ## 공개 저장소 규칙
 

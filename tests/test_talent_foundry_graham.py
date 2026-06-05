@@ -362,7 +362,20 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             run = materialize_training_blueprint(blueprint, output_dir=Path(tmp) / "agent_warrent")
             artifacts = {key: Path(value) for key, value in run["artifacts"].items()}
+            payload_output = Path(tmp) / "agent_id_card_payload.json"
             output = Path(tmp) / "agent_identity_envelope.json"
+            verify_output = Path(tmp) / "agent_identity_verification.json"
+            payload_exit = cli_main(
+                [
+                    "export-agent-id-card-payload",
+                    "--installed-manifest",
+                    str(artifacts["installed_agent_manifest"]),
+                    "--employment-record",
+                    str(artifacts["employment_record"]),
+                    "--output",
+                    str(payload_output),
+                ]
+            )
             exit_code = cli_main(
                 [
                     "export-agent-identity-envelope",
@@ -378,9 +391,25 @@ class GrahamTalentFoundryTests(unittest.TestCase):
                     str(output),
                 ]
             )
+            verify_exit = cli_main(
+                [
+                    "verify-agent-id-card",
+                    "--payload",
+                    str(payload_output),
+                    "--envelope",
+                    str(output),
+                    "--output",
+                    str(verify_output),
+                ]
+            )
+            payload = json.loads(payload_output.read_text(encoding="utf-8"))
             envelope = json.loads(output.read_text(encoding="utf-8"))
+            verification = json.loads(verify_output.read_text(encoding="utf-8"))
 
+        self.assertEqual(payload_exit, 0)
         self.assertEqual(exit_code, 0)
+        self.assertEqual(verify_exit, 0)
+        self.assertEqual(payload["schema"], "ai-talent-agent-id-card-payload/v1")
         self.assertEqual(envelope["version"], "ail.v1")
         self.assertEqual(envelope["agent"]["display_name"], "agent-warrent-test")
         self.assertEqual(envelope["delegation"]["task_ref"], "test-agent-warrent-export")
@@ -388,6 +417,63 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertEqual(envelope["verification"]["strength"], "local_runtime_asserted")
         self.assertFalse(envelope["extensions"]["paideia"]["privacy"]["network_action_performed"])
         self.assertNotIn("C:\\Users\\", json.dumps(envelope, ensure_ascii=False))
+        self.assertEqual(verification["schema"], "paideia-agent-id-card-verification/v1")
+        self.assertTrue(verification["valid"])
+        self.assertEqual(verification["status"], "passed")
+        self.assertFalse(verification["network_action_performed"])
+        self.assertEqual(verification["external_registration"], "not_performed_manual_owner_action_only")
+        self.assertFalse(verification["validations"]["payload"]["privacy"]["credential_like_values_exported"])
+        self.assertFalse(verification["validations"]["envelope"]["privacy"]["local_absolute_paths_exported"])
+
+    def test_agent_identity_verifier_blocks_private_contact_and_local_paths(self) -> None:
+        from ai22b.talent_foundry.agent_identity_card import (
+            AGENT_WARRENT_REPO_URL,
+            validate_agent_id_card_payload,
+            validate_agent_identity_layer_envelope,
+        )
+
+        payload_validation = validate_agent_id_card_payload(
+            {
+                "schema": "ai-talent-agent-id-card-payload/v1",
+                "status": "payload_ready_not_registered",
+                "network_action_performed": False,
+                "owner_review_required": True,
+                "credential_subject": {
+                    "display_name": "privacy-test-agent",
+                    "role": "research agent",
+                    "owner_org": "boss@example.com",
+                    "scope": {"runtime": "local_first_paideia_agent"},
+                },
+                "local_lineage": {"install_id": "privacy_test_agent"},
+                "agent_identity_layer": {
+                    "compatible_envelope_version": "ail.v1",
+                    "provider_repo": AGENT_WARRENT_REPO_URL,
+                    "external_registration": "manual_owner_action_only",
+                },
+            }
+        )
+        envelope_validation = validate_agent_identity_layer_envelope(
+            {
+                "version": "ail.v1",
+                "agent": {"id": "paideia_privacy_test", "display_name": "privacy-test-agent", "role": "research agent"},
+                "delegation": {"mode": "direct"},
+                "scope": {"approval_policy": {"external_registration": "human_required"}},
+                "verification": {"strength": "local_runtime_asserted", "signed": False},
+                "runtime": {"run_id": "run_privacy_test", "cwd": "D:\\private-agent-run"},
+                "extensions": {
+                    "agent_warrent": {
+                        "repo_url": AGENT_WARRENT_REPO_URL,
+                        "registration_state": "local_unregistered",
+                        "external_registration": "manual_owner_action_only",
+                    }
+                },
+            }
+        )
+
+        self.assertFalse(payload_validation["valid"])
+        self.assertTrue(payload_validation["privacy"]["raw_owner_email_exported"])
+        self.assertFalse(envelope_validation["valid"])
+        self.assertTrue(envelope_validation["privacy"]["local_absolute_paths_exported"])
 
     def test_owner_self_extension_blueprint_uses_private_local_track_without_role_model(self) -> None:
         from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
