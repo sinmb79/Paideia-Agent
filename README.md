@@ -146,6 +146,8 @@ python -m pip install -e ".[dev]"        # tests
 
 CI runs a package smoke test that verifies the `pyproject.toml` console scripts import as callables, optional extras stay split by runtime capability, and package metadata does not reference private/local paths.
 
+CI also runs a CLI smoke test for public-safe first-run commands. It verifies that `list-role-models`, `doctor-llm-provider --llm-engine deterministic_local`, and `run-action-policy-eval` execute without private files, API keys, or network access while writing reviewable JSON reports.
+
 Runtime artifacts are stored outside this source tree by default:
 
 ```powershell

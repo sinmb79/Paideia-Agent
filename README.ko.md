@@ -102,6 +102,8 @@ python -m pip install -e ".[dev]"        # 테스트
 
 CI의 package smoke 테스트는 `pyproject.toml`의 console script가 실제 callable로 import되는지, optional extras가 기능별로 분리되어 있는지, 패키지 메타데이터에 private/local path가 섞이지 않았는지 확인합니다.
 
+CI는 공개 안전 first-run CLI smoke 테스트도 실행합니다. 이 테스트는 `list-role-models`, `doctor-llm-provider --llm-engine deterministic_local`, `run-action-policy-eval`이 비공개 파일, API 키, 네트워크 접근 없이 실행되고 검토 가능한 JSON 리포트를 쓰는지 확인합니다.
+
 롤모델 목록:
 
 ```powershell
