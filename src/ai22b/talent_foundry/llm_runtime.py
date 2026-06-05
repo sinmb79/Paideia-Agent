@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 from datetime import datetime, timezone
 from pathlib import Path
@@ -49,6 +50,7 @@ LOCAL_HTTP_ENGINES = {"ollama_local_http", "lm_studio_local_http"}
 LLM_PROVIDER_DOCTOR_SCHEMA = "paideia-llm-provider-doctor/v1"
 LLM_PROVIDER_PREFLIGHT_SCHEMA = "paideia-llm-provider-preflight/v1"
 LLM_PROVIDER_SMOKE_CONTRACT_SCHEMA = "paideia-llm-provider-smoke-contract/v1"
+LLM_REVIEWABLE_PLAN_SCHEMA = "paideia-llm-reviewable-plan/v1"
 MODEL_REQUIRED_ENGINES = {
     "anthropic_claude_api",
     "google_gemini_api",
@@ -518,6 +520,11 @@ def _invoke_offline_or_local_engine(
 
     agent = manifest["agent"]
     prompt_fingerprint = _prompt_fingerprint(manifest=manifest, task=task)
+    draft = (
+        f"{agent['name']}은 자신의 학습 기록과 절차 원칙을 기준으로 "
+        f"'{task}' 업무의 초안을 로컬 응용 엔진에서 구성한다."
+    )
+    llm_plan = build_reviewable_llm_plan(text=draft, task=task)
     return {
         "schema": RUNTIME_RESULT_SCHEMA,
         "engine": engine,
@@ -526,10 +533,8 @@ def _invoke_offline_or_local_engine(
         "network_access": runtime_config["network_access"],
         "prompt_fingerprint": prompt_fingerprint,
         "applied_as": "language_and_tool_reasoning_engine",
-        "draft": (
-            f"{agent['name']}은 자신의 학습 기록과 절차 원칙을 기준으로 "
-            f"'{task}' 업무의 초안을 로컬 응용 엔진에서 구성한다."
-        ),
+        "draft": llm_plan["assistant_reply"],
+        "llm_plan": llm_plan,
     }
 
 
@@ -563,6 +568,11 @@ def _invoke_live_client(
             "llm_mode": "live",
             "client_result": client_result_summary,
         }
+    llm_plan = build_reviewable_llm_plan(
+        text=str(client_result.get("text", "")),
+        task=task,
+        tools=tools,
+    )
     return {
         "schema": RUNTIME_RESULT_SCHEMA,
         "engine": engine,
@@ -573,7 +583,8 @@ def _invoke_live_client(
         "prompt_fingerprint": _prompt_fingerprint(manifest=manifest, task=task),
         "llm_mode": "live",
         "model": client_result.get("model") or runtime_config.get("model"),
-        "draft": client_result.get("text", ""),
+        "draft": llm_plan["assistant_reply"],
+        "llm_plan": llm_plan,
         "client_result": client_result_summary,
         "data_policy": {
             "send_private_training_files": False,
@@ -608,6 +619,164 @@ def _client_result_for_runtime_storage(
     summary["private_reasoning_field_values_stored"] = False
     summary["retention_policy"] = "summary_without_provider_text_or_debug_payload"
     return summary
+
+
+def _compact_text(value: Any, *, limit: int = 1200) -> str:
+    text = str(value or "").strip()
+    if len(text) <= limit:
+        return text
+    return text[: limit - 3].rstrip() + "..."
+
+
+def _json_object_from_text(text: str) -> tuple[dict[str, Any] | None, str]:
+    stripped = text.strip()
+    if stripped.startswith("```"):
+        lines = stripped.splitlines()
+        if lines and lines[0].strip().startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip().startswith("```"):
+            lines = lines[:-1]
+        stripped = "\n".join(lines).strip()
+    try:
+        data = json.loads(stripped)
+    except json.JSONDecodeError:
+        start = stripped.find("{")
+        end = stripped.rfind("}")
+        if start == -1 or end <= start:
+            return None, "plain_text_fallback"
+        try:
+            data = json.loads(stripped[start : end + 1])
+        except json.JSONDecodeError:
+            return None, "plain_text_fallback"
+    if isinstance(data, dict):
+        return data, "json_object"
+    return None, "plain_text_fallback"
+
+
+def _normalize_reasoning_summary(value: Any, *, task: str, source: str) -> list[dict[str, str]]:
+    items: list[dict[str, str]] = []
+    if isinstance(value, list):
+        for index, item in enumerate(value, start=1):
+            if isinstance(item, dict):
+                step = item.get("step") or item.get("id") or item.get("title") or f"step_{index}"
+                summary = item.get("summary") or item.get("reason") or item.get("evidence") or item
+            else:
+                step = f"step_{index}"
+                summary = item
+            items.append({"step": _compact_text(step, limit=80), "summary": _compact_text(summary, limit=300)})
+    elif value:
+        items.append({"step": "summary", "summary": _compact_text(value, limit=300)})
+    if items:
+        return items[:6]
+    return [
+        {
+            "step": "request_understood",
+            "summary": _compact_text(f"요청 '{task}'을 실행 전 검토 가능한 업무 단위로 정리했습니다.", limit=300),
+        },
+        {
+            "step": "policy_and_evidence_first",
+            "summary": "정책 게이트, 근거 확인, 보스 검토 가능한 산출물 생성을 우선합니다.",
+        },
+        {
+            "step": "plan_source",
+            "summary": f"LLM 출력은 {source} 경로로 정규화되었고 숨은 추론 원문은 저장하지 않습니다.",
+        },
+    ]
+
+
+def _normalize_string_list(value: Any, *, fallback: list[str]) -> list[str]:
+    if isinstance(value, list):
+        normalized = [_compact_text(item, limit=220) for item in value if str(item).strip()]
+        if normalized:
+            return normalized[:6]
+    if isinstance(value, str) and value.strip():
+        return [_compact_text(value, limit=220)]
+    return fallback
+
+
+def _normalize_tool_plan(value: Any, *, tools: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    available = {
+        str(item.get("id") or item.get("name"))
+        for item in tools or []
+        if item.get("id") or item.get("name")
+    }
+    raw_items = value if isinstance(value, list) else []
+    if not raw_items:
+        raw_items = [
+            {
+                "tool": item.get("id") or item.get("name"),
+                "purpose": item.get("description", "candidate tool for registered execution loop"),
+            }
+            for item in tools or []
+        ]
+    normalized: list[dict[str, Any]] = []
+    for item in raw_items:
+        if isinstance(item, dict):
+            tool = str(item.get("tool") or item.get("name") or item.get("id") or "").strip()
+            purpose = item.get("purpose") or item.get("reason") or item.get("description") or "candidate tool"
+            requires_approval = bool(item.get("requires_boss_approval", False))
+        else:
+            tool = str(item).strip()
+            purpose = "candidate tool"
+            requires_approval = False
+        if not tool:
+            continue
+        normalized.append(
+            {
+                "tool": _compact_text(tool, limit=80),
+                "purpose": _compact_text(purpose, limit=220),
+                "registration_status": "registered" if tool in available else "not_in_selected_tool_set",
+                "execution_policy": "suggestion_only_registered_executor_decides",
+                "requires_boss_approval": requires_approval,
+            }
+        )
+    return normalized[:8]
+
+
+def build_reviewable_llm_plan(
+    *,
+    text: str,
+    task: str,
+    tools: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    parsed, source = _json_object_from_text(text)
+    assistant_reply = text
+    reasoning_value: Any = None
+    next_actions_value: Any = None
+    tool_plan_value: Any = None
+    if parsed is not None:
+        assistant_reply = str(
+            parsed.get("assistant_reply")
+            or parsed.get("answer")
+            or parsed.get("draft")
+            or parsed.get("summary")
+            or text
+        )
+        reasoning_value = parsed.get("reviewable_reasoning_summary") or parsed.get("reasoning_summary")
+        next_actions_value = parsed.get("suggested_next_actions") or parsed.get("next_actions")
+        tool_plan_value = parsed.get("tool_plan") or parsed.get("tool_use_suggestions")
+    return {
+        "schema": LLM_REVIEWABLE_PLAN_SCHEMA,
+        "source": source,
+        "assistant_reply": _compact_text(assistant_reply, limit=1800),
+        "reviewable_reasoning_summary": _normalize_reasoning_summary(
+            reasoning_value,
+            task=task,
+            source=source,
+        ),
+        "suggested_next_actions": _normalize_string_list(
+            next_actions_value,
+            fallback=[
+                "근거와 정책 경계를 먼저 검토합니다.",
+                "필요한 산출물은 등록된 로컬 도구와 workspace artifact로만 남깁니다.",
+                "학습 승격은 보스 또는 감독위원회 검토 뒤에만 진행합니다.",
+            ],
+        ),
+        "tool_plan": _normalize_tool_plan(tool_plan_value, tools=tools),
+        "tool_plan_policy": "suggestions_only_registered_executor_decides",
+        "private_reasoning_trace": "do_not_store",
+        "raw_provider_text_stored": False,
+    }
 
 
 def _build_provider_smoke_contract(
@@ -720,6 +889,7 @@ def _invoke_bigram_local(
 
     seed = manifest["agent"]["name"]
     draft = generate_text(model, seed=seed, length=160, random_seed=22)
+    llm_plan = build_reviewable_llm_plan(text=draft, task=task)
     return {
         "schema": RUNTIME_RESULT_SCHEMA,
         "engine": "bigram_local",
@@ -729,7 +899,8 @@ def _invoke_bigram_local(
         "network_access": runtime_config["network_access"],
         "local_files_only": True,
         "applied_as": "from_scratch_language_draft_engine",
-        "draft": draft,
+        "draft": llm_plan["assistant_reply"],
+        "llm_plan": llm_plan,
         "prompt_fingerprint": _prompt_fingerprint(manifest=manifest, task=task),
     }
 
@@ -786,6 +957,7 @@ def _invoke_transformers_local(
             "local_files_only": True,
         }
 
+    llm_plan = build_reviewable_llm_plan(text=text, task=task)
     return {
         "schema": RUNTIME_RESULT_SCHEMA,
         "engine": "transformers_local",
@@ -795,7 +967,8 @@ def _invoke_transformers_local(
         "network_access": runtime_config["network_access"],
         "local_files_only": True,
         "applied_as": "language_and_tool_reasoning_engine",
-        "draft": text,
+        "draft": llm_plan["assistant_reply"],
+        "llm_plan": llm_plan,
         "prompt_fingerprint": _prompt_fingerprint(manifest=manifest, task=task),
     }
 
@@ -846,6 +1019,11 @@ def _invoke_openai_chatgpt_codex_bridge(
     task: str,
 ) -> dict[str, Any]:
     agent = manifest["agent"]
+    draft = (
+        f"{agent['name']} uses the local manifest, learning ledger, and memory substrate as identity "
+        f"and reasoning context. OpenAI ChatGPT Codex supplies language generation only for: {task}"
+    )
+    llm_plan = build_reviewable_llm_plan(text=draft, task=task)
     return {
         "schema": RUNTIME_RESULT_SCHEMA,
         "engine": "openai_chatgpt_codex",
@@ -860,10 +1038,8 @@ def _invoke_openai_chatgpt_codex_bridge(
             "api_key_storage": "not_required_by_this_bridge",
         },
         "model": runtime_config.get("model"),
-        "draft": (
-            f"{agent['name']} uses the local manifest, learning ledger, and memory substrate as identity "
-            f"and reasoning context. OpenAI ChatGPT Codex supplies language generation only for: {task}"
-        ),
+        "draft": llm_plan["assistant_reply"],
+        "llm_plan": llm_plan,
     }
 
 
@@ -876,6 +1052,11 @@ def _invoke_configured_adapter_manifest(
     agent = manifest["agent"]
     engine = runtime_config["engine"]
     is_local_http = engine in LOCAL_HTTP_ENGINES
+    draft = (
+        f"{agent['name']} is ready to use {engine} as the selected LLM adapter. "
+        f"Paideia keeps identity and learned routes in local records; the adapter supplies language generation for: {task}"
+    )
+    llm_plan = build_reviewable_llm_plan(text=draft, task=task)
     return {
         "schema": RUNTIME_RESULT_SCHEMA,
         "engine": engine,
@@ -891,10 +1072,8 @@ def _invoke_configured_adapter_manifest(
             "local_http_only": is_local_http,
         },
         "model": runtime_config.get("model"),
-        "draft": (
-            f"{agent['name']} is ready to use {engine} as the selected LLM adapter. "
-            f"Paideia keeps identity and learned routes in local records; the adapter supplies language generation for: {task}"
-        ),
+        "draft": llm_plan["assistant_reply"],
+        "llm_plan": llm_plan,
     }
 
 

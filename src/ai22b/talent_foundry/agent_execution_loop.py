@@ -70,6 +70,10 @@ def _verify_execution(policy_decision: dict[str, Any], tool_execution: dict[str,
         "skipped_policy_approval_required",
     }:
         issues.append(f"llm_status_unexpected:{llm_result.get('status')}")
+    if llm_result.get("status") in {"completed", "bridge_context_prepared", "adapter_manifest_ready"}:
+        llm_plan = llm_result.get("llm_plan", {})
+        if not isinstance(llm_plan, dict) or llm_plan.get("schema") != "paideia-llm-reviewable-plan/v1":
+            issues.append("llm_reviewable_plan_missing")
     return {
         "schema": "paideia-agent-run-verification/v1",
         "status": (
@@ -204,6 +208,12 @@ def _build_execution_contract(
             "attempted": llm_attempted,
             "status": llm_result.get("status"),
             "engine": llm_result.get("engine"),
+            "reviewable_plan_schema": llm_result.get("llm_plan", {}).get("schema")
+            if isinstance(llm_result.get("llm_plan"), dict)
+            else None,
+            "reviewable_plan_source": llm_result.get("llm_plan", {}).get("source")
+            if isinstance(llm_result.get("llm_plan"), dict)
+            else None,
             "skip_reason": None if llm_attempted else llm_result.get("reason"),
             "identity_policy": llm_result.get("identity_policy"),
             "provider_preflight_status": llm_provider_preflight.get("status"),

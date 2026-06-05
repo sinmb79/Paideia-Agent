@@ -100,9 +100,14 @@ def _work_session(context: dict[str, Any]) -> dict[str, Any]:
     agent = context.get("manifest", {}).get("agent", {})
     task = context.get("task", "")
     llm_result = context.get("llm_result", {})
+    llm_plan = llm_result.get("llm_plan", {}) if isinstance(llm_result.get("llm_plan"), dict) else {}
     draft = str(llm_result.get("draft", "")).strip()
     return {
         "summary": draft or f"{agent.get('name')}은 '{task}' 요청을 근거 확인, 경계 확인, 결과 기록 순서로 정리했습니다.",
+        "llm_plan_schema": llm_plan.get("schema"),
+        "llm_plan_source": llm_plan.get("source"),
+        "reviewable_reasoning_summary": llm_plan.get("reviewable_reasoning_summary", []),
+        "suggested_next_actions": llm_plan.get("suggested_next_actions", []),
         "requires_boss_review": True,
         "artifact_policy": "in_memory_summary_only_for_cli_run",
     }
@@ -119,6 +124,7 @@ def _evidence_packet(context: dict[str, Any]) -> dict[str, Any]:
     procedural = list(memory.get("procedural_principles", []))[:5]
     semantic = list(memory.get("semantic_themes", []))[:5]
     previous_completed = [item.get("tool") for item in previous_tools if item.get("status") == "completed"]
+    llm_plan = llm_result.get("llm_plan", {}) if isinstance(llm_result.get("llm_plan"), dict) else {}
     evidence_items = [
         {
             "id": "request",
@@ -131,6 +137,17 @@ def _evidence_packet(context: dict[str, Any]) -> dict[str, Any]:
             "source": llm_result.get("engine", "unknown_runtime"),
             "summary": draft or "No runtime draft was produced; keep conclusions tentative.",
             "trust_level": "draft_requires_review",
+        },
+        {
+            "id": "llm_reviewable_plan",
+            "source": llm_result.get("engine", "unknown_runtime"),
+            "summary": "; ".join(
+                str(item.get("summary", ""))
+                for item in llm_plan.get("reviewable_reasoning_summary", [])
+                if isinstance(item, dict)
+            )
+            or "No structured LLM plan was produced.",
+            "trust_level": "reviewable_summary_not_private_trace",
         },
         {
             "id": "memory_profile",
@@ -162,6 +179,11 @@ def _evidence_packet(context: dict[str, Any]) -> dict[str, Any]:
             "evidence": "runtime_draft",
         },
         {
+            "id": "llm_plan_marked_reviewable",
+            "status": "satisfied" if llm_plan.get("schema") == "paideia-llm-reviewable-plan/v1" else "needs_review",
+            "evidence": "llm_reviewable_plan",
+        },
+        {
             "id": "source_dates_required_for_external_claims",
             "status": "manual_review_required",
             "evidence": "not_performed_by_local_in_memory_tool",
@@ -179,6 +201,8 @@ def _evidence_packet(context: dict[str, Any]) -> dict[str, Any]:
         "checklist": checklist,
         "previous_completed_tools": previous_completed,
         "unsupported_claim_policy": "unsupported_external_claims_remain_open_questions",
+        "llm_tool_plan": llm_plan.get("tool_plan", []),
+        "llm_plan_policy": llm_plan.get("tool_plan_policy"),
         "open_questions": [
             "Which source date and document version support each external factual claim?",
             "Which counterevidence would change the draft conclusion?",

@@ -399,6 +399,8 @@ The adapter regression suite uses fake SDK/HTTP success fixtures for OpenAI Resp
 
 Every agent, hired job, and dataflow runtime result also embeds `llm_provider_preflight`. This no-network packet explains whether the selected provider was skipped for offline mode, needs configuration, or is ready for an explicit live attempt. It records missing model/key/path checks, next actions, secret non-export policy, and the fact that preflight itself did not call the provider.
 
+Completed, bridge-ready, and adapter-ready agent runs also include `llm_plan`. This is a reviewable packet with `assistant_reply`, short evidence-facing reasoning summaries, suggested next actions, and suggestion-only tool plans. Raw provider text and hidden reasoning traces are not stored; registered tools still execute only through the policy-checked local tool registry.
+
 Chat runs use the same selected provider contract. `openai_chatgpt_codex` keeps the dedicated OpenAI Responses chat bridge, while Anthropic, Gemini, Mistral, OpenRouter, Ollama, and LM Studio chat through the shared `LLMClient` adapter path. Every chat turn records `chat_execution_trace` with memory routing, live provider attempt/fallback, reply generation mode, and reviewed learning decision when `--learn-from-chat` is enabled.
 
 Manifest-based workspace runs also accept the same provider flags. This lets a pre-hire or lab workspace run use the selected LLM adapter while still writing sandboxed local artifacts:
