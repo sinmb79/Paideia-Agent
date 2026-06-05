@@ -467,6 +467,17 @@ Hired jobs also write `deliverable_synthesis.json`, materialize declared `delive
 
 Every agent run now includes `runtime_observability`: estimated context size, estimated prompt tokens, selected-memory count, selected-tool count, provider usage presence, fallback state, review/promotion/quarantine counters, and privacy flags showing that full session replay and private reasoning traces were not stored. Dataflow jobs also write `runtime_observability.json` inside the workspace, so the memory-board claim can be measured instead of only described.
 
+You can compare those records against a generic prompt-wrapper replay baseline:
+
+```powershell
+ai22b-talent-foundry compare-runtime-observability `
+  --run .\last_hired_agent_run.json `
+  --run .\last_hired_dataflow_run.json `
+  --output .\runtime_observability_comparison.json
+```
+
+The report estimates how many prompt tokens Paideia used through bounded memory routing versus a proxy baseline that would replay the whole run artifact into a prompt. It stores file names and path fingerprints only, not local absolute paths or private reasoning traces.
+
 After a workspace, hired-job, or dataflow run, create an execution proof before trusting the result:
 
 ```powershell

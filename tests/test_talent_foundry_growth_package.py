@@ -26,6 +26,9 @@ class PaideiaGrowthPackageTests(unittest.TestCase):
             run = materialize_training_blueprint(blueprint, output_dir=root / "graham")
             artifacts = {key: Path(value) for key, value in run["artifacts"].items()}
             release_audit = json.loads(artifacts["release_audit"].read_text(encoding="utf-8"))
+            runtime_benchmark = json.loads(
+                artifacts["runtime_observability_comparison"].read_text(encoding="utf-8")
+            )
 
             graduate_dir = root / "graduate_package"
             self.assertEqual(
@@ -80,10 +83,14 @@ class PaideiaGrowthPackageTests(unittest.TestCase):
         self.assertEqual(runtime_manifest["llm_contract"]["identity_source"], "graduate_package_memory_pack")
         self.assertTrue(run["verification"]["hired_agent_run_created"])
         self.assertTrue(run["verification"]["hired_dataflow_run_created"])
+        self.assertTrue(run["verification"]["runtime_observability_comparison_created"])
         self.assertTrue(run["verification"]["release_audit_public_ready"])
         self.assertTrue(release_audit["public_release_ready"])
         self.assertTrue(release_audit["checkpoints"]["role_model_runtime"]["details"]["agent_run_p0_runtime_ready"])
         self.assertTrue(release_audit["checkpoints"]["role_model_runtime"]["details"]["dataflow_p0_runtime_ready"])
+        self.assertEqual(runtime_benchmark["schema"], "paideia-runtime-observability-comparison/v1")
+        self.assertTrue(runtime_benchmark["summary"]["public_safe"])
+        self.assertGreater(runtime_benchmark["summary"]["context_reduction_ratio"], 1)
         self.assertEqual(same_sky["schema"], "ai22b-paideia-same-sky-eval/v1")
         self.assertEqual(same_sky["agent_count"], 1)
         self.assertIn("growth_profile", same_sky["agent_views"][0]["response"]["evidence_links"])

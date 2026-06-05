@@ -81,6 +81,7 @@ from ai22b.talent_foundry.registry import (
     run_hired_workspace_agent,
 )
 from ai22b.talent_foundry.runtime import run_work_session
+from ai22b.talent_foundry.runtime_benchmark import build_runtime_observability_comparison
 from ai22b.talent_foundry.team import run_clone_team_session
 from ai22b.talent_foundry.training_run import materialize_training_blueprint
 from ai22b.talent_foundry.workspace_agent import run_workspace_agent_from_manifest
@@ -295,6 +296,18 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     execution_proof.add_argument("--run", required=True)
     execution_proof.add_argument("--output", required=True)
+
+    runtime_observability_compare = subparsers.add_parser(
+        "compare-runtime-observability",
+        help="Compare Paideia runtime observability against a generic prompt-wrapper replay baseline.",
+    )
+    runtime_observability_compare.add_argument(
+        "--run",
+        action="append",
+        required=True,
+        help="Agent, workspace, hired job, or dataflow run JSON. Repeatable.",
+    )
+    runtime_observability_compare.add_argument("--output", required=True)
 
     graduate_package = subparsers.add_parser(
         "build-graduate-package",
@@ -999,6 +1012,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         proof = verify_workspace_execution_file(Path(args.run), output_path=output_path)
         print(str(output_path))
         return 0 if proof["passed"] else 1
+
+    if args.command == "compare-runtime-observability":
+        output_path = Path(args.output)
+        report = build_runtime_observability_comparison(
+            [Path(path) for path in args.run],
+            output_path=output_path,
+        )
+        print(str(output_path))
+        return 0 if report["summary"]["public_safe"] else 1
 
     if args.command == "build-graduate-package":
         result = build_graduate_package(Path(args.training_run), Path(args.output_dir))

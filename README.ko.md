@@ -249,6 +249,17 @@ ai22b-talent-foundry run-hired-dataflow-job `
 
 모든 agent run에는 `runtime_observability`가 포함됩니다. 여기에는 추정 컨텍스트 크기, 추정 prompt token, 선택된 메모리 수, 선택된 도구 수, provider usage 존재 여부, fallback 상태, review/promotion/quarantine 카운터, full session replay와 private reasoning trace를 저장하지 않았다는 privacy flag가 기록됩니다. Dataflow job은 workspace 안에 `runtime_observability.json`도 따로 써서, 기억기판이 토큰과 컨텍스트를 줄인다는 주장을 실제 지표로 검토할 수 있게 합니다.
 
+이 기록은 일반 프롬프트형 래퍼가 전체 run artifact를 다시 prompt에 넣는 baseline과 비교할 수 있습니다.
+
+```powershell
+ai22b-talent-foundry compare-runtime-observability `
+  --run .\last_hired_agent_run.json `
+  --run .\last_hired_dataflow_run.json `
+  --output .\runtime_observability_comparison.json
+```
+
+리포트는 Paideia의 bounded memory routing이 사용한 추정 prompt token과 전체 실행 기록 replay baseline의 추정 token을 비교합니다. 공개 안전성을 위해 파일명과 경로 fingerprint만 저장하고, 로컬 절대경로나 private reasoning trace는 저장하지 않습니다.
+
 workspace, hired-job, dataflow 실행 후에는 결과를 신뢰하기 전에 실행 증명 파일을 만들 수 있습니다.
 
 ```powershell

@@ -35,6 +35,7 @@ from ai22b.talent_foundry.program_manifest import build_public_program_manifest
 from ai22b.talent_foundry.reasoning_kibo import build_initial_reasoning_kibo, write_reasoning_kibo_jsonl
 from ai22b.talent_foundry.records import build_career_records
 from ai22b.talent_foundry.registry import hire_installed_agent, run_hired_agent, run_hired_dataflow_job
+from ai22b.talent_foundry.runtime_benchmark import build_runtime_observability_comparison
 
 
 TRAINING_RUN_SCHEMA = "ai-talent-training-run/v1"
@@ -417,6 +418,7 @@ def materialize_training_blueprint(
     artifacts["hired_agent_run"] = installed_root / "last_hired_agent_run.json"
     artifacts["hired_dataflow_workspace"] = installed_root / "agent_dataflow_workspace"
     artifacts["hired_dataflow_run"] = installed_root / "last_hired_dataflow_run.json"
+    artifacts["runtime_observability_comparison"] = output_dir / "runtime_observability_comparison.json"
 
     run_hired_agent(
         artifacts["employment_record"],
@@ -445,6 +447,10 @@ def materialize_training_blueprint(
         output_path=artifacts["hired_dataflow_run"],
         llm_mode="offline",
     )
+    build_runtime_observability_comparison(
+        [artifacts["hired_agent_run"], artifacts["hired_dataflow_run"]],
+        output_path=artifacts["runtime_observability_comparison"],
+    )
     build_public_program_manifest(output_dir, output_path=artifacts["public_program_manifest"])
 
     run = {
@@ -468,6 +474,7 @@ def materialize_training_blueprint(
             "growth_profile_created": artifacts["growth_profile"].exists(),
             "hired_agent_run_created": artifacts["hired_agent_run"].exists(),
             "hired_dataflow_run_created": artifacts["hired_dataflow_run"].exists(),
+            "runtime_observability_comparison_created": artifacts["runtime_observability_comparison"].exists(),
             "public_program_manifest_created": artifacts["public_program_manifest"].exists(),
         },
     }
