@@ -17,6 +17,20 @@ from ai22b.talent_foundry.llm_clients import (
 
 RUNTIME_SCHEMA = "ai-talent-llm-runtime/v1"
 RUNTIME_RESULT_SCHEMA = "ai-talent-llm-runtime-result/v1"
+CLIENT_RESULT_RUNTIME_SUMMARY_KEYS = (
+    "schema",
+    "engine",
+    "status",
+    "reason",
+    "model",
+    "error_type",
+    "network_access",
+    "local_files_only",
+    "identity_policy",
+    "raw_output_saved",
+    "response_id",
+    "usage",
+)
 
 TRANSFORMERS_REQUIRED_FILE_GROUPS = {
     "config": ["config.json"],
@@ -388,6 +402,7 @@ def _invoke_live_client(
     messages = build_runtime_messages(manifest=manifest, task=task, policy_context=policy_context)
     client_result = llm_client.generate(messages, tools=tools or [], policy=policy_context or {})
     client_result = sanitize_llm_result_packet(client_result)
+    client_result_summary = _client_result_for_runtime_storage(client_result)
     engine = runtime_config["engine"]
     if client_result.get("status") != "completed":
         return {
@@ -398,7 +413,7 @@ def _invoke_live_client(
             "identity_policy": runtime_config["identity_policy"],
             "network_access": runtime_config["network_access"],
             "llm_mode": "live",
-            "client_result": client_result,
+            "client_result": client_result_summary,
         }
     return {
         "schema": RUNTIME_RESULT_SCHEMA,
@@ -411,13 +426,33 @@ def _invoke_live_client(
         "llm_mode": "live",
         "model": client_result.get("model") or runtime_config.get("model"),
         "draft": client_result.get("text", ""),
-        "client_result": client_result,
+        "client_result": client_result_summary,
         "data_policy": {
             "send_private_training_files": False,
             "send_selected_memory_route_only": True,
             "store_hidden_chain_of_thought": False,
+            "store_raw_client_result_text": False,
         },
     }
+
+
+def _client_result_for_runtime_storage(client_result: dict[str, Any]) -> dict[str, Any]:
+    summary = {
+        key: client_result[key]
+        for key in CLIENT_RESULT_RUNTIME_SUMMARY_KEYS
+        if key in client_result
+    }
+    omitted_keys = sorted(
+        key
+        for key in client_result
+        if key not in CLIENT_RESULT_RUNTIME_SUMMARY_KEYS
+    )
+    if "text" in client_result:
+        summary["text_omitted"] = True
+    if omitted_keys:
+        summary["omitted_keys"] = omitted_keys
+    summary["retention_policy"] = "summary_without_provider_text_or_debug_payload"
+    return summary
 
 
 def _invoke_bigram_local(

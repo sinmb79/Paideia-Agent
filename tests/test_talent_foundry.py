@@ -1344,12 +1344,18 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(live["status"], "completed")
         self.assertEqual(live["draft"], "보스 검토용 live LLM 초안입니다.")
         self.assertEqual(live["client_result"]["engine"], "fake_live_llm")
+        self.assertNotIn("text", live["client_result"])
+        self.assertNotIn("debug_headers", live["client_result"])
+        self.assertTrue(live["client_result"]["text_omitted"])
+        self.assertIn("debug_headers", live["client_result"]["omitted_keys"])
+        self.assertEqual(live["data_policy"]["store_raw_client_result_text"], False)
         self.assertEqual(fallback["status"], "bridge_context_prepared")
         self.assertTrue(fallback["fallback_used"])
         self.assertEqual(fallback["live_attempt"]["reason"], "fake_offline")
+        self.assertNotIn("error", fallback["live_attempt"]["client_result"])
+        self.assertIn("error", fallback["live_attempt"]["client_result"]["omitted_keys"])
         serialized = json.dumps({"live": live, "fallback": fallback}, ensure_ascii=False)
         self.assertNotIn(secret, serialized)
-        self.assertIn("[REDACTED_SECRET]", serialized)
 
     def test_external_live_clients_fail_closed_without_required_keys_or_models(self) -> None:
         import os
@@ -3468,6 +3474,8 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(job_run["llm_runtime_result"]["llm_mode"], "live")
         self.assertEqual(job_run["llm_runtime_result"]["model"], "openrouter/job-model")
         self.assertEqual(job_run["llm_runtime_result"]["client_result"]["engine"], "fake_live_llm")
+        self.assertNotIn("text", job_run["llm_runtime_result"]["client_result"])
+        self.assertTrue(job_run["llm_runtime_result"]["client_result"]["text_omitted"])
         self.assertEqual(
             job_run["workspace_run"]["base_agent_run"]["execution_loop"]["runtime_config"]["engine"],
             "openrouter_api",
