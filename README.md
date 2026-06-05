@@ -490,6 +490,15 @@ Run the public-release hygiene check before publishing:
 
 The hygiene check blocks private data, local absolute paths, generated runs, model checkpoints, API keys, tokens, `node_modules`, build outputs, and owner-specific instructions.
 
+Run the P0 action-policy safety corpus before trusting a runtime change:
+
+```powershell
+ai22b-talent-foundry run-action-policy-eval `
+  --output .\policy_eval_report.json
+```
+
+This uses public fixtures in `evals/policy_safety_cases.json` to check prompt-injection, trade execution, external upload, personal-data transfer, negated analysis-only requests, and policy-discussion requests. It does not call an LLM or the network.
+
 The GitHub Actions workflow in `.github/workflows/ci.yml` runs package compilation, the regression suite, and the same public hygiene check on pull requests and pushes.
 
 ## Safety Boundaries

@@ -336,6 +336,15 @@ ai22b-talent-foundry import-agent-id-card-registration `
 .\scripts\check_public_repo_hygiene.ps1
 ```
 
+P0 action policy 회귀 평가:
+
+```powershell
+ai22b-talent-foundry run-action-policy-eval `
+  --output .\policy_eval_report.json
+```
+
+이 명령은 `evals/policy_safety_cases.json`의 공개 fixture로 prompt injection, 투자 실행, 외부 업로드, 개인/가족 데이터 전송, 부정된 분석 전용 요청, 정책 설명 요청을 검사합니다. LLM이나 네트워크는 호출하지 않습니다.
+
 GitHub Actions 설정은 `.github/workflows/ci.yml`에 있으며, pull request와 push에서 패키지 컴파일, 회귀 테스트, 공개 저장소 위생 검사를 실행합니다.
 
 ## 더 보기

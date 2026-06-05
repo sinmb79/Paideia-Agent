@@ -53,6 +53,7 @@ from ai22b.talent_foundry.onboarding_choices import (
     llm_service_ids,
 )
 from ai22b.talent_foundry.owner_self_extension import build_owner_self_extension_intake
+from ai22b.talent_foundry.policy_eval import DEFAULT_POLICY_EVAL_SUITE, run_action_policy_eval
 from ai22b.talent_foundry.program import create_talent_plan
 from ai22b.talent_foundry.program_manifest import build_public_program_manifest
 from ai22b.talent_foundry.records import build_career_records
@@ -238,6 +239,14 @@ def _build_parser() -> argparse.ArgumentParser:
     rollout_eval.add_argument("--output", required=True)
     rollout_eval.add_argument("--promotion-threshold", type=int, default=92)
     rollout_eval.add_argument("--quarantine-threshold", type=int, default=70)
+
+    policy_eval = subparsers.add_parser(
+        "run-action-policy-eval",
+        help="Run public P0 action-policy safety fixtures against the structured policy engine.",
+    )
+    policy_eval.add_argument("--suite", default=str(DEFAULT_POLICY_EVAL_SUITE))
+    policy_eval.add_argument("--manifest")
+    policy_eval.add_argument("--output", required=True)
 
     graduate_package = subparsers.add_parser(
         "build-graduate-package",
@@ -862,6 +871,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         print(str(output_path))
         return 0
+
+    if args.command == "run-action-policy-eval":
+        output_path = Path(args.output)
+        report = run_action_policy_eval(
+            suite_path=Path(args.suite),
+            manifest_path=Path(args.manifest) if args.manifest else None,
+            output_path=output_path,
+        )
+        print(str(output_path))
+        return 0 if report["status"] == "passed" else 1
 
     if args.command == "build-graduate-package":
         result = build_graduate_package(Path(args.training_run), Path(args.output_dir))

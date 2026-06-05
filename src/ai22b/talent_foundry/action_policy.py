@@ -78,8 +78,22 @@ PERSONAL_DATA_TRANSFER_ALIASES = (
     "가족 데이터 외부 전송",
     "개인정보 전송",
     "가족정보 전송",
+    "개인정보",
+    "가족 개인정보",
+    "가족 데이터",
     "send personal data",
     "send family data",
+    "family data",
+    "personal data",
+)
+PERSONAL_DATA_TRANSFER_MARKERS = (
+    "전송",
+    "외부",
+    "보내",
+    "보내줘",
+    "send",
+    "external",
+    "without approval",
 )
 DISCUSSION_MARKERS = (
     "정책",
@@ -299,7 +313,7 @@ def _personal_data_transfer_state(task: str) -> dict[str, Any]:
         task,
         anchors=PERSONAL_DATA_TRANSFER_ALIASES,
         command_aliases=PERSONAL_DATA_TRANSFER_ALIASES,
-        requested=_has_any(task, PERSONAL_DATA_TRANSFER_ALIASES),
+        requested=_has_any(task, PERSONAL_DATA_TRANSFER_ALIASES) and _has_any(task, PERSONAL_DATA_TRANSFER_MARKERS),
     )
 
 
