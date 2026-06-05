@@ -392,7 +392,7 @@ class TalentFoundryMemorySubstrateChatTests(unittest.TestCase):
                 llm_engine="openai_chatgpt_codex",
                 record_name="employment_record_codex.json",
             )
-            with patch(
+            with patch.dict(os.environ, {"OPENAI_API_KEY": "fixture-openai-key-12345"}, clear=False), patch(
                 "ai22b.talent_foundry.memory_substrate._call_openai_responses_chat",
                 side_effect=fake_live_chat,
             ):

@@ -85,9 +85,23 @@ def _compact_intents(intents: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "request_mode": inference.get("request_mode"),
                 "matched_markers": intent.get("matched_markers", []),
                 "normalization": inference.get("normalization", {}),
+                "arguments": intent.get("arguments", {}),
+                "evidence": intent.get("evidence", {}),
             }
         )
     return compact
+
+
+def _contains_expected_argument(actual: Any, expected: Any) -> bool:
+    if isinstance(expected, list):
+        if not isinstance(actual, list):
+            return False
+        return all(item in actual for item in expected)
+    if isinstance(expected, dict):
+        if not isinstance(actual, dict):
+            return False
+        return all(_contains_expected_argument(actual.get(key), value) for key, value in expected.items())
+    return actual == expected
 
 
 def _case_failures(
@@ -121,6 +135,13 @@ def _case_failures(
         actual = indexed.get(intent_id, {}).get("requested")
         if actual is not expected_requested:
             failures.append(f"{intent_id} requested expected {expected_requested}, got {actual}")
+    for intent_id, expected_arguments in case.get("expected_intent_arguments_contains", {}).items():
+        arguments = indexed.get(intent_id, {}).get("arguments", {})
+        for key, expected_value in expected_arguments.items():
+            if not _contains_expected_argument(arguments.get(key), expected_value):
+                failures.append(
+                    f"{intent_id} arguments.{key} expected to contain {expected_value}, got {arguments.get(key)}"
+                )
     return failures
 
 
@@ -181,7 +202,7 @@ def run_action_policy_eval(
             "network_call_performed": False,
             "llm_called": False,
             "private_reasoning_trace_stored": False,
-            "decision_model": "action_intent_capability_v1",
+            "decision_model": "action_intent_capability_arguments_v2",
             "fixture_contains_private_data": False,
         },
         "case_results": case_results,

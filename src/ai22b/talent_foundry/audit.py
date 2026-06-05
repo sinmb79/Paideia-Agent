@@ -940,7 +940,7 @@ def _action_policy_safety() -> dict[str, Any]:
         and details["llm_called"] is False
         and details["private_reasoning_trace_stored"] is False
         and details["fixture_contains_private_data"] is False
-        and details["decision_model"] == "action_intent_capability_v1"
+        and details["decision_model"] == "action_intent_capability_arguments_v2"
         and not missing_cases
         and not missing_categories
         and not failed_cases

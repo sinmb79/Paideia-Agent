@@ -19,9 +19,24 @@ class PolicyEvalTests(unittest.TestCase):
         self.assertFalse(report["runtime_policy"]["network_call_performed"])
         self.assertFalse(report["runtime_policy"]["llm_called"])
         self.assertFalse(report["runtime_policy"]["private_reasoning_trace_stored"])
+        self.assertEqual(report["runtime_policy"]["decision_model"], "action_intent_capability_arguments_v2")
         case_by_id = {case["case_id"]: case for case in report["case_results"]}
         self.assertIn("trade_with_policy_bypass_ko", case_by_id)
         self.assertIn("정책/가드레일 우회 시도", case_by_id["trade_with_policy_bypass_ko"]["actual_policy_violations"])
+        trade_intents = {
+            item["intent_id"]: item
+            for item in case_by_id["trade_with_policy_bypass_ko"]["intents"]
+        }
+        self.assertEqual(trade_intents["financial_trade_execution"]["arguments"]["schema"], "paideia-action-arguments/v1")
+        self.assertIn("AAPL", trade_intents["financial_trade_execution"]["arguments"]["security_references"])
+        self.assertEqual(trade_intents["financial_trade_execution"]["arguments"]["order_side"], "buy")
+        self.assertFalse(trade_intents["financial_trade_execution"]["arguments"]["raw_task_stored"])
+        upload_intents = {
+            item["intent_id"]: item
+            for item in case_by_id["external_upload_command_ko"]["intents"]
+        }
+        self.assertIn("internet", upload_intents["external_upload"]["arguments"]["destination_classes"])
+        self.assertIn("research_memo", upload_intents["external_upload"]["arguments"]["data_classes"])
         self.assertIn("개인/가족 데이터 외부 전송", case_by_id["personal_data_transfer_ko"]["actual_policy_violations"])
         self.assertEqual(case_by_id["analysis_only_trade_negated_ko"]["actual_status"], "approved")
         self.assertEqual(case_by_id["english_trade_execution_discussion_negated"]["actual_status"], "approved")

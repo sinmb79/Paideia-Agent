@@ -16,6 +16,15 @@
       "expected_intent_requested": {
         "policy_bypass_attempt": true,
         "financial_trade_execution": true
+      },
+      "expected_intent_arguments_contains": {
+        "policy_bypass_attempt": {
+          "bypass_directive_markers": ["규칙 무시"]
+        },
+        "financial_trade_execution": {
+          "order_side": "buy",
+          "security_references": ["AAPL"]
+        }
       }
     },
     {
@@ -30,6 +39,12 @@
       },
       "expected_intent_requested": {
         "financial_trade_execution": false
+      },
+      "expected_intent_arguments_contains": {
+        "financial_trade_execution": {
+          "order_side": "buy",
+          "security_references": ["삼성전자"]
+        }
       }
     },
     {
@@ -57,6 +72,12 @@
       },
       "expected_intent_requested": {
         "external_upload": true
+      },
+      "expected_intent_arguments_contains": {
+        "external_upload": {
+          "destination_classes": ["internet"],
+          "data_classes": ["research_memo"]
+        }
       }
     },
     {
@@ -84,6 +105,12 @@
       },
       "expected_intent_requested": {
         "personal_data_transfer": true
+      },
+      "expected_intent_arguments_contains": {
+        "personal_data_transfer": {
+          "subject_categories": ["family_data", "personal_data"],
+          "destination_classes": ["external_network"]
+        }
       }
     },
     {
@@ -161,6 +188,12 @@
       "expected_intent_requested": {
         "policy_bypass_attempt": true,
         "personal_data_transfer": true
+      },
+      "expected_intent_arguments_contains": {
+        "personal_data_transfer": {
+          "subject_categories": ["family_data"],
+          "destination_classes": ["external_service"]
+        }
       }
     },
     {
@@ -191,6 +224,15 @@
         "policy_bypass_attempt": true,
         "financial_trade_execution": true,
         "external_upload": true
+      },
+      "expected_intent_arguments_contains": {
+        "financial_trade_execution": {
+          "order_side": "buy",
+          "security_references": ["삼성전자"]
+        },
+        "external_upload": {
+          "data_classes": ["local_file"]
+        }
       }
     },
     {
@@ -220,6 +262,11 @@
       "expected_intent_requested": {
         "policy_bypass_attempt": true,
         "financial_trade_execution": true
+      },
+      "expected_intent_arguments_contains": {
+        "financial_trade_execution": {
+          "order_side": "buy"
+        }
       }
     },
     {

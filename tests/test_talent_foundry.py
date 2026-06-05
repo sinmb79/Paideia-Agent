@@ -1257,7 +1257,7 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertTrue(result["execution_contract"]["llm_runtime"]["attempted"])
         self.assertTrue(result["execution_contract"]["tool_execution"]["attempted"])
         self.assertFalse(result["execution_contract"]["memory_write"]["automatic_promotion_performed"])
-        self.assertEqual(result["policy_decision"]["decision_model"], "action_intent_capability_v1")
+        self.assertEqual(result["policy_decision"]["decision_model"], "action_intent_capability_arguments_v2")
         self.assertEqual(result["verification"]["status"], "passed")
         self.assertEqual(result["runtime_observability"]["schema"], "paideia-runtime-observability/v1")
         self.assertGreater(result["runtime_observability"]["context"]["prompt_context_estimated_tokens"], 0)
@@ -1302,7 +1302,18 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("투자 실행", decision["policy_violations"])
         self.assertIn("보스 승인 없는 외부 업로드", decision["policy_violations"])
         self.assertTrue(any(item["action_type"] == "financial_trade_execution" for item in intents))
+        by_id = {item["intent_id"]: item for item in intents}
+        self.assertEqual(by_id["financial_trade_execution"]["arguments"]["schema"], "paideia-action-arguments/v1")
+        self.assertEqual(by_id["financial_trade_execution"]["arguments"]["order_side"], "buy")
+        self.assertIn("삼성전자", by_id["financial_trade_execution"]["arguments"]["security_references"])
+        self.assertIn("internet", by_id["external_upload"]["arguments"]["destination_classes"])
+        self.assertFalse(by_id["external_upload"]["arguments"]["raw_task_stored"])
         self.assertEqual(decision["capability_grants"]["mode"], "deny_by_default")
+        authorization = decision["capability_authorization"]
+        trade_record = next(
+            item for item in authorization["requested_intents"] if item["action_type"] == "financial_trade_execution"
+        )
+        self.assertIn("삼성전자", trade_record["arguments"]["security_references"])
 
     def test_action_policy_distinguishes_negated_and_discussion_only_sensitive_intents(self) -> None:
         from ai22b.talent_foundry.action_policy import evaluate_action_policy, infer_action_intents
@@ -1320,6 +1331,9 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertTrue(financial["negated"])
         self.assertEqual(financial["inference"]["model"], "hybrid_structured_lexical_v3")
         self.assertEqual(financial["inference"]["request_mode"], "negated")
+        self.assertEqual(financial["arguments"]["model"], "public_safe_structured_arguments_v1")
+        self.assertIn("삼성전자", financial["arguments"]["security_references"])
+        self.assertEqual(financial["arguments"]["order_side"], "buy")
         self.assertTrue(financial["inference"]["normalization"]["compact_separator_normalization"])
         self.assertEqual(decision["status"], "approved")
         self.assertNotIn("투자 실행", decision["policy_violations"])
@@ -1362,6 +1376,8 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("보스 승인 없는 외부 업로드", spaced_decision["policy_violations"])
         self.assertEqual(spaced_by_id["financial_trade_execution"]["inference"]["request_mode"], "command")
         self.assertEqual(spaced_by_id["external_upload"]["inference"]["request_mode"], "command")
+        self.assertIn("삼성전자", spaced_by_id["financial_trade_execution"]["arguments"]["security_references"])
+        self.assertIn("local_file", spaced_by_id["external_upload"]["arguments"]["data_classes"])
         self.assertTrue(
             spaced_by_id["external_upload"]["inference"]["normalization"]["compact_separator_normalization"]
         )
@@ -1375,6 +1391,19 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("투자 실행", hyphenated_decision["policy_violations"])
         self.assertEqual(hyphenated_by_id["policy_bypass_attempt"]["inference"]["request_mode"], "command")
         self.assertEqual(hyphenated_by_id["financial_trade_execution"]["inference"]["request_mode"], "command")
+        self.assertEqual(hyphenated_by_id["financial_trade_execution"]["arguments"]["order_side"], "buy")
+        self.assertFalse(hyphenated_by_id["financial_trade_execution"]["arguments"]["raw_task_stored"])
+
+        quantified = infer_action_intents("AAPL 10주를 200만원 한도로 지금 매수 주문 실행해줘.", manifest)
+        quantified_decision = evaluate_action_policy(manifest, quantified)
+        quantified_financial = next(item for item in quantified if item["intent_id"] == "financial_trade_execution")
+
+        self.assertEqual(quantified_decision["status"], "blocked")
+        self.assertIn("AAPL", quantified_financial["arguments"]["security_references"])
+        self.assertEqual(quantified_financial["arguments"]["quantity_mentions"][0]["value_text"], "10")
+        self.assertEqual(quantified_financial["arguments"]["quantity_mentions"][0]["unit"], "shares")
+        self.assertEqual(quantified_financial["arguments"]["money_mentions"][0]["value_text"], "200")
+        self.assertEqual(quantified_financial["arguments"]["money_mentions"][0]["unit"], "만원")
 
     def test_llm_runtime_live_mode_uses_client_interface_and_auto_fallback(self) -> None:
         import os
@@ -2213,7 +2242,7 @@ class TalentFoundryTests(unittest.TestCase):
             workspace_tool_results = json.loads(workspace_tool_path.read_text(encoding="utf-8"))
             rollback = json.loads(rollback_path.read_text(encoding="utf-8"))
             sandbox = json.loads(sandbox_path.read_text(encoding="utf-8"))
-            plan_inside_workspace = str(plan_path).startswith(str(workspace))
+            plan_inside_workspace = plan_path.resolve().is_relative_to(workspace.resolve())
             summary_text = summary_path.read_text(encoding="utf-8")
 
         self.assertEqual(result["schema"], "ai-talent-workspace-agent-run/v1")

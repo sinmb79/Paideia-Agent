@@ -11,7 +11,13 @@ ACTION_INTENT_INFERENCE_SCHEMA = "paideia-action-intent-inference/v1"
 ACTION_APPROVAL_SCHEMA = "paideia-boss-approval/v1"
 CAPABILITY_AUTHORIZATION_SCHEMA = "paideia-capability-authorization/v1"
 INTENT_INFERENCE_MODEL = "hybrid_structured_lexical_v3"
+ACTION_ARGUMENTS_SCHEMA = "paideia-action-arguments/v1"
+ACTION_ARGUMENT_EXTRACTION_MODEL = "public_safe_structured_arguments_v1"
 COMPACT_SEPARATOR_RE = re.compile(r"[\s\-_./\\|·•~`'\"“”‘’()\[\]{}:;,.!?]+")
+TICKER_RE = re.compile(r"\b[A-Z]{1,5}(?:\.[A-Z]{1,3})?\b")
+SHARE_QUANTITY_RE = re.compile(r"(?P<value>\d[\d,]*)\s*(?P<unit>주|shares?|株)", re.I)
+MONEY_AMOUNT_RE = re.compile(r"(?P<value>\d[\d,]*)\s*(?P<unit>원|만원|억원|달러|usd|krw|\$)", re.I)
+COMMON_UPPERCASE_WORDS = {"AI", "API", "CEO", "CFO", "SEC", "FRED", "ETF", "LLM", "URL"}
 
 FINANCIAL_ACTION_ALIASES = (
     "투자 실행",
@@ -240,6 +246,31 @@ POLICY_BYPASS_HARD_COMMAND_MARKERS = (
     "売り注文",
 )
 
+KOREAN_SECURITY_REFERENCES = (
+    "삼성전자",
+    "SK하이닉스",
+    "현대차",
+    "네이버",
+    "카카오",
+    "LG에너지솔루션",
+    "테슬라",
+)
+UPLOAD_DESTINATION_MARKERS = {
+    "internet": ("인터넷", "공개", "public web", "web", "online"),
+    "external_service": ("외부 서비스", "external service", "service", "서비스"),
+    "github": ("github", "깃허브"),
+    "google_drive": ("google drive", "구글 드라이브", "drive"),
+}
+UPLOAD_DATA_CLASS_MARKERS = {
+    "research_memo": ("리서치 메모", "memo", "메모", "report", "보고서"),
+    "agent_record": ("에이전트 기록", "agent record", "agent data"),
+    "local_file": ("파일", "file", "자료", "document", "문서"),
+}
+PERSONAL_DATA_SUBJECT_MARKERS = {
+    "family_data": ("가족", "family", "家族"),
+    "personal_data": ("개인정보", "개인 정보", "personal data", "個人情報", "個人データ"),
+}
+
 TOOL_CAPABILITIES = {
     "local_file_read": ["research.analysis", "filesystem.read_declared"],
     "local_file_write": ["research.analysis", "filesystem.write_declared"],
@@ -421,6 +452,126 @@ def _normalization_summary(task: str) -> dict[str, Any]:
     }
 
 
+def _unique_limited(items: list[str], *, limit: int = 8) -> list[str]:
+    unique: list[str] = []
+    seen: set[str] = set()
+    for item in items:
+        text = str(item).strip()
+        if not text:
+            continue
+        key = text.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(text)
+        if len(unique) >= limit:
+            break
+    return unique
+
+
+def _matched_marker_keys(task: str, marker_map: dict[str, tuple[str, ...]]) -> list[str]:
+    return sorted(key for key, markers in marker_map.items() if _has_any(task, markers))
+
+
+def _extract_security_references(task: str) -> list[str]:
+    tickers = [
+        match.group(0)
+        for match in TICKER_RE.finditer(task)
+        if match.group(0).upper() not in COMMON_UPPERCASE_WORDS
+    ]
+    korean_refs = [item for item in KOREAN_SECURITY_REFERENCES if _contains_marker(task, item)]
+    return _unique_limited(korean_refs + tickers)
+
+
+def _extract_quantity_mentions(task: str) -> list[dict[str, str]]:
+    mentions = []
+    for match in SHARE_QUANTITY_RE.finditer(task):
+        unit = match.group("unit").casefold()
+        mentions.append(
+            {
+                "kind": "share_quantity",
+                "value_text": match.group("value"),
+                "unit": "shares" if unit in {"주", "株".casefold()} or unit.startswith("share") else unit,
+            }
+        )
+    return mentions[:4]
+
+
+def _extract_money_mentions(task: str) -> list[dict[str, str]]:
+    mentions = []
+    for match in MONEY_AMOUNT_RE.finditer(task):
+        mentions.append(
+            {
+                "kind": "money_amount",
+                "value_text": match.group("value"),
+                "unit": match.group("unit").upper() if match.group("unit").casefold() in {"usd", "krw"} else match.group("unit"),
+            }
+        )
+    return mentions[:4]
+
+
+def _order_side(task: str) -> str | None:
+    if _has_any(task, ("매수", "buy", "買い注文", "사줘")):
+        return "buy"
+    if _has_any(task, ("매도", "sell", "売り注文", "팔아줘")):
+        return "sell"
+    return None
+
+
+def _action_arguments(
+    *,
+    task: str,
+    intent_id: str,
+    action_type: str,
+    inference: dict[str, Any],
+) -> dict[str, Any]:
+    arguments: dict[str, Any] = {
+        "schema": ACTION_ARGUMENTS_SCHEMA,
+        "model": ACTION_ARGUMENT_EXTRACTION_MODEL,
+        "intent_id": intent_id,
+        "action_type": action_type,
+        "request_mode": inference.get("request_mode"),
+        "public_safe": True,
+        "raw_task_stored": False,
+    }
+    if action_type == "financial_trade_execution":
+        arguments.update(
+            {
+                "order_side": _order_side(task),
+                "security_references": _extract_security_references(task),
+                "quantity_mentions": _extract_quantity_mentions(task),
+                "money_mentions": _extract_money_mentions(task),
+                "urgency_markers": _matched(task, ACTION_MARKERS),
+            }
+        )
+    elif action_type == "external_upload":
+        arguments.update(
+            {
+                "destination_classes": _matched_marker_keys(task, UPLOAD_DESTINATION_MARKERS),
+                "data_classes": _matched_marker_keys(task, UPLOAD_DATA_CLASS_MARKERS),
+                "external_side_effect": True,
+            }
+        )
+    elif action_type == "personal_data_transfer":
+        arguments.update(
+            {
+                "subject_categories": _matched_marker_keys(task, PERSONAL_DATA_SUBJECT_MARKERS),
+                "destination_classes": _matched_marker_keys(task, UPLOAD_DESTINATION_MARKERS)
+                or (["external_network"] if _has_any(task, PERSONAL_DATA_TRANSFER_MARKERS) else []),
+                "personal_or_family_data": True,
+            }
+        )
+    elif action_type == "policy_bypass_attempt":
+        arguments.update(
+            {
+                "bypass_directive_markers": inference.get("matched_markers", []),
+                "sensitive_markers": inference.get("sensitive_markers", []),
+                "hard_command_markers": inference.get("hard_command_markers", []),
+            }
+        )
+    return arguments
+
+
 def _request_state(
     task: str,
     *,
@@ -549,7 +700,13 @@ def _intent(
     matched_markers: list[str] | None = None,
     negated: bool = False,
     inference: dict[str, Any] | None = None,
+    arguments: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    inference_packet = inference or {
+        "schema": ACTION_INTENT_INFERENCE_SCHEMA,
+        "model": "system_default",
+        "request_mode": "default",
+    }
     return {
         "intent_id": intent_id,
         "action_type": action_type,
@@ -562,12 +719,22 @@ def _intent(
         "requires_boss_approval": requires_boss_approval,
         "blocked_action_label": blocked_action_label,
         "matched_markers": matched_markers or [],
-        "inference": inference
+        "arguments": arguments
         or {
-            "schema": ACTION_INTENT_INFERENCE_SCHEMA,
-            "model": "system_default",
-            "request_mode": "default",
+            "schema": ACTION_ARGUMENTS_SCHEMA,
+            "model": ACTION_ARGUMENT_EXTRACTION_MODEL,
+            "intent_id": intent_id,
+            "action_type": action_type,
+            "request_mode": inference_packet.get("request_mode"),
+            "public_safe": True,
+            "raw_task_stored": False,
         },
+        "evidence": {
+            "matched_marker_count": len(matched_markers or []),
+            "normalization": inference_packet.get("normalization", {}),
+            "raw_task_stored": False,
+        },
+        "inference": inference_packet,
     }
 
 
@@ -623,6 +790,12 @@ def infer_action_intents(task: str, manifest: dict[str, Any] | None = None) -> l
             matched_markers=policy_bypass_state["matched_markers"],
             negated=policy_bypass_state["negated"],
             inference=policy_bypass_state,
+            arguments=_action_arguments(
+                task=task,
+                intent_id="policy_bypass_attempt",
+                action_type="policy_bypass_attempt",
+                inference=policy_bypass_state,
+            ),
         ),
         _intent(
             intent_id="financial_trade_execution",
@@ -637,6 +810,12 @@ def infer_action_intents(task: str, manifest: dict[str, Any] | None = None) -> l
             matched_markers=financial_state["matched_markers"],
             negated=financial_state["negated"],
             inference=financial_state,
+            arguments=_action_arguments(
+                task=task,
+                intent_id="financial_trade_execution",
+                action_type="financial_trade_execution",
+                inference=financial_state,
+            ),
         ),
         _intent(
             intent_id="external_upload",
@@ -651,6 +830,12 @@ def infer_action_intents(task: str, manifest: dict[str, Any] | None = None) -> l
             matched_markers=upload_state["matched_markers"],
             negated=upload_state["negated"],
             inference=upload_state,
+            arguments=_action_arguments(
+                task=task,
+                intent_id="external_upload",
+                action_type="external_upload",
+                inference=upload_state,
+            ),
         ),
         _intent(
             intent_id="personal_data_transfer",
@@ -665,6 +850,12 @@ def infer_action_intents(task: str, manifest: dict[str, Any] | None = None) -> l
             matched_markers=personal_transfer_state["matched_markers"],
             negated=personal_transfer_state["negated"],
             inference=personal_transfer_state,
+            arguments=_action_arguments(
+                task=task,
+                intent_id="personal_data_transfer",
+                action_type="personal_data_transfer",
+                inference=personal_transfer_state,
+            ),
         ),
         _intent(
             intent_id="bounded_projection_team",
@@ -812,6 +1003,7 @@ def _capability_authorization_record(
         "data_class": intent.get("data_class"),
         "capability": intent.get("capability"),
         "risk_level": intent.get("risk_level"),
+        "arguments": intent.get("arguments", {}),
         "requires_boss_approval": bool(intent.get("requires_boss_approval")),
         "authorization_status": status,
         "reason": reason,
@@ -850,6 +1042,7 @@ def build_capability_authorization(
             "risk_level": intent.get("risk_level"),
             "requested": bool(intent.get("requested")),
             "negated": bool(intent.get("negated")),
+            "arguments": intent.get("arguments", {}),
         }
         if not intent.get("requested") or intent.get("negated"):
             inactive_records.append(record)
@@ -987,7 +1180,7 @@ def evaluate_action_policy(manifest: dict[str, Any], intents: list[dict[str, Any
         "schema": ACTION_POLICY_SCHEMA,
         "evaluated_at_utc": _now(),
         "status": status,
-        "decision_model": "action_intent_capability_v1",
+        "decision_model": "action_intent_capability_arguments_v2",
         "capability_grants": grants,
         "capability_authorization": capability_authorization,
         "boss_approval_gate": approval_gate,
