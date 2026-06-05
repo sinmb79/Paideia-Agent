@@ -32,8 +32,11 @@ def _verify_execution(policy_decision: dict[str, Any], tool_execution: dict[str,
     issues: list[str] = []
     completed_tools: set[str] = set()
     evidence_packet: dict[str, Any] | None = None
-    if policy_decision.get("status") == "blocked":
+    policy_status = policy_decision.get("status")
+    if policy_status == "blocked":
         issues.extend(policy_decision.get("policy_violations", []))
+    if policy_status == "needs_approval":
+        issues.extend(f"approval_required:{item.get('action_type')}" for item in policy_decision.get("approval_required", []))
     for item in tool_execution.get("tool_results", []):
         if item.get("status") not in {"completed", "skipped"}:
             issues.append(f"tool_failed:{item.get('tool')}")
@@ -52,11 +55,24 @@ def _verify_execution(policy_decision: dict[str, Any], tool_execution: dict[str,
             issues.append("evidence_packet_checklist_missing")
         if any(item.get("status") == "failed" for item in checklist if isinstance(item, dict)):
             issues.append("evidence_packet_checklist_failed")
-    if llm_result.get("status") not in {"completed", "bridge_context_prepared", "adapter_manifest_ready", "unavailable", "skipped_policy_block"}:
+    if llm_result.get("status") not in {
+        "completed",
+        "bridge_context_prepared",
+        "adapter_manifest_ready",
+        "unavailable",
+        "skipped_policy_block",
+        "skipped_policy_approval_required",
+    }:
         issues.append(f"llm_status_unexpected:{llm_result.get('status')}")
     return {
         "schema": "paideia-agent-run-verification/v1",
-        "status": "blocked" if policy_decision.get("status") == "blocked" else ("passed" if not issues else "needs_review"),
+        "status": (
+            "blocked"
+            if policy_status == "blocked"
+            else "needs_approval"
+            if policy_status == "needs_approval"
+            else ("passed" if not issues else "needs_review")
+        ),
         "issues": issues,
         "checks": {
             "policy_checked_before_tools": True,
@@ -68,7 +84,7 @@ def _verify_execution(policy_decision: dict[str, Any], tool_execution: dict[str,
     }
 
 
-def _response_packet(agent: dict[str, Any], task: str, run_status: str, llm_result: dict[str, Any], policy_violations: list[str]) -> dict[str, Any]:
+def _response_packet(agent: dict[str, Any], task: str, run_status: str, llm_result: dict[str, Any], policy_decision: dict[str, Any]) -> dict[str, Any]:
     if run_status == "blocked":
         return {
             "summary": (
@@ -81,7 +97,21 @@ def _response_packet(agent: dict[str, Any], task: str, run_status: str, llm_resu
                 "허용 가능한 범위는 조사, 비교, 리스크 정리, 문서 초안 작성입니다.",
             ],
             "runtime_target": "local_cli_runtime",
-            "blocked_reasons": policy_violations,
+            "blocked_reasons": policy_decision.get("policy_violations", []),
+        }
+    if run_status == "needs_approval":
+        return {
+            "summary": (
+                f"{agent['name']}은 보스 승인 없이 민감 행동을 실행할 수 없어 '{task}' 요청을 승인 대기 상태로 멈췄습니다. "
+                "승인 전에는 LLM 계획, 로컬 도구 실행, 메모리 승격을 진행하지 않습니다."
+            ),
+            "next_actions": [
+                "요청 범위를 로컬 조사나 초안 작성으로 낮추면 바로 실행할 수 있습니다.",
+                "외부 업로드, 공개 배포, 금융 행동은 별도 승인 절차를 먼저 거쳐야 합니다.",
+                "승인 대기 기록은 감사 로그와 memory quarantine 후보로만 남깁니다.",
+            ],
+            "runtime_target": "local_cli_runtime",
+            "approval_required": policy_decision.get("approval_required", []),
         }
     draft = str(llm_result.get("draft", "")).strip()
     return {
@@ -117,16 +147,21 @@ def run_agent_execution_loop(
     policy_decision = evaluate_action_policy(manifest, action_intents)
     policy_violations = policy_decision["policy_violations"]
     selected_tools = select_tools_for_intents(manifest, action_intents, policy_decision)
-    run_status = "blocked" if policy_decision["status"] == "blocked" else "completed"
+    run_status = policy_decision["status"] if policy_decision["status"] in {"blocked", "needs_approval"} else "completed"
     selected_tool_descriptors = tool_descriptors(selected_tools)
 
     effective_runtime = runtime_config or build_llm_runtime_config(engine="deterministic_local")
-    if run_status == "blocked":
+    if run_status in {"blocked", "needs_approval"}:
+        skipped_status = "skipped_policy_block" if run_status == "blocked" else "skipped_policy_approval_required"
         llm_result = {
             "schema": "ai-talent-llm-runtime-result/v1",
             "engine": effective_runtime.get("engine", "deterministic_local"),
-            "status": "skipped_policy_block",
-            "reason": "policy_blocked_before_llm_or_tool_execution",
+            "status": skipped_status,
+            "reason": (
+                "policy_blocked_before_llm_or_tool_execution"
+                if run_status == "blocked"
+                else "policy_requires_boss_approval_before_llm_or_tool_execution"
+            ),
             "identity_policy": effective_runtime.get("identity_policy", "application_engine_not_identity"),
             "network_access": effective_runtime.get("network_access", "blocked"),
         }
@@ -150,12 +185,20 @@ def run_agent_execution_loop(
         policy_decision=policy_decision,
     )
     verification = _verify_execution(policy_decision, tool_execution, llm_result)
-    response = _response_packet(agent, task, run_status, llm_result, policy_violations)
+    response = _response_packet(agent, task, run_status, llm_result, policy_decision)
     growth_update = {
-        "experience_type": "guardrail_block_after_hire" if run_status == "blocked" else "agent_runtime_after_hire",
+        "experience_type": (
+            "guardrail_block_after_hire"
+            if run_status == "blocked"
+            else "approval_required_after_hire"
+            if run_status == "needs_approval"
+            else "agent_runtime_after_hire"
+        ),
         "reflection": (
             "정책 위반을 업무 능력이 아니라 안전 경계로 처리했습니다."
             if run_status == "blocked"
+            else "민감 행동은 보스 승인 전 실행하지 않고 승인 대기 상태로 기록했습니다."
+            if run_status == "needs_approval"
             else "action policy, LLM planning, capability-checked tools, verification을 하나의 실행 루프로 적용했습니다."
         ),
         "reasoning_delta": [
@@ -166,7 +209,13 @@ def run_agent_execution_loop(
     }
     memory_write = {
         "schema": "paideia-memory-write-decision/v1",
-        "decision": "quarantine" if run_status == "blocked" else "candidate_pending_boss_review",
+        "decision": (
+            "quarantine"
+            if run_status == "blocked"
+            else "pending_boss_approval"
+            if run_status == "needs_approval"
+            else "candidate_pending_boss_review"
+        ),
         "target": "local_learning_ledger",
         "private_reasoning_trace_policy": "do_not_store",
         "promotion_requires": ["verification_passed", "boss_or_committee_review"],
@@ -180,7 +229,7 @@ def run_agent_execution_loop(
         *policy_decision.get("audit_events", []),
         {
             "recorded_at_utc": _now(),
-            "event": "llm_runtime_invoked" if run_status != "blocked" else "llm_runtime_skipped",
+            "event": "llm_runtime_invoked" if run_status == "completed" else "llm_runtime_skipped",
             "status": llm_result.get("status"),
             "engine": llm_result.get("engine"),
         },

@@ -1739,6 +1739,27 @@ class TalentFoundryTests(unittest.TestCase):
             "guardrail_block_after_hire",
         )
 
+    def test_agent_runner_pauses_approval_required_sensitive_action_without_llm_or_tools(self) -> None:
+        from ai22b.talent_foundry.agent_runner import run_agent_from_manifest
+        from ai22b.talent_foundry.demo import run_demo
+
+        with tempfile.TemporaryDirectory() as tmp:
+            outputs = run_demo(output_dir=Path(tmp))
+            manifest = json.loads(outputs["agent_manifest"].read_text(encoding="utf-8"))
+            manifest["tool_policy"]["blocked_tools"] = []
+
+        result = run_agent_from_manifest(manifest, task="내 에이전트 기록을 외부 업로드해줘.")
+
+        self.assertEqual(result["policy_decision"]["status"], "needs_approval")
+        self.assertEqual(result["run_status"], "needs_approval")
+        self.assertEqual(result["selected_tools"], [])
+        self.assertEqual(result["tool_execution"]["tool_results"], [])
+        self.assertEqual(result["llm_runtime_result"]["status"], "skipped_policy_approval_required")
+        self.assertEqual(result["verification"]["status"], "needs_approval")
+        self.assertEqual(result["memory_write"]["decision"], "pending_boss_approval")
+        self.assertEqual(result["growth_update"]["experience_type"], "approval_required_after_hire")
+        self.assertTrue(result["response"]["approval_required"])
+
     def test_cli_run_agent_blocks_forbidden_task(self) -> None:
         from ai22b.talent_foundry.cli import main as cli_main
         from ai22b.talent_foundry.demo import run_demo

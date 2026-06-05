@@ -369,7 +369,7 @@ def capabilities_from_tool_policy(manifest: dict[str, Any]) -> dict[str, Any]:
 
 
 def select_tools_for_intents(manifest: dict[str, Any], intents: list[dict[str, Any]], policy_decision: dict[str, Any]) -> list[str]:
-    if policy_decision.get("status") == "blocked":
+    if policy_decision.get("status") != "approved":
         return []
     grants = capabilities_from_tool_policy(manifest)
     requested_capabilities = {
