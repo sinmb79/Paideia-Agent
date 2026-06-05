@@ -23,6 +23,7 @@ LLM_PROVIDER_PREFLIGHT_SCHEMA = "paideia-llm-provider-preflight/v1"
 DATAFLOW_TRANSPOSE_VERIFICATION_SCHEMA = "ai-talent-dataflow-transpose-verification/v1"
 WORKSPACE_TOOL_ARTIFACTS_SCHEMA = "paideia-workspace-tool-artifacts/v1"
 WORKSPACE_INPUT_REVIEW_SCHEMA = "paideia-workspace-input-review/v1"
+DELIVERABLE_SYNTHESIS_SCHEMA = "paideia-workspace-deliverable-synthesis/v1"
 DELIVERABLE_MANIFEST_SCHEMA = "paideia-workspace-job-deliverables/v1"
 
 
@@ -44,6 +45,10 @@ def _read_json(path: Path) -> dict[str, Any] | None:
 
 def _fingerprint(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _json_digest(value: Any) -> str:
+    return hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
 
 
 def _file_sha256(path: Path) -> str | None:
@@ -244,6 +249,7 @@ def _required_workspace_outputs(schema: str) -> list[str]:
 def _required_job_outputs(*, input_files_declared: bool = False) -> list[str]:
     required = [
         "job_spec",
+        "deliverable_synthesis",
         "deliverable_manifest",
         "job_report",
         "acceptance_checklist",
@@ -464,6 +470,40 @@ def build_workspace_execution_proof(
         )
         checklist = _load_declared_json(job_outputs, "acceptance_checklist") or {}
         criteria = checklist.get("criteria", [])
+        deliverable_synthesis = _load_declared_json(job_outputs, "deliverable_synthesis") or {}
+        synthesis_sources = deliverable_synthesis.get("source_summaries", {})
+        synthesis_policy = deliverable_synthesis.get("artifact_policy", {})
+        synthesis_deliverables = deliverable_synthesis.get("deliverables", [])
+        _check(
+            checks,
+            "job_deliverable_synthesis_verified",
+            deliverable_synthesis.get("schema") == DELIVERABLE_SYNTHESIS_SCHEMA
+            and len(synthesis_deliverables) == len(declared_deliverables)
+            and synthesis_sources.get("llm_runtime", {}).get("identity_policy") == "application_engine_not_identity"
+            and isinstance(synthesis_sources.get("registered_tools"), list)
+            and synthesis_sources.get("declared_inputs", {}).get("declared_input_count") == len(declared_input_files)
+            and synthesis_policy.get("workspace_root_only") is True
+            and synthesis_policy.get("network_call_performed") is False
+            and synthesis_policy.get("subprocess_executed") is False
+            and synthesis_policy.get("raw_provider_payload_saved") is False
+            and synthesis_policy.get("private_reasoning_trace") == "do_not_store"
+            and all(
+                isinstance(item, dict) and item.get("private_reasoning_trace_stored") is False
+                for item in synthesis_deliverables
+            ),
+            evidence={
+                "schema": deliverable_synthesis.get("schema"),
+                "deliverable_count": len(synthesis_deliverables) if isinstance(synthesis_deliverables, list) else None,
+                "tool_summary_count": len(synthesis_sources.get("registered_tools", []))
+                if isinstance(synthesis_sources.get("registered_tools"), list)
+                else None,
+                "declared_input_count": synthesis_sources.get("declared_inputs", {}).get("declared_input_count")
+                if isinstance(synthesis_sources.get("declared_inputs"), dict)
+                else None,
+                "network_call_performed": synthesis_policy.get("network_call_performed"),
+                "subprocess_executed": synthesis_policy.get("subprocess_executed"),
+            },
+        )
         deliverable_manifest_path = _path(job_outputs.get("deliverable_manifest"))
         deliverable_manifest = _load_declared_json(job_outputs, "deliverable_manifest") or {}
         deliverable_files_ok, deliverable_evidence = _deliverable_files_verified(
@@ -476,6 +516,8 @@ def build_workspace_execution_proof(
             deliverable_manifest.get("schema") == DELIVERABLE_MANIFEST_SCHEMA
             and deliverable_manifest.get("declared_deliverable_count") == len(declared_deliverables)
             and deliverable_manifest.get("artifact_count") == len(declared_deliverables)
+            and deliverable_manifest.get("synthesis_schema") == DELIVERABLE_SYNTHESIS_SCHEMA
+            and deliverable_manifest.get("synthesis_digest_sha256") == _json_digest(deliverable_synthesis)
             and deliverable_manifest.get("artifact_policy", {}).get("workspace_root_only") is True
             and deliverable_manifest.get("artifact_policy", {}).get("relative_paths_only") is True
             and deliverable_manifest.get("artifact_policy", {}).get("network_call_performed") is False
@@ -486,6 +528,7 @@ def build_workspace_execution_proof(
                 "schema": deliverable_manifest.get("schema"),
                 "declared_deliverable_count": deliverable_manifest.get("declared_deliverable_count"),
                 "artifact_count": deliverable_manifest.get("artifact_count"),
+                "synthesis_schema": deliverable_manifest.get("synthesis_schema"),
                 **deliverable_evidence,
             },
         )

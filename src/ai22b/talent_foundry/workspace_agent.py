@@ -22,6 +22,7 @@ WORKSPACE_JOB_RUN_SCHEMA = "ai-talent-workspace-agent-job-run/v1"
 ACCEPTANCE_CHECKLIST_SCHEMA = "ai-talent-agent-job-acceptance-checklist/v1"
 WORKSPACE_TOOL_ARTIFACTS_SCHEMA = "paideia-workspace-tool-artifacts/v1"
 WORKSPACE_INPUT_REVIEW_SCHEMA = "paideia-workspace-input-review/v1"
+DELIVERABLE_SYNTHESIS_SCHEMA = "paideia-workspace-deliverable-synthesis/v1"
 DELIVERABLE_MANIFEST_SCHEMA = "paideia-workspace-job-deliverables/v1"
 
 
@@ -254,12 +255,150 @@ def _input_review_lines(input_review: dict[str, Any] | None) -> list[str]:
     return lines
 
 
+def _compact_text(value: Any, *, limit: int = 700) -> str:
+    return " ".join(str(value or "").split())[:limit]
+
+
+def _tool_result_summary(item: dict[str, Any]) -> dict[str, Any]:
+    output = item.get("output", {}) if isinstance(item.get("output"), dict) else {}
+    summary = (
+        output.get("summary")
+        or output.get("mode")
+        or output.get("assessment_mode")
+        or output.get("unsupported_claim_policy")
+        or output.get("target")
+        or output.get("reason")
+        or output.get("schema")
+    )
+    evidence_items = output.get("evidence_items", [])
+    checklist = output.get("checklist", [])
+    return {
+        "tool": item.get("tool"),
+        "status": item.get("status"),
+        "capability": item.get("capability"),
+        "output_schema": output.get("schema"),
+        "summary": _compact_text(summary, limit=500),
+        "evidence_item_count": len(evidence_items) if isinstance(evidence_items, list) else 0,
+        "checklist_count": len(checklist) if isinstance(checklist, list) else 0,
+        "private_reasoning_trace_stored": False,
+    }
+
+
+def _build_deliverable_synthesis(
+    manifest: dict[str, Any],
+    job_spec: dict[str, Any],
+    workspace_run: dict[str, Any],
+    input_review: dict[str, Any] | None,
+) -> dict[str, Any]:
+    base_run = workspace_run.get("base_agent_run", {})
+    llm_result = workspace_run.get("llm_runtime_result", {})
+    tool_execution = base_run.get("tool_execution", {})
+    tool_results = tool_execution.get("tool_results", []) if isinstance(tool_execution, dict) else []
+    memory = base_run.get("memory_applied", {})
+    policy = base_run.get("policy_decision", {})
+    source_summaries = {
+        "llm_runtime": {
+            "engine": llm_result.get("engine"),
+            "status": llm_result.get("status"),
+            "identity_policy": llm_result.get("identity_policy"),
+            "draft_summary": _compact_text(llm_result.get("draft") or llm_result.get("text"), limit=900),
+            "raw_provider_payload_saved": False,
+        },
+        "registered_tools": [_tool_result_summary(item) for item in tool_results if isinstance(item, dict)],
+        "declared_inputs": {
+            "declared_input_count": (input_review or {}).get("declared_input_count", 0),
+            "read_count": (input_review or {}).get("read_count", 0),
+            "rejected_count": (input_review or {}).get("rejected_count", 0),
+            "input_refs": [
+                {
+                    "file_name": item.get("file_name"),
+                    "status": item.get("status"),
+                    "purpose": item.get("purpose"),
+                    "content_sha256": item.get("content_sha256"),
+                    "preview": _compact_text(item.get("preview"), limit=360),
+                }
+                for item in (input_review or {}).get("inputs", [])
+                if isinstance(item, dict)
+            ],
+        },
+        "memory_route": {
+            "semantic_theme_count": len(memory.get("semantic_themes", [])) if isinstance(memory, dict) else 0,
+            "procedural_principle_count": len(memory.get("procedural_principles", [])) if isinstance(memory, dict) else 0,
+            "selected_memory_only": True,
+        },
+        "policy": {
+            "status": policy.get("status"),
+            "decision_model": policy.get("decision_model"),
+            "policy_violations": policy.get("policy_violations", []),
+        },
+    }
+    deliverable_records = []
+    for deliverable in job_spec["deliverables"]:
+        deliverable_records.append(
+            {
+                "id": deliverable["id"],
+                "description": deliverable["description"],
+                "synthesis_inputs": [
+                    "llm_runtime.draft_summary",
+                    "registered_tools",
+                    "declared_inputs",
+                    "memory_route",
+                    "policy",
+                    "workspace_trace",
+                ],
+                "review_policy": "boss_review_required_before_external_use",
+                "private_reasoning_trace_stored": False,
+            }
+        )
+    return {
+        "schema": DELIVERABLE_SYNTHESIS_SCHEMA,
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "objective": job_spec["objective"],
+        "agent": {
+            "name": manifest.get("agent", {}).get("name"),
+            "role": manifest.get("agent", {}).get("role"),
+        },
+        "source_summaries": source_summaries,
+        "deliverables": deliverable_records,
+        "artifact_policy": {
+            "source": "llm_tool_input_memory_policy_synthesis",
+            "workspace_root_only": True,
+            "network_call_performed": False,
+            "subprocess_executed": False,
+            "raw_provider_payload_saved": False,
+            "private_reasoning_trace": "do_not_store",
+            "learning_promotion_performed": False,
+        },
+    }
+
+
+def _synthesis_lines(synthesis: dict[str, Any]) -> list[str]:
+    sources = synthesis.get("source_summaries", {})
+    llm = sources.get("llm_runtime", {})
+    inputs = sources.get("declared_inputs", {})
+    tools = sources.get("registered_tools", [])
+    lines = [
+        f"- LLM: {llm.get('engine')} / {llm.get('status')}",
+        f"- Declared input reads: {inputs.get('read_count', 0)} of {inputs.get('declared_input_count', 0)}",
+        f"- Registered tool summaries: {len(tools) if isinstance(tools, list) else 0}",
+    ]
+    draft = _compact_text(llm.get("draft_summary"), limit=360)
+    if draft:
+        lines.append(f"- Runtime draft summary: {draft}")
+    for item in tools[:5] if isinstance(tools, list) else []:
+        if not isinstance(item, dict):
+            continue
+        lines.append(f"- Tool {item.get('tool')}: {item.get('summary') or item.get('output_schema')}")
+    return lines
+
+
 def _deliverable_text(
     manifest: dict[str, Any],
     job_spec: dict[str, Any],
     deliverable: dict[str, Any],
     workspace_run: dict[str, Any],
     input_review: dict[str, Any] | None,
+    synthesis: dict[str, Any],
 ) -> str:
     agent = manifest["agent"]
     llm_result = workspace_run.get("llm_runtime_result", {})
@@ -282,6 +421,9 @@ def _deliverable_text(
             "",
             "## Declared Inputs",
             *_input_review_lines(input_review),
+            "",
+            "## Synthesis Evidence",
+            *_synthesis_lines(synthesis),
             "",
             "## Work Draft",
             (
@@ -309,13 +451,14 @@ def _write_deliverables(
     job_spec: dict[str, Any],
     workspace_run: dict[str, Any],
     input_review: dict[str, Any] | None,
+    synthesis: dict[str, Any],
 ) -> tuple[Path, dict[str, Any], dict[str, Path]]:
     artifacts: list[dict[str, Any]] = []
     paths: dict[str, Path] = {}
     for index, deliverable in enumerate(job_spec["deliverables"], start=1):
         deliverable_id = str(deliverable["id"])
         relative_path = Path("deliverables") / _safe_deliverable_filename(deliverable_id, index)
-        text = _deliverable_text(manifest, job_spec, deliverable, workspace_run, input_review) + "\n"
+        text = _deliverable_text(manifest, job_spec, deliverable, workspace_run, input_review, synthesis) + "\n"
         path = sandbox.write_text(relative_path, text, purpose=f"job_deliverable:{deliverable_id}")
         data = path.read_bytes()
         paths[deliverable_id] = path
@@ -337,6 +480,8 @@ def _write_deliverables(
         "objective": job_spec["objective"],
         "declared_deliverable_count": len(job_spec["deliverables"]),
         "artifact_count": len(artifacts),
+        "synthesis_schema": synthesis.get("schema"),
+        "synthesis_digest_sha256": _digest(synthesis),
         "artifacts": artifacts,
         "artifact_policy": {
             "workspace_root_only": True,
@@ -392,6 +537,7 @@ def _acceptance_checklist(
     input_review_path: Path | None = None,
     deliverable_manifest_path: Path | None = None,
     deliverable_manifest: dict[str, Any] | None = None,
+    synthesis_path: Path | None = None,
 ) -> dict[str, Any]:
     evidence = [
         workspace_run["workspace_outputs"].get("task_plan"),
@@ -402,6 +548,8 @@ def _acceptance_checklist(
         evidence.append(str(input_review_path))
     if deliverable_manifest_path is not None:
         evidence.append(str(deliverable_manifest_path))
+    if synthesis_path is not None:
+        evidence.append(str(synthesis_path))
     evidence = [item for item in evidence if item]
     deliverable_artifacts = {
         str(item.get("id")): item
@@ -604,12 +752,19 @@ def run_workspace_agent_job_from_manifest(
             input_review,
             purpose="workspace_input_review",
         )
+    deliverable_synthesis = _build_deliverable_synthesis(manifest, normalized, workspace_run, input_review)
+    deliverable_synthesis_path = sandbox.write_json(
+        "deliverable_synthesis.json",
+        deliverable_synthesis,
+        purpose="deliverable_synthesis",
+    )
     deliverable_manifest_path, deliverable_manifest, deliverable_paths = _write_deliverables(
         sandbox,
         manifest,
         normalized,
         workspace_run,
         input_review,
+        deliverable_synthesis,
     )
     job_report_path = sandbox.write_text(
         "job_report.md",
@@ -624,6 +779,7 @@ def run_workspace_agent_job_from_manifest(
             input_review_path=input_review_path,
             deliverable_manifest_path=deliverable_manifest_path,
             deliverable_manifest=deliverable_manifest,
+            synthesis_path=deliverable_synthesis_path,
         ),
         purpose="acceptance_checklist",
     )
@@ -643,6 +799,11 @@ def run_workspace_agent_job_from_manifest(
                 else []
             ),
             _trace_entry(
+                "deliverable_synthesis_prepared",
+                file=deliverable_synthesis_path.name,
+                source="llm_tool_input_memory_policy_synthesis",
+            ),
+            _trace_entry(
                 "declared_deliverables_materialized",
                 file=deliverable_manifest_path.name,
                 deliverable_count=len(normalized.get("deliverables", [])),
@@ -657,6 +818,7 @@ def run_workspace_agent_job_from_manifest(
 
     result["job_outputs"] = {
         "job_spec": str(job_spec_path),
+        "deliverable_synthesis": str(deliverable_synthesis_path),
         "deliverable_manifest": str(deliverable_manifest_path),
         "deliverables": {key: str(path) for key, path in deliverable_paths.items()},
         "job_report": str(job_report_path),

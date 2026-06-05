@@ -50,6 +50,7 @@ class TalentFoundryExecutionProofTests(unittest.TestCase):
         self.assertTrue(proof["passed"])
         self.assertEqual(saved["schema"], "paideia-workspace-execution-proof/v1")
         self.assertEqual(saved["status"], "passed")
+        self.assertIn("job_deliverable_synthesis_verified", {item["id"] for item in saved["checks"]})
         self.assertIn("job_deliverables_materialized", {item["id"] for item in saved["checks"]})
         self.assertIn("job_acceptance_checklist_passed", {item["id"] for item in saved["checks"]})
         self.assertIn("job_input_review_verified", {item["id"] for item in saved["checks"]})
