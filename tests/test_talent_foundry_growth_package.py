@@ -86,10 +86,16 @@ class PaideiaGrowthPackageTests(unittest.TestCase):
         self.assertTrue(run["verification"]["runtime_observability_comparison_created"])
         self.assertTrue(run["verification"]["release_audit_public_ready"])
         self.assertTrue(release_audit["public_release_ready"])
+        self.assertTrue(release_audit["checkpoints"]["action_policy_safety"]["passed"])
         self.assertTrue(release_audit["checkpoints"]["learning_ledger_replay_safety"]["passed"])
         self.assertTrue(release_audit["checkpoints"]["runtime_observability_comparison"]["passed"])
         self.assertTrue(release_audit["checkpoints"]["role_model_runtime"]["details"]["agent_run_p0_runtime_ready"])
         self.assertTrue(release_audit["checkpoints"]["role_model_runtime"]["details"]["dataflow_p0_runtime_ready"])
+        policy_details = release_audit["checkpoints"]["action_policy_safety"]["details"]
+        self.assertEqual(policy_details["failed_count"], 0)
+        self.assertGreaterEqual(policy_details["blocked_case_count"], 8)
+        self.assertFalse(policy_details["network_call_performed"])
+        self.assertFalse(policy_details["llm_called"])
         replay_details = release_audit["checkpoints"]["learning_ledger_replay_safety"]["details"]
         self.assertGreater(replay_details["entry_count"], 0)
         self.assertTrue(replay_details["installed_ledger_present"])
