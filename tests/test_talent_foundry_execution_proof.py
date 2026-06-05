@@ -56,6 +56,7 @@ class TalentFoundryExecutionProofTests(unittest.TestCase):
         self.assertIn("job_acceptance_checklist_passed", {item["id"] for item in saved["checks"]})
         self.assertIn("job_input_review_verified", {item["id"] for item in saved["checks"]})
         self.assertIn("agent_execution_contract_verified", {item["id"] for item in saved["checks"]})
+        self.assertIn("agent_boss_approval_gate_verified", {item["id"] for item in saved["checks"]})
         self.assertIn("workspace_tool_artifacts_materialized", {item["id"] for item in saved["checks"]})
         self.assertIn("llm_provider_preflight_present", {item["id"] for item in saved["checks"]})
         self.assertTrue(saved["artifact_summary"]["absolute_paths_redacted"])
@@ -86,6 +87,9 @@ class TalentFoundryExecutionProofTests(unittest.TestCase):
             tampered["workspace_run"]["base_agent_run"]["execution_contract"]["memory_write"][
                 "automatic_promotion_performed"
             ] = True
+            tampered["workspace_run"]["base_agent_run"]["execution_contract"]["policy_gate"][
+                "approval_required_count"
+            ] = 1
             proof = build_workspace_execution_proof(tampered)
 
         self.assertFalse(proof["passed"])
@@ -93,6 +97,7 @@ class TalentFoundryExecutionProofTests(unittest.TestCase):
         self.assertIn("workspace_required_outputs_present", proof["issues"])
         self.assertIn("workspace_rollback_manifest_schema", proof["issues"])
         self.assertIn("agent_execution_contract_verified", proof["issues"])
+        self.assertIn("agent_boss_approval_gate_verified", proof["issues"])
 
     def test_cli_verify_workspace_execution_for_dataflow_run(self) -> None:
         from ai22b.talent_foundry.cli import main as cli_main

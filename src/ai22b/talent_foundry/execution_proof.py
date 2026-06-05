@@ -742,6 +742,20 @@ def build_workspace_execution_proof(
                 "automatic_promotion_performed": contract_memory.get("automatic_promotion_performed"),
             },
         )
+        _check(
+            checks,
+            "agent_boss_approval_gate_verified",
+            policy.get("boss_approval_gate", {}).get("schema") == "paideia-boss-approval-gate/v1"
+            and contract_policy.get("approval_required_count") == 0
+            and isinstance(contract_policy.get("boss_approval_accepted_count", 0), int)
+            and contract_policy.get("boss_approval_accepted_count", 0) >= 0,
+            evidence={
+                "approval_gate_schema": policy.get("boss_approval_gate", {}).get("schema"),
+                "approval_required_count": contract_policy.get("approval_required_count"),
+                "boss_approval_accepted_count": contract_policy.get("boss_approval_accepted_count"),
+                "policy_status": contract_policy.get("status"),
+            },
+        )
         workspace_tool_results = _load_declared_json(workspace_outputs, "workspace_tool_results") or {}
         artifacts = workspace_tool_results.get("artifacts", [])
         _check(
