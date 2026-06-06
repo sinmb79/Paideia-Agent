@@ -24,6 +24,8 @@ hygiene 스크립트는 두 가지 위험을 검사합니다.
 
 Python readiness audit는 검토 가능한 `paideia-public-release-readiness/v1` 보고서를 씁니다. 이 검사는 소스 저장소 메타데이터, CI gate, 그리고 `src`, `docs`, `tests`, `scripts`, `examples`, `data/public` 같은 공개 후보 파일을 확인하며, 네트워크 호출, 서브프로세스 실행, 비공개 생성 런타임 상태 검사를 수행하지 않습니다.
 
+first-run smoke suite는 deterministic local engine으로 `paideia-llm-onboarding-checklist/v1`도 생성합니다. 이를 통해 LLM/service 선택 경로가 provider doctor, live-check, application smoke, agent runtime smoke, 첫 채팅 명령을 기본 provider 호출 없이 만들 수 있음을 증명합니다.
+
 source SBOM은 `paideia-source-sbom/v1` 보고서를 씁니다. 패키지 메타데이터, optional dependency group, console script, 공개 후보 파일 SHA-256, repository public-candidate digest를 기록합니다. 검토 가능한 재현성 인벤토리이며 취약점 스캔은 아닙니다.
 
 ## 에이전트 번들 게이트

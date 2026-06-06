@@ -3731,6 +3731,7 @@ class TalentFoundryTests(unittest.TestCase):
             )
             session_path = Path(session["artifacts"]["onboarding_session"])
             saved_session = json.loads(session_path.read_text(encoding="utf-8"))
+            llm_checklist = json.loads(Path(session["artifacts"]["llm_onboarding_checklist"]).read_text(encoding="utf-8"))
             employment_record = json.loads(Path(session["artifacts"]["employment_record"]).read_text(encoding="utf-8"))
             goal_cycle = json.loads(Path(session["artifacts"]["first_goal_cycle"]).read_text(encoding="utf-8"))
             artifact_exists = {
@@ -3743,6 +3744,7 @@ class TalentFoundryTests(unittest.TestCase):
                     "employment_record",
                     "employment_goal",
                     "first_goal_cycle",
+                    "llm_onboarding_checklist",
                     "onboarding_session",
                 ]
             }
@@ -3753,13 +3755,18 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(session["local_policy"]["private_data_upload"], "forbidden")
         self.assertEqual(session["selected_llm_service"]["service_id"], "openai_chatgpt_codex")
         self.assertEqual(session["selected_chat_surface"]["id"], "codex-bridge-chat")
+        self.assertEqual(llm_checklist["schema"], "paideia-llm-onboarding-checklist/v1")
+        self.assertEqual(session["llm_onboarding_checklist"]["path"], session["artifacts"]["llm_onboarding_checklist"])
+        self.assertFalse(session["llm_onboarding_checklist"]["public_safe"]["network_call_performed"])
+        self.assertIn("provider_doctor_no_network", session["llm_onboarding_checklist"]["command_ids"])
+        self.assertIn("run-agent-runtime-smoke", "\n".join(session["next_commands"]))
         self.assertEqual(employment_record["status"], "active")
         self.assertEqual(employment_record["llm_service"]["service_id"], "openai_chatgpt_codex")
         self.assertEqual(employment_record["chat_surface"]["id"], "codex-bridge-chat")
         self.assertEqual(goal_cycle["cycle_status"], "completed")
         self.assertEqual(goal_cycle["learning_update"]["decision"], "promoted")
         self.assertLessEqual(
-            {"choose_llm_service", "choose_chat_surface", "researcher_intake", "blueprint", "raise", "hire", "assign_goal", "first_goal_cycle"},
+            {"choose_llm_service", "choose_chat_surface", "llm_onboarding_checklist", "researcher_intake", "blueprint", "raise", "hire", "assign_goal", "first_goal_cycle"},
             {stage["id"] for stage in session["stages"]},
         )
         self.assertTrue(all(artifact_exists.values()))

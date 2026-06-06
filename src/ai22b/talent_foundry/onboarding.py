@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
+from ai22b.talent_foundry.llm_onboarding import build_llm_onboarding_checklist
 from ai22b.talent_foundry.onboarding_choices import (
     DEFAULT_CHAT_SURFACE_ID,
     DEFAULT_LLM_SERVICE_ID,
@@ -83,6 +84,15 @@ def run_agent_onboarding(
         llm_model_path=llm_model_path,
     )
     selected_chat_surface = resolve_chat_surface(chat_surface)
+    llm_onboarding_checklist_path = output_dir / "llm_onboarding_checklist.json"
+    llm_onboarding_checklist = build_llm_onboarding_checklist(
+        llm_service=selected_llm_service["service_id"],
+        llm_engine=selected_llm_service["engine"],
+        llm_model=selected_llm_service.get("selected_model"),
+        llm_model_path=selected_llm_service.get("selected_model_path"),
+        chat_surface=selected_chat_surface["id"],
+        output_path=llm_onboarding_checklist_path,
+    )
 
     blueprint = create_agent_training_blueprint(
         owner=owner,
@@ -167,8 +177,27 @@ def run_agent_onboarding(
         "first_learning_update": str(learning_update_path),
         "first_goal_cycle": str(first_goal_cycle_path),
         "researcher_intake": str(researcher_intake_path),
+        "llm_onboarding_checklist": str(llm_onboarding_checklist_path),
         "onboarding_session": str(output_path),
     }
+    checklist_commands = {
+        item["id"]: item["command"]
+        for item in llm_onboarding_checklist["command_plan"]
+    }
+    live_provider_engines = {
+        "openai_chatgpt_codex",
+        "anthropic_claude_api",
+        "google_gemini_api",
+        "mistral_api",
+        "openrouter_api",
+        "ollama_local_http",
+        "lm_studio_local_http",
+    }
+    runtime_smoke_command = (
+        checklist_commands.get("agent_runtime_live_smoke")
+        if selected_llm_service["engine"] in live_provider_engines
+        else checklist_commands.get("agent_runtime_no_network_smoke")
+    )
     status = (
         "hired_agent_first_goal_cycle_completed"
         if first_goal_cycle.get("cycle_status") == "completed"
@@ -184,6 +213,13 @@ def run_agent_onboarding(
         "track": track,
         "selected_llm_service": selected_llm_service,
         "selected_chat_surface": selected_chat_surface,
+        "llm_onboarding_checklist": {
+            "path": str(llm_onboarding_checklist_path),
+            "status": llm_onboarding_checklist["status"],
+            "readiness": llm_onboarding_checklist["readiness"],
+            "command_ids": [item["id"] for item in llm_onboarding_checklist["command_plan"]],
+            "public_safe": llm_onboarding_checklist["public_safe"],
+        },
         "researcher_mode": researcher_intake["researcher_contract"],
         "employment": {
             "relationship": "owner_raised_ai_talent_hired_as_local_agent",
@@ -203,6 +239,7 @@ def run_agent_onboarding(
         "stages": [
             _stage("choose_llm_service", "completed"),
             _stage("choose_chat_surface", "completed"),
+            _stage("llm_onboarding_checklist", llm_onboarding_checklist["status"], llm_onboarding_checklist_path),
             _stage("researcher_intake", "completed", researcher_intake_path),
             _stage("blueprint", "completed", Path(training_run["artifacts"]["training_blueprint"])),
             _stage("raise", "completed", Path(training_run["artifacts"]["training_run"])),
@@ -215,6 +252,8 @@ def run_agent_onboarding(
         ],
         "artifacts": artifacts,
         "next_commands": [
+            checklist_commands["provider_doctor_no_network"],
+            runtime_smoke_command,
             f"ai22b-talent-foundry run-hired-goal-cycle --employment-record \"{employment_record_path}\" --goal \"{goal_path}\" --cycle-note \"다음 주 업무를 진행한다.\" --workspace \"{target_root / 'next_goal_workspace'}\" --score {review_score} --reviewed-by \"{reviewed_by or owner}\"",
             f"ai22b-talent-foundry record-hired-learning --employment-record \"{employment_record_path}\" --run \"{workspace_run_path}\" --score {review_score} --reviewed-by \"{reviewed_by or owner}\"",
         ],

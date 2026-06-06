@@ -13,6 +13,7 @@ class CliSmokeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             role_models_path = tmp_path / "role_models.json"
+            llm_onboarding_path = tmp_path / "llm_onboarding_checklist.json"
             doctor_path = tmp_path / "llm_provider_doctor.json"
             llm_smoke_path = tmp_path / "llm_application_smoke.json"
             agent_runtime_smoke_path = tmp_path / "agent_runtime_smoke.json"
@@ -28,6 +29,15 @@ class CliSmokeTests(unittest.TestCase):
                     "securities_research",
                     "--output",
                     str(role_models_path),
+                ]
+            )
+            llm_onboarding_code = cli_main(
+                [
+                    "build-llm-onboarding-checklist",
+                    "--llm-engine",
+                    "deterministic_local",
+                    "--output",
+                    str(llm_onboarding_path),
                 ]
             )
             doctor_code = cli_main(
@@ -90,6 +100,7 @@ class CliSmokeTests(unittest.TestCase):
             )
 
             role_models = json.loads(role_models_path.read_text(encoding="utf-8"))
+            llm_onboarding = json.loads(llm_onboarding_path.read_text(encoding="utf-8"))
             doctor = json.loads(doctor_path.read_text(encoding="utf-8"))
             llm_smoke = json.loads(llm_smoke_path.read_text(encoding="utf-8"))
             agent_runtime_smoke = json.loads(agent_runtime_smoke_path.read_text(encoding="utf-8"))
@@ -99,6 +110,7 @@ class CliSmokeTests(unittest.TestCase):
             source_sbom = json.loads(source_sbom_path.read_text(encoding="utf-8"))
 
         self.assertEqual(role_models_code, 0)
+        self.assertEqual(llm_onboarding_code, 0)
         self.assertEqual(doctor_code, 0)
         self.assertEqual(llm_smoke_code, 0)
         self.assertEqual(agent_runtime_smoke_code, 0)
@@ -110,6 +122,26 @@ class CliSmokeTests(unittest.TestCase):
         self.assertEqual(role_models["schema"], "ai-talent-role-model-list/v1")
         self.assertEqual(role_models["domain"], "securities_research")
         self.assertIn("graham_value_investing", {item["role_model_id"] for item in role_models["role_models"]})
+
+        self.assertEqual(llm_onboarding["schema"], "paideia-llm-onboarding-checklist/v1")
+        self.assertEqual(llm_onboarding["status"], "offline_ready")
+        self.assertEqual(llm_onboarding["selected_llm_service"]["engine"], "deterministic_local")
+        self.assertEqual(llm_onboarding["selected_chat_surface"]["id"], "codex-bridge-chat")
+        self.assertFalse(llm_onboarding["public_safe"]["network_call_performed"])
+        self.assertFalse(llm_onboarding["public_safe"]["secret_values_exported"])
+        command_ids = {item["id"] for item in llm_onboarding["command_plan"]}
+        self.assertLessEqual(
+            {
+                "provider_doctor_no_network",
+                "application_engine_no_network_smoke",
+                "agent_runtime_no_network_smoke",
+                "chat_surface_first_turn",
+            },
+            command_ids,
+        )
+        live_command = next(item for item in llm_onboarding["command_plan"] if item["id"] == "provider_doctor_live_check")
+        self.assertIn("--live-check", live_command["command"])
+        self.assertIn("--strict", live_command["command"])
 
         self.assertEqual(doctor["schema"], "paideia-llm-provider-doctor/v1")
         self.assertEqual(doctor["engine"], "deterministic_local")

@@ -102,7 +102,7 @@ python -m pip install -e ".[dev]"        # 테스트
 
 CI의 package smoke 테스트는 `pip install -e ".[dev]"` 이후 실행됩니다. 설치된 distribution metadata, 노출된 console script entry point, 실제 callable script target, 기능별 optional extras 분리, 패키지 메타데이터 hygiene를 확인합니다.
 
-CI는 공개 안전 first-run CLI smoke 테스트도 실행합니다. 이 테스트는 `list-role-models`, `doctor-llm-provider --llm-engine deterministic_local`, `run-llm-application-smoke --llm-engine deterministic_local`, `run-agent-runtime-smoke --llm-engine deterministic_local`, `audit-tool-capabilities --strict`, `run-action-policy-eval`, `audit-public-release-readiness`, `build-source-sbom`이 비공개 파일, API 키, 네트워크 접근 없이 실행되고 검토 가능한 JSON 리포트를 쓰는지 확인합니다.
+CI는 공개 안전 first-run CLI smoke 테스트도 실행합니다. 이 테스트는 `list-role-models`, `build-llm-onboarding-checklist --llm-engine deterministic_local`, `doctor-llm-provider --llm-engine deterministic_local`, `run-llm-application-smoke --llm-engine deterministic_local`, `run-agent-runtime-smoke --llm-engine deterministic_local`, `audit-tool-capabilities --strict`, `run-action-policy-eval`, `audit-public-release-readiness`, `build-source-sbom`이 비공개 파일, API 키, 네트워크 접근 없이 실행되고 검토 가능한 JSON 리포트를 쓰는지 확인합니다.
 
 롤모델 목록:
 
@@ -125,6 +125,16 @@ ai22b-talent-foundry onboard
 ```
 
 이 wizard는 기존 설정 감지, QuickStart/Advanced, Model/Auth, Workspace, Gateway/Channels, Skills, Education Path, Runtime, Agent Identity, Health Check, Finish 순서로 진행합니다.
+
+전체 온보딩을 실행하기 전에 LLM/provider 연결 체크리스트만 따로 만들 수 있습니다.
+
+```powershell
+ai22b-talent-foundry build-llm-onboarding-checklist `
+  --llm-engine deterministic_local `
+  --output .\llm_onboarding_checklist.json
+```
+
+이 체크리스트는 선택한 LLM 서비스, 채팅 표면, provider doctor 명령, live-check 명령, application smoke 명령, 전체 agent runtime smoke 명령, 첫 채팅 명령을 기록합니다. 체크리스트 생성 자체는 네트워크를 호출하지 않으며, 실제 provider 호출은 체크리스트 안에 표시된 명시적 live 명령을 실행할 때만 수행됩니다.
 
 ## P0 실행 루프
 

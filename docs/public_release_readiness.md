@@ -24,6 +24,8 @@ The hygiene script now checks two classes of release risk:
 
 The Python readiness audit writes a reviewable `paideia-public-release-readiness/v1` report. It checks source repository metadata, CI gates, and public candidate files under roots such as `src`, `docs`, `tests`, `scripts`, `examples`, and `data/public`. It does not call the network, execute subprocesses, or inspect private generated runtime state.
 
+The first-run smoke suite also builds `paideia-llm-onboarding-checklist/v1` with the deterministic local engine. This proves the LLM/service selection path can produce provider doctor, live-check, application smoke, agent runtime smoke, and first chat commands without calling a provider by default.
+
 The source SBOM writes `paideia-source-sbom/v1`. It records package metadata, optional dependency groups, console scripts, public candidate file SHA-256 values, and a repository public-candidate digest. It is a reproducible inventory for review; it is not a vulnerability scan.
 
 ## Agent Bundle Gates

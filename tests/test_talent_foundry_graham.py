@@ -256,6 +256,7 @@ class GrahamTalentFoundryTests(unittest.TestCase):
 
     def test_onboarding_exposes_multi_provider_llms_and_role_model_choices(self) -> None:
         from ai22b.talent_foundry.console import questions_with_choices
+        from ai22b.talent_foundry.llm_onboarding import build_llm_onboarding_checklist
         from ai22b.talent_foundry.llm_runtime import build_llm_runtime_config, invoke_llm_application_engine
         from ai22b.talent_foundry.onboarding_choices import LLM_SERVICE_CATALOG, llm_service_ids, resolve_llm_service
 
@@ -277,6 +278,18 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertIn("cost", openrouter_service["cost_warning"].casefold())
         self.assertEqual(resolved_openrouter["doctor"]["required_before_live"], True)
         self.assertEqual(resolved_openrouter["selected_model"], "openai/gpt-test")
+        checklist = build_llm_onboarding_checklist(
+            llm_service="openrouter_api",
+            llm_model="openai/gpt-test",
+        )
+        commands = {item["id"]: item for item in checklist["command_plan"]}
+        self.assertEqual(checklist["schema"], "paideia-llm-onboarding-checklist/v1")
+        self.assertEqual(checklist["status"], "needs_configuration_before_live")
+        self.assertFalse(checklist["public_safe"]["network_call_performed"])
+        self.assertTrue(commands["application_engine_live_smoke"]["network_call"])
+        self.assertTrue(commands["agent_runtime_live_smoke"]["required_before_agent_work"])
+        self.assertIn("--live-check", commands["agent_runtime_live_smoke"]["command"])
+        self.assertIn("OPENROUTER_API_KEY", json.dumps(checklist["readiness"], ensure_ascii=False))
 
         config = build_llm_runtime_config(engine="openrouter_api", model="user-selected-model")
         result = invoke_llm_application_engine(

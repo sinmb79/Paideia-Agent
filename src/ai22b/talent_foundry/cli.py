@@ -53,6 +53,7 @@ from ai22b.talent_foundry.llm_runtime import (
     doctor_llm_provider,
     run_llm_application_smoke,
 )
+from ai22b.talent_foundry.llm_onboarding import build_llm_onboarding_checklist
 from ai22b.talent_foundry.memory_substrate import run_chat_turn_from_employment
 from ai22b.talent_foundry.onboarding import run_agent_onboarding
 from ai22b.talent_foundry.onboarding_choices import (
@@ -229,6 +230,17 @@ def _build_parser() -> argparse.ArgumentParser:
     onboard.add_argument("--reviewed-by")
     onboard.add_argument("--output-dir", default=str(DEFAULT_RUN_DIR / "onboarding"))
     onboard.add_argument("--output")
+
+    llm_onboarding = subparsers.add_parser(
+        "build-llm-onboarding-checklist",
+        help="Build a public-safe checklist for the selected LLM provider, smoke checks, runtime loop, and chat surface.",
+    )
+    llm_onboarding.add_argument("--llm-service", choices=llm_service_ids())
+    llm_onboarding.add_argument("--llm-engine")
+    llm_onboarding.add_argument("--llm-model")
+    llm_onboarding.add_argument("--llm-model-path")
+    llm_onboarding.add_argument("--chat-surface", default=DEFAULT_CHAT_SURFACE_ID, choices=chat_surface_ids())
+    llm_onboarding.add_argument("--output", required=True)
 
     raise_command = subparsers.add_parser("raise", help="Materialize a blueprint into employable local agent outputs.")
     raise_command.add_argument("--blueprint", required=True)
@@ -1288,6 +1300,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         output_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
         print(str(output_path))
         return 0
+
+    if args.command == "build-llm-onboarding-checklist":
+        checklist = build_llm_onboarding_checklist(
+            llm_service=args.llm_service,
+            llm_engine=args.llm_engine,
+            llm_model=args.llm_model,
+            llm_model_path=args.llm_model_path,
+            chat_surface=args.chat_surface,
+            output_path=Path(args.output),
+        )
+        print(str(Path(args.output)))
+        return 0 if checklist.get("schema") else 1
 
     if args.command == "doctor-llm-provider":
         report = doctor_llm_provider(
