@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import tempfile
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from ai22b.talent_foundry.agent_execution_loop import (
@@ -11,6 +13,7 @@ from ai22b.talent_foundry.agent_execution_loop import (
 from ai22b.talent_foundry.agent_runner import run_agent_from_manifest
 from ai22b.talent_foundry.llm_clients import LLMClient
 from ai22b.talent_foundry.llm_runtime import build_llm_provider_preflight, build_llm_runtime_config
+from ai22b.talent_foundry.tool_registry import TOOL_ARTIFACT_MANIFEST_SCHEMA
 
 
 AGENT_RUNTIME_SMOKE_SCHEMA = "paideia-agent-runtime-smoke/v1"
@@ -71,6 +74,67 @@ def _tool_statuses(tool_execution: dict[str, Any]) -> dict[str, str]:
         str(item.get("tool")): str(item.get("status"))
         for item in tool_execution.get("tool_results", [])
         if isinstance(item, dict)
+    }
+
+
+def _artifact_manifest_summary(
+    *,
+    artifact_dir: Path | None,
+    tool_execution: dict[str, Any],
+    tool_status_card: dict[str, Any],
+) -> dict[str, Any]:
+    manifest = tool_execution.get("artifact_manifest", {})
+    manifest = manifest if isinstance(manifest, dict) else {}
+    status_card_manifest = tool_status_card.get("artifact_manifest", {})
+    status_card_manifest = status_card_manifest if isinstance(status_card_manifest, dict) else {}
+    public_safe = manifest.get("public_safe", {})
+    public_safe = public_safe if isinstance(public_safe, dict) else {}
+    artifacts = [item for item in manifest.get("artifacts", []) if isinstance(item, dict)]
+    relative_paths_only = all(
+        item.get("relative_path")
+        and not Path(str(item.get("relative_path"))).is_absolute()
+        and ".." not in Path(str(item.get("relative_path"))).parts
+        for item in artifacts
+    )
+    manifest_file = manifest.get("manifest_file")
+    manifest_file_relative = bool(
+        manifest_file
+        and not Path(str(manifest_file)).is_absolute()
+        and ".." not in Path(str(manifest_file)).parts
+    )
+    artifact_files_exist = False
+    manifest_file_exists = False
+    if artifact_dir is not None and artifact_dir.exists():
+        artifact_files_exist = all((artifact_dir / str(item.get("relative_path", ""))).is_file() for item in artifacts)
+        if manifest_file:
+            manifest_file_exists = (artifact_dir / str(manifest_file)).is_file()
+    evidence_packet_artifact = next(
+        (item for item in artifacts if item.get("tool") == "evidence_packet"),
+        {},
+    )
+    return {
+        "schema": manifest.get("schema"),
+        "status": manifest.get("status"),
+        "artifact_count": manifest.get("artifact_count", 0),
+        "artifact_root": manifest.get("artifact_root"),
+        "manifest_file": manifest_file,
+        "manifest_sha256_present": bool(manifest.get("manifest_sha256")),
+        "manifest_file_relative": manifest_file_relative,
+        "manifest_file_exists": manifest_file_exists,
+        "artifact_files_exist": artifact_files_exist,
+        "relative_paths_only": relative_paths_only,
+        "status_card_schema": status_card_manifest.get("schema"),
+        "status_card_status": status_card_manifest.get("status"),
+        "status_card_artifact_count": status_card_manifest.get("artifact_count", 0),
+        "evidence_packet_artifact_materialized": bool(evidence_packet_artifact.get("relative_path")),
+        "public_safe": {
+            "network_call_performed": public_safe.get("network_call_performed"),
+            "subprocess_executed": public_safe.get("subprocess_executed"),
+            "external_side_effects_performed": public_safe.get("external_side_effects_performed"),
+            "raw_provider_payload_saved": public_safe.get("raw_provider_payload_saved"),
+            "private_reasoning_trace": public_safe.get("private_reasoning_trace"),
+            "absolute_paths_exported": public_safe.get("absolute_paths_exported"),
+        },
     }
 
 
@@ -194,6 +258,11 @@ def _build_live_llm_agent_proof(
         "evidence": {
             "registered_tool_executor_is_authority": True,
             "tool_evidence_packet_completed": details.get("tool_execution_status_card_evidence_completed"),
+            "tool_artifact_manifest_schema": details.get("tool_artifact_manifest_schema"),
+            "tool_artifact_manifest_status": details.get("tool_artifact_manifest_status"),
+            "tool_artifact_evidence_packet_materialized": details.get(
+                "tool_artifact_evidence_packet_materialized"
+            ),
             "memory_review_candidate_schema": details.get("memory_review_candidate_schema"),
             "automatic_memory_promotion_performed": details.get("memory_auto_promotion_performed"),
             "raw_or_hidden_trace_absent": details.get("raw_or_hidden_trace_absent"),
@@ -210,6 +279,7 @@ def _build_live_llm_agent_proof(
             "external_side_effects_performed": details.get(
                 "tool_execution_status_card_external_side_effects_performed"
             ),
+            "local_tool_artifacts_materialized": details.get("tool_artifact_manifest_status") == "materialized",
         },
     }
 
@@ -223,6 +293,7 @@ def run_agent_runtime_smoke(
     llm_mode: str = "offline",
     task: str = "Run a public-safe Paideia agent runtime smoke and leave a reviewable evidence packet.",
     client: LLMClient | None = None,
+    artifact_dir: Path | None = None,
 ) -> dict[str, Any]:
     """Run one public-safe agent loop from LLM selection through memory candidate and audit."""
 
@@ -266,6 +337,16 @@ def run_agent_runtime_smoke(
             "tool_execution_status_card_completed_count": 0,
             "tool_execution_status_card_evidence_completed": False,
             "tool_execution_status_card_external_side_effects_performed": False,
+            "tool_artifact_manifest_schema": TOOL_ARTIFACT_MANIFEST_SCHEMA,
+            "tool_artifact_manifest_status": "not_requested",
+            "tool_artifact_manifest_count": 0,
+            "tool_artifact_manifest_file": None,
+            "tool_artifact_manifest_file_exists": False,
+            "tool_artifact_files_exist": False,
+            "tool_artifact_relative_paths_only": True,
+            "tool_artifact_evidence_packet_materialized": False,
+            "tool_artifact_public_safe": True,
+            "tool_execution_status_card_local_artifacts_materialized": False,
             "network_default": "blocked",
             "subprocess_default": "blocked",
             "verification_status": "skipped_provider_not_ready",
@@ -315,6 +396,7 @@ def run_agent_runtime_smoke(
                 "Use --llm-mode offline for a deterministic no-network runtime check.",
             ],
         }
+    resolved_artifact_dir = artifact_dir or Path(tempfile.mkdtemp(prefix="paideia_agent_runtime_smoke_tools_"))
     run = run_agent_from_manifest(
         _smoke_manifest(),
         task=task,
@@ -322,6 +404,7 @@ def run_agent_runtime_smoke(
         llm_mode=llm_mode,
         llm_model=model,
         llm_client=client,
+        tool_artifact_dir=resolved_artifact_dir,
     )
     llm_result = run.get("llm_runtime_result", {}) if isinstance(run.get("llm_runtime_result"), dict) else {}
     llm_plan = llm_result.get("llm_plan", {}) if isinstance(llm_result.get("llm_plan"), dict) else {}
@@ -373,6 +456,11 @@ def run_agent_runtime_smoke(
     )
     completed_tools = _completed_tools(tool_execution)
     missing_required_tools = sorted(AGENT_RUNTIME_SMOKE_REQUIRED_TOOLS - set(completed_tools))
+    artifact_summary = _artifact_manifest_summary(
+        artifact_dir=resolved_artifact_dir,
+        tool_execution=tool_execution,
+        tool_status_card=tool_status_card,
+    )
     serialized = json.dumps(run, ensure_ascii=False)
     raw_or_hidden_absent = (
         "hidden provider smoke trace" not in serialized
@@ -386,6 +474,15 @@ def run_agent_runtime_smoke(
         and llm_plan.get("private_reasoning_trace") == "do_not_store"
         and llm_plan.get("raw_provider_text_stored") is not True
         and (not llm_client_contract or llm_client_contract.get("status") == "passed")
+        and artifact_summary["status"] == "materialized"
+        and artifact_summary["artifact_files_exist"] is True
+        and artifact_summary["manifest_file_exists"] is True
+        and artifact_summary["relative_paths_only"] is True
+        and artifact_summary["public_safe"]["absolute_paths_exported"] is False
+        and artifact_summary["public_safe"]["network_call_performed"] is False
+        and artifact_summary["public_safe"]["subprocess_executed"] is False
+        and artifact_summary["public_safe"]["raw_provider_payload_saved"] is False
+        and artifact_summary["public_safe"]["private_reasoning_trace"] == "do_not_store"
         and memory_write.get("automatic_promotion_performed") is False
         and raw_or_hidden_absent
     )
@@ -451,6 +548,25 @@ def run_agent_runtime_smoke(
         "tool_execution_status_card_external_side_effects_performed": tool_status_card_public_safe.get(
             "external_side_effects_performed"
         ),
+        "tool_execution_status_card_local_artifacts_materialized": tool_status_card_public_safe.get(
+            "local_tool_artifacts_materialized"
+        ),
+        "tool_artifact_manifest_schema": artifact_summary["schema"],
+        "tool_artifact_manifest_status": artifact_summary["status"],
+        "tool_artifact_manifest_count": artifact_summary["artifact_count"],
+        "tool_artifact_manifest_file": artifact_summary["manifest_file"],
+        "tool_artifact_manifest_file_exists": artifact_summary["manifest_file_exists"],
+        "tool_artifact_files_exist": artifact_summary["artifact_files_exist"],
+        "tool_artifact_relative_paths_only": artifact_summary["relative_paths_only"],
+        "tool_artifact_evidence_packet_materialized": artifact_summary["evidence_packet_artifact_materialized"],
+        "tool_artifact_public_safe": (
+            artifact_summary["public_safe"]["network_call_performed"] is False
+            and artifact_summary["public_safe"]["subprocess_executed"] is False
+            and artifact_summary["public_safe"]["external_side_effects_performed"] is False
+            and artifact_summary["public_safe"]["raw_provider_payload_saved"] is False
+            and artifact_summary["public_safe"]["private_reasoning_trace"] == "do_not_store"
+            and artifact_summary["public_safe"]["absolute_paths_exported"] is False
+        ),
         "tool_execution_model": tool_execution.get("execution_model"),
         "network_default": tool_scope.get("network_default"),
         "subprocess_default": tool_scope.get("subprocess_default"),
@@ -481,6 +597,16 @@ def run_agent_runtime_smoke(
         and details["tool_execution_status_card_status"] == "completed_verified"
         and details["tool_execution_status_card_evidence_completed"] is True
         and details["tool_execution_status_card_external_side_effects_performed"] is False
+        and details["tool_execution_status_card_local_artifacts_materialized"] is True
+        and details["tool_artifact_manifest_schema"] == TOOL_ARTIFACT_MANIFEST_SCHEMA
+        and details["tool_artifact_manifest_status"] == "materialized"
+        and details["tool_artifact_manifest_count"] >= len(AGENT_RUNTIME_SMOKE_REQUIRED_TOOLS)
+        and details["tool_artifact_manifest_file"] == "tool_execution_artifact_manifest.json"
+        and details["tool_artifact_manifest_file_exists"] is True
+        and details["tool_artifact_files_exist"] is True
+        and details["tool_artifact_relative_paths_only"] is True
+        and details["tool_artifact_evidence_packet_materialized"] is True
+        and details["tool_artifact_public_safe"] is True
         and details["missing_required_tools"] == []
         and details["verification_status"] == "passed"
         and details["execution_contract_status"] == "passed"

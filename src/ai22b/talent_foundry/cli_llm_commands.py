@@ -102,6 +102,10 @@ def register_llm_runtime_commands(subparsers: argparse._SubParsersAction) -> Non
         help="Return exit code 2 when the full agent runtime smoke report does not pass.",
     )
     agent_runtime_smoke.add_argument("--output", required=True)
+    agent_runtime_smoke.add_argument(
+        "--tool-artifact-dir",
+        help="Directory for public-safe materialized registered-tool outputs. Defaults to <output-stem>_tool_artifacts.",
+    )
 
     chat_runtime_smoke = subparsers.add_parser(
         "run-chat-runtime-smoke",
@@ -188,6 +192,12 @@ def handle_llm_runtime_command(args: argparse.Namespace) -> int | None:
         return 2 if args.strict and not report.get("passed") else 0
 
     if args.command == "run-agent-runtime-smoke":
+        output_path = Path(args.output)
+        artifact_dir = (
+            Path(args.tool_artifact_dir)
+            if args.tool_artifact_dir
+            else output_path.parent / f"{output_path.stem}_tool_artifacts"
+        )
         report = run_agent_runtime_smoke(
             engine=args.llm_engine,
             service=args.llm_service,
@@ -195,8 +205,8 @@ def handle_llm_runtime_command(args: argparse.Namespace) -> int | None:
             model_path=args.llm_model_path,
             llm_mode=_llm_mode_from_args(args),
             task=args.task,
+            artifact_dir=artifact_dir,
         )
-        output_path = Path(args.output)
         _write_json(output_path, report)
         print(str(output_path))
         return 2 if args.strict and not report.get("passed") else 0

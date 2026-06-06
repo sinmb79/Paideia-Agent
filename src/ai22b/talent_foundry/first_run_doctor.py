@@ -159,6 +159,7 @@ def _live_readiness_summary(report: dict[str, Any]) -> dict[str, Any]:
     status_card = _as_dict(report.get("live_connection_status_card"))
     blocking_step = _as_dict(status_card.get("blocking_step"))
     agent_card = _as_dict(status_card.get("agent_runtime_status_card"))
+    agent_tool_artifacts = _as_dict(status_card.get("agent_tool_artifacts"))
     agent_live_proof = _as_dict(status_card.get("live_llm_agent_proof"))
     chat_memory_card = _as_dict(status_card.get("chat_memory_lifecycle_status_card"))
     chat_runtime_card = _as_dict(status_card.get("chat_runtime_status_card"))
@@ -187,6 +188,17 @@ def _live_readiness_summary(report: dict[str, Any]) -> dict[str, Any]:
         "agent_runtime_status_card_status": agent_card.get("status"),
         "agent_runtime_status_card_public_safe": agent_card.get("public_safe"),
         "agent_runtime_status_card_memory_decision": agent_card.get("memory_decision"),
+        "agent_tool_artifact_manifest_schema": agent_tool_artifacts.get("manifest_schema"),
+        "agent_tool_artifact_manifest_status": agent_tool_artifacts.get("manifest_status"),
+        "agent_tool_artifact_count": agent_tool_artifacts.get("artifact_count"),
+        "agent_tool_artifact_manifest_file": agent_tool_artifacts.get("manifest_file"),
+        "agent_tool_artifact_manifest_file_exists": agent_tool_artifacts.get("manifest_file_exists"),
+        "agent_tool_artifact_files_exist": agent_tool_artifacts.get("artifact_files_exist"),
+        "agent_tool_artifact_relative_paths_only": agent_tool_artifacts.get("relative_paths_only"),
+        "agent_tool_artifact_evidence_packet_materialized": agent_tool_artifacts.get(
+            "evidence_packet_materialized"
+        ),
+        "agent_tool_artifact_public_safe": agent_tool_artifacts.get("public_safe"),
         "live_llm_agent_proof_schema": agent_live_proof.get("schema"),
         "live_llm_agent_proof_status": agent_live_proof.get("status"),
         "live_llm_agent_proof_passed": agent_live_proof.get("passed"),
@@ -361,6 +373,7 @@ def doctor_first_run(
         engine="deterministic_local",
         llm_mode="offline",
         task="Paideia first-run doctor full agent runtime smoke.",
+        artifact_dir=(output_path.parent if output_path is not None else root / "runs") / "agent_runtime_tool_artifacts",
     )
     chat_runtime_smoke = run_chat_runtime_smoke(
         engine="deterministic_local",
@@ -495,6 +508,15 @@ def doctor_first_run(
         and agent_details.get("agent_runtime_status_card_status") == "completed_verified"
         and agent_details.get("agent_runtime_status_card_public_safe") is True
         and agent_details.get("tool_execution_status_card_status") == "completed_verified"
+        and agent_details.get("tool_execution_status_card_local_artifacts_materialized") is True
+        and agent_details.get("tool_artifact_manifest_schema") == "paideia-tool-execution-artifact-manifest/v1"
+        and agent_details.get("tool_artifact_manifest_status") == "materialized"
+        and agent_details.get("tool_artifact_manifest_file") == "tool_execution_artifact_manifest.json"
+        and agent_details.get("tool_artifact_manifest_file_exists") is True
+        and agent_details.get("tool_artifact_files_exist") is True
+        and agent_details.get("tool_artifact_relative_paths_only") is True
+        and agent_details.get("tool_artifact_evidence_packet_materialized") is True
+        and agent_details.get("tool_artifact_public_safe") is True
         and agent_live_proof.get("schema") == "paideia-live-llm-agent-proof/v1"
         and agent_live_proof.get("status") == "offline_verified"
         and agent_live_proof.get("provider_path") == "offline_deterministic_no_provider_call"
@@ -514,6 +536,20 @@ def doctor_first_run(
             ),
             "tool_execution_status_card_schema": agent_details.get("tool_execution_status_card_schema"),
             "tool_execution_status_card_status": agent_details.get("tool_execution_status_card_status"),
+            "tool_execution_status_card_local_artifacts_materialized": agent_details.get(
+                "tool_execution_status_card_local_artifacts_materialized"
+            ),
+            "tool_artifact_manifest_schema": agent_details.get("tool_artifact_manifest_schema"),
+            "tool_artifact_manifest_status": agent_details.get("tool_artifact_manifest_status"),
+            "tool_artifact_manifest_count": agent_details.get("tool_artifact_manifest_count"),
+            "tool_artifact_manifest_file": agent_details.get("tool_artifact_manifest_file"),
+            "tool_artifact_manifest_file_exists": agent_details.get("tool_artifact_manifest_file_exists"),
+            "tool_artifact_files_exist": agent_details.get("tool_artifact_files_exist"),
+            "tool_artifact_relative_paths_only": agent_details.get("tool_artifact_relative_paths_only"),
+            "tool_artifact_evidence_packet_materialized": agent_details.get(
+                "tool_artifact_evidence_packet_materialized"
+            ),
+            "tool_artifact_public_safe": agent_details.get("tool_artifact_public_safe"),
             "completed_tools": agent_details.get("completed_tools"),
             "live_llm_agent_proof_schema": agent_live_proof.get("schema"),
             "live_llm_agent_proof_status": agent_live_proof.get("status"),
@@ -627,6 +663,7 @@ def doctor_first_run(
         and adapter_public.get("secret_values_exported") is False
         and application_runtime.get("network_access") == "blocked"
         and agent_details.get("preflight_network_call_made") is False
+        and agent_details.get("tool_artifact_public_safe") is True
         and chat_details.get("preflight_network_call_made") is False
         and chat_policy.get("secret_values_exported") is False
         and live_readiness_policy.get("live_provider_call_attempted") is False
@@ -659,6 +696,9 @@ def doctor_first_run(
             "chat_runtime_preflight_network_call": chat_details.get("preflight_network_call_made"),
             "llm_live_readiness_live_provider_call_attempted": live_readiness_policy.get(
                 "live_provider_call_attempted"
+            ),
+            "llm_live_readiness_agent_tool_artifact_status": live_readiness_policy.get(
+                "agent_tool_artifact_manifest_status"
             ),
             "llm_live_readiness_agent_live_proof_status": live_readiness_policy.get(
                 "agent_live_llm_proof_status"
@@ -728,6 +768,20 @@ def doctor_first_run(
                 ),
                 "tool_execution_status_card_schema": agent_details.get("tool_execution_status_card_schema"),
                 "tool_execution_status_card_status": agent_details.get("tool_execution_status_card_status"),
+                "tool_execution_status_card_local_artifacts_materialized": agent_details.get(
+                    "tool_execution_status_card_local_artifacts_materialized"
+                ),
+                "tool_artifact_manifest_schema": agent_details.get("tool_artifact_manifest_schema"),
+                "tool_artifact_manifest_status": agent_details.get("tool_artifact_manifest_status"),
+                "tool_artifact_manifest_count": agent_details.get("tool_artifact_manifest_count"),
+                "tool_artifact_manifest_file": agent_details.get("tool_artifact_manifest_file"),
+                "tool_artifact_manifest_file_exists": agent_details.get("tool_artifact_manifest_file_exists"),
+                "tool_artifact_files_exist": agent_details.get("tool_artifact_files_exist"),
+                "tool_artifact_relative_paths_only": agent_details.get("tool_artifact_relative_paths_only"),
+                "tool_artifact_evidence_packet_materialized": agent_details.get(
+                    "tool_artifact_evidence_packet_materialized"
+                ),
+                "tool_artifact_public_safe": agent_details.get("tool_artifact_public_safe"),
                 "live_llm_agent_proof_schema": agent_live_proof.get("schema"),
                 "live_llm_agent_proof_status": agent_live_proof.get("status"),
                 "live_llm_agent_proof_provider_path": agent_live_proof.get("provider_path"),

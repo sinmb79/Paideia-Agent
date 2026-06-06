@@ -130,6 +130,20 @@ def _build_live_connection_status_card(
             "public_safe": agent_check.get("agent_runtime_status_card_public_safe"),
             "memory_decision": agent_check.get("agent_runtime_status_card_memory_decision"),
         },
+        "agent_tool_artifacts": {
+            "manifest_schema": agent_check.get("tool_artifact_manifest_schema"),
+            "manifest_status": agent_check.get("tool_artifact_manifest_status"),
+            "artifact_count": agent_check.get("tool_artifact_manifest_count"),
+            "manifest_file": agent_check.get("tool_artifact_manifest_file"),
+            "manifest_file_exists": agent_check.get("tool_artifact_manifest_file_exists"),
+            "artifact_files_exist": agent_check.get("tool_artifact_files_exist"),
+            "relative_paths_only": agent_check.get("tool_artifact_relative_paths_only"),
+            "evidence_packet_materialized": agent_check.get("tool_artifact_evidence_packet_materialized"),
+            "public_safe": agent_check.get("tool_artifact_public_safe"),
+            "status_card_local_artifacts_materialized": agent_check.get(
+                "tool_execution_status_card_local_artifacts_materialized"
+            ),
+        },
         "live_llm_agent_proof": {
             "schema": agent_proof.get("schema"),
             "status": agent_proof.get("status"),
@@ -160,6 +174,8 @@ def _build_live_connection_status_card(
             "provider_doctor_block_reason": provider_check.get("network_call_block_reason"),
             "agent_live_client_generate_called": agent_live_client_generate_called,
             "built_in_provider_client_called": built_in_provider_client_called,
+            "local_tool_artifacts_materialized": agent_check.get("tool_artifact_manifest_status") == "materialized",
+            "tool_artifact_public_safe": agent_check.get("tool_artifact_public_safe"),
             "live_provider_call_attempted_only_when_requested": True,
             "provider_client_attempted_only_when_requested": not provider_client_generate_attempted or live_check,
         },
@@ -239,6 +255,7 @@ def run_llm_live_readiness_suite(
         service=service,
         llm_mode=llm_mode,
         task=task,
+        artifact_dir=output_dir / "agent_runtime_tool_artifacts",
     )
     chat_smoke = run_chat_runtime_smoke(
         engine=engine,
@@ -368,6 +385,52 @@ def run_llm_live_readiness_suite(
             else None,
             "agent_runtime_status_card_memory_decision": agent_smoke.get("details", {}).get(
                 "agent_runtime_status_card_memory_decision"
+            )
+            if isinstance(agent_smoke.get("details"), dict)
+            else None,
+            "tool_artifact_manifest_schema": agent_smoke.get("details", {}).get(
+                "tool_artifact_manifest_schema"
+            )
+            if isinstance(agent_smoke.get("details"), dict)
+            else None,
+            "tool_artifact_manifest_status": agent_smoke.get("details", {}).get(
+                "tool_artifact_manifest_status"
+            )
+            if isinstance(agent_smoke.get("details"), dict)
+            else None,
+            "tool_artifact_manifest_count": agent_smoke.get("details", {}).get(
+                "tool_artifact_manifest_count"
+            )
+            if isinstance(agent_smoke.get("details"), dict)
+            else None,
+            "tool_artifact_manifest_file": agent_smoke.get("details", {}).get(
+                "tool_artifact_manifest_file"
+            )
+            if isinstance(agent_smoke.get("details"), dict)
+            else None,
+            "tool_artifact_manifest_file_exists": agent_smoke.get("details", {}).get(
+                "tool_artifact_manifest_file_exists"
+            )
+            if isinstance(agent_smoke.get("details"), dict)
+            else None,
+            "tool_artifact_files_exist": agent_smoke.get("details", {}).get("tool_artifact_files_exist")
+            if isinstance(agent_smoke.get("details"), dict)
+            else None,
+            "tool_artifact_relative_paths_only": agent_smoke.get("details", {}).get(
+                "tool_artifact_relative_paths_only"
+            )
+            if isinstance(agent_smoke.get("details"), dict)
+            else None,
+            "tool_artifact_evidence_packet_materialized": agent_smoke.get("details", {}).get(
+                "tool_artifact_evidence_packet_materialized"
+            )
+            if isinstance(agent_smoke.get("details"), dict)
+            else None,
+            "tool_artifact_public_safe": agent_smoke.get("details", {}).get("tool_artifact_public_safe")
+            if isinstance(agent_smoke.get("details"), dict)
+            else None,
+            "tool_execution_status_card_local_artifacts_materialized": agent_smoke.get("details", {}).get(
+                "tool_execution_status_card_local_artifacts_materialized"
             )
             if isinstance(agent_smoke.get("details"), dict)
             else None,
@@ -512,6 +575,15 @@ def run_llm_live_readiness_suite(
             ],
             "provider_doctor_blocked_before_transport": live_connection_status_card["public_safe"][
                 "provider_doctor_blocked_before_transport"
+            ],
+            "agent_tool_artifact_manifest_schema": live_connection_status_card["agent_tool_artifacts"][
+                "manifest_schema"
+            ],
+            "agent_tool_artifact_manifest_status": live_connection_status_card["agent_tool_artifacts"][
+                "manifest_status"
+            ],
+            "agent_tool_artifact_public_safe": live_connection_status_card["agent_tool_artifacts"][
+                "public_safe"
             ],
             "agent_live_llm_proof_schema": agent_proof.get("schema"),
             "agent_live_llm_proof_status": agent_proof.get("status"),

@@ -381,6 +381,18 @@ class CliSmokeTests(unittest.TestCase):
         self.assertEqual(agent_runtime_smoke["details"]["tool_execution_status_card_status"], "completed_verified")
         self.assertTrue(agent_runtime_smoke["details"]["tool_execution_status_card_evidence_completed"])
         self.assertFalse(agent_runtime_smoke["details"]["tool_execution_status_card_external_side_effects_performed"])
+        self.assertTrue(agent_runtime_smoke["details"]["tool_execution_status_card_local_artifacts_materialized"])
+        self.assertEqual(
+            agent_runtime_smoke["details"]["tool_artifact_manifest_schema"],
+            "paideia-tool-execution-artifact-manifest/v1",
+        )
+        self.assertEqual(agent_runtime_smoke["details"]["tool_artifact_manifest_status"], "materialized")
+        self.assertEqual(agent_runtime_smoke["details"]["tool_artifact_manifest_file"], "tool_execution_artifact_manifest.json")
+        self.assertTrue(agent_runtime_smoke["details"]["tool_artifact_manifest_file_exists"])
+        self.assertTrue(agent_runtime_smoke["details"]["tool_artifact_files_exist"])
+        self.assertTrue(agent_runtime_smoke["details"]["tool_artifact_relative_paths_only"])
+        self.assertTrue(agent_runtime_smoke["details"]["tool_artifact_evidence_packet_materialized"])
+        self.assertTrue(agent_runtime_smoke["details"]["tool_artifact_public_safe"])
         self.assertIn("evidence_packet", agent_runtime_smoke["details"]["completed_tools"])
         self.assertEqual(agent_runtime_smoke["details"]["missing_required_tools"], [])
         self.assertEqual(agent_runtime_smoke["details"]["memory_decision"], "candidate_pending_boss_review")
@@ -514,6 +526,20 @@ class CliSmokeTests(unittest.TestCase):
             llm_live_readiness["live_connection_status_card"]["agent_runtime_status_card"]["public_safe"]
         )
         self.assertEqual(
+            llm_live_readiness["live_connection_status_card"]["agent_tool_artifacts"]["manifest_schema"],
+            "paideia-tool-execution-artifact-manifest/v1",
+        )
+        self.assertEqual(
+            llm_live_readiness["live_connection_status_card"]["agent_tool_artifacts"]["manifest_status"],
+            "materialized",
+        )
+        self.assertTrue(
+            llm_live_readiness["live_connection_status_card"]["agent_tool_artifacts"][
+                "evidence_packet_materialized"
+            ]
+        )
+        self.assertTrue(llm_live_readiness["live_connection_status_card"]["agent_tool_artifacts"]["public_safe"])
+        self.assertEqual(
             llm_live_readiness["live_connection_status_card"]["live_llm_agent_proof"]["schema"],
             "paideia-live-llm-agent-proof/v1",
         )
@@ -558,6 +584,13 @@ class CliSmokeTests(unittest.TestCase):
         self.assertTrue(
             llm_live_readiness["checks"]["agent_runtime_smoke"]["agent_runtime_status_card_public_safe"]
         )
+        self.assertEqual(
+            llm_live_readiness["checks"]["agent_runtime_smoke"]["tool_artifact_manifest_schema"],
+            "paideia-tool-execution-artifact-manifest/v1",
+        )
+        self.assertEqual(llm_live_readiness["checks"]["agent_runtime_smoke"]["tool_artifact_manifest_status"], "materialized")
+        self.assertTrue(llm_live_readiness["checks"]["agent_runtime_smoke"]["tool_artifact_files_exist"])
+        self.assertTrue(llm_live_readiness["checks"]["agent_runtime_smoke"]["tool_artifact_public_safe"])
         self.assertEqual(
             llm_live_readiness["checks"]["agent_runtime_smoke"]["live_llm_agent_proof"]["schema"],
             "paideia-live-llm-agent-proof/v1",
@@ -748,6 +781,26 @@ class CliSmokeTests(unittest.TestCase):
             first_run_doctor["artifacts"]["agent_runtime_smoke"]["tool_execution_status_card_status"],
             "completed_verified",
         )
+        self.assertTrue(
+            first_run_doctor["artifacts"]["agent_runtime_smoke"][
+                "tool_execution_status_card_local_artifacts_materialized"
+            ]
+        )
+        self.assertEqual(
+            first_run_doctor["artifacts"]["agent_runtime_smoke"]["tool_artifact_manifest_schema"],
+            "paideia-tool-execution-artifact-manifest/v1",
+        )
+        self.assertEqual(
+            first_run_doctor["artifacts"]["agent_runtime_smoke"]["tool_artifact_manifest_status"],
+            "materialized",
+        )
+        self.assertTrue(first_run_doctor["artifacts"]["agent_runtime_smoke"]["tool_artifact_files_exist"])
+        self.assertTrue(
+            first_run_doctor["artifacts"]["agent_runtime_smoke"][
+                "tool_artifact_evidence_packet_materialized"
+            ]
+        )
+        self.assertTrue(first_run_doctor["artifacts"]["agent_runtime_smoke"]["tool_artifact_public_safe"])
         self.assertEqual(
             first_run_doctor["artifacts"]["agent_runtime_smoke"]["live_llm_agent_proof_schema"],
             "paideia-live-llm-agent-proof/v1",

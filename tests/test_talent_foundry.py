@@ -2112,6 +2112,18 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(report["details"]["tool_execution_status_card_status"], "completed_verified")
         self.assertTrue(report["details"]["tool_execution_status_card_evidence_completed"])
         self.assertFalse(report["details"]["tool_execution_status_card_external_side_effects_performed"])
+        self.assertTrue(report["details"]["tool_execution_status_card_local_artifacts_materialized"])
+        self.assertEqual(
+            report["details"]["tool_artifact_manifest_schema"],
+            "paideia-tool-execution-artifact-manifest/v1",
+        )
+        self.assertEqual(report["details"]["tool_artifact_manifest_status"], "materialized")
+        self.assertEqual(report["details"]["tool_artifact_manifest_file"], "tool_execution_artifact_manifest.json")
+        self.assertTrue(report["details"]["tool_artifact_manifest_file_exists"])
+        self.assertTrue(report["details"]["tool_artifact_files_exist"])
+        self.assertTrue(report["details"]["tool_artifact_relative_paths_only"])
+        self.assertTrue(report["details"]["tool_artifact_evidence_packet_materialized"])
+        self.assertTrue(report["details"]["tool_artifact_public_safe"])
         self.assertEqual(report["details"]["missing_required_tools"], [])
         self.assertIn("work_session", report["details"]["completed_tools"])
         self.assertIn("evidence_packet", report["details"]["completed_tools"])
@@ -2196,6 +2208,9 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertFalse(report["details"]["llm_client_contract_raw_payload_saved"])
         self.assertFalse(report["details"]["llm_client_contract_private_reasoning_values_stored"])
         self.assertTrue(report["details"]["llm_tool_suggestion_only_enforced"])
+        self.assertEqual(report["details"]["tool_artifact_manifest_status"], "materialized")
+        self.assertTrue(report["details"]["tool_artifact_evidence_packet_materialized"])
+        self.assertTrue(report["details"]["tool_artifact_public_safe"])
         self.assertEqual(report["details"]["out_of_scope_executed_count"], 0)
         self.assertEqual(report["live_llm_agent_proof"]["schema"], "paideia-live-llm-agent-proof/v1")
         self.assertEqual(report["live_llm_agent_proof"]["status"], "live_like_client_verified")
@@ -2439,6 +2454,13 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(report["checks"]["agent_runtime_smoke"]["status"], "needs_configuration")
         self.assertFalse(report["checks"]["agent_runtime_smoke"]["passed"])
         self.assertEqual(report["checks"]["agent_runtime_smoke"]["failure_mode"], "live_provider_not_ready")
+        self.assertEqual(
+            report["checks"]["agent_runtime_smoke"]["tool_artifact_manifest_schema"],
+            "paideia-tool-execution-artifact-manifest/v1",
+        )
+        self.assertEqual(report["checks"]["agent_runtime_smoke"]["tool_artifact_manifest_status"], "not_requested")
+        self.assertFalse(report["checks"]["agent_runtime_smoke"]["tool_artifact_evidence_packet_materialized"])
+        self.assertFalse(report["checks"]["agent_runtime_smoke"]["tool_execution_status_card_local_artifacts_materialized"])
         self.assertEqual(
             report["checks"]["agent_runtime_smoke"]["live_llm_agent_proof"]["schema"],
             "paideia-live-llm-agent-proof/v1",
