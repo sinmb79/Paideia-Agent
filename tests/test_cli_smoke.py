@@ -24,6 +24,7 @@ class CliSmokeTests(unittest.TestCase):
             source_sbom_path = tmp_path / "source_sbom.json"
             first_run_doctor_path = tmp_path / "first_run_doctor.json"
             package_install_doctor_path = tmp_path / "package_install_doctor.json"
+            runtime_contract_doctor_path = tmp_path / "runtime_contract_doctor.json"
 
             role_models_code = cli_main(
                 [
@@ -128,6 +129,16 @@ class CliSmokeTests(unittest.TestCase):
                     str(package_install_doctor_path),
                 ]
             )
+            runtime_contract_doctor_code = cli_main(
+                [
+                    "doctor-runtime-contract",
+                    "--repo-root",
+                    ".",
+                    "--strict",
+                    "--output",
+                    str(runtime_contract_doctor_path),
+                ]
+            )
 
             role_models = json.loads(role_models_path.read_text(encoding="utf-8"))
             llm_services = json.loads(llm_services_path.read_text(encoding="utf-8"))
@@ -141,6 +152,7 @@ class CliSmokeTests(unittest.TestCase):
             source_sbom = json.loads(source_sbom_path.read_text(encoding="utf-8"))
             first_run_doctor = json.loads(first_run_doctor_path.read_text(encoding="utf-8"))
             package_install_doctor = json.loads(package_install_doctor_path.read_text(encoding="utf-8"))
+            runtime_contract_doctor = json.loads(runtime_contract_doctor_path.read_text(encoding="utf-8"))
 
         self.assertEqual(role_models_code, 0)
         self.assertEqual(llm_services_code, 0)
@@ -154,6 +166,7 @@ class CliSmokeTests(unittest.TestCase):
         self.assertEqual(source_sbom_code, 0)
         self.assertEqual(first_run_doctor_code, 0)
         self.assertEqual(package_install_doctor_code, 0)
+        self.assertEqual(runtime_contract_doctor_code, 0)
 
         self.assertEqual(role_models["schema"], "ai-talent-role-model-list/v1")
         self.assertEqual(role_models["domain"], "securities_research")
@@ -288,6 +301,28 @@ class CliSmokeTests(unittest.TestCase):
         self.assertTrue(package_checks["distribution_console_scripts_match_pyproject"]["passed"])
         self.assertTrue(package_checks["console_script_targets_importable_callables"]["passed"])
 
+        self.assertEqual(runtime_contract_doctor["schema"], "paideia-runtime-contract-doctor/v1")
+        self.assertTrue(runtime_contract_doctor["passed"])
+        self.assertEqual(runtime_contract_doctor["status"], "passed")
+        self.assertEqual(runtime_contract_doctor["summary"]["failed_count"], 0)
+        self.assertFalse(runtime_contract_doctor["summary"]["network_call_performed"])
+        self.assertFalse(runtime_contract_doctor["summary"]["subprocess_executed"])
+        self.assertFalse(runtime_contract_doctor["summary"]["live_provider_called"])
+        runtime_checks = {item["id"]: item for item in runtime_contract_doctor["checks"]}
+        self.assertTrue(runtime_checks["live_agent_loop_contract_passed"]["passed"])
+        self.assertTrue(runtime_checks["fail_closed_runtime_contract_passed"]["passed"])
+        self.assertEqual(
+            runtime_contract_doctor["artifacts"]["live_agent_loop_contract"]["details"]["run_status"],
+            "completed",
+        )
+        self.assertEqual(
+            runtime_contract_doctor["artifacts"]["fail_closed_runtime_contract"]["details"]["direct_agent_run_status"],
+            "needs_configuration",
+        )
+        self.assertFalse(runtime_contract_doctor["public_safe"]["network_call_performed"])
+        self.assertFalse(runtime_contract_doctor["public_safe"]["subprocess_executed"])
+        self.assertFalse(runtime_contract_doctor["public_safe"]["live_provider_called"])
+
         self.assertEqual(first_run_doctor["schema"], "paideia-first-run-doctor/v1")
         self.assertTrue(first_run_doctor["passed"])
         self.assertEqual(first_run_doctor["status"], "passed")
@@ -309,6 +344,7 @@ class CliSmokeTests(unittest.TestCase):
             "public_release_readiness_passed",
             "source_sbom_public_safe",
             "package_install_doctor_passed",
+            "runtime_contract_doctor_passed",
             "no_network_or_llm_by_default",
         }:
             self.assertTrue(first_run_checks[check_id]["passed"], check_id)
@@ -316,6 +352,8 @@ class CliSmokeTests(unittest.TestCase):
         self.assertEqual(first_run_doctor["artifacts"]["llm_provider_doctor"]["network_access"], "blocked")
         self.assertEqual(first_run_doctor["artifacts"]["agent_runtime_smoke"]["execution_contract_status"], "passed")
         self.assertTrue(first_run_doctor["artifacts"]["package_install_doctor"]["distribution_installed"])
+        self.assertEqual(first_run_doctor["artifacts"]["runtime_contract_doctor"]["status"], "passed")
+        self.assertFalse(first_run_doctor["artifacts"]["runtime_contract_doctor"]["live_provider_called"])
 
 
 if __name__ == "__main__":

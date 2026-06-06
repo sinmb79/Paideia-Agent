@@ -31,6 +31,7 @@ REQUIRED_CI_MARKERS = [
     ".\\scripts\\check_public_repo_hygiene.ps1",
     "ai22b-talent-foundry doctor-package-install",
     "ai22b-talent-foundry doctor-first-run",
+    "ai22b-talent-foundry doctor-runtime-contract",
 ]
 
 REQUIRED_HYGIENE_MARKERS = [

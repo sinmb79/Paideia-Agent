@@ -94,6 +94,7 @@ from ai22b.talent_foundry.registry import (
 )
 from ai22b.talent_foundry.runtime import run_work_session
 from ai22b.talent_foundry.runtime_benchmark import build_runtime_observability_comparison
+from ai22b.talent_foundry.runtime_contract_doctor import doctor_runtime_contract
 from ai22b.talent_foundry.team import run_clone_team_session
 from ai22b.talent_foundry.training_run import materialize_training_blueprint
 from ai22b.talent_foundry.tool_registry import audit_tool_capability_registry
@@ -251,6 +252,18 @@ def _build_parser() -> argparse.ArgumentParser:
         "--strict",
         action="store_true",
         help="Return exit code 2 when the package install doctor report does not pass.",
+    )
+
+    runtime_contract_doctor = subparsers.add_parser(
+        "doctor-runtime-contract",
+        help="Verify the public-safe live-like agent loop and fail-closed live provider runtime contracts.",
+    )
+    runtime_contract_doctor.add_argument("--repo-root", default=".")
+    runtime_contract_doctor.add_argument("--output", required=True)
+    runtime_contract_doctor.add_argument(
+        "--strict",
+        action="store_true",
+        help="Return exit code 2 when the runtime contract doctor report does not pass.",
     )
 
     onboard = subparsers.add_parser(
@@ -1086,6 +1099,16 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "doctor-package-install":
         report = doctor_package_install(
+            repo_root=Path(args.repo_root),
+            output_path=Path(args.output),
+        )
+        print(str(Path(args.output)))
+        if args.strict and not report.get("passed"):
+            return 2
+        return 0 if report.get("passed") else 1
+
+    if args.command == "doctor-runtime-contract":
+        report = doctor_runtime_contract(
             repo_root=Path(args.repo_root),
             output_path=Path(args.output),
         )

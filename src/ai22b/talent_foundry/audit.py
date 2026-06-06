@@ -36,6 +36,14 @@ from ai22b.talent_foundry.onboarding_choices import LLM_SERVICE_CATALOG
 from ai22b.talent_foundry.package_install_doctor import PACKAGE_INSTALL_DOCTOR_SCHEMA, doctor_package_install
 from ai22b.talent_foundry.role_models import list_role_models, summarize_role_model
 from ai22b.talent_foundry.runtime_benchmark import RUNTIME_OBSERVABILITY_COMPARISON_SCHEMA
+from ai22b.talent_foundry.runtime_contract_doctor import (
+    FAIL_CLOSED_RUNTIME_CONTRACT_SCHEMA,
+    LIVE_AGENT_LOOP_CONTRACT_SCHEMA,
+    RUNTIME_CONTRACT_DOCTOR_SCHEMA,
+    doctor_runtime_contract,
+    run_fail_closed_runtime_contract,
+    run_live_agent_loop_contract,
+)
 from ai22b.talent_foundry.source_sbom import SOURCE_SBOM_SCHEMA, build_source_sbom
 from ai22b.talent_foundry.tool_registry import TOOL_CAPABILITY_AUDIT_SCHEMA, audit_tool_capability_registry
 
@@ -129,6 +137,7 @@ REQUIRED_PUBLIC_PROGRAM_COMMANDS = {
     "doctor-onboarding-session",
     "doctor-first-run",
     "doctor-package-install",
+    "doctor-runtime-contract",
     "start-console",
     "onboard-agent",
     "build-llm-onboarding-checklist",
@@ -183,6 +192,7 @@ PUBLIC_SAFE_FIRST_RUN_COMMANDS = {
     "build-source-sbom",
     "doctor-first-run",
     "doctor-package-install",
+    "doctor-runtime-contract",
 }
 
 
@@ -980,6 +990,7 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
         PROJECT_ROOT / "src" / "ai22b" / "talent_foundry" / "tool_registry.py",
         PROJECT_ROOT / "src" / "ai22b" / "talent_foundry" / "public_release.py",
         PROJECT_ROOT / "src" / "ai22b" / "talent_foundry" / "source_sbom.py",
+        PROJECT_ROOT / "src" / "ai22b" / "talent_foundry" / "runtime_contract_doctor.py",
         DEFAULT_POLICY_EVAL_SUITE,
     ]
     missing = [path for path in evidence if not path.exists()]
@@ -1050,6 +1061,32 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
     package_install_public = (
         package_install_doctor.get("public_safe", {})
         if isinstance(package_install_doctor.get("public_safe"), dict)
+        else {}
+    )
+    runtime_contract_doctor = doctor_runtime_contract(PROJECT_ROOT)
+    runtime_contract_summary = (
+        runtime_contract_doctor.get("summary", {})
+        if isinstance(runtime_contract_doctor.get("summary"), dict)
+        else {}
+    )
+    runtime_contract_public = (
+        runtime_contract_doctor.get("public_safe", {})
+        if isinstance(runtime_contract_doctor.get("public_safe"), dict)
+        else {}
+    )
+    runtime_contract_artifacts = (
+        runtime_contract_doctor.get("artifacts", {})
+        if isinstance(runtime_contract_doctor.get("artifacts"), dict)
+        else {}
+    )
+    runtime_live_contract = (
+        runtime_contract_artifacts.get("live_agent_loop_contract", {})
+        if isinstance(runtime_contract_artifacts.get("live_agent_loop_contract"), dict)
+        else {}
+    )
+    runtime_fail_closed_contract = (
+        runtime_contract_artifacts.get("fail_closed_runtime_contract", {})
+        if isinstance(runtime_contract_artifacts.get("fail_closed_runtime_contract"), dict)
         else {}
     )
     console_script_present = (
@@ -1172,6 +1209,16 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
         "package_install_network_call_performed": package_install_public.get("network_call_performed"),
         "package_install_subprocess_executed": package_install_public.get("subprocess_executed"),
         "package_install_local_paths_exported": package_install_public.get("local_absolute_paths_exported"),
+        "runtime_contract_doctor_schema": runtime_contract_doctor.get("schema"),
+        "runtime_contract_doctor_passed": runtime_contract_doctor.get("passed"),
+        "runtime_contract_doctor_status": runtime_contract_doctor.get("status"),
+        "runtime_contract_failed_count": runtime_contract_summary.get("failed_count"),
+        "runtime_contract_live_loop_status": runtime_live_contract.get("status"),
+        "runtime_contract_fail_closed_status": runtime_fail_closed_contract.get("status"),
+        "runtime_contract_network_call_performed": runtime_contract_public.get("network_call_performed"),
+        "runtime_contract_subprocess_executed": runtime_contract_public.get("subprocess_executed"),
+        "runtime_contract_live_provider_called": runtime_contract_public.get("live_provider_called"),
+        "runtime_contract_secret_values_exported": runtime_contract_public.get("secret_values_exported"),
         "no_network_or_llm_by_default": (
             doctor.get("network_access") == "blocked"
             and doctor.get("live_check_requested") is False
@@ -1190,6 +1237,9 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
             and source_sbom_policy.get("subprocess_executed") is False
             and package_install_public.get("network_call_performed") is False
             and package_install_public.get("subprocess_executed") is False
+            and runtime_contract_public.get("network_call_performed") is False
+            and runtime_contract_public.get("subprocess_executed") is False
+            and runtime_contract_public.get("live_provider_called") is False
         ),
     }
     passed = (
@@ -1278,6 +1328,16 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
         and details["package_install_network_call_performed"] is False
         and details["package_install_subprocess_executed"] is False
         and details["package_install_local_paths_exported"] is False
+        and details["runtime_contract_doctor_schema"] == RUNTIME_CONTRACT_DOCTOR_SCHEMA
+        and details["runtime_contract_doctor_passed"] is True
+        and details["runtime_contract_doctor_status"] == "passed"
+        and details["runtime_contract_failed_count"] == 0
+        and details["runtime_contract_live_loop_status"] == "passed"
+        and details["runtime_contract_fail_closed_status"] == "passed"
+        and details["runtime_contract_network_call_performed"] is False
+        and details["runtime_contract_subprocess_executed"] is False
+        and details["runtime_contract_live_provider_called"] is False
+        and details["runtime_contract_secret_values_exported"] is False
         and details["no_network_or_llm_by_default"] is True
     )
     return _checkpoint(
@@ -1291,6 +1351,19 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
 
 def _llm_live_agent_loop_contract() -> dict[str, Any]:
     """Exercise the live LLM client path through the agent loop without network access."""
+
+    contract = run_live_agent_loop_contract()
+    return _checkpoint(
+        passed=contract.get("passed") is True,
+        evidence=[
+            PROJECT_ROOT / "src" / "ai22b" / "talent_foundry" / "agent_execution_loop.py",
+            PROJECT_ROOT / "src" / "ai22b" / "talent_foundry" / "llm_clients.py",
+            PROJECT_ROOT / "src" / "ai22b" / "talent_foundry" / "tool_registry.py",
+            PROJECT_ROOT / "src" / "ai22b" / "talent_foundry" / "runtime_contract_doctor.py",
+        ],
+        root=PROJECT_ROOT,
+        details=contract.get("details", {}),
+    )
 
     secret = "fixture_audit_live_llm_secret_12345"
     hidden_trace = "audit hidden provider trace must not be stored"
@@ -1590,6 +1663,20 @@ def _write_fail_closed_runtime_fixture(root: Path) -> tuple[Path, dict[str, Any]
 
 def _fail_closed_runtime_contract() -> dict[str, Any]:
     """Prove unconfigured explicit-live runs stop before tools, artifacts, and learning promotion."""
+
+    contract = run_fail_closed_runtime_contract()
+    return _checkpoint(
+        passed=contract.get("passed") is True,
+        evidence=[
+            PROJECT_ROOT / "src" / "ai22b" / "talent_foundry" / "agent_execution_loop.py",
+            PROJECT_ROOT / "src" / "ai22b" / "talent_foundry" / "workspace_agent.py",
+            PROJECT_ROOT / "src" / "ai22b" / "talent_foundry" / "registry.py",
+            PROJECT_ROOT / "src" / "ai22b" / "talent_foundry" / "memory_substrate.py",
+            PROJECT_ROOT / "src" / "ai22b" / "talent_foundry" / "runtime_contract_doctor.py",
+        ],
+        root=PROJECT_ROOT,
+        details=contract.get("details", {}),
+    )
 
     from ai22b.talent_foundry.memory_substrate import run_chat_turn_from_employment
     from ai22b.talent_foundry.registry import (

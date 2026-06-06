@@ -41,6 +41,7 @@ jobs:
           ai22b-talent-foundry audit-public-release-readiness --repo-root . --strict --output runs\public_release_readiness.json
           ai22b-talent-foundry build-source-sbom --repo-root . --output runs\source_sbom.json
           ai22b-talent-foundry doctor-package-install --repo-root . --strict --output runs\package_install_doctor.json
+          ai22b-talent-foundry doctor-runtime-contract --repo-root . --strict --output runs\runtime_contract_doctor.json
           ai22b-talent-foundry doctor-first-run --repo-root . --strict --output runs\first_run_doctor.json
 
       - name: Public repository hygiene

@@ -2834,6 +2834,7 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("build-source-sbom", first_run_details["commands"])
         self.assertIn("doctor-first-run", first_run_details["commands"])
         self.assertIn("doctor-package-install", first_run_details["commands"])
+        self.assertIn("doctor-runtime-contract", first_run_details["commands"])
         self.assertTrue(first_run_details["console_script_present"])
         self.assertTrue(first_run_details["optional_dependency_groups_present"])
         self.assertTrue(first_run_details["cli_smoke_covers_required_commands"])
@@ -2871,6 +2872,16 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertFalse(first_run_details["package_install_network_call_performed"])
         self.assertFalse(first_run_details["package_install_subprocess_executed"])
         self.assertFalse(first_run_details["package_install_local_paths_exported"])
+        self.assertEqual(first_run_details["runtime_contract_doctor_schema"], "paideia-runtime-contract-doctor/v1")
+        self.assertTrue(first_run_details["runtime_contract_doctor_passed"])
+        self.assertEqual(first_run_details["runtime_contract_doctor_status"], "passed")
+        self.assertEqual(first_run_details["runtime_contract_failed_count"], 0)
+        self.assertEqual(first_run_details["runtime_contract_live_loop_status"], "passed")
+        self.assertEqual(first_run_details["runtime_contract_fail_closed_status"], "passed")
+        self.assertFalse(first_run_details["runtime_contract_network_call_performed"])
+        self.assertFalse(first_run_details["runtime_contract_subprocess_executed"])
+        self.assertFalse(first_run_details["runtime_contract_live_provider_called"])
+        self.assertFalse(first_run_details["runtime_contract_secret_values_exported"])
         self.assertEqual(
             first_run_details["application_smoke_identity_policy"],
             "application_engine_not_identity",
@@ -3035,6 +3046,7 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("audit-tool-capabilities", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])
         self.assertIn("doctor-first-run", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])
         self.assertIn("doctor-package-install", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])
+        self.assertIn("doctor-runtime-contract", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])
         self.assertIn("doctor-bundle", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])
         self.assertIn("run-hired-agent-job", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])
         self.assertIn("run-hired-agent-job-cycle", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])

@@ -146,7 +146,7 @@ python -m pip install -e ".[dev]"        # tests
 
 CI runs a package smoke test after `pip install -e ".[dev]"`. It verifies the installed distribution metadata, exposed console script entry points, callable script targets, optional extras split by runtime capability, and package metadata hygiene.
 
-CI also runs a CLI smoke test for public-safe first-run commands. It verifies that `list-role-models`, `list-llm-services`, `build-llm-onboarding-checklist --llm-engine deterministic_local`, `doctor-llm-provider --llm-engine deterministic_local`, `run-llm-application-smoke --llm-engine deterministic_local`, `run-agent-runtime-smoke --llm-engine deterministic_local`, `audit-tool-capabilities --strict`, `run-action-policy-eval`, `audit-public-release-readiness`, `build-source-sbom`, `doctor-package-install`, and `doctor-first-run` execute without private files, API keys, or network access while writing reviewable JSON reports.
+CI also runs a CLI smoke test for public-safe first-run commands. It verifies that `list-role-models`, `list-llm-services`, `build-llm-onboarding-checklist --llm-engine deterministic_local`, `doctor-llm-provider --llm-engine deterministic_local`, `run-llm-application-smoke --llm-engine deterministic_local`, `run-agent-runtime-smoke --llm-engine deterministic_local`, `audit-tool-capabilities --strict`, `run-action-policy-eval`, `audit-public-release-readiness`, `build-source-sbom`, `doctor-package-install`, `doctor-runtime-contract`, and `doctor-first-run` execute without private files, API keys, or network access while writing reviewable JSON reports.
 
 The source package declares an MIT license in `LICENSE` and `pyproject.toml`. Public release readiness is tracked separately from generated agent bundles; see [Public Release Readiness](docs/public_release_readiness.md) and [공개 릴리스 준비도](docs/public_release_readiness.ko.md).
 
@@ -199,6 +199,15 @@ ai22b-talent-foundry doctor-package-install `
   --output .\package_install_doctor.json
 ```
 
+Verify the P0 runtime contract: a live-like agent loop must use the LLM as an application engine only, and unconfigured live providers must fail closed before tools, workspace artifacts, or learning promotion:
+
+```powershell
+ai22b-talent-foundry doctor-runtime-contract `
+  --repo-root . `
+  --strict `
+  --output .\runtime_contract_doctor.json
+```
+
 Run the complete public-safe first-run doctor when you want one install-time report instead of separate checks:
 
 ```powershell
@@ -208,7 +217,7 @@ ai22b-talent-foundry doctor-first-run `
   --output .\first_run_doctor.json
 ```
 
-Add `--onboarding-session .\console_session.json` to fold a generated wizard session into the same report. The doctor verifies the role-model catalog, LLM provider matrix, deterministic checklist, provider doctor, application smoke, full agent runtime smoke, tool capability audit, action policy eval, public release readiness, source SBOM, and package install doctor without live provider calls.
+Add `--onboarding-session .\console_session.json` to fold a generated wizard session into the same report. The doctor verifies the role-model catalog, LLM provider matrix, deterministic checklist, provider doctor, application smoke, full agent runtime smoke, runtime contract doctor, tool capability audit, action policy eval, public release readiness, source SBOM, and package install doctor without live provider calls.
 
 List every selectable LLM service and its no-network readiness posture:
 
@@ -673,13 +682,18 @@ ai22b-talent-foundry doctor-package-install `
   --strict `
   --output .\package_install_doctor.json
 
+ai22b-talent-foundry doctor-runtime-contract `
+  --repo-root . `
+  --strict `
+  --output .\runtime_contract_doctor.json
+
 ai22b-talent-foundry doctor-first-run `
   --repo-root . `
   --strict `
   --output .\first_run_doctor.json
 ```
 
-The readiness audit checks required public files, package license metadata, CI markers, release-readiness docs, the security policy, and the public hygiene policy without network calls or subprocess execution. The source SBOM records package metadata, optional dependency groups, console entrypoints, public candidate file hashes, and a repository digest. The package install doctor verifies the current environment's installed distribution metadata, console scripts, optional extras, and callable targets. The first-run doctor bundles the public-safe install-time checks into a single report for new users. The SBOM is an inventory, not a vulnerability scan.
+The readiness audit checks required public files, package license metadata, CI markers, release-readiness docs, the security policy, and the public hygiene policy without network calls or subprocess execution. The source SBOM records package metadata, optional dependency groups, console entrypoints, public candidate file hashes, and a repository digest. The package install doctor verifies the current environment's installed distribution metadata, console scripts, optional extras, and callable targets. The runtime contract doctor verifies the live-like agent loop, registered tool boundary, memory review gate, and fail-closed live provider behavior without external provider calls. The first-run doctor bundles the public-safe install-time checks into a single report for new users. The SBOM is an inventory, not a vulnerability scan.
 
 Run the P0 action-policy safety corpus before trusting a runtime change:
 
