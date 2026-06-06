@@ -7,6 +7,44 @@ from pathlib import Path
 
 
 class CliSmokeTests(unittest.TestCase):
+    def test_llm_runtime_command_module_registers_guarded_command_surface(self) -> None:
+        import argparse
+
+        from ai22b.talent_foundry.cli_llm_commands import (
+            LLM_RUNTIME_COMMANDS,
+            handle_llm_runtime_command,
+            register_llm_runtime_commands,
+        )
+
+        parser = argparse.ArgumentParser()
+        subparsers = parser.add_subparsers(dest="command", required=True)
+        register_llm_runtime_commands(subparsers)
+
+        self.assertEqual(
+            LLM_RUNTIME_COMMANDS,
+            {
+                "doctor-llm-provider",
+                "doctor-llm-adapters",
+                "run-llm-application-smoke",
+                "run-agent-runtime-smoke",
+                "run-chat-runtime-smoke",
+                "doctor-llm-live-readiness",
+            },
+        )
+        self.assertEqual(set(subparsers.choices), LLM_RUNTIME_COMMANDS)
+        parsed = parser.parse_args(
+            [
+                "run-agent-runtime-smoke",
+                "--llm-engine",
+                "deterministic_local",
+                "--output",
+                "agent_runtime_smoke.json",
+            ]
+        )
+        self.assertEqual(parsed.command, "run-agent-runtime-smoke")
+        self.assertEqual(parsed.llm_mode, "offline")
+        self.assertIsNone(handle_llm_runtime_command(argparse.Namespace(command="list-role-models")))
+
     def test_public_cli_smoke_commands_write_reviewable_outputs(self) -> None:
         from ai22b.talent_foundry.action_policy import ACTION_POLICY_DECISION_MODEL
         from ai22b.talent_foundry.cli import main as cli_main
@@ -442,9 +480,26 @@ class CliSmokeTests(unittest.TestCase):
         self.assertFalse(
             llm_live_readiness["live_connection_status_card"]["public_safe"]["live_provider_call_attempted"]
         )
+        self.assertFalse(
+            llm_live_readiness["live_connection_status_card"]["public_safe"]["live_provider_call_requested"]
+        )
+        self.assertFalse(
+            llm_live_readiness["live_connection_status_card"]["public_safe"]["provider_client_generate_attempted"]
+        )
+        self.assertFalse(
+            llm_live_readiness["live_connection_status_card"]["public_safe"]["provider_doctor_call_attempted"]
+        )
+        self.assertFalse(
+            llm_live_readiness["live_connection_status_card"]["public_safe"]["provider_doctor_network_call_made"]
+        )
         self.assertTrue(
             llm_live_readiness["live_connection_status_card"]["public_safe"][
                 "live_provider_call_attempted_only_when_requested"
+            ]
+        )
+        self.assertTrue(
+            llm_live_readiness["live_connection_status_card"]["public_safe"][
+                "provider_client_attempted_only_when_requested"
             ]
         )
         self.assertEqual(
@@ -544,7 +599,11 @@ class CliSmokeTests(unittest.TestCase):
         )
         self.assertFalse(llm_live_readiness["data_policy"]["secret_values_exported"])
         self.assertFalse(llm_live_readiness["data_policy"]["raw_provider_payload_saved"])
+        self.assertFalse(llm_live_readiness["data_policy"]["live_provider_call_requested"])
         self.assertFalse(llm_live_readiness["data_policy"]["live_provider_call_attempted"])
+        self.assertFalse(llm_live_readiness["data_policy"]["provider_client_generate_attempted"])
+        self.assertFalse(llm_live_readiness["data_policy"]["provider_doctor_network_call_made"])
+        self.assertFalse(llm_live_readiness["data_policy"]["provider_doctor_blocked_before_transport"])
         self.assertEqual(llm_live_readiness["data_policy"]["private_reasoning_trace"], "do_not_store")
         self.assertTrue(all(llm_live_readiness_artifact_exists.values()), llm_live_readiness_artifact_exists)
 

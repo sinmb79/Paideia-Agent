@@ -2377,14 +2377,38 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertFalse(report["live_connection_status_card"]["ready_for_live_agent_work"])
         self.assertEqual(report["live_connection_status_card"]["blocking_step"]["id"], "provider_doctor")
         self.assertFalse(report["live_connection_status_card"]["public_safe"]["secret_values_exported"])
+        self.assertTrue(report["live_connection_status_card"]["public_safe"]["live_provider_call_requested"])
         self.assertTrue(
             report["live_connection_status_card"]["public_safe"]["live_provider_call_attempted"]
         )
         self.assertTrue(
+            report["live_connection_status_card"]["public_safe"]["provider_client_generate_attempted"]
+        )
+        self.assertTrue(
+            report["live_connection_status_card"]["public_safe"]["provider_doctor_call_attempted"]
+        )
+        self.assertFalse(
+            report["live_connection_status_card"]["public_safe"]["provider_doctor_network_call_made"]
+        )
+        self.assertTrue(
+            report["live_connection_status_card"]["public_safe"]["provider_doctor_blocked_before_transport"]
+        )
+        self.assertEqual(
+            report["live_connection_status_card"]["public_safe"]["provider_doctor_block_reason"],
+            "credential_not_set",
+        )
+        self.assertTrue(
             report["live_connection_status_card"]["public_safe"]["live_provider_call_attempted_only_when_requested"]
+        )
+        self.assertTrue(
+            report["live_connection_status_card"]["public_safe"]["provider_client_attempted_only_when_requested"]
         )
         self.assertEqual(report["checks"]["provider_doctor"]["status"], "needs_configuration")
         self.assertFalse(report["checks"]["provider_doctor"]["passed"])
+        self.assertTrue(report["checks"]["provider_doctor"]["provider_call_attempted"])
+        self.assertFalse(report["checks"]["provider_doctor"]["network_call_made_by_doctor"])
+        self.assertTrue(report["checks"]["provider_doctor"]["network_call_blocked_before_transport"])
+        self.assertEqual(report["checks"]["provider_doctor"]["network_call_block_reason"], "credential_not_set")
         self.assertEqual(report["checks"]["application_smoke"]["status"], "failed")
         self.assertFalse(report["checks"]["application_smoke"]["passed"])
         self.assertEqual(report["checks"]["agent_runtime_smoke"]["status"], "needs_configuration")
@@ -2423,7 +2447,11 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertFalse(report["checks"]["chat_runtime_smoke"]["runtime_status_card_presented_as_live"])
         self.assertFalse(report["data_policy"]["secret_values_exported"])
         self.assertFalse(report["data_policy"]["raw_provider_payload_saved"])
+        self.assertTrue(report["data_policy"]["live_provider_call_requested"])
         self.assertTrue(report["data_policy"]["live_provider_call_attempted"])
+        self.assertTrue(report["data_policy"]["provider_client_generate_attempted"])
+        self.assertFalse(report["data_policy"]["provider_doctor_network_call_made"])
+        self.assertTrue(report["data_policy"]["provider_doctor_blocked_before_transport"])
         self.assertEqual(report["data_policy"]["private_reasoning_trace"], "do_not_store")
         self.assertTrue(all(artifact_exists.values()), artifact_exists)
 

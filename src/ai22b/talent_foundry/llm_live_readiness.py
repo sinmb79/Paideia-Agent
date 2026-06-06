@@ -69,9 +69,20 @@ def _build_live_connection_status_card(
     else:
         status = "needs_live_configuration"
     chat_check = checks.get("chat_runtime_smoke", {})
+    provider_check = checks.get("provider_doctor", {})
     agent_check = checks.get("agent_runtime_smoke", {})
     agent_proof = agent_check.get("live_llm_agent_proof", {})
     agent_proof = agent_proof if isinstance(agent_proof, dict) else {}
+    provider_doctor_call_attempted = bool(provider_check.get("provider_call_attempted"))
+    provider_doctor_network_call_made = bool(provider_check.get("network_call_made_by_doctor"))
+    provider_doctor_blocked_before_transport = bool(provider_check.get("network_call_blocked_before_transport"))
+    agent_live_client_generate_called = bool(agent_proof.get("live_client_generate_called"))
+    built_in_provider_client_called = bool(agent_proof.get("built_in_provider_client_called"))
+    provider_client_generate_attempted = bool(
+        provider_doctor_call_attempted
+        or agent_live_client_generate_called
+        or built_in_provider_client_called
+    )
     check_statuses = {
         key: {
             "status": value.get("status"),
@@ -140,8 +151,17 @@ def _build_live_connection_status_card(
             "secret_values_exported": False,
             "raw_provider_payload_saved": False,
             "private_reasoning_trace": "do_not_store",
+            "live_provider_call_requested": live_check,
             "live_provider_call_attempted": bool(live_check),
+            "provider_client_generate_attempted": provider_client_generate_attempted,
+            "provider_doctor_call_attempted": provider_doctor_call_attempted,
+            "provider_doctor_network_call_made": provider_doctor_network_call_made,
+            "provider_doctor_blocked_before_transport": provider_doctor_blocked_before_transport,
+            "provider_doctor_block_reason": provider_check.get("network_call_block_reason"),
+            "agent_live_client_generate_called": agent_live_client_generate_called,
+            "built_in_provider_client_called": built_in_provider_client_called,
             "live_provider_call_attempted_only_when_requested": True,
+            "provider_client_attempted_only_when_requested": not provider_client_generate_attempted or live_check,
         },
         "user_visible_summary": {
             "ko": (
@@ -272,6 +292,25 @@ def run_llm_live_readiness_suite(
             "passed": doctor.get("passed") is True,
             "live_check_requested": doctor.get("live_check_requested"),
             "smoke_contract_status": doctor.get("smoke_contract", {}).get("status")
+            if isinstance(doctor.get("smoke_contract"), dict)
+            else None,
+            "provider_call_attempted": doctor.get("smoke_contract", {}).get("provider_call_attempted")
+            if isinstance(doctor.get("smoke_contract"), dict)
+            else None,
+            "network_call_made_by_doctor": doctor.get("smoke_contract", {}).get("network_call_made_by_doctor")
+            if isinstance(doctor.get("smoke_contract"), dict)
+            else None,
+            "network_call_blocked_before_transport": doctor.get("smoke_contract", {}).get(
+                "network_call_blocked_before_transport"
+            )
+            if isinstance(doctor.get("smoke_contract"), dict)
+            else None,
+            "network_call_block_reason": doctor.get("smoke_contract", {}).get("network_call_block_reason")
+            if isinstance(doctor.get("smoke_contract"), dict)
+            else None,
+            "network_call_delegated_to_client_override": doctor.get("smoke_contract", {}).get(
+                "network_call_delegated_to_client_override"
+            )
             if isinstance(doctor.get("smoke_contract"), dict)
             else None,
         },
@@ -462,8 +501,18 @@ def run_llm_live_readiness_suite(
             "send_full_session_replay": False,
             "raw_provider_payload_saved": False,
             "private_reasoning_trace": "do_not_store",
+            "live_provider_call_requested": live_check,
             "live_provider_called_only_when_live_check_requested": live_check,
             "live_provider_call_attempted": bool(live_check),
+            "provider_client_generate_attempted": live_connection_status_card["public_safe"][
+                "provider_client_generate_attempted"
+            ],
+            "provider_doctor_network_call_made": live_connection_status_card["public_safe"][
+                "provider_doctor_network_call_made"
+            ],
+            "provider_doctor_blocked_before_transport": live_connection_status_card["public_safe"][
+                "provider_doctor_blocked_before_transport"
+            ],
             "agent_live_llm_proof_schema": agent_proof.get("schema"),
             "agent_live_llm_proof_status": agent_proof.get("status"),
             "agent_live_llm_proof_provider_path": agent_proof.get("provider_path"),

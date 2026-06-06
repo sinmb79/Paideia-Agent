@@ -954,7 +954,6 @@ def _build_provider_smoke_contract(
     live_check_performed = live_result is not None
     engine = runtime_config["engine"]
     provider_call_attempted = live_check_performed and engine in EXTERNAL_API_ENGINES.union(LOCAL_HTTP_ENGINES)
-    network_call_made_by_doctor = provider_call_attempted and not client_override_used
     client_summary = {}
     if isinstance(live_result, dict) and isinstance(live_result.get("client_result"), dict):
         client = live_result["client_result"]
@@ -972,6 +971,14 @@ def _build_provider_smoke_contract(
             "retention_policy": client.get("retention_policy"),
         }
     live_status = live_result.get("status") if isinstance(live_result, dict) else None
+    runtime_reason = live_result.get("reason") if isinstance(live_result, dict) else None
+    client_reason = client_summary.get("reason")
+    no_transport_reason = _no_transport_reason(runtime_reason or client_reason)
+    network_call_made_by_doctor = bool(
+        provider_call_attempted
+        and not client_override_used
+        and no_transport_reason is None
+    )
     if not live_check_requested:
         status = "skipped"
     elif live_status == "completed":
@@ -990,6 +997,12 @@ def _build_provider_smoke_contract(
         "provider_call_executor": "injected_client" if client_override_used else "built_in_client",
         "client_override_used": client_override_used,
         "network_call_made_by_doctor": network_call_made_by_doctor,
+        "network_call_blocked_before_transport": bool(
+            provider_call_attempted
+            and not client_override_used
+            and no_transport_reason is not None
+        ),
+        "network_call_block_reason": no_transport_reason,
         "network_call_delegated_to_client_override": provider_call_attempted and client_override_used,
         "network_policy": "no_network_without_explicit_live_check",
         "data_policy": {
@@ -1007,7 +1020,7 @@ def _build_provider_smoke_contract(
         },
         "result_summary": {
             "runtime_status": live_status,
-            "runtime_reason": live_result.get("reason") if isinstance(live_result, dict) else None,
+            "runtime_reason": runtime_reason,
             "runtime_identity_policy": live_result.get("identity_policy") if isinstance(live_result, dict) else None,
             "client_result": client_summary,
         },
@@ -1020,6 +1033,21 @@ def _build_provider_smoke_contract(
         ),
         "status": status,
     }
+
+
+def _no_transport_reason(reason: Any) -> str | None:
+    """Return why a built-in provider client stopped before network transport."""
+
+    text = str(reason or "")
+    if not text:
+        return None
+    if text.endswith("_not_set") or "_KEY_not_set" in text or "API_KEY" in text and text.endswith("_not_set"):
+        return "credential_not_set"
+    if text in {"model_required_for_live_provider", "local_model_path_not_found"}:
+        return text
+    if text.endswith("_import_failed"):
+        return "client_sdk_import_failed"
+    return None
 
 
 def _invoke_bigram_local(
