@@ -270,6 +270,126 @@ PERSONAL_DATA_SUBJECT_MARKERS = {
     "family_data": ("가족", "family", "家族"),
     "personal_data": ("개인정보", "개인 정보", "personal data", "個人情報", "個人データ"),
 }
+DESTRUCTIVE_FILE_ALIASES = (
+    "삭제해줘",
+    "전부 삭제",
+    "전체 삭제",
+    "파일 삭제",
+    "폴더 삭제",
+    "지워줘",
+    "날려줘",
+    "remove-item",
+    "rm -rf",
+    "delete all",
+    "delete files",
+    "delete folder",
+    "remove files",
+    "recursive delete",
+    "rmdir /s",
+    "del /s",
+    "ファイル削除",
+    "全部削除",
+)
+DESTRUCTIVE_FILE_COMMAND_ALIASES = (
+    "삭제해줘",
+    "삭제 실행",
+    "지워줘",
+    "날려줘",
+    "remove-item",
+    "rm -rf",
+    "delete all",
+    "recursive delete",
+    "rmdir /s",
+    "del /s",
+    "削除して",
+)
+SUBPROCESS_EXECUTION_ALIASES = (
+    "셸 명령",
+    "쉘 명령",
+    "명령 실행",
+    "터미널 명령",
+    "powershell",
+    "cmd /c",
+    "bash -c",
+    "python -c",
+    "node -e",
+    "npm run",
+    "npx",
+    "invoke-expression",
+    "iex",
+    "subprocess",
+    "shell command",
+    "run command",
+    "execute command",
+    "コマンド実行",
+)
+SUBPROCESS_COMMAND_ALIASES = (
+    "명령 실행",
+    "실행해줘",
+    "돌려줘",
+    "powershell",
+    "cmd /c",
+    "bash -c",
+    "python -c",
+    "node -e",
+    "npm run",
+    "npx",
+    "invoke-expression",
+    "iex",
+    "run command",
+    "execute command",
+    "実行して",
+)
+NETWORK_REQUEST_ALIASES = (
+    "네트워크 호출",
+    "외부 api 호출",
+    "외부 api",
+    "http 요청",
+    "웹 요청",
+    "curl",
+    "wget",
+    "invoke-webrequest",
+    "iwr",
+    "requests.get",
+    "fetch(",
+    "http request",
+    "api call",
+    "network call",
+    "external request",
+    "ネットワーク呼び出し",
+    "外部api",
+)
+NETWORK_COMMAND_ALIASES = (
+    "호출해줘",
+    "요청해줘",
+    "전송해줘",
+    "curl",
+    "wget",
+    "invoke-webrequest",
+    "iwr",
+    "requests.get",
+    "fetch(",
+    "call api",
+    "send request",
+    "実行して",
+)
+DESTRUCTIVE_TARGET_MARKERS = {
+    "all_files": ("전부", "전체", "모든", "all", "*", "全部"),
+    "workspace": ("작업공간", "workspace", "repo", "repository", "저장소"),
+    "local_path": ("파일", "폴더", "디렉터리", "path", "file", "folder", "directory"),
+}
+SUBPROCESS_RUNTIME_MARKERS = {
+    "powershell": ("powershell", "pwsh", "invoke-expression", "iex"),
+    "cmd": ("cmd /c", "batch", ".bat"),
+    "bash": ("bash -c", "sh -c", "curl | bash"),
+    "python": ("python -c", "py -c"),
+    "node": ("node -e", "npm run", "npx"),
+}
+NETWORK_DESTINATION_MARKERS = {
+    "external_api": ("api", "외부 api", "external api", "外部api"),
+    "web_url": ("http://", "https://", "url", "웹", "web"),
+    "download": ("download", "다운로드", "wget", "curl"),
+}
 
 TOOL_CAPABILITIES = {
     "local_file_read": ["research.analysis", "filesystem.read_declared"],
@@ -569,6 +689,31 @@ def _action_arguments(
                 "hard_command_markers": inference.get("hard_command_markers", []),
             }
         )
+    elif action_type == "destructive_file_operation":
+        arguments.update(
+            {
+                "target_classes": _matched_marker_keys(task, DESTRUCTIVE_TARGET_MARKERS),
+                "destructive_markers": inference.get("matched_markers", []),
+                "recursive_or_bulk_delete": _has_any(task, ("전부", "전체", "모든", "all", "rm -rf", "recursive", "/s")),
+                "filesystem_side_effect": True,
+            }
+        )
+    elif action_type == "subprocess_execution":
+        arguments.update(
+            {
+                "runtime_classes": _matched_marker_keys(task, SUBPROCESS_RUNTIME_MARKERS),
+                "command_markers": inference.get("command_markers", []),
+                "subprocess_side_effect": True,
+            }
+        )
+    elif action_type == "network_request":
+        arguments.update(
+            {
+                "destination_classes": _matched_marker_keys(task, NETWORK_DESTINATION_MARKERS),
+                "network_markers": inference.get("matched_markers", []),
+                "external_side_effect": True,
+            }
+        )
     return arguments
 
 
@@ -643,6 +788,36 @@ def _personal_data_transfer_state(task: str) -> dict[str, Any]:
     )
 
 
+def _destructive_file_state(task: str) -> dict[str, Any]:
+    return _request_state(
+        task,
+        anchors=DESTRUCTIVE_FILE_ALIASES,
+        command_aliases=DESTRUCTIVE_FILE_COMMAND_ALIASES,
+        requested=_has_any(task, DESTRUCTIVE_FILE_ALIASES),
+    )
+
+
+def _subprocess_execution_state(task: str) -> dict[str, Any]:
+    return _request_state(
+        task,
+        anchors=SUBPROCESS_EXECUTION_ALIASES,
+        command_aliases=SUBPROCESS_COMMAND_ALIASES,
+        requested=_has_any(task, SUBPROCESS_EXECUTION_ALIASES) and _has_any(task, SUBPROCESS_COMMAND_ALIASES),
+    )
+
+
+def _network_request_state(task: str, upload_state: dict[str, Any] | None = None) -> dict[str, Any]:
+    requested = _has_any(task, NETWORK_REQUEST_ALIASES) and _has_any(task, NETWORK_COMMAND_ALIASES)
+    if (upload_state or {}).get("requested") and not _has_any(task, NETWORK_REQUEST_ALIASES):
+        requested = False
+    return _request_state(
+        task,
+        anchors=NETWORK_REQUEST_ALIASES,
+        command_aliases=NETWORK_COMMAND_ALIASES,
+        requested=requested,
+    )
+
+
 def _policy_bypass_state(task: str) -> dict[str, Any]:
     matched = _matched(task, POLICY_BYPASS_ALIASES)
     command_markers = _matched(task, POLICY_BYPASS_COMMAND_ALIASES + COMMAND_MARKERS)
@@ -653,7 +828,10 @@ def _policy_bypass_state(task: str) -> dict[str, Any]:
         FINANCIAL_ACTION_ALIASES
         + FINANCIAL_VERBS
         + EXTERNAL_UPLOAD_ALIASES
-        + PERSONAL_DATA_TRANSFER_ALIASES,
+        + PERSONAL_DATA_TRANSFER_ALIASES
+        + DESTRUCTIVE_FILE_ALIASES
+        + SUBPROCESS_EXECUTION_ALIASES
+        + NETWORK_REQUEST_ALIASES,
     )
     hard_command_markers = _matched(task, POLICY_BYPASS_HARD_COMMAND_MARKERS)
     negated = bool(matched) and _has_any(task, POLICY_BYPASS_NEGATION_MARKERS)
@@ -742,6 +920,9 @@ def infer_action_intents(task: str, manifest: dict[str, Any] | None = None) -> l
     financial_state = _financial_action_state(task)
     personal_transfer_state = _personal_data_transfer_state(task)
     upload_state = _external_upload_state(task, personal_transfer_state)
+    destructive_file_state = _destructive_file_state(task)
+    subprocess_state = _subprocess_execution_state(task)
+    network_state = _network_request_state(task, upload_state)
     policy_bypass_state = _policy_bypass_state(task)
     projection_requested = "팀" in task or "분신" in task
     return [
@@ -855,6 +1036,66 @@ def infer_action_intents(task: str, manifest: dict[str, Any] | None = None) -> l
                 intent_id="personal_data_transfer",
                 action_type="personal_data_transfer",
                 inference=personal_transfer_state,
+            ),
+        ),
+        _intent(
+            intent_id="destructive_file_operation",
+            action_type="destructive_file_operation",
+            target="local_filesystem",
+            data_class="filesystem_state",
+            capability="filesystem.destructive_write",
+            risk_level="critical",
+            requested=destructive_file_state["requested"],
+            blocked_action_label="파괴적 파일 작업",
+            requires_boss_approval=True,
+            matched_markers=destructive_file_state["matched_markers"],
+            negated=destructive_file_state["negated"],
+            inference=destructive_file_state,
+            arguments=_action_arguments(
+                task=task,
+                intent_id="destructive_file_operation",
+                action_type="destructive_file_operation",
+                inference=destructive_file_state,
+            ),
+        ),
+        _intent(
+            intent_id="subprocess_execution",
+            action_type="subprocess_execution",
+            target="local_process_runner",
+            data_class="command_text",
+            capability="subprocess.execute",
+            risk_level="high",
+            requested=subprocess_state["requested"],
+            blocked_action_label="승인 없는 서브프로세스 실행",
+            requires_boss_approval=True,
+            matched_markers=subprocess_state["matched_markers"],
+            negated=subprocess_state["negated"],
+            inference=subprocess_state,
+            arguments=_action_arguments(
+                task=task,
+                intent_id="subprocess_execution",
+                action_type="subprocess_execution",
+                inference=subprocess_state,
+            ),
+        ),
+        _intent(
+            intent_id="network_request",
+            action_type="network_request",
+            target="external_network",
+            data_class="network_request",
+            capability="network.request",
+            risk_level="high",
+            requested=network_state["requested"],
+            blocked_action_label="승인 없는 네트워크 호출",
+            requires_boss_approval=True,
+            matched_markers=network_state["matched_markers"],
+            negated=network_state["negated"],
+            inference=network_state,
+            arguments=_action_arguments(
+                task=task,
+                intent_id="network_request",
+                action_type="network_request",
+                inference=network_state,
             ),
         ),
         _intent(

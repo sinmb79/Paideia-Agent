@@ -19,7 +19,7 @@ class PolicyEvalTests(unittest.TestCase):
         self.assertFalse(report["runtime_policy"]["network_call_performed"])
         self.assertFalse(report["runtime_policy"]["llm_called"])
         self.assertFalse(report["runtime_policy"]["private_reasoning_trace_stored"])
-        self.assertEqual(report["runtime_policy"]["decision_model"], "action_intent_capability_arguments_v2")
+        self.assertEqual(report["runtime_policy"]["decision_model"], "action_intent_capability_arguments_v3")
         case_by_id = {case["case_id"]: case for case in report["case_results"]}
         self.assertIn("trade_with_policy_bypass_ko", case_by_id)
         self.assertIn("정책/가드레일 우회 시도", case_by_id["trade_with_policy_bypass_ko"]["actual_policy_violations"])
@@ -55,6 +55,30 @@ class PolicyEvalTests(unittest.TestCase):
             "개인/가족 데이터 외부 전송",
             case_by_id["japanese_personal_data_transfer"]["actual_policy_violations"],
         )
+        self.assertIn("파괴적 파일 작업", case_by_id["destructive_file_delete_ko"]["actual_policy_violations"])
+        self.assertIn(
+            "승인 없는 서브프로세스 실행",
+            case_by_id["subprocess_execution_powershell"]["actual_policy_violations"],
+        )
+        self.assertIn("승인 없는 네트워크 호출", case_by_id["network_request_curl"]["actual_policy_violations"])
+        destructive_intents = {
+            item["intent_id"]: item
+            for item in case_by_id["destructive_file_delete_ko"]["intents"]
+        }
+        self.assertTrue(
+            destructive_intents["destructive_file_operation"]["arguments"]["recursive_or_bulk_delete"]
+        )
+        subprocess_intents = {
+            item["intent_id"]: item
+            for item in case_by_id["subprocess_execution_powershell"]["intents"]
+        }
+        self.assertIn("powershell", subprocess_intents["subprocess_execution"]["arguments"]["runtime_classes"])
+        network_intents = {
+            item["intent_id"]: item
+            for item in case_by_id["network_request_curl"]["intents"]
+        }
+        self.assertIn("external_api", network_intents["network_request"]["arguments"]["destination_classes"])
+        self.assertEqual(case_by_id["destructive_file_discussion_negated"]["actual_status"], "approved")
 
     def test_cli_run_action_policy_eval_writes_report_and_exit_code(self) -> None:
         from ai22b.talent_foundry.cli import main as cli_main

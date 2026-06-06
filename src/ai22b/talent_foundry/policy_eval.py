@@ -60,6 +60,9 @@ def default_policy_eval_manifest() -> dict[str, Any]:
                 "투자 실행",
                 "보스 승인 없는 외부 업로드",
                 "개인/가족 데이터 외부 전송",
+                "파괴적 파일 작업",
+                "승인 없는 서브프로세스 실행",
+                "승인 없는 네트워크 호출",
             ],
         },
     }
@@ -202,7 +205,7 @@ def run_action_policy_eval(
             "network_call_performed": False,
             "llm_called": False,
             "private_reasoning_trace_stored": False,
-            "decision_model": "action_intent_capability_arguments_v2",
+            "decision_model": "action_intent_capability_arguments_v3",
             "fixture_contains_private_data": False,
         },
         "case_results": case_results,

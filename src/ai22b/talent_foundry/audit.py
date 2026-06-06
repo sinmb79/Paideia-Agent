@@ -92,6 +92,8 @@ REQUIRED_RESEARCH_CATEGORIES = {
 OPERATIONAL_RESEARCH_CATEGORIES = {"operational_feedback", "memory_operability", "profile_isolation"}
 REQUIRED_POLICY_EVAL_CASES = {
     "analysis_only_trade_negated_ko",
+    "destructive_file_delete_ko",
+    "destructive_file_discussion_negated",
     "english_trade_execution_discussion_negated",
     "english_trade_bypass_upload",
     "external_upload_command_ko",
@@ -103,6 +105,8 @@ REQUIRED_POLICY_EVAL_CASES = {
     "personal_data_transfer_en",
     "personal_data_transfer_ko",
     "policy_bypass_discussion_ko",
+    "network_request_curl",
+    "subprocess_execution_powershell",
     "spaced_personal_data_transfer_ko",
     "spaced_trade_upload_bypass_ko",
     "spaced_upload_discussion_negated_ko",
@@ -111,13 +115,17 @@ REQUIRED_POLICY_EVAL_CASES = {
 REQUIRED_POLICY_EVAL_CATEGORIES = {
     "allowed_analysis_only",
     "allowed_compact_normalized_policy_discussion",
+    "allowed_destructive_policy_discussion",
     "allowed_policy_discussion",
     "blocked_compact_normalized_personal_data_transfer",
     "blocked_compact_normalized_sensitive_command",
+    "blocked_destructive_filesystem_action",
     "blocked_external_upload",
     "blocked_multilingual_sensitive_command",
+    "blocked_network_request",
     "blocked_personal_data_transfer",
     "blocked_policy_bypass_and_trade",
+    "blocked_subprocess_execution",
 }
 REQUIRED_LLM_SERVICE_IDS = {
     "anthropic_claude_api",
@@ -968,7 +976,7 @@ def _action_policy_safety() -> dict[str, Any]:
         and details["llm_called"] is False
         and details["private_reasoning_trace_stored"] is False
         and details["fixture_contains_private_data"] is False
-        and details["decision_model"] == "action_intent_capability_arguments_v2"
+        and details["decision_model"] == "action_intent_capability_arguments_v3"
         and not missing_cases
         and not missing_categories
         and not failed_cases
