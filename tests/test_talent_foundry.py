@@ -1289,6 +1289,16 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertTrue(result["execution_contract"]["llm_runtime"]["attempted"])
         self.assertTrue(result["execution_contract"]["tool_execution"]["attempted"])
         self.assertFalse(result["execution_contract"]["memory_write"]["automatic_promotion_performed"])
+        self.assertEqual(result["agent_runtime_status_card"]["schema"], "paideia-agent-runtime-status-card/v1")
+        self.assertEqual(result["agent_runtime_status_card"]["status"], "completed_verified")
+        self.assertEqual(result["agent_runtime_status_card"]["policy_gate"]["status"], "approved")
+        self.assertEqual(result["agent_runtime_status_card"]["llm_runtime"]["status"], "completed")
+        self.assertEqual(result["agent_runtime_status_card"]["tool_execution"]["status"], "completed_verified")
+        self.assertEqual(
+            result["agent_runtime_status_card"]["memory"]["decision"],
+            "candidate_pending_boss_review",
+        )
+        self.assertTrue(result["agent_runtime_status_card"]["public_safe"]["passed"])
         self.assertEqual(result["tool_execution_status_card"]["schema"], "paideia-tool-execution-status-card/v1")
         self.assertEqual(result["tool_execution_status_card"]["status"], "completed_verified")
         self.assertTrue(result["tool_execution_status_card"]["evidence_packet"]["completed"])
@@ -2047,6 +2057,16 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(report["details"]["policy_status"], "approved")
         self.assertEqual(report["details"]["verification_status"], "passed")
         self.assertEqual(report["details"]["execution_contract_status"], "passed")
+        self.assertEqual(
+            report["details"]["agent_runtime_status_card_schema"],
+            "paideia-agent-runtime-status-card/v1",
+        )
+        self.assertEqual(report["details"]["agent_runtime_status_card_status"], "completed_verified")
+        self.assertTrue(report["details"]["agent_runtime_status_card_public_safe"])
+        self.assertEqual(
+            report["details"]["agent_runtime_status_card_memory_decision"],
+            "candidate_pending_boss_review",
+        )
         self.assertEqual(report["details"]["tool_execution_status_card_schema"], "paideia-tool-execution-status-card/v1")
         self.assertEqual(report["details"]["tool_execution_status_card_status"], "completed_verified")
         self.assertTrue(report["details"]["tool_execution_status_card_evidence_completed"])
@@ -2161,6 +2181,11 @@ class TalentFoundryTests(unittest.TestCase):
             result["execution_contract"]["status"],
             "provider_configuration_required_before_execution",
         )
+        self.assertEqual(result["agent_runtime_status_card"]["schema"], "paideia-agent-runtime-status-card/v1")
+        self.assertEqual(result["agent_runtime_status_card"]["status"], "skipped_provider_not_ready")
+        self.assertFalse(result["agent_runtime_status_card"]["llm_runtime"]["attempted"])
+        self.assertEqual(result["agent_runtime_status_card"]["memory"]["decision"], "skipped_provider_not_ready")
+        self.assertTrue(result["agent_runtime_status_card"]["public_safe"]["passed"])
         self.assertFalse(result["execution_contract"]["llm_runtime"]["attempted"])
         self.assertFalse(result["execution_contract"]["tool_execution"]["attempted"])
         self.assertEqual(result["memory_write"]["decision"], "skipped_provider_not_ready")
@@ -2204,6 +2229,16 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(report["details"]["preflight_status"], "needs_configuration")
         self.assertTrue(report["details"]["preflight_live_path_selected"])
         self.assertFalse(report["details"]["preflight_network_call_made"])
+        self.assertEqual(
+            report["details"]["agent_runtime_status_card_schema"],
+            "paideia-agent-runtime-status-card/v1",
+        )
+        self.assertEqual(report["details"]["agent_runtime_status_card_status"], "skipped_provider_not_ready")
+        self.assertTrue(report["details"]["agent_runtime_status_card_public_safe"])
+        self.assertEqual(
+            report["details"]["agent_runtime_status_card_memory_decision"],
+            "skipped_provider_not_ready",
+        )
         self.assertEqual(report["details"]["completed_tools"], [])
         self.assertEqual(report["details"]["tool_execution_status_card_schema"], "paideia-tool-execution-status-card/v1")
         self.assertEqual(report["details"]["tool_execution_status_card_status"], "skipped_provider_not_ready")

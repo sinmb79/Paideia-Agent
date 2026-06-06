@@ -4,7 +4,10 @@ import json
 from datetime import datetime, timezone
 from typing import Any
 
-from ai22b.talent_foundry.agent_execution_loop import TOOL_EXECUTION_STATUS_CARD_SCHEMA
+from ai22b.talent_foundry.agent_execution_loop import (
+    AGENT_RUNTIME_STATUS_CARD_SCHEMA,
+    TOOL_EXECUTION_STATUS_CARD_SCHEMA,
+)
 from ai22b.talent_foundry.agent_runner import run_agent_from_manifest
 from ai22b.talent_foundry.llm_clients import LLMClient
 from ai22b.talent_foundry.llm_runtime import build_llm_provider_preflight, build_llm_runtime_config
@@ -114,6 +117,10 @@ def run_agent_runtime_smoke(
                 "preflight_live_check_performed": preflight.get("live_check_performed"),
                 "preflight_network_call_made": preflight.get("network_call_made_by_preflight"),
                 "policy_status": "skipped_provider_not_ready",
+                "agent_runtime_status_card_schema": AGENT_RUNTIME_STATUS_CARD_SCHEMA,
+                "agent_runtime_status_card_status": "skipped_provider_not_ready",
+                "agent_runtime_status_card_public_safe": True,
+                "agent_runtime_status_card_memory_decision": "skipped_provider_not_ready",
                 "selected_tools": [],
                 "completed_tools": [],
                 "missing_required_tools": sorted(AGENT_RUNTIME_SMOKE_REQUIRED_TOOLS),
@@ -204,6 +211,11 @@ def run_agent_runtime_smoke(
     runtime_observability = (
         run.get("runtime_observability", {}) if isinstance(run.get("runtime_observability"), dict) else {}
     )
+    agent_runtime_status_card = (
+        run.get("agent_runtime_status_card", {})
+        if isinstance(run.get("agent_runtime_status_card"), dict)
+        else {}
+    )
     completed_tools = _completed_tools(tool_execution)
     missing_required_tools = sorted(AGENT_RUNTIME_SMOKE_REQUIRED_TOOLS - set(completed_tools))
     serialized = json.dumps(run, ensure_ascii=False)
@@ -258,6 +270,14 @@ def run_agent_runtime_smoke(
         "preflight_live_check_performed": preflight.get("live_check_performed"),
         "preflight_network_call_made": preflight.get("network_call_made_by_preflight"),
         "policy_status": policy_decision.get("status"),
+        "agent_runtime_status_card_schema": agent_runtime_status_card.get("schema"),
+        "agent_runtime_status_card_status": agent_runtime_status_card.get("status"),
+        "agent_runtime_status_card_public_safe": agent_runtime_status_card.get("public_safe", {}).get("passed")
+        if isinstance(agent_runtime_status_card.get("public_safe"), dict)
+        else None,
+        "agent_runtime_status_card_memory_decision": agent_runtime_status_card.get("memory", {}).get("decision")
+        if isinstance(agent_runtime_status_card.get("memory"), dict)
+        else None,
         "policy_authorization_model": policy_decision.get("capability_authorization", {}).get(
             "authorization_model"
         )
@@ -295,6 +315,10 @@ def run_agent_runtime_smoke(
         details["run_schema"] == "ai-talent-agent-run/v1"
         and details["run_status"] == "completed"
         and details["policy_status"] == "approved"
+        and details["agent_runtime_status_card_schema"] == AGENT_RUNTIME_STATUS_CARD_SCHEMA
+        and details["agent_runtime_status_card_status"] == "completed_verified"
+        and details["agent_runtime_status_card_public_safe"] is True
+        and details["agent_runtime_status_card_memory_decision"] == "candidate_pending_boss_review"
         and details["llm_status"] in AGENT_RUNTIME_SMOKE_ACCEPTED_LLM_STATUSES
         and details["llm_plan_schema"] == "paideia-llm-reviewable-plan/v1"
         and details["tool_execution_model"] == "registered_capability_checked_local_tools_v1"

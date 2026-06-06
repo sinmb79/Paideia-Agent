@@ -26,6 +26,7 @@ EXECUTION_CONTRACT_SCHEMA = "paideia-agent-execution-contract/v1"
 LLM_TOOL_PLAN_ALIGNMENT_SCHEMA = "paideia-llm-tool-plan-alignment/v1"
 MEMORY_REVIEW_CANDIDATE_SCHEMA = "paideia-memory-review-candidate/v1"
 TOOL_EXECUTION_STATUS_CARD_SCHEMA = "paideia-tool-execution-status-card/v1"
+AGENT_RUNTIME_STATUS_CARD_SCHEMA = "paideia-agent-runtime-status-card/v1"
 
 
 def _now() -> str:
@@ -651,6 +652,170 @@ def _build_tool_execution_status_card(
     }
 
 
+def _build_agent_runtime_status_card(
+    *,
+    run_status: str,
+    policy_decision: dict[str, Any],
+    selected_tools: list[str],
+    llm_result: dict[str, Any],
+    llm_provider_preflight: dict[str, Any],
+    tool_execution_status_card: dict[str, Any],
+    execution_contract: dict[str, Any],
+    verification: dict[str, Any],
+    memory_write: dict[str, Any],
+    runtime_observability: dict[str, Any],
+) -> dict[str, Any]:
+    policy_status = policy_decision.get("status")
+    llm_status = llm_result.get("status")
+    tool_status = tool_execution_status_card.get("status")
+    verification_status = verification.get("status")
+    contract_status = execution_contract.get("status")
+    memory_decision = memory_write.get("decision")
+    llm_contract = (
+        llm_result.get("llm_client_contract", {})
+        if isinstance(llm_result.get("llm_client_contract"), dict)
+        else {}
+    )
+    if run_status == "blocked":
+        status = "skipped_policy_block"
+    elif run_status == "needs_approval":
+        status = "skipped_pending_boss_approval"
+    elif run_status == "needs_configuration":
+        status = "skipped_provider_not_ready"
+    elif contract_status == "passed" and verification_status == "passed":
+        status = "completed_verified"
+    else:
+        status = "needs_review"
+
+    public_safe = {
+        "policy_checked_before_llm": execution_contract.get("policy_gate", {}).get("checked_before_llm") is True,
+        "policy_checked_before_tools": execution_contract.get("policy_gate", {}).get("checked_before_tools") is True,
+        "registered_tool_executor_is_authority": execution_contract.get("policy_gate", {}).get(
+            "registered_tool_executor_is_execution_authority"
+        )
+        is True,
+        "llm_tool_suggestions_are_non_authoritative": execution_contract.get("policy_gate", {}).get(
+            "llm_tool_suggestions_are_non_authoritative"
+        )
+        is True,
+        "network_default": tool_execution_status_card.get("capability_scope", {}).get("network_default", "blocked"),
+        "subprocess_default": tool_execution_status_card.get("capability_scope", {}).get("subprocess_default", "blocked"),
+        "raw_provider_payload_saved": False,
+        "private_reasoning_trace": "do_not_store",
+        "automatic_memory_promotion_performed": bool(memory_write.get("automatic_promotion_performed", False)),
+        "external_side_effects_performed": tool_execution_status_card.get("public_safe", {}).get(
+            "external_side_effects_performed",
+            False,
+        ),
+    }
+    passed_safety = (
+        public_safe["policy_checked_before_llm"]
+        and public_safe["policy_checked_before_tools"]
+        and public_safe["registered_tool_executor_is_authority"]
+        and public_safe["llm_tool_suggestions_are_non_authoritative"]
+        and public_safe["network_default"] == "blocked"
+        and public_safe["subprocess_default"] == "blocked"
+        and public_safe["raw_provider_payload_saved"] is False
+        and public_safe["automatic_memory_promotion_performed"] is False
+        and public_safe["external_side_effects_performed"] is False
+    )
+
+    return {
+        "schema": AGENT_RUNTIME_STATUS_CARD_SCHEMA,
+        "status": status,
+        "run_status": run_status,
+        "created_at_utc": _now(),
+        "loop": {
+            "request_to_action_intent": "passed",
+            "policy_before_llm": "passed",
+            "policy_before_tools": "passed",
+            "llm_planning": "attempted" if run_status == "completed" else "skipped",
+            "registered_tool_execution": "attempted" if bool(tool_execution_status_card.get("attempted")) else "skipped",
+            "verification": verification_status,
+            "memory_write_decision": memory_decision,
+        },
+        "policy_gate": {
+            "status": policy_status,
+            "decision_model": policy_decision.get("decision_model"),
+            "denied_count": len(policy_decision.get("denied_actions", [])),
+            "approval_required_count": len(policy_decision.get("approval_required", [])),
+            "capability_authorization_model": execution_contract.get("policy_gate", {}).get(
+                "capability_authorization_model"
+            ),
+        },
+        "llm_runtime": {
+            "status": llm_status,
+            "engine": llm_result.get("engine"),
+            "attempted": execution_contract.get("llm_runtime", {}).get("attempted"),
+            "provider_preflight_status": llm_provider_preflight.get("status"),
+            "provider_live_check_performed": llm_provider_preflight.get("live_check_performed"),
+            "llm_client_contract_schema": llm_contract.get("schema"),
+            "llm_client_contract_status": llm_contract.get("status"),
+            "client_result_summary_only": llm_contract.get("client_result_summary_only"),
+        },
+        "tool_execution": {
+            "status": tool_status,
+            "selected_count": len(selected_tools),
+            "completed_count": len(tool_execution_status_card.get("completed_tools", [])),
+            "evidence_packet_completed": tool_execution_status_card.get("evidence_packet", {}).get("completed"),
+            "unregistered_tools": tool_execution_status_card.get("unregistered_tools", []),
+            "external_side_effects_performed": public_safe["external_side_effects_performed"],
+        },
+        "verification": {
+            "status": verification_status,
+            "execution_contract_status": contract_status,
+            "issues": verification.get("issues", []),
+        },
+        "memory": {
+            "decision": memory_decision,
+            "review_candidate_schema": memory_write.get("review_candidate", {}).get("schema")
+            if isinstance(memory_write.get("review_candidate"), dict)
+            else None,
+            "promotion_requires": memory_write.get("promotion_requires", []),
+            "automatic_promotion_performed": bool(memory_write.get("automatic_promotion_performed", False)),
+            "private_reasoning_trace_policy": memory_write.get("private_reasoning_trace_policy"),
+        },
+        "observability": {
+            "schema": runtime_observability.get("schema"),
+            "selected_memory_count": runtime_observability.get("context", {}).get("selected_memory_count")
+            if isinstance(runtime_observability.get("context"), dict)
+            else None,
+            "estimated_prompt_tokens": runtime_observability.get("context", {}).get(
+                "prompt_context_estimated_tokens"
+            )
+            if isinstance(runtime_observability.get("context"), dict)
+            else None,
+        },
+        "public_safe": {
+            **public_safe,
+            "passed": passed_safety,
+        },
+        "user_visible_summary": {
+            "ko": (
+                "정책, LLM 계획, 등록 도구, 검증, 메모리 후보 기록까지 P0 실행 루프가 검증됐습니다."
+                if status == "completed_verified"
+                else "정책 또는 provider 설정 때문에 P0 실행 루프가 시작 전 안전하게 멈췄습니다."
+                if status in {"skipped_policy_block", "skipped_pending_boss_approval", "skipped_provider_not_ready"}
+                else "P0 실행 루프 결과에 검토가 필요합니다."
+            ),
+            "en": (
+                "The P0 execution loop was verified across policy, LLM planning, registered tools, verification, and memory candidate writing."
+                if status == "completed_verified"
+                else "The P0 execution loop stopped safely before execution because policy or provider setup blocked it."
+                if status in {"skipped_policy_block", "skipped_pending_boss_approval", "skipped_provider_not_ready"}
+                else "The P0 execution loop needs review."
+            ),
+        },
+        "next_actions": (
+            ["Review the evidence packet and memory candidate before promoting this experience."]
+            if status == "completed_verified"
+            else ["Resolve the blocking policy, approval, or provider readiness issue before rerunning."]
+            if status in {"skipped_policy_block", "skipped_pending_boss_approval", "skipped_provider_not_ready"}
+            else ["Inspect execution_contract, tool_execution_status_card, and verification issues."]
+        ),
+    }
+
+
 def run_agent_execution_loop(
     manifest: dict[str, Any],
     *,
@@ -829,6 +994,18 @@ def run_agent_execution_loop(
         llm_mode=llm_mode,
         runtime_config=effective_runtime,
     )
+    agent_runtime_status_card = _build_agent_runtime_status_card(
+        run_status=run_status,
+        policy_decision=policy_decision,
+        selected_tools=selected_tools,
+        llm_result=llm_result,
+        llm_provider_preflight=llm_provider_preflight,
+        tool_execution_status_card=tool_execution_status_card,
+        execution_contract=execution_contract,
+        verification=verification,
+        memory_write=memory_write,
+        runtime_observability=runtime_observability,
+    )
     audit_events = [
         {
             "recorded_at_utc": created_at,
@@ -865,6 +1042,14 @@ def run_agent_execution_loop(
             "status": tool_execution_status_card["status"],
             "completed_count": len(tool_execution_status_card["completed_tools"]),
             "blocked_count": len(tool_execution_status_card["blocked_tools"]),
+        },
+        {
+            "recorded_at_utc": _now(),
+            "event": "agent_runtime_status_card_recorded",
+            "status": agent_runtime_status_card["status"],
+            "policy_status": agent_runtime_status_card["policy_gate"]["status"],
+            "llm_status": agent_runtime_status_card["llm_runtime"]["status"],
+            "memory_decision": agent_runtime_status_card["memory"]["decision"],
         },
     ]
 
@@ -912,6 +1097,7 @@ def run_agent_execution_loop(
             },
         },
         "execution_contract": execution_contract,
+        "agent_runtime_status_card": agent_runtime_status_card,
         "tool_execution_status_card": tool_execution_status_card,
         "tool_execution": tool_execution,
         "llm_tool_plan_alignment": llm_tool_plan_alignment,
