@@ -26,6 +26,7 @@ from ai22b.talent_foundry.agent_runner import run_agent_from_manifest
 from ai22b.talent_foundry.assessment import evaluate_assessment
 from ai22b.talent_foundry.audit import audit_foundry_release
 from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
+from ai22b.talent_foundry.chat_runtime_smoke import run_chat_runtime_smoke
 from ai22b.talent_foundry.cohort import create_specialist_cohort
 from ai22b.talent_foundry.console import collect_console_answers, run_console_session
 from ai22b.talent_foundry.developmental_ecology import build_developmental_ecology
@@ -561,14 +562,35 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     agent_runtime_smoke.add_argument("--output", required=True)
 
+    chat_runtime_smoke = subparsers.add_parser(
+        "run-chat-runtime-smoke",
+        help="Run one selected LLM/chat surface through the hired-chat path and write a public-safe report.",
+    )
+    chat_runtime_smoke.add_argument("--llm-engine", required=True)
+    chat_runtime_smoke.add_argument("--llm-service")
+    chat_runtime_smoke.add_argument("--llm-model")
+    chat_runtime_smoke.add_argument("--llm-model-path")
+    chat_runtime_smoke.add_argument("--chat-surface", default=DEFAULT_CHAT_SURFACE_ID, choices=chat_surface_ids())
+    chat_runtime_smoke.add_argument("--llm-mode", choices=["offline", "auto", "live"], default="offline")
+    chat_runtime_smoke.add_argument("--live-check", action="store_true", help="Shortcut for --llm-mode live.")
+    chat_runtime_smoke.add_argument("--message", default="보스가 Paideia 채팅 readiness를 확인합니다.")
+    chat_runtime_smoke.add_argument(
+        "--strict",
+        action="store_true",
+        help="Return exit code 2 when the chat runtime smoke report does not pass.",
+    )
+    chat_runtime_smoke.add_argument("--output", required=True)
+    chat_runtime_smoke.add_argument("--artifact-dir")
+
     llm_live_readiness = subparsers.add_parser(
         "doctor-llm-live-readiness",
-        help="Run provider doctor, application smoke, and agent runtime smoke as one readiness suite.",
+        help="Run provider doctor, application, agent-runtime, and chat-runtime smoke as one readiness suite.",
     )
     llm_live_readiness.add_argument("--llm-engine", required=True)
     llm_live_readiness.add_argument("--llm-service")
     llm_live_readiness.add_argument("--llm-model")
     llm_live_readiness.add_argument("--llm-model-path")
+    llm_live_readiness.add_argument("--chat-surface", default=DEFAULT_CHAT_SURFACE_ID, choices=chat_surface_ids())
     llm_live_readiness.add_argument(
         "--live-check",
         action="store_true",
@@ -1526,12 +1548,34 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 2
         return 0
 
+    if args.command == "run-chat-runtime-smoke":
+        llm_mode = "live" if args.live_check else args.llm_mode
+        output_path = Path(args.output)
+        artifact_dir = Path(args.artifact_dir) if args.artifact_dir else output_path.parent / "chat_runtime_smoke_artifacts"
+        report = run_chat_runtime_smoke(
+            engine=args.llm_engine,
+            service=args.llm_service,
+            model=args.llm_model,
+            model_path=args.llm_model_path,
+            chat_surface=args.chat_surface,
+            llm_mode=llm_mode,
+            message=args.message,
+            artifact_dir=artifact_dir,
+        )
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(str(output_path))
+        if args.strict and not report.get("passed"):
+            return 2
+        return 0
+
     if args.command == "doctor-llm-live-readiness":
         report = run_llm_live_readiness_suite(
             engine=args.llm_engine,
             service=args.llm_service,
             model=args.llm_model,
             model_path=args.llm_model_path,
+            chat_surface=args.chat_surface,
             live_check=args.live_check,
             output_dir=Path(args.output_dir),
             task=args.task,

@@ -2268,11 +2268,60 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(report["checks"]["agent_runtime_smoke"]["status"], "needs_configuration")
         self.assertFalse(report["checks"]["agent_runtime_smoke"]["passed"])
         self.assertEqual(report["checks"]["agent_runtime_smoke"]["failure_mode"], "live_provider_not_ready")
+        self.assertEqual(report["checks"]["chat_runtime_smoke"]["status"], "needs_configuration")
+        self.assertFalse(report["checks"]["chat_runtime_smoke"]["passed"])
+        self.assertEqual(report["checks"]["chat_runtime_smoke"]["chat_status"], "needs_configuration")
+        self.assertTrue(report["checks"]["chat_runtime_smoke"]["provider_not_ready"])
         self.assertFalse(report["data_policy"]["secret_values_exported"])
         self.assertFalse(report["data_policy"]["raw_provider_payload_saved"])
         self.assertTrue(report["data_policy"]["live_provider_call_attempted"])
         self.assertEqual(report["data_policy"]["private_reasoning_trace"], "do_not_store")
         self.assertTrue(all(artifact_exists.values()), artifact_exists)
+
+    def test_cli_chat_runtime_smoke_strict_fails_closed_when_live_provider_not_ready(self) -> None:
+        import os
+
+        from ai22b.talent_foundry.cli import main as cli_main
+
+        old_key = os.environ.pop("OPENROUTER_API_KEY", None)
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                output_path = Path(tmp) / "chat_runtime_smoke.live.json"
+                exit_code = cli_main(
+                    [
+                        "run-chat-runtime-smoke",
+                        "--llm-engine",
+                        "openrouter_api",
+                        "--llm-model",
+                        "openai/gpt-4.1-mini",
+                        "--live-check",
+                        "--strict",
+                        "--output",
+                        str(output_path),
+                    ]
+                )
+                report = json.loads(output_path.read_text(encoding="utf-8"))
+        finally:
+            if old_key is not None:
+                os.environ["OPENROUTER_API_KEY"] = old_key
+
+        self.assertEqual(exit_code, 2)
+        self.assertEqual(report["schema"], "paideia-chat-runtime-smoke/v1")
+        self.assertFalse(report["passed"])
+        self.assertEqual(report["status"], "needs_configuration")
+        self.assertEqual(report["engine"], "openrouter_api")
+        self.assertEqual(report["llm_mode"], "live")
+        self.assertEqual(report["details"]["chat_status"], "needs_configuration")
+        self.assertEqual(report["details"]["reply_generation_mode"], "skipped_provider_not_ready")
+        self.assertEqual(report["details"]["llm_status"], "skipped_provider_not_ready")
+        self.assertEqual(report["details"]["preflight_status"], "needs_configuration")
+        self.assertFalse(report["details"]["preflight_network_call_made"])
+        self.assertTrue(report["details"]["provider_not_ready"])
+        self.assertFalse(report["details"]["learning_update_performed"])
+        self.assertFalse(report["data_policy"]["secret_values_exported"])
+        self.assertFalse(report["data_policy"]["raw_provider_payload_saved"])
+        self.assertEqual(report["data_policy"]["private_reasoning_trace"], "do_not_store")
+        self.assertFalse(report["data_policy"]["learning_auto_promotion_performed"])
 
     def test_agent_execution_uses_registered_tool_executor(self) -> None:
         from ai22b.talent_foundry.agent_runner import run_agent_from_manifest
@@ -2987,6 +3036,7 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("doctor-llm-provider", first_run_details["commands"])
         self.assertIn("run-llm-application-smoke", first_run_details["commands"])
         self.assertIn("run-agent-runtime-smoke", first_run_details["commands"])
+        self.assertIn("run-chat-runtime-smoke", first_run_details["commands"])
         self.assertIn("doctor-llm-live-readiness", first_run_details["commands"])
         self.assertIn("audit-tool-capabilities", first_run_details["commands"])
         self.assertIn("run-action-policy-eval", first_run_details["commands"])
@@ -3078,6 +3128,23 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(first_run_details["agent_runtime_smoke_network_default"], "blocked")
         self.assertEqual(first_run_details["agent_runtime_smoke_subprocess_default"], "blocked")
         self.assertTrue(first_run_details["agent_runtime_smoke_public_safe"])
+        self.assertEqual(first_run_details["chat_runtime_smoke_schema"], "paideia-chat-runtime-smoke/v1")
+        self.assertTrue(first_run_details["chat_runtime_smoke_passed"])
+        self.assertEqual(first_run_details["chat_runtime_smoke_status"], "passed")
+        self.assertEqual(first_run_details["chat_runtime_smoke_engine"], "deterministic_local")
+        self.assertEqual(first_run_details["chat_runtime_smoke_llm_mode"], "offline")
+        self.assertEqual(first_run_details["chat_runtime_smoke_chat_surface_id"], "codex-bridge-chat")
+        self.assertEqual(first_run_details["chat_runtime_smoke_chat_status"], "completed")
+        self.assertEqual(first_run_details["chat_runtime_smoke_llm_status"], "completed")
+        self.assertFalse(first_run_details["chat_runtime_smoke_preflight_network_call"])
+        self.assertIsInstance(first_run_details["chat_runtime_smoke_selected_memory_count"], int)
+        self.assertFalse(first_run_details["chat_runtime_smoke_stored_private_reasoning_trace"])
+        self.assertFalse(first_run_details["chat_runtime_smoke_learning_update_performed"])
+        self.assertFalse(first_run_details["chat_runtime_smoke_provider_not_ready"])
+        self.assertFalse(first_run_details["chat_runtime_smoke_secret_values_exported"])
+        self.assertFalse(first_run_details["chat_runtime_smoke_raw_provider_payload_saved"])
+        self.assertEqual(first_run_details["chat_runtime_smoke_private_reasoning_trace"], "do_not_store")
+        self.assertFalse(first_run_details["chat_runtime_smoke_learning_auto_promotion_performed"])
         self.assertEqual(first_run_details["tool_capability_audit_schema"], "paideia-tool-capability-audit/v1")
         self.assertTrue(first_run_details["tool_capability_audit_passed"])
         self.assertEqual(first_run_details["tool_capability_audit_status"], "passed")
@@ -3210,6 +3277,7 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("build-llm-connection-profile", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])
         self.assertIn("run-llm-application-smoke", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])
         self.assertIn("run-agent-runtime-smoke", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])
+        self.assertIn("run-chat-runtime-smoke", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])
         self.assertIn("doctor-llm-live-readiness", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])
         self.assertIn("audit-tool-capabilities", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])
         self.assertIn("doctor-first-run", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])

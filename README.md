@@ -146,7 +146,7 @@ python -m pip install -e ".[dev]"        # tests
 
 CI runs a package smoke test after `pip install -e ".[dev]"`. It verifies the installed distribution metadata, exposed console script entry points, callable script targets, optional extras split by runtime capability, and package metadata hygiene.
 
-CI also runs a CLI smoke test for public-safe first-run commands. It verifies that `list-role-models`, `list-llm-services`, `build-llm-onboarding-checklist --llm-engine deterministic_local`, `build-llm-connection-profile --llm-engine deterministic_local`, `doctor-llm-provider --llm-engine deterministic_local`, `run-llm-application-smoke --llm-engine deterministic_local`, `run-agent-runtime-smoke --llm-engine deterministic_local`, `doctor-llm-live-readiness --llm-engine deterministic_local`, `audit-tool-capabilities --strict`, `run-action-policy-eval`, `audit-public-release-readiness`, `build-source-sbom`, `doctor-package-install`, `doctor-runtime-contract`, and `doctor-first-run` execute without private files, API keys, or network access while writing reviewable JSON reports.
+CI also runs a CLI smoke test for public-safe first-run commands. It verifies that `list-role-models`, `list-llm-services`, `build-llm-onboarding-checklist --llm-engine deterministic_local`, `build-llm-connection-profile --llm-engine deterministic_local`, `doctor-llm-provider --llm-engine deterministic_local`, `run-llm-application-smoke --llm-engine deterministic_local`, `run-agent-runtime-smoke --llm-engine deterministic_local`, `run-chat-runtime-smoke --llm-engine deterministic_local`, `doctor-llm-live-readiness --llm-engine deterministic_local`, `audit-tool-capabilities --strict`, `run-action-policy-eval`, `audit-public-release-readiness`, `build-source-sbom`, `doctor-package-install`, `doctor-runtime-contract`, and `doctor-first-run` execute without private files, API keys, or network access while writing reviewable JSON reports.
 
 The source package declares an MIT license in `LICENSE` and `pyproject.toml`. Public release readiness is tracked separately from generated agent bundles; see [Public Release Readiness](docs/public_release_readiness.md) and [공개 릴리스 준비도](docs/public_release_readiness.ko.md).
 
@@ -509,7 +509,16 @@ ai22b-talent-foundry run-agent-runtime-smoke `
   --output .\agent_runtime_smoke.json
 ```
 
-For onboarding or release gating, `doctor-llm-live-readiness` runs the provider doctor, application-engine smoke, and full agent-runtime smoke as one suite. Without `--live-check` it is public-safe and no-network; with `--live-check` it intentionally calls the selected API or localhost server and returns exit code `2` in `--strict` mode if any provider, application, or full-runtime step is not ready:
+Before daily conversation, `run-chat-runtime-smoke` runs the selected LLM and chat surface through the hired-chat path. It proves that the employment record, memory substrate, provider preflight, bounded reply generation, and review-gated learning posture are wired before a user starts chatting:
+
+```powershell
+ai22b-talent-foundry run-chat-runtime-smoke `
+  --llm-engine deterministic_local `
+  --strict `
+  --output .\chat_runtime_smoke.json
+```
+
+For onboarding or release gating, `doctor-llm-live-readiness` runs the provider doctor, application-engine smoke, full agent-runtime smoke, and hired-chat runtime smoke as one suite. Without `--live-check` it is public-safe and no-network; with `--live-check` it intentionally calls the selected API or localhost server and returns exit code `2` in `--strict` mode if any provider, application, full-runtime, or chat-runtime step is not ready:
 
 ```powershell
 ai22b-talent-foundry doctor-llm-live-readiness `
@@ -520,7 +529,7 @@ ai22b-talent-foundry doctor-llm-live-readiness `
   --output-dir .\llm_live_readiness
 ```
 
-The suite writes `llm_live_readiness_suite.json`, `llm_provider_doctor.*.json`, `llm_application_smoke.*.json`, and `agent_runtime_smoke.*.json`. It stores only summaries, never secret values, raw provider payloads, private training files, full session replay, or hidden reasoning traces.
+The suite writes `llm_live_readiness_suite.json`, `llm_provider_doctor.*.json`, `llm_application_smoke.*.json`, `agent_runtime_smoke.*.json`, and `chat_runtime_smoke.*.json`. It stores only summaries, never secret values, raw provider payloads, private training files, full session replay, or hidden reasoning traces.
 
 The same provider gate is enforced by installed/hired workspace, job, and dataflow runs. If a hired agent is run in live mode without a configured provider key or local endpoint, Paideia records `needs_configuration`, skips workspace artifact creation, skips job deliverables, skips dataflow synthesis, and leaves no learning promotion candidate beyond a quarantined configuration record. `audit-release` now includes `fail_closed_runtime_contract`, which exercises direct agent, hired workspace, hired job, dataflow, and chat paths with an unconfigured live provider and requires all of them to stop before tools, workspace artifacts, fallback-as-live replies, or learning promotion.
 

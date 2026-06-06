@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from ai22b.talent_foundry.agent_runtime_smoke import run_agent_runtime_smoke
+from ai22b.talent_foundry.chat_runtime_smoke import run_chat_runtime_smoke
 from ai22b.talent_foundry.llm_runtime import doctor_llm_provider, run_llm_application_smoke
 
 
@@ -33,6 +34,7 @@ def run_llm_live_readiness_suite(
     model: str | None = None,
     model_path: str | None = None,
     service: str | None = None,
+    chat_surface: str | None = None,
     live_check: bool = False,
     output_dir: Path,
     task: str = "Run a Paideia live readiness suite for the selected LLM provider.",
@@ -70,6 +72,16 @@ def run_llm_live_readiness_suite(
         llm_mode=llm_mode,
         task=task,
     )
+    chat_smoke = run_chat_runtime_smoke(
+        engine=engine,
+        model=model,
+        model_path=model_path,
+        service=service,
+        chat_surface=chat_surface,
+        llm_mode=llm_mode,
+        message="보스가 Paideia 채팅 readiness를 확인합니다.",
+        artifact_dir=output_dir / "chat_runtime_smoke_artifacts",
+    )
     summary_path = output_dir / "llm_live_readiness_suite.json"
     artifacts = {
         "summary": str(summary_path),
@@ -85,14 +97,20 @@ def run_llm_live_readiness_suite(
             output_dir,
             "agent_runtime_smoke.live.json" if live_check else "agent_runtime_smoke.offline.json",
         ),
+        "chat_runtime_smoke": _report_path(
+            output_dir,
+            "chat_runtime_smoke.live.json" if live_check else "chat_runtime_smoke.offline.json",
+        ),
     }
     _write_json(Path(artifacts["provider_doctor"]), doctor)
     _write_json(Path(artifacts["application_smoke"]), application_smoke)
     _write_json(Path(artifacts["agent_runtime_smoke"]), agent_smoke)
+    _write_json(Path(artifacts["chat_runtime_smoke"]), chat_smoke)
     required_before_live = {
         "provider_doctor": "doctor-llm-provider --live-check",
         "application_smoke": "run-llm-application-smoke --live-check",
         "agent_runtime_smoke": "run-agent-runtime-smoke --live-check",
+        "chat_runtime_smoke": "run-chat-runtime-smoke --live-check",
     }
     checks = {
         "provider_doctor": {
@@ -131,11 +149,26 @@ def run_llm_live_readiness_suite(
             if isinstance(agent_smoke.get("details"), dict)
             else None,
         },
+        "chat_runtime_smoke": {
+            "schema": chat_smoke.get("schema"),
+            "status": _status(chat_smoke),
+            "passed": chat_smoke.get("passed") is True,
+            "chat_status": chat_smoke.get("details", {}).get("chat_status")
+            if isinstance(chat_smoke.get("details"), dict)
+            else None,
+            "reply_generation_mode": chat_smoke.get("details", {}).get("reply_generation_mode")
+            if isinstance(chat_smoke.get("details"), dict)
+            else None,
+            "provider_not_ready": chat_smoke.get("details", {}).get("provider_not_ready")
+            if isinstance(chat_smoke.get("details"), dict)
+            else None,
+        },
     }
     passed = (
         checks["provider_doctor"]["passed"]
         and checks["application_smoke"]["passed"]
         and checks["agent_runtime_smoke"]["passed"]
+        and checks["chat_runtime_smoke"]["passed"]
     )
     live_ready = bool(live_check and passed)
     suite = {
@@ -145,6 +178,7 @@ def run_llm_live_readiness_suite(
         "service": service or engine,
         "model": model,
         "model_path_present": bool(model_path),
+        "chat_surface": chat_surface,
         "summary_path": str(summary_path),
         "live_check_requested": live_check,
         "llm_mode": llm_mode,

@@ -119,6 +119,31 @@ def _chat_command(
     return " ".join(part for part in parts if part)
 
 
+def _chat_runtime_smoke_command(
+    *,
+    engine: str,
+    model: str | None = None,
+    model_path: str | None = None,
+    chat_surface: str,
+    live: bool = False,
+    strict: bool = False,
+    output: str,
+) -> str:
+    needs_model = engine in EXTERNAL_API_ENGINES or engine in LOCAL_HTTP_ENGINES
+    needs_path = engine in LOCAL_HTTP_ENGINES or engine in LOCAL_MODEL_ENGINES
+    parts = [
+        "ai22b-talent-foundry run-chat-runtime-smoke",
+        f"--llm-engine {engine}",
+        f"--chat-surface {chat_surface}",
+        _arg("--llm-model", model, "<model>" if needs_model else None).strip(),
+        _arg("--llm-model-path", model_path, "<localhost-url-or-local-model-path>" if needs_path else None).strip(),
+        "--live-check" if live else "",
+        "--strict" if strict else "",
+        f"--output {output}",
+    ]
+    return " ".join(part for part in parts if part)
+
+
 def _profile_env_setup(engine: str) -> list[dict[str, Any]]:
     setup: list[dict[str, Any]] = []
     for group in ENV_REQUIREMENTS.get(engine, []):
@@ -262,8 +287,15 @@ def build_llm_connection_profile(
                 "command": command_by_id["agent_runtime_live_smoke"]["command"],
                 "purpose": "Verify policy, planning, registered tools, verification, and review-gated memory with the selected provider.",
             },
+            {
+                "id": "chat_runtime_smoke",
+                "network_call": needs_live,
+                "command": command_by_id["chat_runtime_smoke"]["command"],
+                "purpose": "Verify the selected chat surface can run a hired-chat turn before daily conversation.",
+            },
         ],
         "daily_use_commands": {
+            "chat_runtime_smoke": command_by_id["chat_runtime_smoke"]["command"],
             "offline_first_chat": command_by_id["chat_surface_first_turn"]["command"],
             "live_chat_template": _chat_command(
                 engine=engine,
@@ -460,6 +492,21 @@ def build_llm_onboarding_checklist(
             ),
         },
         {
+            "id": "chat_runtime_smoke",
+            "required_before_daily_use": True,
+            "network_call": live_provider,
+            "command": _chat_runtime_smoke_command(
+                engine=engine,
+                model=model,
+                model_path=model_path,
+                chat_surface=selected_chat["id"],
+                live=live_provider,
+                strict=True,
+                output="chat_runtime_smoke.json",
+            ),
+            "expected": "proves the selected chat surface can run a hired-chat turn with provider preflight and review-gated learning.",
+        },
+        {
             "id": "chat_surface_first_turn",
             "required_before_daily_use": False,
             "network_call": False,
@@ -489,6 +536,7 @@ def build_llm_onboarding_checklist(
             "application smoke stores no raw provider payload or hidden reasoning trace",
             "agent runtime smoke proves policy before LLM and tools",
             "live readiness suite ties provider doctor, application smoke, and full runtime smoke together",
+            "chat runtime smoke proves the selected chat surface before daily conversation",
             "chat turn records provider preflight and selected memory route",
             "learning promotion remains review-gated after provider fallback or failure",
         ],

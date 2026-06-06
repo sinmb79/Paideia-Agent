@@ -102,7 +102,7 @@ python -m pip install -e ".[dev]"        # 테스트
 
 CI의 package smoke 테스트는 `pip install -e ".[dev]"` 이후 실행됩니다. 설치된 distribution metadata, 노출된 console script entry point, 실제 callable script target, 기능별 optional extras 분리, 패키지 메타데이터 hygiene를 확인합니다.
 
-CI는 공개 안전 first-run CLI smoke 테스트도 실행합니다. 이 테스트는 `list-role-models`, `list-llm-services`, `build-llm-onboarding-checklist --llm-engine deterministic_local`, `build-llm-connection-profile --llm-engine deterministic_local`, `doctor-llm-provider --llm-engine deterministic_local`, `run-llm-application-smoke --llm-engine deterministic_local`, `run-agent-runtime-smoke --llm-engine deterministic_local`, `doctor-llm-live-readiness --llm-engine deterministic_local`, `audit-tool-capabilities --strict`, `run-action-policy-eval`, `audit-public-release-readiness`, `build-source-sbom`, `doctor-package-install`, `doctor-runtime-contract`, `doctor-first-run`이 비공개 파일, API 키, 네트워크 접근 없이 실행되고 검토 가능한 JSON 리포트를 쓰는지 확인합니다.
+CI는 공개 안전 first-run CLI smoke 테스트도 실행합니다. 이 테스트는 `list-role-models`, `list-llm-services`, `build-llm-onboarding-checklist --llm-engine deterministic_local`, `build-llm-connection-profile --llm-engine deterministic_local`, `doctor-llm-provider --llm-engine deterministic_local`, `run-llm-application-smoke --llm-engine deterministic_local`, `run-agent-runtime-smoke --llm-engine deterministic_local`, `run-chat-runtime-smoke --llm-engine deterministic_local`, `doctor-llm-live-readiness --llm-engine deterministic_local`, `audit-tool-capabilities --strict`, `run-action-policy-eval`, `audit-public-release-readiness`, `build-source-sbom`, `doctor-package-install`, `doctor-runtime-contract`, `doctor-first-run`이 비공개 파일, API 키, 네트워크 접근 없이 실행되고 검토 가능한 JSON 리포트를 쓰는지 확인합니다.
 
 롤모델 목록:
 
@@ -295,7 +295,16 @@ ai22b-talent-foundry run-agent-runtime-smoke `
   --output .\agent_runtime_smoke.json
 ```
 
-온보딩이나 릴리스 게이트에서는 `doctor-llm-live-readiness`를 사용하면 provider doctor, application-engine smoke, 전체 agent-runtime smoke를 한 번에 실행할 수 있습니다. `--live-check`가 없으면 공개 안전/no-network 점검만 수행하고, `--live-check`를 명시하면 선택한 API 또는 localhost server를 실제 호출합니다. `--strict`에서는 provider, application, full-runtime 중 하나라도 준비되지 않으면 exit code `2`로 닫힙니다.
+일상 대화 전에는 `run-chat-runtime-smoke`로 선택한 LLM과 채팅 표면이 hired-chat 경로를 제대로 타는지 확인합니다. 이 명령은 employment record, memory substrate, provider preflight, 제한된 답변 생성, review-gated learning 정책이 연결되어 있는지 검증합니다.
+
+```powershell
+ai22b-talent-foundry run-chat-runtime-smoke `
+  --llm-engine deterministic_local `
+  --strict `
+  --output .\chat_runtime_smoke.json
+```
+
+온보딩이나 릴리스 게이트에서는 `doctor-llm-live-readiness`를 사용하면 provider doctor, application-engine smoke, 전체 agent-runtime smoke, hired-chat runtime smoke를 한 번에 실행할 수 있습니다. `--live-check`가 없으면 공개 안전/no-network 점검만 수행하고, `--live-check`를 명시하면 선택한 API 또는 localhost server를 실제 호출합니다. `--strict`에서는 provider, application, full-runtime, chat-runtime 중 하나라도 준비되지 않으면 exit code `2`로 닫힙니다.
 
 ```powershell
 ai22b-talent-foundry doctor-llm-live-readiness `
@@ -306,7 +315,7 @@ ai22b-talent-foundry doctor-llm-live-readiness `
   --output-dir .\llm_live_readiness
 ```
 
-이 suite는 `llm_live_readiness_suite.json`, `llm_provider_doctor.*.json`, `llm_application_smoke.*.json`, `agent_runtime_smoke.*.json`을 씁니다. 저장되는 것은 요약 정보뿐이며 secret 값, raw provider payload, 비공개 학습 파일, 전체 세션 replay, 숨은 추론 trace는 저장하지 않습니다.
+이 suite는 `llm_live_readiness_suite.json`, `llm_provider_doctor.*.json`, `llm_application_smoke.*.json`, `agent_runtime_smoke.*.json`, `chat_runtime_smoke.*.json`을 씁니다. 저장되는 것은 요약 정보뿐이며 secret 값, raw provider payload, 비공개 학습 파일, 전체 세션 replay, 숨은 추론 trace는 저장하지 않습니다.
 
 같은 provider gate는 설치/고용된 workspace, job, dataflow 실행에도 적용됩니다. 고용된 에이전트를 live mode로 실행했지만 provider API key 또는 로컬 endpoint가 준비되지 않았으면 Paideia는 `needs_configuration`을 기록하고, workspace 산출물 생성, job deliverable 생성, dataflow synthesis, 학습 승격 후보 생성을 모두 시작하지 않습니다. dataflow의 경우에도 promotion은 quarantine 상태의 설정 필요 기록으로만 남습니다. `audit-release`는 이제 `fail_closed_runtime_contract`를 포함해서 direct agent, hired workspace, hired job, dataflow, chat 경로를 live provider 미설정 상태로 직접 실행하고, 도구 실행, workspace artifact 생성, live로 위장한 fallback 답변, 학습 승격이 모두 시작되지 않았는지 검사합니다.
 

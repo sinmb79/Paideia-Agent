@@ -19,6 +19,7 @@ class CliSmokeTests(unittest.TestCase):
             doctor_path = tmp_path / "llm_provider_doctor.json"
             llm_smoke_path = tmp_path / "llm_application_smoke.json"
             agent_runtime_smoke_path = tmp_path / "agent_runtime_smoke.json"
+            chat_runtime_smoke_path = tmp_path / "chat_runtime_smoke.json"
             llm_live_readiness_dir = tmp_path / "llm_live_readiness"
             tool_audit_path = tmp_path / "tool_capability_audit.json"
             policy_eval_path = tmp_path / "policy_eval_report.json"
@@ -90,6 +91,16 @@ class CliSmokeTests(unittest.TestCase):
                     "--strict",
                     "--output",
                     str(agent_runtime_smoke_path),
+                ]
+            )
+            chat_runtime_smoke_code = cli_main(
+                [
+                    "run-chat-runtime-smoke",
+                    "--llm-engine",
+                    "deterministic_local",
+                    "--strict",
+                    "--output",
+                    str(chat_runtime_smoke_path),
                 ]
             )
             llm_live_readiness_code = cli_main(
@@ -168,6 +179,11 @@ class CliSmokeTests(unittest.TestCase):
             doctor = json.loads(doctor_path.read_text(encoding="utf-8"))
             llm_smoke = json.loads(llm_smoke_path.read_text(encoding="utf-8"))
             agent_runtime_smoke = json.loads(agent_runtime_smoke_path.read_text(encoding="utf-8"))
+            chat_runtime_smoke = json.loads(chat_runtime_smoke_path.read_text(encoding="utf-8"))
+            chat_runtime_smoke_artifact_exists = {
+                name: Path(artifact_path).exists()
+                for name, artifact_path in chat_runtime_smoke["artifacts"].items()
+            }
             llm_live_readiness = json.loads(
                 (llm_live_readiness_dir / "llm_live_readiness_suite.json").read_text(encoding="utf-8")
             )
@@ -190,6 +206,7 @@ class CliSmokeTests(unittest.TestCase):
         self.assertEqual(doctor_code, 0)
         self.assertEqual(llm_smoke_code, 0)
         self.assertEqual(agent_runtime_smoke_code, 0)
+        self.assertEqual(chat_runtime_smoke_code, 0)
         self.assertEqual(llm_live_readiness_code, 0)
         self.assertEqual(tool_audit_code, 0)
         self.assertEqual(policy_eval_code, 0)
@@ -230,6 +247,7 @@ class CliSmokeTests(unittest.TestCase):
                 "application_engine_no_network_smoke",
                 "agent_runtime_no_network_smoke",
                 "llm_live_readiness_suite",
+                "chat_runtime_smoke",
                 "chat_surface_first_turn",
             },
             command_ids,
@@ -242,6 +260,9 @@ class CliSmokeTests(unittest.TestCase):
         )
         self.assertIn("doctor-llm-live-readiness", readiness_command["command"])
         self.assertIn("--output-dir", readiness_command["command"])
+        chat_smoke_command = next(item for item in llm_onboarding["command_plan"] if item["id"] == "chat_runtime_smoke")
+        self.assertIn("run-chat-runtime-smoke", chat_smoke_command["command"])
+        self.assertIn("--chat-surface codex-bridge-chat", chat_smoke_command["command"])
 
         self.assertEqual(llm_connection_profile["schema"], "paideia-llm-connection-profile/v1")
         self.assertEqual(llm_connection_profile["status"], "offline_ready_no_setup")
@@ -257,9 +278,11 @@ class CliSmokeTests(unittest.TestCase):
                 "explicit_live_provider_check",
                 "live_application_engine_smoke",
                 "live_agent_runtime_smoke",
+                "chat_runtime_smoke",
             },
             profile_sequence_ids,
         )
+        self.assertIn("run-chat-runtime-smoke", llm_connection_profile["daily_use_commands"]["chat_runtime_smoke"])
 
         self.assertEqual(doctor["schema"], "paideia-llm-provider-doctor/v1")
         self.assertEqual(doctor["engine"], "deterministic_local")
@@ -299,6 +322,24 @@ class CliSmokeTests(unittest.TestCase):
         self.assertEqual(agent_runtime_smoke["details"]["subprocess_default"], "blocked")
         self.assertTrue(agent_runtime_smoke["details"]["public_safe"])
 
+        self.assertEqual(chat_runtime_smoke["schema"], "paideia-chat-runtime-smoke/v1")
+        self.assertTrue(chat_runtime_smoke["passed"])
+        self.assertEqual(chat_runtime_smoke["status"], "passed")
+        self.assertEqual(chat_runtime_smoke["engine"], "deterministic_local")
+        self.assertEqual(chat_runtime_smoke["llm_mode"], "offline")
+        self.assertEqual(chat_runtime_smoke["chat_surface"]["id"], "codex-bridge-chat")
+        self.assertEqual(chat_runtime_smoke["details"]["chat_status"], "completed")
+        self.assertEqual(chat_runtime_smoke["details"]["llm_status"], "completed")
+        self.assertFalse(chat_runtime_smoke["details"]["preflight_network_call_made"])
+        self.assertFalse(chat_runtime_smoke["details"]["stored_private_reasoning_trace"])
+        self.assertFalse(chat_runtime_smoke["details"]["learning_update_performed"])
+        self.assertFalse(chat_runtime_smoke["details"]["provider_not_ready"])
+        self.assertFalse(chat_runtime_smoke["data_policy"]["secret_values_exported"])
+        self.assertFalse(chat_runtime_smoke["data_policy"]["raw_provider_payload_saved"])
+        self.assertEqual(chat_runtime_smoke["data_policy"]["private_reasoning_trace"], "do_not_store")
+        self.assertFalse(chat_runtime_smoke["data_policy"]["learning_auto_promotion_performed"])
+        self.assertTrue(all(chat_runtime_smoke_artifact_exists.values()), chat_runtime_smoke_artifact_exists)
+
         self.assertEqual(llm_live_readiness["schema"], "paideia-llm-live-readiness-suite/v1")
         self.assertTrue(llm_live_readiness["passed"])
         self.assertFalse(llm_live_readiness["live_ready"])
@@ -312,6 +353,8 @@ class CliSmokeTests(unittest.TestCase):
         self.assertTrue(llm_live_readiness["checks"]["provider_doctor"]["passed"])
         self.assertTrue(llm_live_readiness["checks"]["application_smoke"]["passed"])
         self.assertTrue(llm_live_readiness["checks"]["agent_runtime_smoke"]["passed"])
+        self.assertTrue(llm_live_readiness["checks"]["chat_runtime_smoke"]["passed"])
+        self.assertEqual(llm_live_readiness["checks"]["chat_runtime_smoke"]["chat_status"], "completed")
         self.assertFalse(llm_live_readiness["data_policy"]["secret_values_exported"])
         self.assertFalse(llm_live_readiness["data_policy"]["raw_provider_payload_saved"])
         self.assertFalse(llm_live_readiness["data_policy"]["live_provider_call_attempted"])
@@ -414,6 +457,7 @@ class CliSmokeTests(unittest.TestCase):
             "deterministic_provider_doctor_ready",
             "application_engine_smoke_passed",
             "agent_runtime_smoke_passed",
+            "chat_runtime_smoke_passed",
             "llm_live_readiness_suite_public_safe",
             "tool_capability_audit_passed",
             "action_policy_eval_passed",
@@ -428,6 +472,9 @@ class CliSmokeTests(unittest.TestCase):
         self.assertEqual(first_run_doctor["artifacts"]["llm_provider_doctor"]["network_access"], "blocked")
         self.assertEqual(first_run_doctor["artifacts"]["llm_connection_profile"]["status"], "offline_ready_no_setup")
         self.assertEqual(first_run_doctor["artifacts"]["agent_runtime_smoke"]["execution_contract_status"], "passed")
+        self.assertEqual(first_run_doctor["artifacts"]["chat_runtime_smoke"]["schema"], "paideia-chat-runtime-smoke/v1")
+        self.assertEqual(first_run_doctor["artifacts"]["chat_runtime_smoke"]["chat_status"], "completed")
+        self.assertFalse(first_run_doctor["artifacts"]["chat_runtime_smoke"]["stored_private_reasoning_trace"])
         self.assertEqual(
             first_run_doctor["artifacts"]["llm_live_readiness"]["schema"],
             "paideia-llm-live-readiness-suite/v1",

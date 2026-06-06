@@ -11,6 +11,7 @@ from typing import Any
 from ai22b.config import PROJECT_ROOT
 from ai22b.talent_foundry.agent_runtime_smoke import AGENT_RUNTIME_SMOKE_SCHEMA, run_agent_runtime_smoke
 from ai22b.talent_foundry.agent_runner import run_agent_from_manifest
+from ai22b.talent_foundry.chat_runtime_smoke import CHAT_RUNTIME_SMOKE_SCHEMA, run_chat_runtime_smoke
 from ai22b.talent_foundry.distribution import verify_agent_release_archive, verify_agent_release_bundle
 from ai22b.talent_foundry.execution_proof import (
     WORKSPACE_EXECUTION_PROOF_SCHEMA,
@@ -155,6 +156,7 @@ REQUIRED_PUBLIC_PROGRAM_COMMANDS = {
     "doctor-llm-provider",
     "run-llm-application-smoke",
     "run-agent-runtime-smoke",
+    "run-chat-runtime-smoke",
     "doctor-llm-live-readiness",
     "audit-tool-capabilities",
     "doctor-bundle",
@@ -198,6 +200,7 @@ PUBLIC_SAFE_FIRST_RUN_COMMANDS = {
     "doctor-llm-provider",
     "run-llm-application-smoke",
     "run-agent-runtime-smoke",
+    "run-chat-runtime-smoke",
     "doctor-llm-live-readiness",
     "audit-tool-capabilities",
     "run-action-policy-eval",
@@ -1000,6 +1003,7 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
         PROJECT_ROOT / "src" / "ai22b" / "talent_foundry" / "role_models.py",
         PROJECT_ROOT / "src" / "ai22b" / "talent_foundry" / "llm_runtime.py",
         PROJECT_ROOT / "src" / "ai22b" / "talent_foundry" / "agent_runtime_smoke.py",
+        PROJECT_ROOT / "src" / "ai22b" / "talent_foundry" / "chat_runtime_smoke.py",
         PROJECT_ROOT / "src" / "ai22b" / "talent_foundry" / "tool_registry.py",
         PROJECT_ROOT / "src" / "ai22b" / "talent_foundry" / "public_release.py",
         PROJECT_ROOT / "src" / "ai22b" / "talent_foundry" / "source_sbom.py",
@@ -1040,6 +1044,28 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
     agent_runtime_details = (
         agent_runtime_smoke.get("details", {})
         if isinstance(agent_runtime_smoke.get("details"), dict)
+        else {}
+    )
+    chat_runtime_smoke = run_chat_runtime_smoke(
+        engine="deterministic_local",
+        llm_mode="offline",
+        chat_surface="codex-bridge-chat",
+        artifact_dir=PROJECT_ROOT / "runs" / "audit_chat_runtime_smoke",
+        message="Public-safe first-run hired-chat smoke.",
+    )
+    chat_runtime_details = (
+        chat_runtime_smoke.get("details", {})
+        if isinstance(chat_runtime_smoke.get("details"), dict)
+        else {}
+    )
+    chat_runtime_policy = (
+        chat_runtime_smoke.get("data_policy", {})
+        if isinstance(chat_runtime_smoke.get("data_policy"), dict)
+        else {}
+    )
+    chat_runtime_surface = (
+        chat_runtime_smoke.get("chat_surface", {})
+        if isinstance(chat_runtime_smoke.get("chat_surface"), dict)
         else {}
     )
     tool_audit = audit_tool_capability_registry()
@@ -1200,6 +1226,31 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
         "agent_runtime_smoke_network_default": agent_runtime_details.get("network_default"),
         "agent_runtime_smoke_subprocess_default": agent_runtime_details.get("subprocess_default"),
         "agent_runtime_smoke_public_safe": agent_runtime_details.get("public_safe"),
+        "chat_runtime_smoke_schema": chat_runtime_smoke.get("schema"),
+        "chat_runtime_smoke_passed": chat_runtime_smoke.get("passed"),
+        "chat_runtime_smoke_status": chat_runtime_smoke.get("status"),
+        "chat_runtime_smoke_engine": chat_runtime_smoke.get("engine"),
+        "chat_runtime_smoke_llm_mode": chat_runtime_smoke.get("llm_mode"),
+        "chat_runtime_smoke_chat_surface_id": chat_runtime_surface.get("id"),
+        "chat_runtime_smoke_chat_status": chat_runtime_details.get("chat_status"),
+        "chat_runtime_smoke_reply_generation_mode": chat_runtime_details.get("reply_generation_mode"),
+        "chat_runtime_smoke_conversation_intent": chat_runtime_details.get("conversation_intent"),
+        "chat_runtime_smoke_llm_status": chat_runtime_details.get("llm_status"),
+        "chat_runtime_smoke_preflight_status": chat_runtime_details.get("preflight_status"),
+        "chat_runtime_smoke_preflight_network_call": chat_runtime_details.get("preflight_network_call_made"),
+        "chat_runtime_smoke_selected_memory_count": chat_runtime_details.get("selected_memory_count"),
+        "chat_runtime_smoke_trace_steps": chat_runtime_details.get("trace_steps"),
+        "chat_runtime_smoke_stored_private_reasoning_trace": chat_runtime_details.get(
+            "stored_private_reasoning_trace"
+        ),
+        "chat_runtime_smoke_learning_update_performed": chat_runtime_details.get("learning_update_performed"),
+        "chat_runtime_smoke_provider_not_ready": chat_runtime_details.get("provider_not_ready"),
+        "chat_runtime_smoke_secret_values_exported": chat_runtime_policy.get("secret_values_exported"),
+        "chat_runtime_smoke_raw_provider_payload_saved": chat_runtime_policy.get("raw_provider_payload_saved"),
+        "chat_runtime_smoke_private_reasoning_trace": chat_runtime_policy.get("private_reasoning_trace"),
+        "chat_runtime_smoke_learning_auto_promotion_performed": chat_runtime_policy.get(
+            "learning_auto_promotion_performed"
+        ),
         "tool_capability_audit_schema": tool_audit.get("schema"),
         "tool_capability_audit_passed": tool_audit.get("passed"),
         "tool_capability_audit_status": tool_audit.get("status"),
@@ -1267,6 +1318,8 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
             and application_runtime.get("network_access") == "blocked"
             and application_preflight.get("network_call_made_by_preflight") is False
             and agent_runtime_details.get("preflight_network_call_made") is False
+            and chat_runtime_details.get("preflight_network_call_made") is False
+            and chat_runtime_policy.get("secret_values_exported") is False
             and agent_runtime_details.get("network_default") == "blocked"
             and agent_runtime_details.get("subprocess_default") == "blocked"
             and tool_audit_public.get("network_call_performed") is False
@@ -1333,6 +1386,23 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
         and details["agent_runtime_smoke_network_default"] == "blocked"
         and details["agent_runtime_smoke_subprocess_default"] == "blocked"
         and details["agent_runtime_smoke_public_safe"] is True
+        and details["chat_runtime_smoke_schema"] == CHAT_RUNTIME_SMOKE_SCHEMA
+        and details["chat_runtime_smoke_passed"] is True
+        and details["chat_runtime_smoke_status"] == "passed"
+        and details["chat_runtime_smoke_engine"] == "deterministic_local"
+        and details["chat_runtime_smoke_llm_mode"] == "offline"
+        and details["chat_runtime_smoke_chat_surface_id"] == "codex-bridge-chat"
+        and details["chat_runtime_smoke_chat_status"] == "completed"
+        and details["chat_runtime_smoke_llm_status"] == "completed"
+        and details["chat_runtime_smoke_preflight_network_call"] is False
+        and isinstance(details["chat_runtime_smoke_selected_memory_count"], int)
+        and details["chat_runtime_smoke_stored_private_reasoning_trace"] is False
+        and details["chat_runtime_smoke_learning_update_performed"] is False
+        and details["chat_runtime_smoke_provider_not_ready"] is False
+        and details["chat_runtime_smoke_secret_values_exported"] is False
+        and details["chat_runtime_smoke_raw_provider_payload_saved"] is False
+        and details["chat_runtime_smoke_private_reasoning_trace"] == "do_not_store"
+        and details["chat_runtime_smoke_learning_auto_promotion_performed"] is False
         and details["tool_capability_audit_schema"] == TOOL_CAPABILITY_AUDIT_SCHEMA
         and details["tool_capability_audit_passed"] is True
         and details["tool_capability_audit_status"] == "passed"
