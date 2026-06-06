@@ -162,6 +162,27 @@ def run_llm_live_readiness_suite(
             "provider_not_ready": chat_smoke.get("details", {}).get("provider_not_ready")
             if isinstance(chat_smoke.get("details"), dict)
             else None,
+            "runtime_status_card_schema": chat_smoke.get("details", {}).get("runtime_status_card_schema")
+            if isinstance(chat_smoke.get("details"), dict)
+            else None,
+            "runtime_status_card_status": chat_smoke.get("details", {}).get("runtime_status_card_status")
+            if isinstance(chat_smoke.get("details"), dict)
+            else None,
+            "runtime_status_card_fallback_used": chat_smoke.get("details", {}).get(
+                "runtime_status_card_fallback_used"
+            )
+            if isinstance(chat_smoke.get("details"), dict)
+            else None,
+            "runtime_status_card_presented_as_live": chat_smoke.get("details", {}).get(
+                "runtime_status_card_presented_as_live"
+            )
+            if isinstance(chat_smoke.get("details"), dict)
+            else None,
+            "runtime_status_card_learning_decision": chat_smoke.get("details", {}).get(
+                "runtime_status_card_learning_decision"
+            )
+            if isinstance(chat_smoke.get("details"), dict)
+            else None,
         },
     }
     passed = (

@@ -25,6 +25,7 @@ from ai22b.talent_foundry.llm_runtime import build_llm_provider_preflight, invok
 MEMORY_SUBSTRATE_SCHEMA = "ai-talent-memory-substrate/v1"
 CHAT_CONTEXT_SCHEMA = "ai-talent-chat-context/v1"
 CHAT_RUN_SCHEMA = "ai-talent-chat-run/v1"
+CHAT_RUNTIME_STATUS_CARD_SCHEMA = "paideia-chat-runtime-status-card/v1"
 DEFAULT_OPENAI_CHAT_MODEL = "gpt-5.2"
 
 RESEARCH_BASIS = [
@@ -2124,6 +2125,159 @@ def _draft_chat_reply(
     }
 
 
+def _chat_learning_decision(run: dict[str, Any]) -> dict[str, Any]:
+    update = run.get("chat_learning_update", {})
+    if not isinstance(update, dict) or not update.get("decision"):
+        return {
+            "decision": "not_requested",
+            "ledger_write_performed": False,
+            "automatic_promotion_performed": False,
+            "review_required": False,
+        }
+    return {
+        "decision": update.get("decision"),
+        "ledger_write_performed": bool(update.get("ledger_write_performed", False)),
+        "automatic_promotion_performed": bool(update.get("automatic_promotion_performed", False)),
+        "latest_experience_id": update.get("latest_experience_id"),
+        "review_required": update.get("decision") in {"quarantined", "candidate_pending_boss_review"},
+    }
+
+
+def _chat_status_card_status(
+    *,
+    chat_status: str,
+    reply_generation_mode: str,
+    fallback_used: bool,
+    live_attempt_status: str | None,
+) -> str:
+    if chat_status == "needs_configuration":
+        return "needs_configuration"
+    if fallback_used:
+        return "completed_with_fallback"
+    if reply_generation_mode in {"live_openai_responses", "live_generic_llm_client"} and live_attempt_status == "completed":
+        return "completed_live"
+    return "completed_offline"
+
+
+def _chat_status_card_next_actions(
+    *,
+    status: str,
+    llm_mode: str,
+    preflight: dict[str, Any],
+    learning_decision: dict[str, Any],
+) -> list[str]:
+    actions: list[str] = []
+    preflight_next_actions = preflight.get("next_actions", [])
+    if not isinstance(preflight_next_actions, list):
+        preflight_next_actions = []
+    if status == "needs_configuration":
+        actions.extend(preflight_next_actions)
+        actions.append("Retry live chat only after the provider doctor passes with an explicit live check.")
+    elif status == "completed_with_fallback":
+        actions.append("Treat this answer as deterministic fallback, not a live-provider answer.")
+        actions.append("Review the quarantined chat learning entry before promoting any lesson.")
+        actions.extend(preflight_next_actions[:2])
+    elif status == "completed_live":
+        actions.append("Review the live answer and learning candidate before promotion.")
+    else:
+        actions.append("Use offline chat for local deterministic checks, or switch to auto/live after provider readiness is explicit.")
+    if learning_decision.get("decision") == "quarantined":
+        actions.append("Inspect the quarantined experience before using it as future memory.")
+    if llm_mode == "live" and status != "completed_live":
+        actions.append("Do not present this turn as a successful live provider conversation.")
+    return list(dict.fromkeys(str(action) for action in actions if action))
+
+
+def _build_chat_runtime_status_card(
+    *,
+    run: dict[str, Any],
+    llm_provider_preflight: dict[str, Any],
+    live_llm_attempt: dict[str, Any] | None,
+    learn_from_chat: bool,
+) -> dict[str, Any]:
+    llm_result = run.get("llm_runtime_result", {}) if isinstance(run.get("llm_runtime_result"), dict) else {}
+    fallback_used = bool(llm_result.get("fallback_used"))
+    live_attempt_status = (live_llm_attempt or {}).get("status")
+    card_status = _chat_status_card_status(
+        chat_status=str(run.get("chat_status")),
+        reply_generation_mode=str(run.get("reply_generation_mode")),
+        fallback_used=fallback_used,
+        live_attempt_status=live_attempt_status,
+    )
+    learning_decision = _chat_learning_decision(run)
+    preflight_data_policy = (
+        llm_provider_preflight.get("data_policy", {})
+        if isinstance(llm_provider_preflight.get("data_policy"), dict)
+        else {}
+    )
+    return {
+        "schema": CHAT_RUNTIME_STATUS_CARD_SCHEMA,
+        "status": card_status,
+        "chat_status": run.get("chat_status"),
+        "llm_mode": run.get("llm_mode"),
+        "reply_generation_mode": run.get("reply_generation_mode"),
+        "selected_engine": llm_provider_preflight.get("engine") or llm_result.get("engine"),
+        "model": llm_provider_preflight.get("model") or llm_result.get("model"),
+        "provider_preflight": {
+            "schema": llm_provider_preflight.get("schema"),
+            "status": llm_provider_preflight.get("status"),
+            "provider_doctor_status": llm_provider_preflight.get("provider_doctor_status"),
+            "live_path_selected": llm_provider_preflight.get("live_path_selected"),
+            "live_check_performed": llm_provider_preflight.get("live_check_performed"),
+            "network_call_made_by_preflight": llm_provider_preflight.get("network_call_made_by_preflight"),
+            "blocking_checks": llm_provider_preflight.get("blocking_checks", []),
+        },
+        "live_attempt": {
+            "requested": run.get("llm_mode") in {"auto", "live"},
+            "status": live_attempt_status or "skipped",
+            "engine": (live_llm_attempt or {}).get("engine"),
+            "provider_adapter": (live_llm_attempt or {}).get("provider_adapter"),
+            "reason": (live_llm_attempt or {}).get("reason"),
+        },
+        "fallback": {
+            "used": fallback_used,
+            "presented_as_live": False,
+            "reason": (live_llm_attempt or {}).get("reason") if fallback_used else None,
+        },
+        "learning": {
+            "learn_from_chat_requested": bool(learn_from_chat),
+            **learning_decision,
+        },
+        "public_safe": {
+            "secret_values_exported": False,
+            "raw_provider_payload_saved": False,
+            "private_reasoning_trace": "do_not_store",
+            "send_private_training_files": preflight_data_policy.get("send_private_training_files", False),
+        },
+        "user_visible_summary": {
+            "ko": (
+                "live provider 설정이 필요해서 실행을 시작하지 않았습니다."
+                if card_status == "needs_configuration"
+                else "live provider 실패 후 로컬 deterministic fallback으로 답했으며 학습은 검토 대기입니다."
+                if card_status == "completed_with_fallback"
+                else "live provider로 답했지만 학습은 검토 후에만 반영됩니다."
+                if card_status == "completed_live"
+                else "로컬 offline 엔진으로 답했으며 live provider 호출은 없었습니다."
+            ),
+            "en": (
+                "Live provider configuration is required before this chat can run."
+                if card_status == "needs_configuration"
+                else "The live provider failed or was unavailable; the reply used deterministic fallback and learning needs review."
+                if card_status == "completed_with_fallback"
+                else "The reply came from the live provider; learning still requires review."
+                if card_status == "completed_live"
+                else "The reply used the local offline engine; no live provider call was made."
+            ),
+        },
+        "next_actions": _chat_status_card_next_actions(
+            status=card_status,
+            llm_mode=str(run.get("llm_mode")),
+            preflight=llm_provider_preflight,
+            learning_decision=learning_decision,
+        ),
+    }
+
+
 def run_chat_turn_from_employment(
     employment_record_path: Path,
     *,
@@ -2395,6 +2549,21 @@ def run_chat_turn_from_employment(
                 latest_experience_id=run["chat_learning_update"].get("latest_experience_id"),
             )
         )
+
+    run["chat_runtime_status_card"] = _build_chat_runtime_status_card(
+        run=run,
+        llm_provider_preflight=llm_provider_preflight,
+        live_llm_attempt=live_llm_attempt,
+        learn_from_chat=learn_from_chat,
+    )
+    run["chat_execution_trace"].append(
+        _chat_trace_entry(
+            "chat_runtime_status_card_recorded",
+            status=run["chat_runtime_status_card"]["status"],
+            fallback_used=run["chat_runtime_status_card"]["fallback"]["used"],
+            learning_decision=run["chat_runtime_status_card"]["learning"]["decision"],
+        )
+    )
 
     run_output_path = output_path or target_root / entrypoints.get("last_chat", "last_hired_agent_chat.json")
     _write_json(run_output_path, run)

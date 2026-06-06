@@ -356,6 +356,14 @@ class CliSmokeTests(unittest.TestCase):
         self.assertFalse(chat_runtime_smoke["details"]["stored_private_reasoning_trace"])
         self.assertFalse(chat_runtime_smoke["details"]["learning_update_performed"])
         self.assertFalse(chat_runtime_smoke["details"]["provider_not_ready"])
+        self.assertEqual(
+            chat_runtime_smoke["details"]["runtime_status_card_schema"],
+            "paideia-chat-runtime-status-card/v1",
+        )
+        self.assertEqual(chat_runtime_smoke["details"]["runtime_status_card_status"], "completed_offline")
+        self.assertFalse(chat_runtime_smoke["details"]["runtime_status_card_fallback_used"])
+        self.assertFalse(chat_runtime_smoke["details"]["runtime_status_card_presented_as_live"])
+        self.assertEqual(chat_runtime_smoke["details"]["runtime_status_card_learning_decision"], "not_requested")
         self.assertFalse(chat_runtime_smoke["data_policy"]["secret_values_exported"])
         self.assertFalse(chat_runtime_smoke["data_policy"]["raw_provider_payload_saved"])
         self.assertEqual(chat_runtime_smoke["data_policy"]["private_reasoning_trace"], "do_not_store")
@@ -377,6 +385,22 @@ class CliSmokeTests(unittest.TestCase):
         self.assertTrue(llm_live_readiness["checks"]["agent_runtime_smoke"]["passed"])
         self.assertTrue(llm_live_readiness["checks"]["chat_runtime_smoke"]["passed"])
         self.assertEqual(llm_live_readiness["checks"]["chat_runtime_smoke"]["chat_status"], "completed")
+        self.assertEqual(
+            llm_live_readiness["checks"]["chat_runtime_smoke"]["runtime_status_card_schema"],
+            "paideia-chat-runtime-status-card/v1",
+        )
+        self.assertEqual(
+            llm_live_readiness["checks"]["chat_runtime_smoke"]["runtime_status_card_status"],
+            "completed_offline",
+        )
+        self.assertFalse(llm_live_readiness["checks"]["chat_runtime_smoke"]["runtime_status_card_fallback_used"])
+        self.assertFalse(
+            llm_live_readiness["checks"]["chat_runtime_smoke"]["runtime_status_card_presented_as_live"]
+        )
+        self.assertEqual(
+            llm_live_readiness["checks"]["chat_runtime_smoke"]["runtime_status_card_learning_decision"],
+            "not_requested",
+        )
         self.assertFalse(llm_live_readiness["data_policy"]["secret_values_exported"])
         self.assertFalse(llm_live_readiness["data_policy"]["raw_provider_payload_saved"])
         self.assertFalse(llm_live_readiness["data_policy"]["live_provider_call_attempted"])
@@ -501,6 +525,22 @@ class CliSmokeTests(unittest.TestCase):
         self.assertEqual(first_run_doctor["artifacts"]["chat_runtime_smoke"]["schema"], "paideia-chat-runtime-smoke/v1")
         self.assertEqual(first_run_doctor["artifacts"]["chat_runtime_smoke"]["chat_status"], "completed")
         self.assertFalse(first_run_doctor["artifacts"]["chat_runtime_smoke"]["stored_private_reasoning_trace"])
+        self.assertEqual(
+            first_run_doctor["artifacts"]["chat_runtime_smoke"]["runtime_status_card_schema"],
+            "paideia-chat-runtime-status-card/v1",
+        )
+        self.assertEqual(
+            first_run_doctor["artifacts"]["chat_runtime_smoke"]["runtime_status_card_status"],
+            "completed_offline",
+        )
+        self.assertFalse(first_run_doctor["artifacts"]["chat_runtime_smoke"]["runtime_status_card_fallback_used"])
+        self.assertFalse(
+            first_run_doctor["artifacts"]["chat_runtime_smoke"]["runtime_status_card_presented_as_live"]
+        )
+        self.assertEqual(
+            first_run_doctor["artifacts"]["chat_runtime_smoke"]["runtime_status_card_learning_decision"],
+            "not_requested",
+        )
         self.assertEqual(
             first_run_doctor["artifacts"]["llm_live_readiness"]["schema"],
             "paideia-llm-live-readiness-suite/v1",

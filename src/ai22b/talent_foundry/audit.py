@@ -33,6 +33,7 @@ from ai22b.talent_foundry.llm_runtime import (
     run_llm_application_smoke,
 )
 from ai22b.talent_foundry.learning_loop import build_reasoning_kernel, create_learning_ledger
+from ai22b.talent_foundry.memory_substrate import CHAT_RUNTIME_STATUS_CARD_SCHEMA
 from ai22b.talent_foundry.llm_adapter_contracts import LLM_ADAPTER_CONTRACTS_SCHEMA, run_llm_adapter_contracts
 from ai22b.talent_foundry.llm_onboarding import build_llm_connection_profile
 from ai22b.talent_foundry.onboarding_choices import LLM_SERVICE_CATALOG
@@ -1272,6 +1273,15 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
         ),
         "chat_runtime_smoke_learning_update_performed": chat_runtime_details.get("learning_update_performed"),
         "chat_runtime_smoke_provider_not_ready": chat_runtime_details.get("provider_not_ready"),
+        "chat_runtime_status_card_schema": chat_runtime_details.get("runtime_status_card_schema"),
+        "chat_runtime_status_card_status": chat_runtime_details.get("runtime_status_card_status"),
+        "chat_runtime_status_card_fallback_used": chat_runtime_details.get("runtime_status_card_fallback_used"),
+        "chat_runtime_status_card_presented_as_live": chat_runtime_details.get(
+            "runtime_status_card_presented_as_live"
+        ),
+        "chat_runtime_status_card_learning_decision": chat_runtime_details.get(
+            "runtime_status_card_learning_decision"
+        ),
         "chat_runtime_smoke_secret_values_exported": chat_runtime_policy.get("secret_values_exported"),
         "chat_runtime_smoke_raw_provider_payload_saved": chat_runtime_policy.get("raw_provider_payload_saved"),
         "chat_runtime_smoke_private_reasoning_trace": chat_runtime_policy.get("private_reasoning_trace"),
@@ -1442,6 +1452,11 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
         and details["chat_runtime_smoke_stored_private_reasoning_trace"] is False
         and details["chat_runtime_smoke_learning_update_performed"] is False
         and details["chat_runtime_smoke_provider_not_ready"] is False
+        and details["chat_runtime_status_card_schema"] == CHAT_RUNTIME_STATUS_CARD_SCHEMA
+        and details["chat_runtime_status_card_status"] == "completed_offline"
+        and details["chat_runtime_status_card_fallback_used"] is False
+        and details["chat_runtime_status_card_presented_as_live"] is False
+        and details["chat_runtime_status_card_learning_decision"] == "not_requested"
         and details["chat_runtime_smoke_secret_values_exported"] is False
         and details["chat_runtime_smoke_raw_provider_payload_saved"] is False
         and details["chat_runtime_smoke_private_reasoning_trace"] == "do_not_store"

@@ -2272,6 +2272,16 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertFalse(report["checks"]["chat_runtime_smoke"]["passed"])
         self.assertEqual(report["checks"]["chat_runtime_smoke"]["chat_status"], "needs_configuration")
         self.assertTrue(report["checks"]["chat_runtime_smoke"]["provider_not_ready"])
+        self.assertEqual(
+            report["checks"]["chat_runtime_smoke"]["runtime_status_card_schema"],
+            "paideia-chat-runtime-status-card/v1",
+        )
+        self.assertEqual(
+            report["checks"]["chat_runtime_smoke"]["runtime_status_card_status"],
+            "needs_configuration",
+        )
+        self.assertFalse(report["checks"]["chat_runtime_smoke"]["runtime_status_card_fallback_used"])
+        self.assertFalse(report["checks"]["chat_runtime_smoke"]["runtime_status_card_presented_as_live"])
         self.assertFalse(report["data_policy"]["secret_values_exported"])
         self.assertFalse(report["data_policy"]["raw_provider_payload_saved"])
         self.assertTrue(report["data_policy"]["live_provider_call_attempted"])
@@ -2318,6 +2328,11 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertFalse(report["details"]["preflight_network_call_made"])
         self.assertTrue(report["details"]["provider_not_ready"])
         self.assertFalse(report["details"]["learning_update_performed"])
+        self.assertEqual(report["details"]["runtime_status_card_schema"], "paideia-chat-runtime-status-card/v1")
+        self.assertEqual(report["details"]["runtime_status_card_status"], "needs_configuration")
+        self.assertFalse(report["details"]["runtime_status_card_fallback_used"])
+        self.assertFalse(report["details"]["runtime_status_card_presented_as_live"])
+        self.assertEqual(report["details"]["runtime_status_card_learning_decision"], "not_requested")
         self.assertFalse(report["data_policy"]["secret_values_exported"])
         self.assertFalse(report["data_policy"]["raw_provider_payload_saved"])
         self.assertEqual(report["data_policy"]["private_reasoning_trace"], "do_not_store")
@@ -3153,6 +3168,14 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertFalse(first_run_details["chat_runtime_smoke_stored_private_reasoning_trace"])
         self.assertFalse(first_run_details["chat_runtime_smoke_learning_update_performed"])
         self.assertFalse(first_run_details["chat_runtime_smoke_provider_not_ready"])
+        self.assertEqual(
+            first_run_details["chat_runtime_status_card_schema"],
+            "paideia-chat-runtime-status-card/v1",
+        )
+        self.assertEqual(first_run_details["chat_runtime_status_card_status"], "completed_offline")
+        self.assertFalse(first_run_details["chat_runtime_status_card_fallback_used"])
+        self.assertFalse(first_run_details["chat_runtime_status_card_presented_as_live"])
+        self.assertEqual(first_run_details["chat_runtime_status_card_learning_decision"], "not_requested")
         self.assertFalse(first_run_details["chat_runtime_smoke_secret_values_exported"])
         self.assertFalse(first_run_details["chat_runtime_smoke_raw_provider_payload_saved"])
         self.assertEqual(first_run_details["chat_runtime_smoke_private_reasoning_trace"], "do_not_store")
@@ -3624,6 +3647,10 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(report["artifacts"]["first_chat"]["output"], "paideia_first_run_chat_smoke.json")
         self.assertEqual(first_chat["chat_status"], "completed")
         self.assertFalse(first_chat["stored_private_reasoning_trace"])
+        self.assertEqual(first_chat["chat_runtime_status_card"]["schema"], "paideia-chat-runtime-status-card/v1")
+        self.assertEqual(first_chat["chat_runtime_status_card"]["status"], "completed_offline")
+        self.assertFalse(first_chat["chat_runtime_status_card"]["fallback"]["used"])
+        self.assertEqual(first_chat["chat_runtime_status_card"]["learning"]["decision"], "not_requested")
 
     def test_migrate_openclaw_skill_wraps_and_quarantines_imported_asset(self) -> None:
         from ai22b.talent_foundry.agent_program import build_paideia_agent_install_kit, doctor_agent_program

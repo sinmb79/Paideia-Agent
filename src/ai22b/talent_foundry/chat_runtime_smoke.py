@@ -166,6 +166,11 @@ def run_chat_runtime_smoke(
     )
     preflight = chat.get("llm_provider_preflight", {}) if isinstance(chat.get("llm_provider_preflight"), dict) else {}
     llm_result = chat.get("llm_runtime_result", {}) if isinstance(chat.get("llm_runtime_result"), dict) else {}
+    status_card = (
+        chat.get("chat_runtime_status_card", {})
+        if isinstance(chat.get("chat_runtime_status_card"), dict)
+        else {}
+    )
     trace = chat.get("chat_execution_trace", []) if isinstance(chat.get("chat_execution_trace"), list) else []
     selected_nodes = (
         chat.get("chat_context", {})
@@ -203,6 +208,20 @@ def run_chat_runtime_smoke(
             "stored_private_reasoning_trace": chat.get("stored_private_reasoning_trace"),
             "learning_update_performed": bool(chat.get("chat_learning_update")),
             "provider_not_ready": provider_not_ready,
+            "runtime_status_card_schema": status_card.get("schema"),
+            "runtime_status_card_status": status_card.get("status"),
+            "runtime_status_card_fallback_used": status_card.get("fallback", {}).get("used")
+            if isinstance(status_card.get("fallback"), dict)
+            else None,
+            "runtime_status_card_presented_as_live": status_card.get("fallback", {}).get("presented_as_live")
+            if isinstance(status_card.get("fallback"), dict)
+            else None,
+            "runtime_status_card_learning_decision": status_card.get("learning", {}).get("decision")
+            if isinstance(status_card.get("learning"), dict)
+            else None,
+            "runtime_status_card_user_summary_ko": status_card.get("user_visible_summary", {}).get("ko")
+            if isinstance(status_card.get("user_visible_summary"), dict)
+            else None,
         },
         "artifacts": {
             "employment_record": str(employment_record_path),
