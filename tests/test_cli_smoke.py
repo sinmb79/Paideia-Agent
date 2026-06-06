@@ -364,6 +364,13 @@ class CliSmokeTests(unittest.TestCase):
             agent_runtime_smoke["details"]["agent_runtime_status_card_memory_decision"],
             "candidate_pending_boss_review",
         )
+        self.assertEqual(agent_runtime_smoke["live_llm_agent_proof"]["schema"], "paideia-live-llm-agent-proof/v1")
+        self.assertEqual(agent_runtime_smoke["live_llm_agent_proof"]["status"], "offline_verified")
+        self.assertTrue(agent_runtime_smoke["live_llm_agent_proof"]["passed"])
+        self.assertEqual(
+            agent_runtime_smoke["live_llm_agent_proof"]["provider_path"],
+            "offline_deterministic_no_provider_call",
+        )
 
         self.assertEqual(chat_runtime_smoke["schema"], "paideia-chat-runtime-smoke/v1")
         self.assertTrue(chat_runtime_smoke["passed"])
@@ -452,6 +459,18 @@ class CliSmokeTests(unittest.TestCase):
             llm_live_readiness["live_connection_status_card"]["agent_runtime_status_card"]["public_safe"]
         )
         self.assertEqual(
+            llm_live_readiness["live_connection_status_card"]["live_llm_agent_proof"]["schema"],
+            "paideia-live-llm-agent-proof/v1",
+        )
+        self.assertEqual(
+            llm_live_readiness["live_connection_status_card"]["live_llm_agent_proof"]["status"],
+            "offline_verified",
+        )
+        self.assertEqual(
+            llm_live_readiness["live_connection_status_card"]["live_llm_agent_proof"]["provider_path"],
+            "offline_deterministic_no_provider_call",
+        )
+        self.assertEqual(
             llm_live_readiness["live_connection_status_card"]["chat_memory_lifecycle_status_card"]["schema"],
             "paideia-memory-lifecycle-status-card/v1",
         )
@@ -483,6 +502,14 @@ class CliSmokeTests(unittest.TestCase):
         )
         self.assertTrue(
             llm_live_readiness["checks"]["agent_runtime_smoke"]["agent_runtime_status_card_public_safe"]
+        )
+        self.assertEqual(
+            llm_live_readiness["checks"]["agent_runtime_smoke"]["live_llm_agent_proof"]["schema"],
+            "paideia-live-llm-agent-proof/v1",
+        )
+        self.assertEqual(
+            llm_live_readiness["checks"]["agent_runtime_smoke"]["live_llm_agent_proof"]["status"],
+            "offline_verified",
         )
         self.assertTrue(llm_live_readiness["checks"]["chat_runtime_smoke"]["passed"])
         self.assertEqual(llm_live_readiness["checks"]["chat_runtime_smoke"]["chat_status"], "completed")
@@ -656,6 +683,18 @@ class CliSmokeTests(unittest.TestCase):
             first_run_doctor["artifacts"]["agent_runtime_smoke"]["tool_execution_status_card_status"],
             "completed_verified",
         )
+        self.assertEqual(
+            first_run_doctor["artifacts"]["agent_runtime_smoke"]["live_llm_agent_proof_schema"],
+            "paideia-live-llm-agent-proof/v1",
+        )
+        self.assertEqual(
+            first_run_doctor["artifacts"]["agent_runtime_smoke"]["live_llm_agent_proof_status"],
+            "offline_verified",
+        )
+        self.assertEqual(
+            first_run_doctor["artifacts"]["agent_runtime_smoke"]["live_llm_agent_proof_provider_path"],
+            "offline_deterministic_no_provider_call",
+        )
         self.assertEqual(first_run_doctor["artifacts"]["chat_runtime_smoke"]["schema"], "paideia-chat-runtime-smoke/v1")
         self.assertEqual(first_run_doctor["artifacts"]["chat_runtime_smoke"]["chat_status"], "completed")
         self.assertFalse(first_run_doctor["artifacts"]["chat_runtime_smoke"]["stored_private_reasoning_trace"])
@@ -707,6 +746,18 @@ class CliSmokeTests(unittest.TestCase):
         self.assertEqual(
             first_run_doctor["artifacts"]["llm_live_readiness"]["agent_runtime_status_card_status"],
             "completed_verified",
+        )
+        self.assertEqual(
+            first_run_doctor["artifacts"]["llm_live_readiness"]["live_llm_agent_proof_schema"],
+            "paideia-live-llm-agent-proof/v1",
+        )
+        self.assertEqual(
+            first_run_doctor["artifacts"]["llm_live_readiness"]["live_llm_agent_proof_status"],
+            "offline_verified",
+        )
+        self.assertEqual(
+            first_run_doctor["artifacts"]["llm_live_readiness"]["live_llm_agent_proof_provider_path"],
+            "offline_deterministic_no_provider_call",
         )
         self.assertEqual(
             first_run_doctor["artifacts"]["llm_live_readiness"]["chat_memory_lifecycle_status_card_schema"],

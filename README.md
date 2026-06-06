@@ -534,6 +534,8 @@ ai22b-talent-foundry run-agent-runtime-smoke `
   --output .\agent_runtime_smoke.json
 ```
 
+The agent runtime smoke also writes `paideia-live-llm-agent-proof/v1`. This packet separates `offline_verified`, injected `live_like_client_verified`, real `built_in_live_provider_client`, adapter-context, and `needs_configuration` paths so reviewers can tell whether a result was an offline proof, a live-like contract test, an actual provider client run, or a fail-closed configuration gate. It keeps only summary fields and records that raw provider payloads, hidden reasoning traces, and automatic memory promotion were not stored.
+
 Before daily conversation, `run-chat-runtime-smoke` runs the selected LLM and chat surface through the hired-chat path. It proves that the employment record, memory substrate, provider preflight, bounded reply generation, and review-gated learning posture are wired before a user starts chatting:
 
 ```powershell
@@ -554,7 +556,7 @@ ai22b-talent-foundry doctor-llm-live-readiness `
   --output-dir .\llm_live_readiness
 ```
 
-The suite writes `llm_live_readiness_suite.json`, `llm_provider_doctor.*.json`, `llm_application_smoke.*.json`, `agent_runtime_smoke.*.json`, and `chat_runtime_smoke.*.json`. The summary includes `live_connection_status_card`, which says whether the selected LLM is ready for live chat and agent work, whether only offline/no-network checks have passed, and which step blocks live use first. The card also surfaces the `agent_runtime_status_card`, the chat `memory_lifecycle_status_card`, and the chat runtime card's memory-lifecycle summary so first-run operators can see the request -> policy -> LLM -> tools -> verification -> memory route without opening raw run files. It stores only summaries, never secret values, raw provider payloads, private training files, full session replay, or hidden reasoning traces.
+The suite writes `llm_live_readiness_suite.json`, `llm_provider_doctor.*.json`, `llm_application_smoke.*.json`, `agent_runtime_smoke.*.json`, and `chat_runtime_smoke.*.json`. The summary includes `live_connection_status_card`, which says whether the selected LLM is ready for live chat and agent work, whether only offline/no-network checks have passed, and which step blocks live use first. The card also surfaces the `agent_runtime_status_card`, the agent `live_llm_agent_proof`, the chat `memory_lifecycle_status_card`, and the chat runtime card's memory-lifecycle summary so first-run operators can see the request -> policy -> LLM -> tools -> verification -> memory route without opening raw run files. It stores only summaries, never secret values, raw provider payloads, private training files, full session replay, or hidden reasoning traces.
 
 The same provider gate is enforced by installed/hired workspace, job, and dataflow runs. If a hired agent is run in live mode without a configured provider key or local endpoint, Paideia records `needs_configuration`, skips workspace artifact creation, skips job deliverables, skips dataflow synthesis, and leaves no learning promotion candidate beyond a quarantined configuration record. `audit-release` now includes `fail_closed_runtime_contract`, which exercises direct agent, hired workspace, hired job, dataflow, and chat paths with an unconfigured live provider and requires all of them to stop before tools, workspace artifacts, fallback-as-live replies, or learning promotion.
 

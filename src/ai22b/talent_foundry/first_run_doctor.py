@@ -159,6 +159,7 @@ def _live_readiness_summary(report: dict[str, Any]) -> dict[str, Any]:
     status_card = _as_dict(report.get("live_connection_status_card"))
     blocking_step = _as_dict(status_card.get("blocking_step"))
     agent_card = _as_dict(status_card.get("agent_runtime_status_card"))
+    agent_live_proof = _as_dict(status_card.get("live_llm_agent_proof"))
     chat_memory_card = _as_dict(status_card.get("chat_memory_lifecycle_status_card"))
     chat_runtime_card = _as_dict(status_card.get("chat_runtime_status_card"))
     chat_runtime_memory = _as_dict(chat_runtime_card.get("memory_lifecycle"))
@@ -186,6 +187,11 @@ def _live_readiness_summary(report: dict[str, Any]) -> dict[str, Any]:
         "agent_runtime_status_card_status": agent_card.get("status"),
         "agent_runtime_status_card_public_safe": agent_card.get("public_safe"),
         "agent_runtime_status_card_memory_decision": agent_card.get("memory_decision"),
+        "live_llm_agent_proof_schema": agent_live_proof.get("schema"),
+        "live_llm_agent_proof_status": agent_live_proof.get("status"),
+        "live_llm_agent_proof_passed": agent_live_proof.get("passed"),
+        "live_llm_agent_proof_level": agent_live_proof.get("proof_level"),
+        "live_llm_agent_proof_provider_path": agent_live_proof.get("provider_path"),
         "chat_memory_lifecycle_status_card_schema": chat_memory_card.get("schema"),
         "chat_memory_lifecycle_status_card_status": chat_memory_card.get("status"),
         "chat_memory_lifecycle_status_card_selected_count": chat_memory_card.get("selected_count"),
@@ -386,6 +392,7 @@ def doctor_first_run(
     application_runtime = _as_dict(application_smoke.get("runtime_result"))
     application_policy = _as_dict(application_smoke.get("data_policy"))
     agent_details = _as_dict(agent_runtime_smoke.get("details"))
+    agent_live_proof = _as_dict(agent_runtime_smoke.get("live_llm_agent_proof"))
     chat_details = _as_dict(chat_runtime_smoke.get("details"))
     chat_policy = _as_dict(chat_runtime_smoke.get("data_policy"))
     live_readiness_policy = _as_dict(llm_live_readiness.get("data_policy"))
@@ -488,6 +495,10 @@ def doctor_first_run(
         and agent_details.get("agent_runtime_status_card_status") == "completed_verified"
         and agent_details.get("agent_runtime_status_card_public_safe") is True
         and agent_details.get("tool_execution_status_card_status") == "completed_verified"
+        and agent_live_proof.get("schema") == "paideia-live-llm-agent-proof/v1"
+        and agent_live_proof.get("status") == "offline_verified"
+        and agent_live_proof.get("provider_path") == "offline_deterministic_no_provider_call"
+        and agent_live_proof.get("passed") is True
         and agent_details.get("public_safe") is True
         and agent_details.get("memory_auto_promotion_performed") is False,
         details={
@@ -504,6 +515,9 @@ def doctor_first_run(
             "tool_execution_status_card_schema": agent_details.get("tool_execution_status_card_schema"),
             "tool_execution_status_card_status": agent_details.get("tool_execution_status_card_status"),
             "completed_tools": agent_details.get("completed_tools"),
+            "live_llm_agent_proof_schema": agent_live_proof.get("schema"),
+            "live_llm_agent_proof_status": agent_live_proof.get("status"),
+            "live_llm_agent_proof_provider_path": agent_live_proof.get("provider_path"),
         },
     )
     _check(
@@ -646,6 +660,9 @@ def doctor_first_run(
             "llm_live_readiness_live_provider_call_attempted": live_readiness_policy.get(
                 "live_provider_call_attempted"
             ),
+            "llm_live_readiness_agent_live_proof_status": live_readiness_policy.get(
+                "agent_live_llm_proof_status"
+            ),
             "agent_network_default": agent_details.get("network_default"),
             "policy_eval_llm_called": policy_runtime.get("llm_called"),
         },
@@ -711,6 +728,9 @@ def doctor_first_run(
                 ),
                 "tool_execution_status_card_schema": agent_details.get("tool_execution_status_card_schema"),
                 "tool_execution_status_card_status": agent_details.get("tool_execution_status_card_status"),
+                "live_llm_agent_proof_schema": agent_live_proof.get("schema"),
+                "live_llm_agent_proof_status": agent_live_proof.get("status"),
+                "live_llm_agent_proof_provider_path": agent_live_proof.get("provider_path"),
             },
             "chat_runtime_smoke": _chat_smoke_summary(chat_runtime_smoke),
             "llm_live_readiness": _live_readiness_summary(llm_live_readiness),

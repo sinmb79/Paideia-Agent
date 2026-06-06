@@ -70,6 +70,8 @@ def _build_live_connection_status_card(
         status = "needs_live_configuration"
     chat_check = checks.get("chat_runtime_smoke", {})
     agent_check = checks.get("agent_runtime_smoke", {})
+    agent_proof = agent_check.get("live_llm_agent_proof", {})
+    agent_proof = agent_proof if isinstance(agent_proof, dict) else {}
     check_statuses = {
         key: {
             "status": value.get("status"),
@@ -116,6 +118,16 @@ def _build_live_connection_status_card(
             "status": agent_check.get("agent_runtime_status_card_status"),
             "public_safe": agent_check.get("agent_runtime_status_card_public_safe"),
             "memory_decision": agent_check.get("agent_runtime_status_card_memory_decision"),
+        },
+        "live_llm_agent_proof": {
+            "schema": agent_proof.get("schema"),
+            "status": agent_proof.get("status"),
+            "passed": agent_proof.get("passed"),
+            "proof_level": agent_proof.get("proof_level"),
+            "provider_path": agent_proof.get("provider_path"),
+            "live_client_generate_called": agent_proof.get("live_client_generate_called"),
+            "client_override_used": agent_proof.get("client_override_used"),
+            "built_in_provider_client_called": agent_proof.get("built_in_provider_client_called"),
         },
         "chat_memory_lifecycle_status_card": {
             "schema": chat_check.get("memory_lifecycle_status_card_schema"),
@@ -242,6 +254,11 @@ def run_llm_live_readiness_suite(
     _write_json(Path(artifacts["application_smoke"]), application_smoke)
     _write_json(Path(artifacts["agent_runtime_smoke"]), agent_smoke)
     _write_json(Path(artifacts["chat_runtime_smoke"]), chat_smoke)
+    agent_proof = (
+        agent_smoke.get("live_llm_agent_proof", {})
+        if isinstance(agent_smoke.get("live_llm_agent_proof"), dict)
+        else {}
+    )
     required_before_live = {
         "provider_doctor": "doctor-llm-provider --live-check",
         "application_smoke": "run-llm-application-smoke --live-check",
@@ -284,6 +301,17 @@ def run_llm_live_readiness_suite(
             "llm_client_contract_status": agent_smoke.get("details", {}).get("llm_client_contract_status")
             if isinstance(agent_smoke.get("details"), dict)
             else None,
+            "live_llm_agent_proof": {
+                "schema": agent_proof.get("schema"),
+                "status": agent_proof.get("status"),
+                "passed": agent_proof.get("passed"),
+                "proof_level": agent_proof.get("proof_level"),
+                "provider_path": agent_proof.get("provider_path"),
+                "live_runtime_path_selected": agent_proof.get("live_runtime_path_selected"),
+                "live_client_generate_called": agent_proof.get("live_client_generate_called"),
+                "client_override_used": agent_proof.get("client_override_used"),
+                "built_in_provider_client_called": agent_proof.get("built_in_provider_client_called"),
+            },
             "agent_runtime_status_card_schema": agent_smoke.get("details", {}).get(
                 "agent_runtime_status_card_schema"
             )
@@ -436,6 +464,9 @@ def run_llm_live_readiness_suite(
             "private_reasoning_trace": "do_not_store",
             "live_provider_called_only_when_live_check_requested": live_check,
             "live_provider_call_attempted": bool(live_check),
+            "agent_live_llm_proof_schema": agent_proof.get("schema"),
+            "agent_live_llm_proof_status": agent_proof.get("status"),
+            "agent_live_llm_proof_provider_path": agent_proof.get("provider_path"),
         },
         "next_actions": live_connection_status_card["next_actions"],
     }

@@ -305,6 +305,8 @@ ai22b-talent-foundry run-agent-runtime-smoke `
   --output .\agent_runtime_smoke.json
 ```
 
+agent runtime smoke는 `paideia-live-llm-agent-proof/v1`도 함께 씁니다. 이 packet은 `offline_verified`, 주입된 `live_like_client_verified`, 실제 `built_in_live_provider_client`, adapter-context, `needs_configuration` 경로를 분리해서 결과가 오프라인 증명인지, live-like 계약 테스트인지, 실제 provider client 실행인지, 설정 부족으로 fail-closed 된 것인지 한눈에 보여줍니다. 저장되는 것은 요약 필드뿐이며 raw provider payload, 숨은 추론 trace, 자동 memory promotion이 저장되지 않았음을 기록합니다.
+
 일상 대화 전에는 `run-chat-runtime-smoke`로 선택한 LLM과 채팅 표면이 hired-chat 경로를 제대로 타는지 확인합니다. 이 명령은 employment record, memory substrate, provider preflight, 제한된 답변 생성, review-gated learning 정책이 연결되어 있는지 검증합니다.
 
 ```powershell
@@ -325,7 +327,7 @@ ai22b-talent-foundry doctor-llm-live-readiness `
   --output-dir .\llm_live_readiness
 ```
 
-이 suite는 `llm_live_readiness_suite.json`, `llm_provider_doctor.*.json`, `llm_application_smoke.*.json`, `agent_runtime_smoke.*.json`, `chat_runtime_smoke.*.json`을 씁니다. 요약에는 `live_connection_status_card`가 포함되어 선택한 LLM이 live 채팅과 에이전트 업무에 준비됐는지, offline/no-network 검증만 통과한 상태인지, live 사용을 막는 첫 단계가 무엇인지 보여줍니다. 이 카드에는 `agent_runtime_status_card`, 채팅 `memory_lifecycle_status_card`, 채팅 runtime card의 memory-lifecycle 요약도 함께 올라오므로 first-run 운영자는 raw 실행 파일을 열지 않고도 요청 -> 정책 -> LLM -> 도구 -> 검증 -> 메모리 경로를 확인할 수 있습니다. 저장되는 것은 요약 정보뿐이며 secret 값, raw provider payload, 비공개 학습 파일, 전체 세션 replay, 숨은 추론 trace는 저장하지 않습니다.
+이 suite는 `llm_live_readiness_suite.json`, `llm_provider_doctor.*.json`, `llm_application_smoke.*.json`, `agent_runtime_smoke.*.json`, `chat_runtime_smoke.*.json`을 씁니다. 요약에는 `live_connection_status_card`가 포함되어 선택한 LLM이 live 채팅과 에이전트 업무에 준비됐는지, offline/no-network 검증만 통과한 상태인지, live 사용을 막는 첫 단계가 무엇인지 보여줍니다. 이 카드에는 `agent_runtime_status_card`, agent `live_llm_agent_proof`, 채팅 `memory_lifecycle_status_card`, 채팅 runtime card의 memory-lifecycle 요약도 함께 올라오므로 first-run 운영자는 raw 실행 파일을 열지 않고도 요청 -> 정책 -> LLM -> 도구 -> 검증 -> 메모리 경로를 확인할 수 있습니다. 저장되는 것은 요약 정보뿐이며 secret 값, raw provider payload, 비공개 학습 파일, 전체 세션 replay, 숨은 추론 trace는 저장하지 않습니다.
 
 같은 provider gate는 설치/고용된 workspace, job, dataflow 실행에도 적용됩니다. 고용된 에이전트를 live mode로 실행했지만 provider API key 또는 로컬 endpoint가 준비되지 않았으면 Paideia는 `needs_configuration`을 기록하고, workspace 산출물 생성, job deliverable 생성, dataflow synthesis, 학습 승격 후보 생성을 모두 시작하지 않습니다. dataflow의 경우에도 promotion은 quarantine 상태의 설정 필요 기록으로만 남습니다. `audit-release`는 이제 `fail_closed_runtime_contract`를 포함해서 direct agent, hired workspace, hired job, dataflow, chat 경로를 live provider 미설정 상태로 직접 실행하고, 도구 실행, workspace artifact 생성, live로 위장한 fallback 답변, 학습 승격이 모두 시작되지 않았는지 검사합니다.
 

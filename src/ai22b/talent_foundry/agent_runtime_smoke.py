@@ -14,6 +14,7 @@ from ai22b.talent_foundry.llm_runtime import build_llm_provider_preflight, build
 
 
 AGENT_RUNTIME_SMOKE_SCHEMA = "paideia-agent-runtime-smoke/v1"
+LIVE_LLM_AGENT_PROOF_SCHEMA = "paideia-live-llm-agent-proof/v1"
 AGENT_RUNTIME_SMOKE_ACCEPTED_LLM_STATUSES = {
     "completed",
     "bridge_context_prepared",
@@ -73,6 +74,146 @@ def _tool_statuses(tool_execution: dict[str, Any]) -> dict[str, str]:
     }
 
 
+def _build_live_llm_agent_proof(
+    *,
+    engine: str,
+    service: str | None,
+    llm_mode: str,
+    run_attempted: bool,
+    client_override_used: bool,
+    preflight: dict[str, Any],
+    details: dict[str, Any],
+    llm_client_contract: dict[str, Any] | None = None,
+    public_safe: bool,
+    report_passed: bool,
+) -> dict[str, Any]:
+    contract = llm_client_contract if isinstance(llm_client_contract, dict) else {}
+    client_executor = contract.get("client_executor")
+    llm_status = details.get("llm_status")
+    if llm_mode != "live":
+        proof_status = "offline_verified"
+        provider_path = "offline_deterministic_no_provider_call"
+        proof_level = "offline_no_network"
+    elif not run_attempted:
+        proof_status = "needs_configuration"
+        provider_path = "fail_closed_before_agent_loop"
+        proof_level = "configuration_gate"
+    elif client_executor == "injected_client" or client_override_used:
+        proof_status = "live_like_client_verified" if report_passed else "live_like_client_failed"
+        provider_path = "injected_live_client_contract"
+        proof_level = "injected_client_live_like"
+    elif client_executor == "built_in_client":
+        proof_status = "real_live_provider_verified" if report_passed and llm_status == "completed" else "real_live_provider_not_ready"
+        provider_path = "built_in_live_provider_client"
+        proof_level = "real_provider_client"
+    elif llm_status in {"bridge_context_prepared", "adapter_manifest_ready"}:
+        proof_status = "adapter_context_prepared" if report_passed else "adapter_context_failed"
+        provider_path = "adapter_context_no_live_generation"
+        proof_level = "adapter_context"
+    else:
+        proof_status = "failed" if not report_passed else "verified"
+        provider_path = "unknown_or_unclassified_live_path"
+        proof_level = "unknown"
+
+    live_client_generate_called = bool(
+        llm_mode == "live"
+        and run_attempted
+        and (
+            client_override_used
+            or client_executor in {"injected_client", "built_in_client"}
+            or llm_status in {"completed", "unavailable"}
+        )
+    )
+    built_in_provider_client_called = bool(llm_mode == "live" and run_attempted and client_executor == "built_in_client")
+    injected_client_used = bool(client_override_used or client_executor == "injected_client")
+    sensitive_retention_passed = (
+        details.get("client_result_text_omitted") is not False
+        and details.get("client_result_raw_output_saved") is not True
+        and details.get("llm_client_contract_raw_payload_saved") is not True
+        and details.get("llm_client_contract_private_reasoning_values_stored") is not True
+        and details.get("raw_or_hidden_trace_absent") is True
+    )
+    proof_passed = bool(
+        public_safe
+        and (
+            proof_status
+            in {
+                "offline_verified",
+                "live_like_client_verified",
+                "real_live_provider_verified",
+                "adapter_context_prepared",
+            }
+            or proof_status == "needs_configuration"
+        )
+        and sensitive_retention_passed
+    )
+    return {
+        "schema": LIVE_LLM_AGENT_PROOF_SCHEMA,
+        "status": proof_status,
+        "passed": proof_passed,
+        "proof_level": proof_level,
+        "provider_path": provider_path,
+        "engine": engine,
+        "service": service or engine,
+        "llm_mode": llm_mode,
+        "run_attempted": run_attempted,
+        "live_runtime_path_selected": llm_mode == "live",
+        "live_client_generate_called": live_client_generate_called,
+        "client_override_used": injected_client_used,
+        "built_in_provider_client_called": built_in_provider_client_called,
+        "provider_preflight": {
+            "status": preflight.get("status"),
+            "live_path_selected": preflight.get("live_path_selected"),
+            "live_check_performed": preflight.get("live_check_performed"),
+            "network_call_made": preflight.get("network_call_made_by_preflight"),
+            "blocking_check_count": len(preflight.get("blocking_checks", []))
+            if isinstance(preflight.get("blocking_checks"), list)
+            else None,
+        },
+        "runtime": {
+            "llm_status": llm_status,
+            "run_status": details.get("run_status"),
+            "policy_status": details.get("policy_status"),
+            "verification_status": details.get("verification_status"),
+            "execution_contract_status": details.get("execution_contract_status"),
+            "tool_execution_status": details.get("tool_execution_status_card_status"),
+            "memory_decision": details.get("memory_decision"),
+        },
+        "llm_client_contract": {
+            "schema": contract.get("schema"),
+            "status": contract.get("status"),
+            "client_executor": client_executor,
+            "runtime_status": contract.get("runtime_status"),
+            "summary_only": contract.get("client_result_summary_only"),
+            "raw_provider_payload_saved": contract.get("raw_provider_payload_saved", False),
+            "private_reasoning_values_stored": contract.get("private_reasoning_field_values_stored", False),
+            "private_reasoning_trace": contract.get("private_reasoning_trace", "do_not_store")
+            if contract
+            else "do_not_store",
+        },
+        "evidence": {
+            "registered_tool_executor_is_authority": True,
+            "tool_evidence_packet_completed": details.get("tool_execution_status_card_evidence_completed"),
+            "memory_review_candidate_schema": details.get("memory_review_candidate_schema"),
+            "automatic_memory_promotion_performed": details.get("memory_auto_promotion_performed"),
+            "raw_or_hidden_trace_absent": details.get("raw_or_hidden_trace_absent"),
+            "sensitive_retention_passed": sensitive_retention_passed,
+        },
+        "public_safe": {
+            "passed": public_safe,
+            "secret_values_exported": False,
+            "raw_provider_payload_saved": False,
+            "private_reasoning_trace": "do_not_store",
+            "preflight_network_call_made": preflight.get("network_call_made_by_preflight"),
+            "network_default": details.get("network_default"),
+            "subprocess_default": details.get("subprocess_default"),
+            "external_side_effects_performed": details.get(
+                "tool_execution_status_card_external_side_effects_performed"
+            ),
+        },
+    }
+
+
 def run_agent_runtime_smoke(
     *,
     engine: str,
@@ -98,49 +239,63 @@ def run_agent_runtime_smoke(
         and preflight.get("status") == "needs_configuration"
     )
     if live_provider_not_ready:
+        details = {
+            "schema": "paideia-agent-runtime-smoke-details/v1",
+            "run_attempted": False,
+            "failure_mode": "live_provider_not_ready",
+            "engine": engine,
+            "service": service or engine,
+            "llm_mode": llm_mode,
+            "llm_status": "skipped_provider_not_ready",
+            "preflight_status": preflight.get("status"),
+            "preflight_blocking_check_count": len(preflight.get("blocking_checks", [])),
+            "preflight_live_path_selected": preflight.get("live_path_selected"),
+            "preflight_live_check_performed": preflight.get("live_check_performed"),
+            "preflight_network_call_made": preflight.get("network_call_made_by_preflight"),
+            "policy_status": "skipped_provider_not_ready",
+            "agent_runtime_status_card_schema": AGENT_RUNTIME_STATUS_CARD_SCHEMA,
+            "agent_runtime_status_card_status": "skipped_provider_not_ready",
+            "agent_runtime_status_card_public_safe": True,
+            "agent_runtime_status_card_memory_decision": "skipped_provider_not_ready",
+            "selected_tools": [],
+            "completed_tools": [],
+            "missing_required_tools": sorted(AGENT_RUNTIME_SMOKE_REQUIRED_TOOLS),
+            "tool_statuses": {},
+            "tool_execution_status_card_schema": TOOL_EXECUTION_STATUS_CARD_SCHEMA,
+            "tool_execution_status_card_status": "skipped_provider_not_ready",
+            "tool_execution_status_card_completed_count": 0,
+            "tool_execution_status_card_evidence_completed": False,
+            "tool_execution_status_card_external_side_effects_performed": False,
+            "network_default": "blocked",
+            "subprocess_default": "blocked",
+            "verification_status": "skipped_provider_not_ready",
+            "execution_contract_status": "skipped_provider_not_ready",
+            "memory_decision": "skipped_provider_not_ready",
+            "memory_review_candidate_schema": None,
+            "memory_auto_promotion_performed": False,
+            "audit_event_count": 0,
+            "raw_or_hidden_trace_absent": True,
+            "public_safe": True,
+        }
+        live_llm_agent_proof = _build_live_llm_agent_proof(
+            engine=engine,
+            service=service,
+            llm_mode=llm_mode,
+            run_attempted=False,
+            client_override_used=False,
+            preflight=preflight,
+            details=details,
+            llm_client_contract=None,
+            public_safe=True,
+            report_passed=False,
+        )
         return {
             "schema": AGENT_RUNTIME_SMOKE_SCHEMA,
             "created_at_utc": datetime.now(timezone.utc).isoformat(),
             "status": "needs_configuration",
             "passed": False,
-            "details": {
-                "schema": "paideia-agent-runtime-smoke-details/v1",
-                "run_attempted": False,
-                "failure_mode": "live_provider_not_ready",
-                "engine": engine,
-                "service": service or engine,
-                "llm_mode": llm_mode,
-                "llm_status": "skipped_provider_not_ready",
-                "preflight_status": preflight.get("status"),
-                "preflight_blocking_check_count": len(preflight.get("blocking_checks", [])),
-                "preflight_live_path_selected": preflight.get("live_path_selected"),
-                "preflight_live_check_performed": preflight.get("live_check_performed"),
-                "preflight_network_call_made": preflight.get("network_call_made_by_preflight"),
-                "policy_status": "skipped_provider_not_ready",
-                "agent_runtime_status_card_schema": AGENT_RUNTIME_STATUS_CARD_SCHEMA,
-                "agent_runtime_status_card_status": "skipped_provider_not_ready",
-                "agent_runtime_status_card_public_safe": True,
-                "agent_runtime_status_card_memory_decision": "skipped_provider_not_ready",
-                "selected_tools": [],
-                "completed_tools": [],
-                "missing_required_tools": sorted(AGENT_RUNTIME_SMOKE_REQUIRED_TOOLS),
-                "tool_statuses": {},
-                "tool_execution_status_card_schema": TOOL_EXECUTION_STATUS_CARD_SCHEMA,
-                "tool_execution_status_card_status": "skipped_provider_not_ready",
-                "tool_execution_status_card_completed_count": 0,
-                "tool_execution_status_card_evidence_completed": False,
-                "tool_execution_status_card_external_side_effects_performed": False,
-                "network_default": "blocked",
-                "subprocess_default": "blocked",
-                "verification_status": "skipped_provider_not_ready",
-                "execution_contract_status": "skipped_provider_not_ready",
-                "memory_decision": "skipped_provider_not_ready",
-                "memory_review_candidate_schema": None,
-                "memory_auto_promotion_performed": False,
-                "audit_event_count": 0,
-                "raw_or_hidden_trace_absent": True,
-                "public_safe": True,
-            },
+            "details": details,
+            "live_llm_agent_proof": live_llm_agent_proof,
             "preflight": preflight,
             "data_policy": {
                 "secret_values_exported": False,
@@ -341,12 +496,25 @@ def run_agent_runtime_smoke(
         and details["preflight_network_call_made"] is False
         and public_safe
     )
+    live_llm_agent_proof = _build_live_llm_agent_proof(
+        engine=engine,
+        service=service,
+        llm_mode=llm_mode,
+        run_attempted=True,
+        client_override_used=client is not None,
+        preflight=preflight,
+        details=details,
+        llm_client_contract=llm_client_contract,
+        public_safe=public_safe,
+        report_passed=passed,
+    )
     return {
         "schema": AGENT_RUNTIME_SMOKE_SCHEMA,
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "status": "passed" if passed else "failed",
         "passed": passed,
         "details": details,
+        "live_llm_agent_proof": live_llm_agent_proof,
         "data_policy": {
             "secret_values_exported": False,
             "send_private_training_files": False,

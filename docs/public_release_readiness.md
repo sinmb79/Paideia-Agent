@@ -36,6 +36,8 @@ The package install doctor writes `paideia-package-install-doctor/v1`. It checks
 
 The runtime contract doctor writes `paideia-runtime-contract-doctor/v1`. It checks the live-like agent loop, LLM identity boundary, registered tool executor, memory review gate, and fail-closed live provider behavior without calling an external provider.
 
+Agent runtime smoke reports include `paideia-live-llm-agent-proof/v1`, a public-safe proof packet that labels the selected path as offline verification, injected live-like client, built-in live provider client, adapter context, or fail-closed configuration gate. Release review can therefore distinguish no-network CI evidence from an actual live provider client run without storing raw provider payloads or hidden reasoning traces.
+
 The first-run doctor writes `paideia-first-run-doctor/v1`. It bundles the role-model catalog, LLM provider matrix, selected deterministic checklist, connection profile, provider doctor, application smoke, full agent runtime smoke, runtime contract doctor, tool capability audit, action policy eval, public release readiness, source SBOM, and package install doctor into one install-time report. Add `--onboarding-session <console_session.json>` to include wizard health verification in the same report.
 
 ## Agent Bundle Gates

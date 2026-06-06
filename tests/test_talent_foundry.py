@@ -2102,6 +2102,17 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(report["details"]["network_default"], "blocked")
         self.assertEqual(report["details"]["subprocess_default"], "blocked")
         self.assertTrue(report["details"]["public_safe"])
+        self.assertEqual(report["live_llm_agent_proof"]["schema"], "paideia-live-llm-agent-proof/v1")
+        self.assertEqual(report["live_llm_agent_proof"]["status"], "offline_verified")
+        self.assertTrue(report["live_llm_agent_proof"]["passed"])
+        self.assertEqual(report["live_llm_agent_proof"]["proof_level"], "offline_no_network")
+        self.assertEqual(
+            report["live_llm_agent_proof"]["provider_path"],
+            "offline_deterministic_no_provider_call",
+        )
+        self.assertFalse(report["live_llm_agent_proof"]["live_runtime_path_selected"])
+        self.assertFalse(report["live_llm_agent_proof"]["live_client_generate_called"])
+        self.assertFalse(report["live_llm_agent_proof"]["client_override_used"])
 
     def test_agent_runtime_smoke_exercises_live_client_path_without_raw_provider_storage(self) -> None:
         from ai22b.talent_foundry.agent_runtime_smoke import run_agent_runtime_smoke
@@ -2161,6 +2172,19 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertFalse(report["details"]["llm_client_contract_private_reasoning_values_stored"])
         self.assertTrue(report["details"]["llm_tool_suggestion_only_enforced"])
         self.assertEqual(report["details"]["out_of_scope_executed_count"], 0)
+        self.assertEqual(report["live_llm_agent_proof"]["schema"], "paideia-live-llm-agent-proof/v1")
+        self.assertEqual(report["live_llm_agent_proof"]["status"], "live_like_client_verified")
+        self.assertTrue(report["live_llm_agent_proof"]["passed"])
+        self.assertEqual(report["live_llm_agent_proof"]["proof_level"], "injected_client_live_like")
+        self.assertEqual(report["live_llm_agent_proof"]["provider_path"], "injected_live_client_contract")
+        self.assertTrue(report["live_llm_agent_proof"]["live_runtime_path_selected"])
+        self.assertTrue(report["live_llm_agent_proof"]["live_client_generate_called"])
+        self.assertTrue(report["live_llm_agent_proof"]["client_override_used"])
+        self.assertFalse(report["live_llm_agent_proof"]["built_in_provider_client_called"])
+        self.assertEqual(
+            report["live_llm_agent_proof"]["llm_client_contract"]["client_executor"],
+            "injected_client",
+        )
         self.assertNotIn(secret, serialized)
         self.assertNotIn(hidden_trace, serialized)
 
@@ -2263,6 +2287,14 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(report["details"]["memory_decision"], "skipped_provider_not_ready")
         self.assertFalse(report["details"]["memory_auto_promotion_performed"])
         self.assertTrue(report["details"]["public_safe"])
+        self.assertEqual(report["live_llm_agent_proof"]["schema"], "paideia-live-llm-agent-proof/v1")
+        self.assertEqual(report["live_llm_agent_proof"]["status"], "needs_configuration")
+        self.assertTrue(report["live_llm_agent_proof"]["passed"])
+        self.assertEqual(report["live_llm_agent_proof"]["proof_level"], "configuration_gate")
+        self.assertEqual(report["live_llm_agent_proof"]["provider_path"], "fail_closed_before_agent_loop")
+        self.assertFalse(report["live_llm_agent_proof"]["run_attempted"])
+        self.assertTrue(report["live_llm_agent_proof"]["live_runtime_path_selected"])
+        self.assertFalse(report["live_llm_agent_proof"]["live_client_generate_called"])
 
     def test_cli_llm_application_smoke_strict_fails_when_provider_is_not_ready(self) -> None:
         import os
@@ -2358,6 +2390,23 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(report["checks"]["agent_runtime_smoke"]["status"], "needs_configuration")
         self.assertFalse(report["checks"]["agent_runtime_smoke"]["passed"])
         self.assertEqual(report["checks"]["agent_runtime_smoke"]["failure_mode"], "live_provider_not_ready")
+        self.assertEqual(
+            report["checks"]["agent_runtime_smoke"]["live_llm_agent_proof"]["schema"],
+            "paideia-live-llm-agent-proof/v1",
+        )
+        self.assertEqual(
+            report["checks"]["agent_runtime_smoke"]["live_llm_agent_proof"]["status"],
+            "needs_configuration",
+        )
+        self.assertTrue(report["checks"]["agent_runtime_smoke"]["live_llm_agent_proof"]["passed"])
+        self.assertEqual(
+            report["checks"]["agent_runtime_smoke"]["live_llm_agent_proof"]["provider_path"],
+            "fail_closed_before_agent_loop",
+        )
+        self.assertEqual(
+            report["live_connection_status_card"]["live_llm_agent_proof"]["status"],
+            "needs_configuration",
+        )
         self.assertEqual(report["checks"]["chat_runtime_smoke"]["status"], "needs_configuration")
         self.assertFalse(report["checks"]["chat_runtime_smoke"]["passed"])
         self.assertEqual(report["checks"]["chat_runtime_smoke"]["chat_status"], "needs_configuration")
@@ -3271,6 +3320,13 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(first_run_details["agent_runtime_smoke_network_default"], "blocked")
         self.assertEqual(first_run_details["agent_runtime_smoke_subprocess_default"], "blocked")
         self.assertTrue(first_run_details["agent_runtime_smoke_public_safe"])
+        self.assertEqual(first_run_details["agent_runtime_live_llm_proof_schema"], "paideia-live-llm-agent-proof/v1")
+        self.assertEqual(first_run_details["agent_runtime_live_llm_proof_status"], "offline_verified")
+        self.assertTrue(first_run_details["agent_runtime_live_llm_proof_passed"])
+        self.assertEqual(
+            first_run_details["agent_runtime_live_llm_proof_provider_path"],
+            "offline_deterministic_no_provider_call",
+        )
         self.assertEqual(first_run_details["chat_runtime_smoke_schema"], "paideia-chat-runtime-smoke/v1")
         self.assertTrue(first_run_details["chat_runtime_smoke_passed"])
         self.assertEqual(first_run_details["chat_runtime_smoke_status"], "passed")

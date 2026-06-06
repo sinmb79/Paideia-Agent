@@ -9,7 +9,11 @@ from pathlib import Path
 from typing import Any
 
 from ai22b.config import PROJECT_ROOT
-from ai22b.talent_foundry.agent_runtime_smoke import AGENT_RUNTIME_SMOKE_SCHEMA, run_agent_runtime_smoke
+from ai22b.talent_foundry.agent_runtime_smoke import (
+    AGENT_RUNTIME_SMOKE_SCHEMA,
+    LIVE_LLM_AGENT_PROOF_SCHEMA,
+    run_agent_runtime_smoke,
+)
 from ai22b.talent_foundry.agent_runner import run_agent_from_manifest
 from ai22b.talent_foundry.chat_runtime_smoke import CHAT_RUNTIME_SMOKE_SCHEMA, run_chat_runtime_smoke
 from ai22b.talent_foundry.distribution import verify_agent_release_archive, verify_agent_release_bundle
@@ -1069,6 +1073,11 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
         if isinstance(agent_runtime_smoke.get("details"), dict)
         else {}
     )
+    agent_live_proof = (
+        agent_runtime_smoke.get("live_llm_agent_proof", {})
+        if isinstance(agent_runtime_smoke.get("live_llm_agent_proof"), dict)
+        else {}
+    )
     chat_runtime_smoke = run_chat_runtime_smoke(
         engine="deterministic_local",
         llm_mode="offline",
@@ -1274,6 +1283,11 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
         "agent_runtime_smoke_network_default": agent_runtime_details.get("network_default"),
         "agent_runtime_smoke_subprocess_default": agent_runtime_details.get("subprocess_default"),
         "agent_runtime_smoke_public_safe": agent_runtime_details.get("public_safe"),
+        "agent_runtime_live_llm_proof_schema": agent_live_proof.get("schema"),
+        "agent_runtime_live_llm_proof_status": agent_live_proof.get("status"),
+        "agent_runtime_live_llm_proof_passed": agent_live_proof.get("passed"),
+        "agent_runtime_live_llm_proof_level": agent_live_proof.get("proof_level"),
+        "agent_runtime_live_llm_proof_provider_path": agent_live_proof.get("provider_path"),
         "chat_runtime_smoke_schema": chat_runtime_smoke.get("schema"),
         "chat_runtime_smoke_passed": chat_runtime_smoke.get("passed"),
         "chat_runtime_smoke_status": chat_runtime_smoke.get("status"),
@@ -1495,6 +1509,10 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
         and details["agent_runtime_smoke_network_default"] == "blocked"
         and details["agent_runtime_smoke_subprocess_default"] == "blocked"
         and details["agent_runtime_smoke_public_safe"] is True
+        and details["agent_runtime_live_llm_proof_schema"] == LIVE_LLM_AGENT_PROOF_SCHEMA
+        and details["agent_runtime_live_llm_proof_status"] == "offline_verified"
+        and details["agent_runtime_live_llm_proof_passed"] is True
+        and details["agent_runtime_live_llm_proof_provider_path"] == "offline_deterministic_no_provider_call"
         and details["chat_runtime_smoke_schema"] == CHAT_RUNTIME_SMOKE_SCHEMA
         and details["chat_runtime_smoke_passed"] is True
         and details["chat_runtime_smoke_status"] == "passed"
