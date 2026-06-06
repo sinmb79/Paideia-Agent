@@ -554,7 +554,7 @@ ai22b-talent-foundry doctor-llm-live-readiness `
   --output-dir .\llm_live_readiness
 ```
 
-The suite writes `llm_live_readiness_suite.json`, `llm_provider_doctor.*.json`, `llm_application_smoke.*.json`, `agent_runtime_smoke.*.json`, and `chat_runtime_smoke.*.json`. It stores only summaries, never secret values, raw provider payloads, private training files, full session replay, or hidden reasoning traces.
+The suite writes `llm_live_readiness_suite.json`, `llm_provider_doctor.*.json`, `llm_application_smoke.*.json`, `agent_runtime_smoke.*.json`, and `chat_runtime_smoke.*.json`. The summary includes `live_connection_status_card`, which says whether the selected LLM is ready for live chat and agent work, whether only offline/no-network checks have passed, and which step blocks live use first. It stores only summaries, never secret values, raw provider payloads, private training files, full session replay, or hidden reasoning traces.
 
 The same provider gate is enforced by installed/hired workspace, job, and dataflow runs. If a hired agent is run in live mode without a configured provider key or local endpoint, Paideia records `needs_configuration`, skips workspace artifact creation, skips job deliverables, skips dataflow synthesis, and leaves no learning promotion candidate beyond a quarantined configuration record. `audit-release` now includes `fail_closed_runtime_contract`, which exercises direct agent, hired workspace, hired job, dataflow, and chat paths with an unconfigured live provider and requires all of them to stop before tools, workspace artifacts, fallback-as-live replies, or learning promotion.
 

@@ -380,6 +380,26 @@ class CliSmokeTests(unittest.TestCase):
             llm_live_readiness["summary_path"],
             str(llm_live_readiness_dir / "llm_live_readiness_suite.json"),
         )
+        self.assertEqual(
+            llm_live_readiness["live_connection_status_card"]["schema"],
+            "paideia-live-connection-status-card/v1",
+        )
+        self.assertEqual(
+            llm_live_readiness["live_connection_status_card"]["status"],
+            "offline_verified_live_not_attempted",
+        )
+        self.assertTrue(llm_live_readiness["live_connection_status_card"]["offline_ready"])
+        self.assertFalse(llm_live_readiness["live_connection_status_card"]["ready_for_live_chat"])
+        self.assertFalse(llm_live_readiness["live_connection_status_card"]["ready_for_live_agent_work"])
+        self.assertIsNone(llm_live_readiness["live_connection_status_card"]["blocking_step"])
+        self.assertFalse(
+            llm_live_readiness["live_connection_status_card"]["public_safe"]["live_provider_call_attempted"]
+        )
+        self.assertTrue(
+            llm_live_readiness["live_connection_status_card"]["public_safe"][
+                "live_provider_call_attempted_only_when_requested"
+            ]
+        )
         self.assertTrue(llm_live_readiness["checks"]["provider_doctor"]["passed"])
         self.assertTrue(llm_live_readiness["checks"]["application_smoke"]["passed"])
         self.assertTrue(llm_live_readiness["checks"]["agent_runtime_smoke"]["passed"])
@@ -545,6 +565,16 @@ class CliSmokeTests(unittest.TestCase):
             first_run_doctor["artifacts"]["llm_live_readiness"]["schema"],
             "paideia-llm-live-readiness-suite/v1",
         )
+        self.assertEqual(
+            first_run_doctor["artifacts"]["llm_live_readiness"]["live_connection_status_card_schema"],
+            "paideia-live-connection-status-card/v1",
+        )
+        self.assertEqual(
+            first_run_doctor["artifacts"]["llm_live_readiness"]["live_connection_status_card_status"],
+            "offline_verified_live_not_attempted",
+        )
+        self.assertFalse(first_run_doctor["artifacts"]["llm_live_readiness"]["ready_for_live_chat"])
+        self.assertFalse(first_run_doctor["artifacts"]["llm_live_readiness"]["ready_for_live_agent_work"])
         self.assertFalse(first_run_doctor["artifacts"]["llm_live_readiness"]["live_provider_call_attempted"])
         self.assertTrue(first_run_doctor["artifacts"]["package_install_doctor"]["distribution_installed"])
         self.assertEqual(first_run_doctor["artifacts"]["runtime_contract_doctor"]["status"], "passed")

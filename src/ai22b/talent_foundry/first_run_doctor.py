@@ -154,6 +154,8 @@ def _runtime_contract_summary(runtime_doctor: dict[str, Any]) -> dict[str, Any]:
 def _live_readiness_summary(report: dict[str, Any]) -> dict[str, Any]:
     data_policy = _as_dict(report.get("data_policy"))
     checks = _as_dict(report.get("checks"))
+    status_card = _as_dict(report.get("live_connection_status_card"))
+    blocking_step = _as_dict(status_card.get("blocking_step"))
     return {
         "schema": report.get("schema"),
         "status": report.get("status"),
@@ -169,6 +171,11 @@ def _live_readiness_summary(report: dict[str, Any]) -> dict[str, Any]:
         "raw_provider_payload_saved": data_policy.get("raw_provider_payload_saved"),
         "private_reasoning_trace": data_policy.get("private_reasoning_trace"),
         "live_provider_call_attempted": data_policy.get("live_provider_call_attempted"),
+        "live_connection_status_card_schema": status_card.get("schema"),
+        "live_connection_status_card_status": status_card.get("status"),
+        "ready_for_live_chat": status_card.get("ready_for_live_chat"),
+        "ready_for_live_agent_work": status_card.get("ready_for_live_agent_work"),
+        "blocking_step_id": blocking_step.get("id"),
     }
 
 

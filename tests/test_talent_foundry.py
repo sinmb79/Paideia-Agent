@@ -2261,6 +2261,21 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertFalse(report["live_ready"])
         self.assertTrue(report["live_check_requested"])
         self.assertEqual(report["llm_mode"], "live")
+        self.assertEqual(
+            report["live_connection_status_card"]["schema"],
+            "paideia-live-connection-status-card/v1",
+        )
+        self.assertEqual(report["live_connection_status_card"]["status"], "needs_live_configuration")
+        self.assertFalse(report["live_connection_status_card"]["ready_for_live_chat"])
+        self.assertFalse(report["live_connection_status_card"]["ready_for_live_agent_work"])
+        self.assertEqual(report["live_connection_status_card"]["blocking_step"]["id"], "provider_doctor")
+        self.assertFalse(report["live_connection_status_card"]["public_safe"]["secret_values_exported"])
+        self.assertTrue(
+            report["live_connection_status_card"]["public_safe"]["live_provider_call_attempted"]
+        )
+        self.assertTrue(
+            report["live_connection_status_card"]["public_safe"]["live_provider_call_attempted_only_when_requested"]
+        )
         self.assertEqual(report["checks"]["provider_doctor"]["status"], "needs_configuration")
         self.assertFalse(report["checks"]["provider_doctor"]["passed"])
         self.assertEqual(report["checks"]["application_smoke"]["status"], "failed")

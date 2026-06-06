@@ -11,6 +11,7 @@ from ai22b.talent_foundry.llm_runtime import doctor_llm_provider, run_llm_applic
 
 
 LLM_LIVE_READINESS_SCHEMA = "paideia-llm-live-readiness-suite/v1"
+LIVE_CONNECTION_STATUS_CARD_SCHEMA = "paideia-live-connection-status-card/v1"
 
 
 def _write_json(path: Path, data: dict[str, Any]) -> None:
@@ -26,6 +27,116 @@ def _status(value: dict[str, Any]) -> str:
 
 def _report_path(output_dir: Path, filename: str) -> str:
     return str(output_dir / filename)
+
+
+def _first_blocking_step(checks: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
+    for step_id in ("provider_doctor", "application_smoke", "agent_runtime_smoke", "chat_runtime_smoke"):
+        step = checks.get(step_id, {})
+        if step.get("passed") is True:
+            continue
+        return {
+            "id": step_id,
+            "status": step.get("status"),
+            "reason": (
+                step.get("failure_mode")
+                or step.get("runtime_status")
+                or step.get("chat_status")
+                or step.get("smoke_contract_status")
+                or "check_not_passed"
+            ),
+        }
+    return None
+
+
+def _build_live_connection_status_card(
+    *,
+    engine: str,
+    service: str | None,
+    model: str | None,
+    model_path: str | None,
+    chat_surface: str | None,
+    live_check: bool,
+    passed: bool,
+    live_ready: bool,
+    checks: dict[str, dict[str, Any]],
+    required_before_live: dict[str, str],
+) -> dict[str, Any]:
+    blocking_step = _first_blocking_step(checks)
+    if live_ready:
+        status = "ready_for_live_agent_work"
+    elif not live_check and passed:
+        status = "offline_verified_live_not_attempted"
+    else:
+        status = "needs_live_configuration"
+    chat_check = checks.get("chat_runtime_smoke", {})
+    check_statuses = {
+        key: {
+            "status": value.get("status"),
+            "passed": value.get("passed"),
+        }
+        for key, value in checks.items()
+    }
+    return {
+        "schema": LIVE_CONNECTION_STATUS_CARD_SCHEMA,
+        "status": status,
+        "live_check_requested": live_check,
+        "offline_ready": bool(passed and not live_check),
+        "ready_for_live_chat": bool(live_ready and chat_check.get("passed") is True),
+        "ready_for_live_agent_work": bool(live_ready),
+        "selected_llm": {
+            "engine": engine,
+            "service": service or engine,
+            "model": model,
+            "model_path_present": bool(model_path),
+            "chat_surface": chat_surface,
+        },
+        "blocking_step": blocking_step,
+        "check_statuses": check_statuses,
+        "chat_runtime_status_card": {
+            "schema": chat_check.get("runtime_status_card_schema"),
+            "status": chat_check.get("runtime_status_card_status"),
+            "fallback_used": chat_check.get("runtime_status_card_fallback_used"),
+            "presented_as_live": chat_check.get("runtime_status_card_presented_as_live"),
+            "learning_decision": chat_check.get("runtime_status_card_learning_decision"),
+        },
+        "public_safe": {
+            "secret_values_exported": False,
+            "raw_provider_payload_saved": False,
+            "private_reasoning_trace": "do_not_store",
+            "live_provider_call_attempted": bool(live_check),
+            "live_provider_call_attempted_only_when_requested": True,
+        },
+        "user_visible_summary": {
+            "ko": (
+                "선택한 LLM은 live 채팅과 에이전트 업무에 사용할 준비가 됐습니다."
+                if status == "ready_for_live_agent_work"
+                else "offline/no-network 검증은 통과했지만 live provider 호출은 아직 시도하지 않았습니다."
+                if status == "offline_verified_live_not_attempted"
+                else f"live 연결이 막혔습니다. 먼저 확인할 단계는 {blocking_step.get('id') if blocking_step else 'provider setup'}입니다."
+            ),
+            "en": (
+                "The selected LLM is ready for live chat and agent work."
+                if status == "ready_for_live_agent_work"
+                else "Offline/no-network checks passed, but a live provider call has not been attempted."
+                if status == "offline_verified_live_not_attempted"
+                else f"Live connection is blocked; inspect {blocking_step.get('id') if blocking_step else 'provider setup'} first."
+            ),
+        },
+        "next_actions": (
+            ["Start live chat or hired-agent work with the generated artifacts."]
+            if status == "ready_for_live_agent_work"
+            else [
+                "Run the explicit live-check sequence only when you intend to call the selected provider.",
+                *required_before_live.values(),
+            ]
+            if status == "offline_verified_live_not_attempted"
+            else [
+                f"Inspect {blocking_step.get('id') if blocking_step else 'provider_doctor'} artifact first.",
+                "Configure the required API key, model, localhost server, or model path.",
+                "Re-run doctor-llm-live-readiness with --live-check after setup.",
+            ]
+        ),
+    }
 
 
 def run_llm_live_readiness_suite(
@@ -192,6 +303,18 @@ def run_llm_live_readiness_suite(
         and checks["chat_runtime_smoke"]["passed"]
     )
     live_ready = bool(live_check and passed)
+    live_connection_status_card = _build_live_connection_status_card(
+        engine=engine,
+        service=service,
+        model=model,
+        model_path=model_path,
+        chat_surface=chat_surface,
+        live_check=live_check,
+        passed=passed,
+        live_ready=live_ready,
+        checks=checks,
+        required_before_live=required_before_live,
+    )
     suite = {
         "schema": LLM_LIVE_READINESS_SCHEMA,
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -209,6 +332,7 @@ def run_llm_live_readiness_suite(
         "checks": checks,
         "artifacts": artifacts,
         "required_before_live": required_before_live,
+        "live_connection_status_card": live_connection_status_card,
         "data_policy": {
             "secret_values_exported": False,
             "send_private_training_files": False,
@@ -218,15 +342,7 @@ def run_llm_live_readiness_suite(
             "live_provider_called_only_when_live_check_requested": live_check,
             "live_provider_call_attempted": bool(live_check),
         },
-        "next_actions": (
-            ["Use the generated live-ready reports before chat or hired-agent work."]
-            if live_ready
-            else [
-                "Review provider_doctor, application_smoke, and agent_runtime_smoke artifacts.",
-                "Configure the required API key, model, local server, or local model path.",
-                "Re-run this suite with --live-check only when you intentionally want a real provider call.",
-            ]
-        ),
+        "next_actions": live_connection_status_card["next_actions"],
     }
     _write_json(summary_path, suite)
     return suite
