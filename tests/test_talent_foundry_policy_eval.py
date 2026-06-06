@@ -9,6 +9,7 @@ from pathlib import Path
 class PolicyEvalTests(unittest.TestCase):
     def test_public_action_policy_eval_suite_passes_without_llm_or_network(self) -> None:
         from ai22b.talent_foundry.policy_eval import DEFAULT_POLICY_EVAL_SUITE, run_action_policy_eval
+        from ai22b.talent_foundry.action_policy import ACTION_POLICY_DECISION_MODEL
 
         report = run_action_policy_eval(suite_path=DEFAULT_POLICY_EVAL_SUITE)
 
@@ -19,7 +20,7 @@ class PolicyEvalTests(unittest.TestCase):
         self.assertFalse(report["runtime_policy"]["network_call_performed"])
         self.assertFalse(report["runtime_policy"]["llm_called"])
         self.assertFalse(report["runtime_policy"]["private_reasoning_trace_stored"])
-        self.assertEqual(report["runtime_policy"]["decision_model"], "action_intent_capability_arguments_v3")
+        self.assertEqual(report["runtime_policy"]["decision_model"], ACTION_POLICY_DECISION_MODEL)
         case_by_id = {case["case_id"]: case for case in report["case_results"]}
         self.assertIn("trade_with_policy_bypass_ko", case_by_id)
         self.assertIn("정책/가드레일 우회 시도", case_by_id["trade_with_policy_bypass_ko"]["actual_policy_violations"])

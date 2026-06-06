@@ -22,6 +22,7 @@ from ai22b.talent_foundry.policy_eval import (
     DEFAULT_POLICY_EVAL_SUITE,
     run_action_policy_eval,
 )
+from ai22b.talent_foundry.action_policy import ACTION_POLICY_DECISION_MODEL
 from ai22b.talent_foundry.llm_runtime import (
     LLM_PROVIDER_DOCTOR_SCHEMA,
     LLM_PROVIDER_PREFLIGHT_SCHEMA,
@@ -991,7 +992,7 @@ def _action_policy_safety() -> dict[str, Any]:
         and details["llm_called"] is False
         and details["private_reasoning_trace_stored"] is False
         and details["fixture_contains_private_data"] is False
-        and details["decision_model"] == "action_intent_capability_arguments_v3"
+        and details["decision_model"] == ACTION_POLICY_DECISION_MODEL
         and not missing_cases
         and not missing_categories
         and not failed_cases
@@ -1357,6 +1358,7 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
         "policy_eval_schema": policy_eval.get("schema"),
         "policy_eval_status": policy_eval.get("status"),
         "policy_eval_failed_count": policy_summary.get("failed_count"),
+        "policy_eval_decision_model": policy_runtime.get("decision_model"),
         "policy_eval_network_call_performed": policy_runtime.get("network_call_performed"),
         "policy_eval_llm_called": policy_runtime.get("llm_called"),
         "policy_eval_private_reasoning_trace_stored": policy_runtime.get("private_reasoning_trace_stored"),
@@ -1541,6 +1543,7 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
         and details["policy_eval_schema"] == ACTION_POLICY_EVAL_REPORT_SCHEMA
         and details["policy_eval_status"] == "passed"
         and details["policy_eval_failed_count"] == 0
+        and details["policy_eval_decision_model"] == ACTION_POLICY_DECISION_MODEL
         and details["policy_eval_private_reasoning_trace_stored"] is False
         and details["source_sbom_schema"] == SOURCE_SBOM_SCHEMA
         and details["source_sbom_package"] == "paideia-agent"

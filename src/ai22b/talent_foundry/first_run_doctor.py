@@ -18,6 +18,7 @@ from ai22b.talent_foundry.llm_live_readiness import run_llm_live_readiness_suite
 from ai22b.talent_foundry.llm_runtime import doctor_llm_provider, run_llm_application_smoke
 from ai22b.talent_foundry.onboarding_doctor import doctor_onboarding_session
 from ai22b.talent_foundry.package_install_doctor import doctor_package_install
+from ai22b.talent_foundry.action_policy import ACTION_POLICY_DECISION_MODEL
 from ai22b.talent_foundry.policy_eval import DEFAULT_POLICY_EVAL_SUITE, run_action_policy_eval
 from ai22b.talent_foundry.public_release import audit_public_release_readiness
 from ai22b.talent_foundry.role_models import list_role_models, summarize_role_model
@@ -69,6 +70,7 @@ def _policy_summary(policy_eval: dict[str, Any]) -> dict[str, Any]:
         "status": policy_eval.get("status"),
         "case_count": summary.get("case_count"),
         "failed_count": summary.get("failed_count"),
+        "decision_model": runtime.get("decision_model"),
         "network_call_performed": runtime.get("network_call_performed"),
         "llm_called": runtime.get("llm_called"),
         "private_reasoning_trace_stored": runtime.get("private_reasoning_trace_stored"),
@@ -545,6 +547,7 @@ def doctor_first_run(
         policy_eval.get("schema") == "paideia-action-policy-eval-report/v1"
         and policy_eval.get("status") == "passed"
         and _as_dict(policy_eval.get("summary")).get("failed_count") == 0
+        and policy_runtime.get("decision_model") == ACTION_POLICY_DECISION_MODEL
         and policy_runtime.get("network_call_performed") is False
         and policy_runtime.get("llm_called") is False,
         details=_policy_summary(policy_eval),

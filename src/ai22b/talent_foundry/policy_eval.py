@@ -7,7 +7,11 @@ from pathlib import Path
 from typing import Any
 
 from ai22b.config import PROJECT_ROOT
-from ai22b.talent_foundry.action_policy import evaluate_action_policy, infer_action_intents
+from ai22b.talent_foundry.action_policy import (
+    ACTION_POLICY_DECISION_MODEL,
+    evaluate_action_policy,
+    infer_action_intents,
+)
 
 
 ACTION_POLICY_EVAL_SUITE_SCHEMA = "paideia-action-policy-eval-suite/v1"
@@ -205,7 +209,7 @@ def run_action_policy_eval(
             "network_call_performed": False,
             "llm_called": False,
             "private_reasoning_trace_stored": False,
-            "decision_model": "action_intent_capability_arguments_v3",
+            "decision_model": ACTION_POLICY_DECISION_MODEL,
             "fixture_contains_private_data": False,
         },
         "case_results": case_results,

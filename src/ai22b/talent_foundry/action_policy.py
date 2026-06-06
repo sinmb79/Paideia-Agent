@@ -10,6 +10,8 @@ ACTION_POLICY_SCHEMA = "paideia-action-policy/v1"
 ACTION_INTENT_INFERENCE_SCHEMA = "paideia-action-intent-inference/v1"
 ACTION_APPROVAL_SCHEMA = "paideia-boss-approval/v1"
 CAPABILITY_AUTHORIZATION_SCHEMA = "paideia-capability-authorization/v1"
+ACTION_POLICY_DECISION_MODEL = "action_intent_capability_arguments_v3"
+CAPABILITY_AUTHORIZATION_MODEL = "request_to_action_to_capability_to_approval_v1"
 INTENT_INFERENCE_MODEL = "hybrid_structured_lexical_v3"
 ACTION_ARGUMENTS_SCHEMA = "paideia-action-arguments/v1"
 ACTION_ARGUMENT_EXTRACTION_MODEL = "public_safe_structured_arguments_v1"
@@ -1313,7 +1315,7 @@ def build_capability_authorization(
     return {
         "schema": CAPABILITY_AUTHORIZATION_SCHEMA,
         "mode": "deny_by_default",
-        "authorization_model": "request_to_action_to_capability_to_approval_v1",
+        "authorization_model": CAPABILITY_AUTHORIZATION_MODEL,
         "allowed_capabilities": sorted(allowed_capabilities),
         "requested_intents": requested_records,
         "inactive_or_negated_intents": inactive_records,
@@ -1421,7 +1423,7 @@ def evaluate_action_policy(manifest: dict[str, Any], intents: list[dict[str, Any
         "schema": ACTION_POLICY_SCHEMA,
         "evaluated_at_utc": _now(),
         "status": status,
-        "decision_model": "action_intent_capability_arguments_v2",
+        "decision_model": ACTION_POLICY_DECISION_MODEL,
         "capability_grants": grants,
         "capability_authorization": capability_authorization,
         "boss_approval_gate": approval_gate,

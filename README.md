@@ -784,7 +784,7 @@ ai22b-talent-foundry run-action-policy-eval `
   --output .\policy_eval_report.json
 ```
 
-This uses public fixtures in `evals/policy_safety_cases.json` to check prompt-injection, trade execution, external upload, personal-data transfer, compact-normalized bypass attempts, negated analysis-only requests, and policy-discussion requests. It does not call an LLM or the network.
+This uses public fixtures in `evals/policy_safety_cases.json` to check prompt-injection, trade execution, external upload, personal-data transfer, compact-normalized bypass attempts, negated analysis-only requests, and policy-discussion requests. The report records the shared action-policy decision model (`action_intent_capability_arguments_v3`) used by runtime, first-run doctor, and release audit. It does not call an LLM or the network.
 
 Create a local Boss approval artifact when a sensitive action should move past the policy gate for one reviewed run. This still does not execute a network upload, subprocess, or trade by itself:
 

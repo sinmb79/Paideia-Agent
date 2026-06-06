@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from ai22b.talent_foundry.action_policy import CAPABILITY_AUTHORIZATION_MODEL
 from ai22b.talent_foundry.runtime_observability import RUNTIME_OBSERVABILITY_SCHEMA
 from ai22b.talent_foundry.workspace_sandbox import (
     WORKSPACE_ROLLBACK_MANIFEST_SCHEMA,
@@ -753,7 +754,7 @@ def build_workspace_execution_proof(
             "capability_authorization_verified",
             capability_authorization.get("schema") == CAPABILITY_AUTHORIZATION_SCHEMA
             and capability_authorization.get("mode") == "deny_by_default"
-            and capability_authorization.get("authorization_model") == "request_to_action_to_capability_to_approval_v1"
+            and capability_authorization.get("authorization_model") == CAPABILITY_AUTHORIZATION_MODEL
             and capability_authorization.get("approval_gate_schema") == "paideia-boss-approval-gate/v1"
             and authorization_invariants.get("policy_checked_before_llm") is True
             and authorization_invariants.get("policy_checked_before_tools") is True

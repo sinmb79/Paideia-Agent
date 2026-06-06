@@ -1304,7 +1304,9 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertTrue(result["tool_execution_status_card"]["evidence_packet"]["completed"])
         self.assertFalse(result["tool_execution_status_card"]["public_safe"]["external_side_effects_performed"])
         self.assertEqual(result["tool_execution_status_card"]["capability_scope"]["network_default"], "blocked")
-        self.assertEqual(result["policy_decision"]["decision_model"], "action_intent_capability_arguments_v2")
+        from ai22b.talent_foundry.action_policy import ACTION_POLICY_DECISION_MODEL
+
+        self.assertEqual(result["policy_decision"]["decision_model"], ACTION_POLICY_DECISION_MODEL)
         self.assertEqual(result["verification"]["status"], "passed")
         self.assertEqual(result["runtime_observability"]["schema"], "paideia-runtime-observability/v1")
         self.assertGreater(result["runtime_observability"]["context"]["prompt_context_estimated_tokens"], 0)
@@ -3095,6 +3097,7 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(manifest["release_evidence"]["expected_audit"], "foundry_release_audit.json")
 
     def test_release_audit_verifies_full_training_to_hiring_lifecycle(self) -> None:
+        from ai22b.talent_foundry.action_policy import ACTION_POLICY_DECISION_MODEL
         from ai22b.talent_foundry.audit import audit_foundry_release
         from ai22b.talent_foundry.demo import run_demo
 
@@ -3315,6 +3318,7 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertTrue(first_run_details["tool_capability_public_safe"])
         self.assertEqual(first_run_details["policy_eval_status"], "passed")
         self.assertEqual(first_run_details["policy_eval_failed_count"], 0)
+        self.assertEqual(first_run_details["policy_eval_decision_model"], ACTION_POLICY_DECISION_MODEL)
         self.assertFalse(first_run_details["policy_eval_network_call_performed"])
         self.assertFalse(first_run_details["policy_eval_llm_called"])
         self.assertTrue(first_run_details["no_network_or_llm_by_default"])

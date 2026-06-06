@@ -632,7 +632,7 @@ ai22b-talent-foundry run-action-policy-eval `
   --output .\policy_eval_report.json
 ```
 
-이 명령은 `evals/policy_safety_cases.json`의 공개 fixture로 prompt injection, 투자 실행, 외부 업로드, 개인/가족 데이터 전송, 부정된 분석 전용 요청, 정책 설명 요청을 검사합니다. LLM이나 네트워크는 호출하지 않습니다.
+이 명령은 `evals/policy_safety_cases.json`의 공개 fixture로 prompt injection, 투자 실행, 외부 업로드, 개인/가족 데이터 전송, 부정된 분석 전용 요청, 정책 설명 요청을 검사합니다. 보고서에는 runtime, first-run doctor, release audit가 공유하는 action-policy decision model(`action_intent_capability_arguments_v3`)도 기록됩니다. LLM이나 네트워크는 호출하지 않습니다.
 
 민감 행동을 한 번의 검토된 실행에서 policy gate 뒤로 넘겨야 한다면 로컬 Boss approval artifact를 생성합니다. 이 artifact 자체는 네트워크 업로드, 서브프로세스, 거래 실행을 수행하지 않습니다.
 

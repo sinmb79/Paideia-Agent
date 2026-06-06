@@ -8,6 +8,7 @@ from pathlib import Path
 
 class CliSmokeTests(unittest.TestCase):
     def test_public_cli_smoke_commands_write_reviewable_outputs(self) -> None:
+        from ai22b.talent_foundry.action_policy import ACTION_POLICY_DECISION_MODEL
         from ai22b.talent_foundry.cli import main as cli_main
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -537,6 +538,7 @@ class CliSmokeTests(unittest.TestCase):
         self.assertEqual(policy_eval["schema"], "paideia-action-policy-eval-report/v1")
         self.assertEqual(policy_eval["status"], "passed")
         self.assertEqual(policy_eval["summary"]["failed_count"], 0)
+        self.assertEqual(policy_eval["runtime_policy"]["decision_model"], ACTION_POLICY_DECISION_MODEL)
         self.assertFalse(policy_eval["runtime_policy"]["network_call_performed"])
         self.assertFalse(policy_eval["runtime_policy"]["llm_called"])
 
@@ -717,6 +719,10 @@ class CliSmokeTests(unittest.TestCase):
         self.assertFalse(first_run_doctor["artifacts"]["llm_live_readiness"]["ready_for_live_chat"])
         self.assertFalse(first_run_doctor["artifacts"]["llm_live_readiness"]["ready_for_live_agent_work"])
         self.assertFalse(first_run_doctor["artifacts"]["llm_live_readiness"]["live_provider_call_attempted"])
+        self.assertEqual(
+            first_run_doctor["artifacts"]["action_policy_eval"]["decision_model"],
+            ACTION_POLICY_DECISION_MODEL,
+        )
         self.assertTrue(first_run_doctor["artifacts"]["package_install_doctor"]["distribution_installed"])
         self.assertEqual(first_run_doctor["artifacts"]["runtime_contract_doctor"]["status"], "passed")
         self.assertFalse(first_run_doctor["artifacts"]["runtime_contract_doctor"]["live_provider_called"])
