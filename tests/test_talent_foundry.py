@@ -1378,8 +1378,14 @@ class TalentFoundryTests(unittest.TestCase):
 
         self.assertFalse(financial["requested"])
         self.assertTrue(financial["negated"])
-        self.assertEqual(financial["inference"]["model"], "hybrid_structured_lexical_v3")
+        self.assertEqual(financial["inference"]["model"], "hybrid_structured_lexical_v4")
         self.assertEqual(financial["inference"]["request_mode"], "negated")
+        self.assertEqual(
+            financial["inference"]["structured_evidence"]["schema"],
+            "paideia-action-intent-evidence/v1",
+        )
+        self.assertEqual(financial["inference"]["structured_evidence"]["decision_basis"], "explicit_negation_or_do_not_execute_marker_overrode_anchor")
+        self.assertFalse(financial["inference"]["structured_evidence"]["raw_task_stored"])
         self.assertEqual(financial["arguments"]["model"], "public_safe_structured_arguments_v1")
         self.assertIn("삼성전자", financial["arguments"]["security_references"])
         self.assertEqual(financial["arguments"]["order_side"], "buy")
@@ -1425,6 +1431,14 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("보스 승인 없는 외부 업로드", spaced_decision["policy_violations"])
         self.assertEqual(spaced_by_id["financial_trade_execution"]["inference"]["request_mode"], "command")
         self.assertEqual(spaced_by_id["external_upload"]["inference"]["request_mode"], "command")
+        self.assertEqual(
+            spaced_by_id["external_upload"]["evidence"]["structured_evidence"]["decision_basis"],
+            "sensitive_action_request_detected",
+        )
+        self.assertEqual(
+            spaced_by_id["external_upload"]["evidence"]["structured_evidence"]["confidence"],
+            "high",
+        )
         self.assertIn("삼성전자", spaced_by_id["financial_trade_execution"]["arguments"]["security_references"])
         self.assertIn("local_file", spaced_by_id["external_upload"]["arguments"]["data_classes"])
         self.assertTrue(

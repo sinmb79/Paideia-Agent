@@ -8,11 +8,12 @@ from typing import Any
 
 ACTION_POLICY_SCHEMA = "paideia-action-policy/v1"
 ACTION_INTENT_INFERENCE_SCHEMA = "paideia-action-intent-inference/v1"
+ACTION_INTENT_EVIDENCE_SCHEMA = "paideia-action-intent-evidence/v1"
 ACTION_APPROVAL_SCHEMA = "paideia-boss-approval/v1"
 CAPABILITY_AUTHORIZATION_SCHEMA = "paideia-capability-authorization/v1"
 ACTION_POLICY_DECISION_MODEL = "action_intent_capability_arguments_v3"
 CAPABILITY_AUTHORIZATION_MODEL = "request_to_action_to_capability_to_approval_v1"
-INTENT_INFERENCE_MODEL = "hybrid_structured_lexical_v3"
+INTENT_INFERENCE_MODEL = "hybrid_structured_lexical_v4"
 ACTION_ARGUMENTS_SCHEMA = "paideia-action-arguments/v1"
 ACTION_ARGUMENT_EXTRACTION_MODEL = "public_safe_structured_arguments_v1"
 COMPACT_SEPARATOR_RE = re.compile(r"[\s\-_./\\|·•~`'\"“”‘’()\[\]{}:;,.!?]+")
@@ -574,6 +575,88 @@ def _normalization_summary(task: str) -> dict[str, Any]:
     }
 
 
+def _intent_evidence_confidence(*, request_mode: str, requested: bool, command_markers: list[str]) -> str:
+    if requested and command_markers:
+        return "high"
+    if requested:
+        return "medium"
+    if request_mode in {"negated", "discussion_only"}:
+        return "medium"
+    if request_mode == "mentioned_only":
+        return "low"
+    return "none"
+
+
+def _intent_decision_basis(*, request_mode: str, requested: bool) -> str:
+    if requested:
+        return "sensitive_action_request_detected"
+    if request_mode == "negated":
+        return "explicit_negation_or_do_not_execute_marker_overrode_anchor"
+    if request_mode == "discussion_only":
+        return "policy_or_risk_discussion_without_execution_signal"
+    if request_mode == "mentioned_only":
+        return "anchor_mentioned_without_action_signal"
+    return "no_relevant_action_anchor_detected"
+
+
+def _structured_intent_evidence(
+    *,
+    action_type: str,
+    request_mode: str,
+    requested: bool,
+    negated: bool,
+    discussion_only: bool,
+    matched_markers: list[str],
+    command_markers: list[str],
+    negation_markers: list[str],
+    discussion_markers: list[str],
+    normalization: dict[str, Any],
+    sensitive_markers: list[str] | None = None,
+    hard_command_markers: list[str] | None = None,
+) -> dict[str, Any]:
+    sensitive_markers = sensitive_markers or []
+    hard_command_markers = hard_command_markers or []
+    return {
+        "schema": ACTION_INTENT_EVIDENCE_SCHEMA,
+        "model": INTENT_INFERENCE_MODEL,
+        "action_type": action_type,
+        "request_mode": request_mode,
+        "requested": requested,
+        "confidence": _intent_evidence_confidence(
+            request_mode=request_mode,
+            requested=requested,
+            command_markers=command_markers or hard_command_markers,
+        ),
+        "decision_basis": _intent_decision_basis(request_mode=request_mode, requested=requested),
+        "signal_counts": {
+            "anchor_markers": len(matched_markers),
+            "command_markers": len(command_markers),
+            "negation_markers": len(negation_markers),
+            "discussion_markers": len(discussion_markers),
+            "sensitive_markers": len(sensitive_markers),
+            "hard_command_markers": len(hard_command_markers),
+        },
+        "signal_checklist": [
+            {"id": "anchor_marker_seen", "passed": bool(matched_markers)},
+            {
+                "id": "command_or_explicit_request_signal",
+                "passed": bool(command_markers or hard_command_markers or requested),
+            },
+            {
+                "id": "negation_overrides_request",
+                "passed": not requested if negated else True,
+            },
+            {
+                "id": "discussion_only_stays_non_executable",
+                "passed": not requested if discussion_only else True,
+            },
+            {"id": "raw_task_not_stored", "passed": True},
+        ],
+        "normalization": normalization,
+        "raw_task_stored": False,
+    }
+
+
 def _unique_limited(items: list[str], *, limit: int = 8) -> list[str]:
     unique: list[str] = []
     seen: set[str] = set()
@@ -722,6 +805,7 @@ def _action_arguments(
 def _request_state(
     task: str,
     *,
+    action_type: str,
     anchors: tuple[str, ...],
     command_aliases: tuple[str, ...] = (),
     requested: bool,
@@ -743,6 +827,7 @@ def _request_state(
         mode = "mentioned_only"
     else:
         mode = "not_detected"
+    normalization = _normalization_summary(task)
     return {
         "schema": ACTION_INTENT_INFERENCE_SCHEMA,
         "model": INTENT_INFERENCE_MODEL,
@@ -754,7 +839,19 @@ def _request_state(
         "command_markers": command_markers,
         "negation_markers": negation_markers,
         "discussion_markers": discussion_markers,
-        "normalization": _normalization_summary(task),
+        "structured_evidence": _structured_intent_evidence(
+            action_type=action_type,
+            request_mode=mode,
+            requested=effective_requested,
+            negated=negated,
+            discussion_only=discussion_only,
+            matched_markers=matched,
+            command_markers=command_markers,
+            negation_markers=negation_markers,
+            discussion_markers=discussion_markers,
+            normalization=normalization,
+        ),
+        "normalization": normalization,
     }
 
 
@@ -763,6 +860,7 @@ def _financial_action_state(task: str) -> dict[str, Any]:
     requested = _has_any(task, FINANCIAL_ACTION_ALIASES) or (_has_any(task, FINANCIAL_VERBS) and _has_any(task, ACTION_MARKERS))
     return _request_state(
         task,
+        action_type="financial_trade_execution",
         anchors=anchor_phrases,
         command_aliases=FINANCIAL_ACTION_ALIASES + ACTION_MARKERS,
         requested=requested,
@@ -775,6 +873,7 @@ def _external_upload_state(task: str, personal_transfer_state: dict[str, Any] | 
         requested = False
     return _request_state(
         task,
+        action_type="external_upload",
         anchors=EXTERNAL_UPLOAD_ALIASES,
         command_aliases=EXTERNAL_UPLOAD_COMMAND_ALIASES,
         requested=requested,
@@ -784,6 +883,7 @@ def _external_upload_state(task: str, personal_transfer_state: dict[str, Any] | 
 def _personal_data_transfer_state(task: str) -> dict[str, Any]:
     return _request_state(
         task,
+        action_type="personal_data_transfer",
         anchors=PERSONAL_DATA_TRANSFER_ALIASES,
         command_aliases=PERSONAL_DATA_TRANSFER_ALIASES,
         requested=_has_any(task, PERSONAL_DATA_TRANSFER_ALIASES) and _has_any(task, PERSONAL_DATA_TRANSFER_MARKERS),
@@ -793,6 +893,7 @@ def _personal_data_transfer_state(task: str) -> dict[str, Any]:
 def _destructive_file_state(task: str) -> dict[str, Any]:
     return _request_state(
         task,
+        action_type="destructive_file_operation",
         anchors=DESTRUCTIVE_FILE_ALIASES,
         command_aliases=DESTRUCTIVE_FILE_COMMAND_ALIASES,
         requested=_has_any(task, DESTRUCTIVE_FILE_ALIASES),
@@ -802,6 +903,7 @@ def _destructive_file_state(task: str) -> dict[str, Any]:
 def _subprocess_execution_state(task: str) -> dict[str, Any]:
     return _request_state(
         task,
+        action_type="subprocess_execution",
         anchors=SUBPROCESS_EXECUTION_ALIASES,
         command_aliases=SUBPROCESS_COMMAND_ALIASES,
         requested=_has_any(task, SUBPROCESS_EXECUTION_ALIASES) and _has_any(task, SUBPROCESS_COMMAND_ALIASES),
@@ -814,6 +916,7 @@ def _network_request_state(task: str, upload_state: dict[str, Any] | None = None
         requested = False
     return _request_state(
         task,
+        action_type="network_request",
         anchors=NETWORK_REQUEST_ALIASES,
         command_aliases=NETWORK_COMMAND_ALIASES,
         requested=requested,
@@ -849,6 +952,7 @@ def _policy_bypass_state(task: str) -> dict[str, Any]:
         mode = "mentioned_only"
     else:
         mode = "not_detected"
+    normalization = _normalization_summary(task)
     return {
         "schema": ACTION_INTENT_INFERENCE_SCHEMA,
         "model": INTENT_INFERENCE_MODEL,
@@ -862,7 +966,21 @@ def _policy_bypass_state(task: str) -> dict[str, Any]:
         "discussion_markers": discussion_markers,
         "sensitive_markers": sensitive_markers,
         "hard_command_markers": hard_command_markers,
-        "normalization": _normalization_summary(task),
+        "structured_evidence": _structured_intent_evidence(
+            action_type="policy_bypass_attempt",
+            request_mode=mode,
+            requested=effective_requested,
+            negated=negated,
+            discussion_only=discussion_only,
+            matched_markers=matched,
+            command_markers=command_markers,
+            negation_markers=negation_markers,
+            discussion_markers=discussion_markers,
+            sensitive_markers=sensitive_markers,
+            hard_command_markers=hard_command_markers,
+            normalization=normalization,
+        ),
+        "normalization": normalization,
     }
 
 
@@ -912,6 +1030,7 @@ def _intent(
         "evidence": {
             "matched_marker_count": len(matched_markers or []),
             "normalization": inference_packet.get("normalization", {}),
+            "structured_evidence": inference_packet.get("structured_evidence", {}),
             "raw_task_stored": False,
         },
         "inference": inference_packet,

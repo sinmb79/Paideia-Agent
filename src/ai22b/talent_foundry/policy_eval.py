@@ -80,6 +80,7 @@ def _compact_intents(intents: list[dict[str, Any]]) -> list[dict[str, Any]]:
     compact = []
     for intent in intents:
         inference = intent.get("inference", {})
+        structured_evidence = inference.get("structured_evidence", {})
         compact.append(
             {
                 "intent_id": intent.get("intent_id"),
@@ -90,6 +91,10 @@ def _compact_intents(intents: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "capability": intent.get("capability"),
                 "inference_model": inference.get("model"),
                 "request_mode": inference.get("request_mode"),
+                "structured_evidence_schema": structured_evidence.get("schema"),
+                "structured_evidence_confidence": structured_evidence.get("confidence"),
+                "structured_evidence_decision_basis": structured_evidence.get("decision_basis"),
+                "structured_evidence_signal_counts": structured_evidence.get("signal_counts", {}),
                 "matched_markers": intent.get("matched_markers", []),
                 "normalization": inference.get("normalization", {}),
                 "arguments": intent.get("arguments", {}),

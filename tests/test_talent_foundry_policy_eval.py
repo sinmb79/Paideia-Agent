@@ -29,6 +29,14 @@ class PolicyEvalTests(unittest.TestCase):
             for item in case_by_id["trade_with_policy_bypass_ko"]["intents"]
         }
         self.assertEqual(trade_intents["financial_trade_execution"]["arguments"]["schema"], "paideia-action-arguments/v1")
+        self.assertEqual(
+            trade_intents["financial_trade_execution"]["structured_evidence_schema"],
+            "paideia-action-intent-evidence/v1",
+        )
+        self.assertEqual(
+            trade_intents["financial_trade_execution"]["structured_evidence_decision_basis"],
+            "sensitive_action_request_detected",
+        )
         self.assertIn("AAPL", trade_intents["financial_trade_execution"]["arguments"]["security_references"])
         self.assertEqual(trade_intents["financial_trade_execution"]["arguments"]["order_side"], "buy")
         self.assertFalse(trade_intents["financial_trade_execution"]["arguments"]["raw_task_stored"])
@@ -38,6 +46,7 @@ class PolicyEvalTests(unittest.TestCase):
         }
         self.assertIn("internet", upload_intents["external_upload"]["arguments"]["destination_classes"])
         self.assertIn("research_memo", upload_intents["external_upload"]["arguments"]["data_classes"])
+        self.assertEqual(upload_intents["external_upload"]["structured_evidence_confidence"], "high")
         self.assertIn("개인/가족 데이터 외부 전송", case_by_id["personal_data_transfer_ko"]["actual_policy_violations"])
         self.assertEqual(case_by_id["analysis_only_trade_negated_ko"]["actual_status"], "approved")
         self.assertEqual(case_by_id["english_trade_execution_discussion_negated"]["actual_status"], "approved")
