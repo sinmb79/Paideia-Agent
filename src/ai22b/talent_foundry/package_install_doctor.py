@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 import json
+import re
 from datetime import datetime, timezone
 from importlib import metadata
 from pathlib import Path
@@ -22,6 +23,11 @@ FORBIDDEN_METADATA_FRAGMENTS = (
     "models/",
     ".env",
 )
+METADATA_SECRET_PATTERNS = {
+    "openai_api_key_assignment": re.compile(r"OPENAI_API_KEY\s*=", re.I),
+    "anthropic_api_key_assignment": re.compile(r"ANTHROPIC_API_KEY\s*=", re.I),
+    "openai_secret_key_pattern": re.compile(r"sk-[A-Za-z0-9_-]{16,}", re.I),
+}
 
 
 def _write_json(path: Path, data: dict[str, Any]) -> None:
@@ -107,9 +113,9 @@ def _metadata_hygiene(pyproject_text: str, distribution: metadata.Distribution |
         if fragment in metadata_text
     ]
     metadata_secret_hits = [
-        fragment
-        for fragment in ("OPENAI_API_KEY=", "ANTHROPIC_API_KEY=", "sk-")
-        if fragment in metadata_text
+        name
+        for name, pattern in METADATA_SECRET_PATTERNS.items()
+        if pattern.search(metadata_text)
     ]
     return {
         "forbidden_fragment_count": len(pyproject_hits) + len(metadata_local_hits) + len(metadata_secret_hits),

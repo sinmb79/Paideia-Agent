@@ -66,6 +66,28 @@ class PackageSmokeTests(unittest.TestCase):
         self.assertTrue(check_by_id["distribution_console_scripts_match_pyproject"]["passed"])
         self.assertTrue(check_by_id["console_script_targets_importable_callables"]["passed"])
 
+    def test_package_metadata_hygiene_does_not_flag_task_word_as_openai_secret(self) -> None:
+        from ai22b.talent_foundry.package_install_doctor import _metadata_hygiene
+
+        class FakeDistribution:
+            metadata = {
+                "Name": "paideia-agent",
+                "Summary": "Includes raw-task-not-stored checks for public safety.",
+            }
+
+        clean = _metadata_hygiene("", FakeDistribution())
+        self.assertEqual(clean["metadata_secret_fragments"], [])
+        self.assertEqual(clean["forbidden_fragment_count"], 0)
+
+        class FakeSecretDistribution:
+            metadata = {
+                "Name": "paideia-agent",
+                "Summary": "Contains sk-fixture_secret_value_1234567890 and must fail.",
+            }
+
+        secret = _metadata_hygiene("", FakeSecretDistribution())
+        self.assertIn("openai_secret_key_pattern", secret["metadata_secret_fragments"])
+
     def test_optional_dependencies_are_split_by_runtime_capability(self) -> None:
         project = self._pyproject()["project"]
         optional = project.get("optional-dependencies", {})
