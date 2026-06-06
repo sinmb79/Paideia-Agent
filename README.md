@@ -517,6 +517,8 @@ The adapter regression suite uses fake SDK/HTTP success fixtures for OpenAI Resp
 
 Every agent, hired job, and dataflow runtime result also embeds `llm_provider_preflight`. This no-network packet explains whether the selected provider was skipped for offline mode, needs configuration, or is ready for an explicit live attempt. It records missing model/key/path checks, next actions, secret non-export policy, and the fact that preflight itself did not call the provider.
 
+Live provider attempts also carry a `paideia-llm-client-contract/v1` packet. It proves the provider result was kept as a summary-only client result, raw provider text and payloads were not saved, private reasoning fields were omitted, secrets were not exported, and the selected LLM stayed an application engine rather than the agent identity.
+
 Completed, bridge-ready, and adapter-ready agent runs also include `llm_plan`. This is a reviewable packet with `assistant_reply`, short evidence-facing reasoning summaries, suggested next actions, and suggestion-only tool plans. Raw provider text and hidden reasoning traces are not stored; registered tools still execute only through the policy-checked local tool registry. Each run also records `llm_tool_plan_alignment`, proving that out-of-scope LLM tool suggestions were not executed.
 
 Post-run learning is also review-gated. `memory_write.review_candidate` records a summary-only `paideia-memory-review-candidate/v1` packet with evidence digests for the LLM plan, policy decision, tool execution, verification, and tool-plan alignment. It explicitly sets `automatic_promotion_allowed=false`; no run is promoted into the local learning ledger until verification and Boss/committee review approve it.

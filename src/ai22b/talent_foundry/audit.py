@@ -1493,6 +1493,11 @@ def _llm_live_agent_loop_contract() -> dict[str, Any]:
     )
     llm_result = run.get("llm_runtime_result", {}) if isinstance(run.get("llm_runtime_result"), dict) else {}
     client_result = llm_result.get("client_result", {}) if isinstance(llm_result.get("client_result"), dict) else {}
+    llm_client_contract = (
+        llm_result.get("llm_client_contract", {})
+        if isinstance(llm_result.get("llm_client_contract"), dict)
+        else {}
+    )
     llm_plan = llm_result.get("llm_plan", {}) if isinstance(llm_result.get("llm_plan"), dict) else {}
     execution_contract = (
         run.get("execution_contract", {}) if isinstance(run.get("execution_contract"), dict) else {}
@@ -1538,6 +1543,13 @@ def _llm_live_agent_loop_contract() -> dict[str, Any]:
         "client_result_private_reasoning_values_stored": client_result.get(
             "private_reasoning_field_values_stored"
         ),
+        "llm_client_contract_schema": llm_client_contract.get("schema"),
+        "llm_client_contract_status": llm_client_contract.get("status"),
+        "llm_client_contract_summary_only": llm_client_contract.get("client_result_summary_only"),
+        "llm_client_contract_raw_payload_saved": llm_client_contract.get("raw_provider_payload_saved"),
+        "llm_client_contract_private_reasoning_values_stored": llm_client_contract.get(
+            "private_reasoning_field_values_stored"
+        ),
         "data_policy_store_raw_client_result_text": llm_result.get("data_policy", {}).get(
             "store_raw_client_result_text"
         )
@@ -1577,6 +1589,11 @@ def _llm_live_agent_loop_contract() -> dict[str, Any]:
         and details["client_result_raw_output_saved"] is False
         and details["client_result_private_reasoning_fields_omitted"] >= 2
         and details["client_result_private_reasoning_values_stored"] is False
+        and details["llm_client_contract_schema"] == "paideia-llm-client-contract/v1"
+        and details["llm_client_contract_status"] == "passed"
+        and details["llm_client_contract_summary_only"] is True
+        and details["llm_client_contract_raw_payload_saved"] is False
+        and details["llm_client_contract_private_reasoning_values_stored"] is False
         and details["data_policy_store_raw_client_result_text"] is False
         and details["provider_preflight_live_check_performed"] is False
         and details["provider_preflight_network_call_made"] is False

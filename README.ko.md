@@ -1,6 +1,6 @@
 # Paideia Agent
 
-> 현재 P0 반영: 모든 agent run, hired job, dataflow 실행 결과에는 `llm_provider_preflight`가 자동으로 포함됩니다. 이 패킷은 provider를 실제 호출하지 않고, 선택된 LLM이 offline mode라서 건너뛰어졌는지, 모델/API 키/로컬 경로 설정이 부족한지, 명시적인 live 실행 준비가 되었는지를 설명합니다. 또한 다음 조치, secret 비공개 정책, preflight 단계에서는 네트워크 호출을 하지 않았다는 사실을 함께 기록합니다.
+> 현재 P0 반영: 모든 agent run, hired job, dataflow 실행 결과에는 `llm_provider_preflight`가 자동으로 포함됩니다. 이 패킷은 provider를 실제 호출하지 않고, 선택된 LLM이 offline mode라서 건너뛰어졌는지, 모델/API 키/로컬 경로 설정이 부족한지, 명시적인 live 실행 준비가 되었는지를 설명합니다. 또한 다음 조치, secret 비공개 정책, preflight 단계에서는 네트워크 호출을 하지 않았다는 사실을 함께 기록합니다. 실제 live provider 시도에는 `paideia-llm-client-contract/v1`도 붙어 provider 결과가 summary-only로 저장됐고, raw provider text/payload, secret, private reasoning trace가 저장되지 않았으며, 선택한 LLM이 에이전트 정체성이 아니라 응용 엔진으로만 쓰였음을 증명합니다.
 
 [English](README.md) | [한국어](README.ko.md)
 

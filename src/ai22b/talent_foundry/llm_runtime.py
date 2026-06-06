@@ -52,6 +52,7 @@ LLM_PROVIDER_PREFLIGHT_SCHEMA = "paideia-llm-provider-preflight/v1"
 LLM_PROVIDER_SMOKE_CONTRACT_SCHEMA = "paideia-llm-provider-smoke-contract/v1"
 LLM_APPLICATION_SMOKE_SCHEMA = "paideia-llm-application-smoke/v1"
 LLM_REVIEWABLE_PLAN_SCHEMA = "paideia-llm-reviewable-plan/v1"
+LLM_CLIENT_CONTRACT_SCHEMA = "paideia-llm-client-contract/v1"
 MODEL_REQUIRED_ENGINES = {
     "anthropic_claude_api",
     "google_gemini_api",
@@ -534,6 +535,12 @@ def run_llm_application_smoke(
         and client_result.get("private_reasoning_field_values_stored", False) is False
         and client_result.get("raw_output_saved", False) is False
     )
+    llm_client_contract = (
+        runtime_result.get("llm_client_contract", {})
+        if isinstance(runtime_result.get("llm_client_contract"), dict)
+        else {}
+    )
+    contract_safe = not llm_client_contract or llm_client_contract.get("status") == "passed"
     report = {
         "schema": LLM_APPLICATION_SMOKE_SCHEMA,
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -542,8 +549,12 @@ def run_llm_application_smoke(
         "model": model,
         "model_path_present": bool(model_path),
         "llm_mode": llm_mode,
-        "status": "passed" if runtime_result.get("status") == "completed" and public_safe else "failed",
-        "passed": runtime_result.get("status") == "completed" and public_safe,
+        "status": (
+            "passed"
+            if runtime_result.get("status") == "completed" and public_safe and contract_safe
+            else "failed"
+        ),
+        "passed": runtime_result.get("status") == "completed" and public_safe and contract_safe,
         "runtime_result": _sanitize_runtime_result(runtime_result),
         "runtime_contract": {
             "application_engine_only": runtime_result.get("identity_policy") == "application_engine_not_identity",
@@ -554,7 +565,15 @@ def run_llm_application_smoke(
                 "private_reasoning_field_values_stored",
                 False,
             ),
+            "llm_client_contract_schema": llm_client_contract.get("schema"),
+            "llm_client_contract_status": llm_client_contract.get("status"),
+            "llm_client_contract_summary_only": llm_client_contract.get("client_result_summary_only"),
+            "llm_client_contract_raw_payload_saved": llm_client_contract.get("raw_provider_payload_saved"),
+            "llm_client_contract_private_reasoning_values_stored": llm_client_contract.get(
+                "private_reasoning_field_values_stored"
+            ),
         },
+        "llm_client_contract": llm_client_contract or None,
         "preflight": {
             "schema": preflight.get("schema"),
             "status": preflight.get("status"),
@@ -650,6 +669,12 @@ def _invoke_live_client(
         private_reasoning_fields_omitted=private_reasoning_fields_omitted,
     )
     engine = runtime_config["engine"]
+    llm_client_contract = _build_llm_client_contract(
+        runtime_config,
+        runtime_status="completed" if client_result.get("status") == "completed" else "unavailable",
+        client_result_summary=client_result_summary,
+        client_override_used=client is not None,
+    )
     if client_result.get("status") != "completed":
         return {
             "schema": RUNTIME_RESULT_SCHEMA,
@@ -660,6 +685,7 @@ def _invoke_live_client(
             "network_access": runtime_config["network_access"],
             "llm_mode": "live",
             "client_result": client_result_summary,
+            "llm_client_contract": llm_client_contract,
         }
     llm_plan = build_reviewable_llm_plan(
         text=str(client_result.get("text", "")),
@@ -679,6 +705,7 @@ def _invoke_live_client(
         "draft": llm_plan["assistant_reply"],
         "llm_plan": llm_plan,
         "client_result": client_result_summary,
+        "llm_client_contract": llm_client_contract,
         "data_policy": {
             "send_private_training_files": False,
             "send_selected_memory_route_only": True,
@@ -712,6 +739,51 @@ def _client_result_for_runtime_storage(
     summary["private_reasoning_field_values_stored"] = False
     summary["retention_policy"] = "summary_without_provider_text_or_debug_payload"
     return summary
+
+
+def _build_llm_client_contract(
+    runtime_config: dict[str, Any],
+    *,
+    runtime_status: str,
+    client_result_summary: dict[str, Any],
+    client_override_used: bool,
+) -> dict[str, Any]:
+    private_values_stored = client_result_summary.get("private_reasoning_field_values_stored", False)
+    raw_output_saved = client_result_summary.get("raw_output_saved", False)
+    summary_only = "text" not in client_result_summary
+    safe = summary_only and raw_output_saved is False and private_values_stored is False
+    return {
+        "schema": LLM_CLIENT_CONTRACT_SCHEMA,
+        "status": "passed" if safe else "failed",
+        "engine": runtime_config["engine"],
+        "service": runtime_config.get("service", runtime_config["engine"]),
+        "model": client_result_summary.get("model") or runtime_config.get("model"),
+        "llm_mode": "live",
+        "runtime_status": runtime_status,
+        "client_result_status": client_result_summary.get("status"),
+        "client_executor": "injected_client" if client_override_used else "built_in_client",
+        "client_override_used": client_override_used,
+        "application_engine_only": runtime_config.get("identity_policy") == "application_engine_not_identity",
+        "network_access": runtime_config.get("network_access"),
+        "network_call_requires_explicit_live_check": True,
+        "secret_values_exported": False,
+        "send_private_training_files": False,
+        "send_full_session_replay": False,
+        "send_selected_memory_route_only": True,
+        "client_result_summary_only": summary_only,
+        "text_omitted": client_result_summary.get("text_omitted") is True,
+        "omitted_keys": client_result_summary.get("omitted_keys", []),
+        "raw_provider_text_saved": False,
+        "raw_provider_payload_saved": False,
+        "raw_output_saved": raw_output_saved,
+        "private_reasoning_fields_omitted": client_result_summary.get("private_reasoning_fields_omitted", 0),
+        "private_reasoning_field_values_stored": private_values_stored,
+        "private_reasoning_trace": "do_not_store",
+        "retention_policy": client_result_summary.get(
+            "retention_policy",
+            "summary_without_provider_text_or_debug_payload",
+        ),
+    }
 
 
 def _compact_text(value: Any, *, limit: int = 1200) -> str:
@@ -1229,6 +1301,35 @@ def _sanitize_runtime_result(result: dict[str, Any] | None) -> dict[str, Any] | 
                 "retention_policy",
             ]
             if key in client_result
+        }
+    client_contract = result.get("llm_client_contract")
+    if isinstance(client_contract, dict):
+        sanitized["llm_client_contract"] = {
+            key: client_contract[key]
+            for key in [
+                "schema",
+                "status",
+                "engine",
+                "service",
+                "model",
+                "llm_mode",
+                "runtime_status",
+                "client_result_status",
+                "client_executor",
+                "client_override_used",
+                "application_engine_only",
+                "network_access",
+                "client_result_summary_only",
+                "text_omitted",
+                "raw_provider_text_saved",
+                "raw_provider_payload_saved",
+                "raw_output_saved",
+                "private_reasoning_fields_omitted",
+                "private_reasoning_field_values_stored",
+                "private_reasoning_trace",
+                "retention_policy",
+            ]
+            if key in client_contract
         }
     return sanitized
 

@@ -158,6 +158,9 @@ def run_agent_runtime_smoke(
     llm_result = run.get("llm_runtime_result", {}) if isinstance(run.get("llm_runtime_result"), dict) else {}
     llm_plan = llm_result.get("llm_plan", {}) if isinstance(llm_result.get("llm_plan"), dict) else {}
     client_result = llm_result.get("client_result", {}) if isinstance(llm_result.get("client_result"), dict) else {}
+    llm_client_contract = (
+        llm_result.get("llm_client_contract", {}) if isinstance(llm_result.get("llm_client_contract"), dict) else {}
+    )
     preflight = run.get("llm_provider_preflight", {}) if isinstance(run.get("llm_provider_preflight"), dict) else preflight
     policy_decision = run.get("policy_decision", {}) if isinstance(run.get("policy_decision"), dict) else {}
     tool_execution = run.get("tool_execution", {}) if isinstance(run.get("tool_execution"), dict) else {}
@@ -194,6 +197,7 @@ def run_agent_runtime_smoke(
         and tool_scope.get("subprocess_default") == "blocked"
         and llm_plan.get("private_reasoning_trace") == "do_not_store"
         and llm_plan.get("raw_provider_text_stored") is not True
+        and (not llm_client_contract or llm_client_contract.get("status") == "passed")
         and memory_write.get("automatic_promotion_performed") is False
         and raw_or_hidden_absent
     )
@@ -220,6 +224,13 @@ def run_agent_runtime_smoke(
         "client_result_private_reasoning_values_stored": client_result.get(
             "private_reasoning_field_values_stored",
             False,
+        ),
+        "llm_client_contract_schema": llm_client_contract.get("schema"),
+        "llm_client_contract_status": llm_client_contract.get("status"),
+        "llm_client_contract_summary_only": llm_client_contract.get("client_result_summary_only"),
+        "llm_client_contract_raw_payload_saved": llm_client_contract.get("raw_provider_payload_saved"),
+        "llm_client_contract_private_reasoning_values_stored": llm_client_contract.get(
+            "private_reasoning_field_values_stored"
         ),
         "preflight_status": preflight.get("status"),
         "preflight_live_path_selected": preflight.get("live_path_selected"),
@@ -268,6 +279,7 @@ def run_agent_runtime_smoke(
         and details["audit_event_count"] >= 4
         and details["network_default"] == "blocked"
         and details["subprocess_default"] == "blocked"
+        and details["llm_client_contract_status"] in {None, "passed"}
         and details["preflight_network_call_made"] is False
         and public_safe
     )
