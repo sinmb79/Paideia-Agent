@@ -572,7 +572,13 @@ class TransformersLocalClient:
     ) -> dict[str, Any]:
         path = Path(self.model_path)
         if not path.exists():
-            return _unavailable("transformers_local", "local_model_path_not_found", model_path=str(path), local_files_only=True)
+            return _unavailable(
+                "transformers_local",
+                "local_model_path_not_found",
+                model_path=str(path),
+                local_files_only=True,
+                network_access="blocked",
+            )
         try:
             from transformers import AutoModelForCausalLM, AutoTokenizer
 

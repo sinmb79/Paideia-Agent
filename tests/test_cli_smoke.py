@@ -17,6 +17,7 @@ class CliSmokeTests(unittest.TestCase):
             llm_onboarding_path = tmp_path / "llm_onboarding_checklist.json"
             llm_connection_profile_path = tmp_path / "llm_connection_profile.json"
             doctor_path = tmp_path / "llm_provider_doctor.json"
+            adapter_contracts_path = tmp_path / "llm_adapter_contracts.json"
             llm_smoke_path = tmp_path / "llm_application_smoke.json"
             agent_runtime_smoke_path = tmp_path / "agent_runtime_smoke.json"
             chat_runtime_smoke_path = tmp_path / "chat_runtime_smoke.json"
@@ -71,6 +72,14 @@ class CliSmokeTests(unittest.TestCase):
                     "--strict",
                     "--output",
                     str(doctor_path),
+                ]
+            )
+            adapter_contracts_code = cli_main(
+                [
+                    "doctor-llm-adapters",
+                    "--strict",
+                    "--output",
+                    str(adapter_contracts_path),
                 ]
             )
             llm_smoke_code = cli_main(
@@ -177,6 +186,7 @@ class CliSmokeTests(unittest.TestCase):
             llm_onboarding = json.loads(llm_onboarding_path.read_text(encoding="utf-8"))
             llm_connection_profile = json.loads(llm_connection_profile_path.read_text(encoding="utf-8"))
             doctor = json.loads(doctor_path.read_text(encoding="utf-8"))
+            adapter_contracts = json.loads(adapter_contracts_path.read_text(encoding="utf-8"))
             llm_smoke = json.loads(llm_smoke_path.read_text(encoding="utf-8"))
             agent_runtime_smoke = json.loads(agent_runtime_smoke_path.read_text(encoding="utf-8"))
             chat_runtime_smoke = json.loads(chat_runtime_smoke_path.read_text(encoding="utf-8"))
@@ -204,6 +214,7 @@ class CliSmokeTests(unittest.TestCase):
         self.assertEqual(llm_onboarding_code, 0)
         self.assertEqual(llm_connection_profile_code, 0)
         self.assertEqual(doctor_code, 0)
+        self.assertEqual(adapter_contracts_code, 0)
         self.assertEqual(llm_smoke_code, 0)
         self.assertEqual(agent_runtime_smoke_code, 0)
         self.assertEqual(chat_runtime_smoke_code, 0)
@@ -292,6 +303,17 @@ class CliSmokeTests(unittest.TestCase):
         self.assertEqual(doctor["smoke_contract"]["schema"], "paideia-llm-provider-smoke-contract/v1")
         self.assertEqual(doctor["smoke_contract"]["status"], "skipped")
         self.assertFalse(doctor["smoke_contract"]["provider_call_attempted"])
+
+        self.assertEqual(adapter_contracts["schema"], "paideia-llm-adapter-contracts/v1")
+        self.assertTrue(adapter_contracts["passed"])
+        self.assertEqual(adapter_contracts["status"], "passed")
+        self.assertGreaterEqual(adapter_contracts["summary"]["direct_adapter_count"], 9)
+        self.assertEqual(adapter_contracts["summary"]["failed_count"], 0)
+        self.assertFalse(adapter_contracts["public_safe"]["network_call_performed"])
+        self.assertFalse(adapter_contracts["public_safe"]["localhost_call_performed"])
+        self.assertFalse(adapter_contracts["public_safe"]["external_provider_called"])
+        self.assertFalse(adapter_contracts["public_safe"]["secret_values_exported"])
+        self.assertFalse(adapter_contracts["public_safe"]["raw_provider_payload_saved"])
 
         self.assertEqual(llm_smoke["schema"], "paideia-llm-application-smoke/v1")
         self.assertEqual(llm_smoke["engine"], "deterministic_local")
@@ -455,6 +477,7 @@ class CliSmokeTests(unittest.TestCase):
             "llm_onboarding_checklist_public_safe",
             "llm_connection_profile_public_safe",
             "deterministic_provider_doctor_ready",
+            "llm_adapter_contracts_passed",
             "application_engine_smoke_passed",
             "agent_runtime_smoke_passed",
             "chat_runtime_smoke_passed",
@@ -470,6 +493,9 @@ class CliSmokeTests(unittest.TestCase):
             self.assertTrue(first_run_checks[check_id]["passed"], check_id)
         self.assertIn("graham_value_investing", first_run_doctor["artifacts"]["role_models"]["role_model_ids"])
         self.assertEqual(first_run_doctor["artifacts"]["llm_provider_doctor"]["network_access"], "blocked")
+        self.assertEqual(first_run_doctor["artifacts"]["llm_adapter_contracts"]["schema"], "paideia-llm-adapter-contracts/v1")
+        self.assertTrue(first_run_doctor["artifacts"]["llm_adapter_contracts"]["passed"])
+        self.assertFalse(first_run_doctor["artifacts"]["llm_adapter_contracts"]["network_call_performed"])
         self.assertEqual(first_run_doctor["artifacts"]["llm_connection_profile"]["status"], "offline_ready_no_setup")
         self.assertEqual(first_run_doctor["artifacts"]["agent_runtime_smoke"]["execution_contract_status"], "passed")
         self.assertEqual(first_run_doctor["artifacts"]["chat_runtime_smoke"]["schema"], "paideia-chat-runtime-smoke/v1")

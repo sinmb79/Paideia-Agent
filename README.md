@@ -146,7 +146,7 @@ python -m pip install -e ".[dev]"        # tests
 
 CI runs a package smoke test after `pip install -e ".[dev]"`. It verifies the installed distribution metadata, exposed console script entry points, callable script targets, optional extras split by runtime capability, and package metadata hygiene.
 
-CI also runs a CLI smoke test for public-safe first-run commands. It verifies that `list-role-models`, `list-llm-services`, `build-llm-onboarding-checklist --llm-engine deterministic_local`, `build-llm-connection-profile --llm-engine deterministic_local`, `doctor-llm-provider --llm-engine deterministic_local`, `run-llm-application-smoke --llm-engine deterministic_local`, `run-agent-runtime-smoke --llm-engine deterministic_local`, `run-chat-runtime-smoke --llm-engine deterministic_local`, `doctor-llm-live-readiness --llm-engine deterministic_local`, `audit-tool-capabilities --strict`, `run-action-policy-eval`, `audit-public-release-readiness`, `build-source-sbom`, `doctor-package-install`, `doctor-runtime-contract`, and `doctor-first-run` execute without private files, API keys, or network access while writing reviewable JSON reports.
+CI also runs a CLI smoke test for public-safe first-run commands. It verifies that `list-role-models`, `list-llm-services`, `build-llm-onboarding-checklist --llm-engine deterministic_local`, `build-llm-connection-profile --llm-engine deterministic_local`, `doctor-llm-provider --llm-engine deterministic_local`, `doctor-llm-adapters`, `run-llm-application-smoke --llm-engine deterministic_local`, `run-agent-runtime-smoke --llm-engine deterministic_local`, `run-chat-runtime-smoke --llm-engine deterministic_local`, `doctor-llm-live-readiness --llm-engine deterministic_local`, `audit-tool-capabilities --strict`, `run-action-policy-eval`, `audit-public-release-readiness`, `build-source-sbom`, `doctor-package-install`, `doctor-runtime-contract`, and `doctor-first-run` execute without private files, API keys, or network access while writing reviewable JSON reports.
 
 The source package declares an MIT license in `LICENSE` and `pyproject.toml`. Public release readiness is tracked separately from generated agent bundles; see [Public Release Readiness](docs/public_release_readiness.md) and [공개 릴리스 준비도](docs/public_release_readiness.ko.md).
 
@@ -467,6 +467,16 @@ ai22b-talent-foundry build-llm-connection-profile `
 The profile records `setup_requirements`, `readiness`, `verification_sequence`, `daily_use_commands`, `fail_closed_expectation`, and `data_policy`. API providers show the required environment-variable placeholder; local HTTP providers such as Ollama show the localhost endpoint. The file itself is generated without a live provider call.
 
 Hiring an installed talent also writes the same no-network profile next to the `employment_record.json` and links it through `entrypoints.llm_connection_profile`. This keeps the selected LLM/chat setup attached to the hired agent, not only to the onboarding session, so later `run-hired-agent`, chat, workspace, and dataflow checks can be audited from the employment record folder.
+
+To verify adapter contracts across the supported provider families without calling live APIs or localhost servers, run:
+
+```powershell
+ai22b-talent-foundry doctor-llm-adapters `
+  --strict `
+  --output .\llm_adapter_contracts.json
+```
+
+This doctor checks direct client factory coverage, deterministic local generation, external API missing-credential fail-closed behavior, localhost adapter explicit-live posture, and local-model missing-path fail-closed behavior. It records `network_call_performed=false`, `external_provider_called=false`, `localhost_call_performed=false`, `raw_provider_payload_saved=false`, and `private_reasoning_trace=do_not_store`.
 
 Before hiring or running a talent with a live/local provider, run the provider doctor:
 

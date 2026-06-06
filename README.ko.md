@@ -102,7 +102,7 @@ python -m pip install -e ".[dev]"        # 테스트
 
 CI의 package smoke 테스트는 `pip install -e ".[dev]"` 이후 실행됩니다. 설치된 distribution metadata, 노출된 console script entry point, 실제 callable script target, 기능별 optional extras 분리, 패키지 메타데이터 hygiene를 확인합니다.
 
-CI는 공개 안전 first-run CLI smoke 테스트도 실행합니다. 이 테스트는 `list-role-models`, `list-llm-services`, `build-llm-onboarding-checklist --llm-engine deterministic_local`, `build-llm-connection-profile --llm-engine deterministic_local`, `doctor-llm-provider --llm-engine deterministic_local`, `run-llm-application-smoke --llm-engine deterministic_local`, `run-agent-runtime-smoke --llm-engine deterministic_local`, `run-chat-runtime-smoke --llm-engine deterministic_local`, `doctor-llm-live-readiness --llm-engine deterministic_local`, `audit-tool-capabilities --strict`, `run-action-policy-eval`, `audit-public-release-readiness`, `build-source-sbom`, `doctor-package-install`, `doctor-runtime-contract`, `doctor-first-run`이 비공개 파일, API 키, 네트워크 접근 없이 실행되고 검토 가능한 JSON 리포트를 쓰는지 확인합니다.
+CI는 공개 안전 first-run CLI smoke 테스트도 실행합니다. 이 테스트는 `list-role-models`, `list-llm-services`, `build-llm-onboarding-checklist --llm-engine deterministic_local`, `build-llm-connection-profile --llm-engine deterministic_local`, `doctor-llm-provider --llm-engine deterministic_local`, `doctor-llm-adapters`, `run-llm-application-smoke --llm-engine deterministic_local`, `run-agent-runtime-smoke --llm-engine deterministic_local`, `run-chat-runtime-smoke --llm-engine deterministic_local`, `doctor-llm-live-readiness --llm-engine deterministic_local`, `audit-tool-capabilities --strict`, `run-action-policy-eval`, `audit-public-release-readiness`, `build-source-sbom`, `doctor-package-install`, `doctor-runtime-contract`, `doctor-first-run`이 비공개 파일, API 키, 네트워크 접근 없이 실행되고 검토 가능한 JSON 리포트를 쓰는지 확인합니다.
 
 롤모델 목록:
 
@@ -253,6 +253,16 @@ ai22b-talent-foundry build-llm-connection-profile `
 profile에는 `setup_requirements`, `readiness`, `verification_sequence`, `daily_use_commands`, `fail_closed_expectation`, `data_policy`가 들어갑니다. API provider는 필요한 환경변수 placeholder를, Ollama 같은 로컬 HTTP provider는 localhost endpoint를 보여줍니다. 이 파일을 만드는 동안 live provider 호출은 발생하지 않습니다.
 
 설치된 인재를 고용할 때도 같은 no-network profile이 `employment_record.json` 옆에 자동으로 생성되고 `entrypoints.llm_connection_profile`로 연결됩니다. 그래서 선택한 LLM/채팅 설정이 온보딩 세션에만 남지 않고, 고용된 에이전트 폴더에서 `run-hired-agent`, 채팅, workspace, dataflow 검증까지 추적할 수 있습니다.
+
+지원 provider 계열의 adapter 계약을 live API나 localhost 서버 호출 없이 확인하려면 다음 명령을 실행합니다.
+
+```powershell
+ai22b-talent-foundry doctor-llm-adapters `
+  --strict `
+  --output .\llm_adapter_contracts.json
+```
+
+이 doctor는 direct client factory coverage, deterministic local generation, 외부 API missing-credential fail-closed, localhost adapter의 explicit-live posture, local-model missing-path fail-closed 동작을 확인합니다. 리포트에는 `network_call_performed=false`, `external_provider_called=false`, `localhost_call_performed=false`, `raw_provider_payload_saved=false`, `private_reasoning_trace=do_not_store`가 기록됩니다.
 
 live 또는 로컬 provider로 인재를 고용/실행하기 전에는 provider doctor를 먼저 실행할 수 있습니다.
 

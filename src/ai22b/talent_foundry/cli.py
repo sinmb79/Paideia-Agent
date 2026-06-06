@@ -55,6 +55,7 @@ from ai22b.talent_foundry.llm_runtime import (
     doctor_llm_provider,
     run_llm_application_smoke,
 )
+from ai22b.talent_foundry.llm_adapter_contracts import run_llm_adapter_contracts
 from ai22b.talent_foundry.llm_live_readiness import run_llm_live_readiness_suite
 from ai22b.talent_foundry.llm_onboarding import (
     build_llm_connection_profile,
@@ -523,6 +524,17 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Return exit code 2 when the provider doctor report is not ready.",
     )
     doctor_llm.add_argument("--output", required=True)
+
+    doctor_llm_adapters = subparsers.add_parser(
+        "doctor-llm-adapters",
+        help="Verify public-safe LLM adapter contracts without live provider or localhost calls.",
+    )
+    doctor_llm_adapters.add_argument(
+        "--strict",
+        action="store_true",
+        help="Return exit code 2 when an adapter contract check fails.",
+    )
+    doctor_llm_adapters.add_argument("--output", required=True)
 
     llm_smoke = subparsers.add_parser(
         "run-llm-application-smoke",
@@ -1504,6 +1516,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             model_path=args.llm_model_path,
             live_check=args.live_check,
         )
+        output_path = Path(args.output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(str(output_path))
+        if args.strict and not report.get("passed"):
+            return 2
+        return 0
+
+    if args.command == "doctor-llm-adapters":
+        report = run_llm_adapter_contracts()
         output_path = Path(args.output)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")

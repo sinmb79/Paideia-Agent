@@ -27,6 +27,59 @@ def _headers(request) -> dict[str, str]:
 
 
 class TalentFoundryLlmClientTests(unittest.TestCase):
+    def test_llm_adapter_contract_doctor_public_safe_no_network(self) -> None:
+        from ai22b.talent_foundry.llm_adapter_contracts import run_llm_adapter_contracts
+
+        report = run_llm_adapter_contracts()
+        checks = {item["id"]: item for item in report["checks"]}
+
+        self.assertEqual(report["schema"], "paideia-llm-adapter-contracts/v1")
+        self.assertTrue(report["passed"])
+        self.assertEqual(report["status"], "passed")
+        self.assertGreaterEqual(report["summary"]["direct_adapter_count"], 9)
+        self.assertEqual(report["summary"]["failed_count"], 0)
+        self.assertFalse(report["public_safe"]["network_call_performed"])
+        self.assertFalse(report["public_safe"]["localhost_call_performed"])
+        self.assertFalse(report["public_safe"]["external_provider_called"])
+        self.assertFalse(report["public_safe"]["secret_values_exported"])
+        self.assertFalse(report["public_safe"]["raw_provider_payload_saved"])
+        self.assertEqual(report["public_safe"]["private_reasoning_trace"], "do_not_store")
+        self.assertTrue(checks["client_factory_contract"]["passed"])
+        self.assertTrue(checks["deterministic_generate_contract"]["passed"])
+        self.assertTrue(checks["external_api_missing_credentials_fail_closed"]["passed"])
+        self.assertTrue(checks["localhost_adapters_explicit_live_contract"]["passed"])
+        self.assertTrue(checks["local_model_missing_path_fail_closed"]["passed"])
+        external_cases = {
+            item["engine"]: item
+            for item in checks["external_api_missing_credentials_fail_closed"]["cases"]
+        }
+        self.assertIn("openrouter_api", external_cases)
+        self.assertEqual(external_cases["openrouter_api"]["status"], "unavailable")
+        self.assertFalse(external_cases["openrouter_api"]["network_call_attempted"])
+
+    def test_cli_doctor_llm_adapters_writes_report(self) -> None:
+        import tempfile
+        from pathlib import Path
+
+        from ai22b.talent_foundry.cli import main as cli_main
+
+        with tempfile.TemporaryDirectory() as tmp:
+            output_path = Path(tmp) / "llm_adapter_contracts.json"
+            exit_code = cli_main(
+                [
+                    "doctor-llm-adapters",
+                    "--strict",
+                    "--output",
+                    str(output_path),
+                ]
+            )
+            report = json.loads(output_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(report["schema"], "paideia-llm-adapter-contracts/v1")
+        self.assertTrue(report["passed"])
+        self.assertFalse(report["public_safe"]["network_call_performed"])
+
     def test_openai_responses_client_calls_sdk_success_without_exporting_secret_or_payload(self) -> None:
         from ai22b.talent_foundry.llm_clients import OpenAIResponsesClient
 

@@ -8,6 +8,7 @@ from typing import Any
 from ai22b.config import PROJECT_ROOT
 from ai22b.talent_foundry.agent_runtime_smoke import run_agent_runtime_smoke
 from ai22b.talent_foundry.chat_runtime_smoke import run_chat_runtime_smoke
+from ai22b.talent_foundry.llm_adapter_contracts import run_llm_adapter_contracts
 from ai22b.talent_foundry.llm_onboarding import (
     build_llm_connection_profile,
     build_llm_onboarding_checklist,
@@ -171,6 +172,25 @@ def _live_readiness_summary(report: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _adapter_contract_summary(report: dict[str, Any]) -> dict[str, Any]:
+    summary = _as_dict(report.get("summary"))
+    public_safe = _public_safe(report)
+    return {
+        "schema": report.get("schema"),
+        "status": report.get("status"),
+        "passed": report.get("passed"),
+        "direct_adapter_count": summary.get("direct_adapter_count"),
+        "runtime_only_local_engines": summary.get("runtime_only_local_engines", []),
+        "failed_count": summary.get("failed_count"),
+        "network_call_performed": public_safe.get("network_call_performed"),
+        "localhost_call_performed": public_safe.get("localhost_call_performed"),
+        "external_provider_called": public_safe.get("external_provider_called"),
+        "secret_values_exported": public_safe.get("secret_values_exported"),
+        "raw_provider_payload_saved": public_safe.get("raw_provider_payload_saved"),
+        "private_reasoning_trace": public_safe.get("private_reasoning_trace"),
+    }
+
+
 def _chat_smoke_summary(report: dict[str, Any]) -> dict[str, Any]:
     details = _as_dict(report.get("details"))
     data_policy = _as_dict(report.get("data_policy"))
@@ -269,6 +289,7 @@ def doctor_first_run(
         chat_surface="codex-bridge-chat",
     )
     provider_doctor = doctor_llm_provider(engine="deterministic_local", live_check=False)
+    adapter_contracts = run_llm_adapter_contracts()
     application_smoke = run_llm_application_smoke(
         engine="deterministic_local",
         llm_mode="offline",
@@ -305,6 +326,7 @@ def doctor_first_run(
     provider_matrix_public = _public_safe(provider_matrix)
     checklist_public = _public_safe(llm_checklist)
     connection_public = _public_safe(llm_connection_profile)
+    adapter_public = _public_safe(adapter_contracts)
     application_runtime = _as_dict(application_smoke.get("runtime_result"))
     application_policy = _as_dict(application_smoke.get("data_policy"))
     agent_details = _as_dict(agent_runtime_smoke.get("details"))
@@ -371,6 +393,19 @@ def doctor_first_run(
             "status": provider_doctor.get("status"),
             "network_access": provider_doctor.get("network_access"),
         },
+    )
+    _check(
+        checks,
+        "llm_adapter_contracts_passed",
+        adapter_contracts.get("schema") == "paideia-llm-adapter-contracts/v1"
+        and adapter_contracts.get("passed") is True
+        and adapter_public.get("network_call_performed") is False
+        and adapter_public.get("localhost_call_performed") is False
+        and adapter_public.get("external_provider_called") is False
+        and adapter_public.get("secret_values_exported") is False
+        and adapter_public.get("raw_provider_payload_saved") is False
+        and adapter_public.get("private_reasoning_trace") == "do_not_store",
+        details=_adapter_contract_summary(adapter_contracts),
     )
     _check(
         checks,
@@ -502,6 +537,10 @@ def doctor_first_run(
         and provider_doctor.get("live_check_requested") is False
         and connection_public.get("network_call_performed") is False
         and connection_public.get("secret_values_exported") is False
+        and adapter_public.get("network_call_performed") is False
+        and adapter_public.get("localhost_call_performed") is False
+        and adapter_public.get("external_provider_called") is False
+        and adapter_public.get("secret_values_exported") is False
         and application_runtime.get("network_access") == "blocked"
         and agent_details.get("preflight_network_call_made") is False
         and chat_details.get("preflight_network_call_made") is False
@@ -530,6 +569,8 @@ def doctor_first_run(
         no_network_or_llm_by_default,
         details={
             "provider_live_check_requested": provider_doctor.get("live_check_requested"),
+            "adapter_network_call_performed": adapter_public.get("network_call_performed"),
+            "adapter_external_provider_called": adapter_public.get("external_provider_called"),
             "application_network_access": application_runtime.get("network_access"),
             "chat_runtime_preflight_network_call": chat_details.get("preflight_network_call_made"),
             "llm_live_readiness_live_provider_call_attempted": live_readiness_policy.get(
@@ -579,6 +620,7 @@ def doctor_first_run(
                 "status": provider_doctor.get("status"),
                 "network_access": provider_doctor.get("network_access"),
             },
+            "llm_adapter_contracts": _adapter_contract_summary(adapter_contracts),
             "application_smoke": {
                 "schema": application_smoke.get("schema"),
                 "status": application_smoke.get("status"),

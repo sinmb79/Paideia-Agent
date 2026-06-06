@@ -33,6 +33,7 @@ from ai22b.talent_foundry.llm_runtime import (
     run_llm_application_smoke,
 )
 from ai22b.talent_foundry.learning_loop import build_reasoning_kernel, create_learning_ledger
+from ai22b.talent_foundry.llm_adapter_contracts import LLM_ADAPTER_CONTRACTS_SCHEMA, run_llm_adapter_contracts
 from ai22b.talent_foundry.llm_onboarding import build_llm_connection_profile
 from ai22b.talent_foundry.onboarding_choices import LLM_SERVICE_CATALOG
 from ai22b.talent_foundry.package_install_doctor import PACKAGE_INSTALL_DOCTOR_SCHEMA, doctor_package_install
@@ -154,6 +155,7 @@ REQUIRED_PUBLIC_PROGRAM_COMMANDS = {
     "build-llm-connection-profile",
     "raise",
     "doctor-llm-provider",
+    "doctor-llm-adapters",
     "run-llm-application-smoke",
     "run-agent-runtime-smoke",
     "run-chat-runtime-smoke",
@@ -198,6 +200,7 @@ PUBLIC_SAFE_FIRST_RUN_COMMANDS = {
     "build-llm-onboarding-checklist",
     "build-llm-connection-profile",
     "doctor-llm-provider",
+    "doctor-llm-adapters",
     "run-llm-application-smoke",
     "run-agent-runtime-smoke",
     "run-chat-runtime-smoke",
@@ -1001,6 +1004,7 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
         cli_smoke_test_path,
         role_model_catalog_dir,
         PROJECT_ROOT / "src" / "ai22b" / "talent_foundry" / "role_models.py",
+        PROJECT_ROOT / "src" / "ai22b" / "talent_foundry" / "llm_adapter_contracts.py",
         PROJECT_ROOT / "src" / "ai22b" / "talent_foundry" / "llm_runtime.py",
         PROJECT_ROOT / "src" / "ai22b" / "talent_foundry" / "agent_runtime_smoke.py",
         PROJECT_ROOT / "src" / "ai22b" / "talent_foundry" / "chat_runtime_smoke.py",
@@ -1016,6 +1020,17 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
     role_models = [summarize_role_model(item) for item in list_role_models("securities_research")]
     role_model_ids = {str(item.get("role_model_id", "")) for item in role_models}
     doctor = doctor_llm_provider(engine="deterministic_local", live_check=False)
+    adapter_contracts = run_llm_adapter_contracts()
+    adapter_summary = (
+        adapter_contracts.get("summary", {})
+        if isinstance(adapter_contracts.get("summary"), dict)
+        else {}
+    )
+    adapter_public = (
+        adapter_contracts.get("public_safe", {})
+        if isinstance(adapter_contracts.get("public_safe"), dict)
+        else {}
+    )
     application_smoke = run_llm_application_smoke(
         engine="deterministic_local",
         llm_mode="offline",
@@ -1182,6 +1197,17 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
         "smoke_raw_provider_text_saved": smoke_retention.get("raw_provider_text_saved"),
         "smoke_raw_provider_payload_saved": smoke_retention.get("raw_provider_payload_saved"),
         "smoke_private_reasoning_trace": smoke_data_policy.get("private_reasoning_trace"),
+        "llm_adapter_contracts_schema": adapter_contracts.get("schema"),
+        "llm_adapter_contracts_passed": adapter_contracts.get("passed"),
+        "llm_adapter_contracts_status": adapter_contracts.get("status"),
+        "llm_adapter_contracts_direct_adapter_count": adapter_summary.get("direct_adapter_count"),
+        "llm_adapter_contracts_failed_count": adapter_summary.get("failed_count"),
+        "llm_adapter_contracts_network_call_performed": adapter_public.get("network_call_performed"),
+        "llm_adapter_contracts_localhost_call_performed": adapter_public.get("localhost_call_performed"),
+        "llm_adapter_contracts_external_provider_called": adapter_public.get("external_provider_called"),
+        "llm_adapter_contracts_secret_values_exported": adapter_public.get("secret_values_exported"),
+        "llm_adapter_contracts_raw_provider_payload_saved": adapter_public.get("raw_provider_payload_saved"),
+        "llm_adapter_contracts_private_reasoning_trace": adapter_public.get("private_reasoning_trace"),
         "application_smoke_schema": application_smoke.get("schema"),
         "llm_connection_profile_schema": llm_connection_profile.get("schema"),
         "llm_connection_profile_status": llm_connection_profile.get("status"),
@@ -1315,6 +1341,10 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
             and smoke_contract.get("network_call_made_by_doctor") is False
             and connection_profile_public.get("network_call_performed") is False
             and connection_profile_public.get("secret_values_exported") is False
+            and adapter_public.get("network_call_performed") is False
+            and adapter_public.get("localhost_call_performed") is False
+            and adapter_public.get("external_provider_called") is False
+            and adapter_public.get("secret_values_exported") is False
             and application_runtime.get("network_access") == "blocked"
             and application_preflight.get("network_call_made_by_preflight") is False
             and agent_runtime_details.get("preflight_network_call_made") is False
@@ -1348,6 +1378,18 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
         and details["smoke_raw_provider_text_saved"] is False
         and details["smoke_raw_provider_payload_saved"] is False
         and details["smoke_private_reasoning_trace"] == "do_not_store"
+        and details["llm_adapter_contracts_schema"] == LLM_ADAPTER_CONTRACTS_SCHEMA
+        and details["llm_adapter_contracts_passed"] is True
+        and details["llm_adapter_contracts_status"] == "passed"
+        and isinstance(details["llm_adapter_contracts_direct_adapter_count"], int)
+        and details["llm_adapter_contracts_direct_adapter_count"] >= 9
+        and details["llm_adapter_contracts_failed_count"] == 0
+        and details["llm_adapter_contracts_network_call_performed"] is False
+        and details["llm_adapter_contracts_localhost_call_performed"] is False
+        and details["llm_adapter_contracts_external_provider_called"] is False
+        and details["llm_adapter_contracts_secret_values_exported"] is False
+        and details["llm_adapter_contracts_raw_provider_payload_saved"] is False
+        and details["llm_adapter_contracts_private_reasoning_trace"] == "do_not_store"
         and details["llm_connection_profile_schema"] == "paideia-llm-connection-profile/v1"
         and details["llm_connection_profile_status"] == "offline_ready_no_setup"
         and details["llm_connection_profile_selected_engine"] == "deterministic_local"
