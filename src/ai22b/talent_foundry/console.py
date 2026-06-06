@@ -10,6 +10,7 @@ from ai22b.talent_foundry.agent_identity_card import (
     build_agent_identity_layer_envelope,
 )
 from ai22b.talent_foundry.onboarding import run_agent_onboarding
+from ai22b.talent_foundry.llm_onboarding import build_llm_provider_matrix
 from ai22b.talent_foundry.onboarding_choices import (
     CHAT_SURFACE_CATALOG,
     DEFAULT_CHAT_SURFACE_ID,
@@ -560,7 +561,10 @@ def write_openclaw_style_config(
         "model_auth": {
             "llm_service": normalized.get("llm_service"),
             "llm_model": normalized.get("llm_model"),
+            "llm_provider_matrix": artifacts.get("llm_provider_matrix"),
+            "llm_onboarding_checklist": artifacts.get("llm_onboarding_checklist"),
             "secret_storage": "env_or_user_managed_no_plaintext_saved",
+            "default_provider_call": "none_without_explicit_live_check",
         },
         "workspace": {
             "owner": normalized.get("owner"),
@@ -613,6 +617,11 @@ def run_console_session(
 
     onboarding_dir = output_dir / "onboarding"
     onboarding_output = onboarding_dir / "onboarding_session.json"
+    llm_provider_matrix_path = output_dir / "llm_provider_matrix.json"
+    llm_provider_matrix = build_llm_provider_matrix(
+        chat_surface=normalized.get("chat_surface") or DEFAULT_CHAT_SURFACE_ID,
+        output_path=llm_provider_matrix_path,
+    )
     onboarding = run_agent_onboarding(
         owner=normalized["owner"],
         request=normalized["request"],
@@ -636,7 +645,9 @@ def run_console_session(
     artifacts = {
         "console_session": str(output_path),
         "answers": str(answers_path),
+        "llm_provider_matrix": str(llm_provider_matrix_path),
         "onboarding_session": onboarding["artifacts"]["onboarding_session"],
+        "llm_onboarding_checklist": onboarding["artifacts"]["llm_onboarding_checklist"],
         "employment_record": onboarding["artifacts"]["employment_record"],
         "employment_goal": onboarding["artifacts"]["employment_goal"],
         "first_goal_cycle": onboarding["artifacts"]["first_goal_cycle"],
@@ -823,6 +834,13 @@ def run_console_session(
             "status": onboarding["status"],
             "track": onboarding["track"],
             "employment": onboarding["employment"],
+            "llm_provider_matrix": {
+                "schema": llm_provider_matrix["schema"],
+                "service_count": llm_provider_matrix["summary"]["service_count"],
+                "live_required_count": llm_provider_matrix["summary"]["live_required_count"],
+                "network_call_performed": llm_provider_matrix["public_safe"]["network_call_performed"],
+            },
+            "llm_onboarding_checklist": onboarding["llm_onboarding_checklist"],
         },
         "local_policy": onboarding["local_policy"],
         "post_hire_extensions": post_hire_extensions,

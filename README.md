@@ -179,7 +179,7 @@ ai22b-talent-foundry onboard
 
 This wizard uses config detection, QuickStart/Advanced mode, Model/Auth, Workspace, Gateway/Channels, Skills, Education Path, Runtime, Agent Identity, Health Check, and Finish steps.
 
-This sample first selects the LLM service and chat surface, then lets that selected LLM act as the curriculum researcher for the Graham-inspired securities research track.
+This sample first selects the LLM service and chat surface, writes `llm_provider_matrix.json` plus a selected-provider checklist, then lets that selected LLM act as the curriculum researcher for the Graham-inspired securities research track.
 
 List every selectable LLM service and its no-network readiness posture:
 

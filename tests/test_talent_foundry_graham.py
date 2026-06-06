@@ -349,6 +349,8 @@ class GrahamTalentFoundryTests(unittest.TestCase):
                 output_path=output_dir / "console_session.json",
             )
             config = json.loads(Path(session["artifacts"]["paideia_onboarding_config"]).read_text(encoding="utf-8"))
+            provider_matrix = json.loads(Path(session["artifacts"]["llm_provider_matrix"]).read_text(encoding="utf-8"))
+            llm_checklist = json.loads(Path(session["artifacts"]["llm_onboarding_checklist"]).read_text(encoding="utf-8"))
             identity_payload = json.loads(Path(session["artifacts"]["agent_id_card_payload"]).read_text(encoding="utf-8"))
             identity_envelope = json.loads(Path(session["artifacts"]["agent_identity_envelope"]).read_text(encoding="utf-8"))
             rollouts = json.loads(Path(session["artifacts"]["simulation_rollouts"]).read_text(encoding="utf-8"))
@@ -356,6 +358,14 @@ class GrahamTalentFoundryTests(unittest.TestCase):
 
         self.assertEqual(session["wizard"]["schema"], "ai22b-paideia-openclaw-style-onboarding/v1")
         self.assertEqual(config["schema"], "ai22b-paideia-openclaw-style-config/v1")
+        self.assertEqual(config["model_auth"]["llm_provider_matrix"], session["artifacts"]["llm_provider_matrix"])
+        self.assertEqual(config["model_auth"]["llm_onboarding_checklist"], session["artifacts"]["llm_onboarding_checklist"])
+        self.assertEqual(config["model_auth"]["default_provider_call"], "none_without_explicit_live_check")
+        self.assertEqual(provider_matrix["schema"], "paideia-llm-provider-matrix/v1")
+        self.assertFalse(provider_matrix["public_safe"]["network_call_performed"])
+        self.assertEqual(llm_checklist["schema"], "paideia-llm-onboarding-checklist/v1")
+        self.assertEqual(session["onboarding_summary"]["llm_provider_matrix"]["schema"], provider_matrix["schema"])
+        self.assertFalse(session["onboarding_summary"]["llm_provider_matrix"]["network_call_performed"])
         self.assertEqual(config["gateway"]["mode"], "local_loopback")
         self.assertEqual(config["channels"]["external_channels"], "disabled_until_explicit_configuration")
         self.assertEqual(identity_payload["schema"], "ai-talent-agent-id-card-payload/v1")
