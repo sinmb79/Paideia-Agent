@@ -4,6 +4,7 @@ import hashlib
 import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Callable
 
 
@@ -11,6 +12,7 @@ TOOL_EXECUTION_SCHEMA = "paideia-tool-execution/v1"
 TOOL_RESULT_RECORD_SCHEMA = "paideia-tool-result-record/v1"
 TOOL_CAPABILITY_SCOPE_SCHEMA = "paideia-tool-capability-scope/v1"
 TOOL_CAPABILITY_AUDIT_SCHEMA = "paideia-tool-capability-audit/v1"
+TOOL_ARTIFACT_MANIFEST_SCHEMA = "paideia-tool-execution-artifact-manifest/v1"
 REQUIRED_DEFAULT_TOOLS = {
     "local_file_read",
     "local_file_write",
@@ -389,6 +391,99 @@ def _stable_digest(value: Any) -> str:
     return hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
 
 
+def _safe_tool_artifact_name(tool_id: str) -> str:
+    safe = "".join(char if char.isalnum() or char in {"-", "_"} else "_" for char in tool_id)
+    return f"{safe or 'tool'}_result.json"
+
+
+def _write_tool_execution_artifacts(
+    *,
+    artifact_dir: Path,
+    results: list[dict[str, Any]],
+) -> dict[str, Any]:
+    artifact_dir = artifact_dir.resolve()
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    artifacts: list[dict[str, Any]] = []
+    for item in results:
+        tool_id = str(item.get("tool", "tool"))
+        file_name = _safe_tool_artifact_name(tool_id)
+        artifact_path = artifact_dir / file_name
+        payload = {
+            "schema": "paideia-tool-output-artifact/v1",
+            "tool": tool_id,
+            "status": item.get("status"),
+            "capability": item.get("capability"),
+            "capability_scope": item.get("capability_scope", {}),
+            "output": item.get("output", {}),
+            "output_digest_sha256": item.get("output_digest_sha256"),
+            "execution_record": item.get("execution_record", {}),
+            "public_safe": {
+                "network_call_performed": False,
+                "subprocess_executed": False,
+                "raw_provider_payload_saved": False,
+                "private_reasoning_trace": "do_not_store",
+                "absolute_paths_exported": False,
+            },
+        }
+        artifact_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        file_bytes = artifact_path.read_bytes()
+        file_digest = hashlib.sha256(file_bytes).hexdigest()
+        record = item.get("execution_record", {})
+        if isinstance(record, dict):
+            record["local_artifact_written"] = True
+            record["local_artifact_file"] = file_name
+            record["local_artifact_sha256"] = file_digest
+        artifacts.append(
+            {
+                "tool": tool_id,
+                "status": item.get("status"),
+                "relative_path": file_name,
+                "bytes": len(file_bytes),
+                "sha256": file_digest,
+                "output_digest_sha256": item.get("output_digest_sha256"),
+            }
+        )
+
+    manifest = {
+        "schema": TOOL_ARTIFACT_MANIFEST_SCHEMA,
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "status": "materialized" if artifacts else "no_tool_results",
+        "artifact_root": artifact_dir.name,
+        "artifact_count": len(artifacts),
+        "artifacts": artifacts,
+        "public_safe": {
+            "network_call_performed": False,
+            "subprocess_executed": False,
+            "external_side_effects_performed": False,
+            "raw_provider_payload_saved": False,
+            "private_reasoning_trace": "do_not_store",
+            "absolute_paths_exported": False,
+        },
+    }
+    manifest_path = artifact_dir / "tool_execution_artifact_manifest.json"
+    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    manifest["manifest_file"] = manifest_path.name
+    manifest["manifest_sha256"] = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+    return manifest
+
+
+def _artifact_manifest_not_requested() -> dict[str, Any]:
+    return {
+        "schema": TOOL_ARTIFACT_MANIFEST_SCHEMA,
+        "status": "not_requested",
+        "artifact_count": 0,
+        "artifacts": [],
+        "public_safe": {
+            "network_call_performed": False,
+            "subprocess_executed": False,
+            "external_side_effects_performed": False,
+            "raw_provider_payload_saved": False,
+            "private_reasoning_trace": "do_not_store",
+            "absolute_paths_exported": False,
+        },
+    }
+
+
 def _tool_result_record(
     *,
     tool_id: str,
@@ -412,6 +507,7 @@ def _tool_result_record(
         "subprocess_executed": False,
         "raw_provider_payload_saved": False,
         "private_reasoning_trace": "do_not_store",
+        "local_artifact_written": False,
     }
 
 
@@ -476,6 +572,7 @@ def execute_registered_tools(
     llm_result: dict[str, Any],
     policy_decision: dict[str, Any],
     registry: dict[str, ToolSpec] | None = None,
+    artifact_dir: Path | None = None,
 ) -> dict[str, Any]:
     active_registry = registry or build_default_tool_registry()
     granted = policy_decision.get("capability_grants", {}).get("allowed_capabilities", [])
@@ -529,11 +626,17 @@ def execute_registered_tools(
                 output=output,
             )
         )
+    artifact_manifest = (
+        _write_tool_execution_artifacts(artifact_dir=artifact_dir, results=results)
+        if artifact_dir is not None and results
+        else _artifact_manifest_not_requested()
+    )
     return {
         "schema": TOOL_EXECUTION_SCHEMA,
         "execution_model": "registered_capability_checked_local_tools_v1",
         "selected_tools": selected_tools,
         "capability_scope": capability_scope,
+        "artifact_manifest": artifact_manifest,
         "tool_results": results,
     }
 

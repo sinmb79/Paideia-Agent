@@ -1272,7 +1272,14 @@ class TalentFoundryTests(unittest.TestCase):
             outputs = run_demo(output_dir=Path(tmp))
             manifest = json.loads(outputs["agent_manifest"].read_text(encoding="utf-8"))
 
-        result = run_agent_from_manifest(manifest, task="거시경제 질문 정리")
+            artifact_dir = Path(tmp) / "tool_artifacts"
+            result = run_agent_from_manifest(manifest, task="거시경제 질문 정리", tool_artifact_dir=artifact_dir)
+            artifact_manifest_path = artifact_dir / "tool_execution_artifact_manifest.json"
+            artifact_manifest_path_exists = artifact_manifest_path.exists()
+            artifact_manifest = json.loads(artifact_manifest_path.read_text(encoding="utf-8"))
+            artifact_relative_paths_are_relative = all(
+                not Path(item["relative_path"]).is_absolute() for item in artifact_manifest["artifacts"]
+            )
 
         self.assertEqual(result["schema"], "ai-talent-agent-run/v1")
         self.assertEqual(result["agent"]["name"], "신용")
@@ -1302,6 +1309,12 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(result["tool_execution_status_card"]["schema"], "paideia-tool-execution-status-card/v1")
         self.assertEqual(result["tool_execution_status_card"]["status"], "completed_verified")
         self.assertTrue(result["tool_execution_status_card"]["evidence_packet"]["completed"])
+        self.assertEqual(
+            result["tool_execution_status_card"]["artifact_manifest"]["schema"],
+            "paideia-tool-execution-artifact-manifest/v1",
+        )
+        self.assertEqual(result["tool_execution_status_card"]["artifact_manifest"]["status"], "materialized")
+        self.assertTrue(result["tool_execution_status_card"]["public_safe"]["local_tool_artifacts_materialized"])
         self.assertFalse(result["tool_execution_status_card"]["public_safe"]["external_side_effects_performed"])
         self.assertEqual(result["tool_execution_status_card"]["capability_scope"]["network_default"], "blocked")
         from ai22b.talent_foundry.action_policy import ACTION_POLICY_DECISION_MODEL
@@ -1320,9 +1333,21 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("assessment", result["selected_tools"])
         self.assertTrue(result["audit_events"])
         self.assertIn("llm_runtime_result", result)
+        self.assertTrue(artifact_manifest_path_exists)
+        self.assertEqual(artifact_manifest["schema"], "paideia-tool-execution-artifact-manifest/v1")
+        self.assertEqual(artifact_manifest["status"], "materialized")
+        self.assertGreaterEqual(artifact_manifest["artifact_count"], 1)
+        self.assertFalse(artifact_manifest["public_safe"]["network_call_performed"])
+        self.assertFalse(artifact_manifest["public_safe"]["subprocess_executed"])
+        self.assertTrue(artifact_relative_paths_are_relative)
         tool_results = {item["tool"]: item for item in result["tool_execution"]["tool_results"]}
         self.assertEqual(tool_results["local_file_read"]["output"]["schema"], "paideia-tool-local-file-read-plan/v1")
         self.assertFalse(tool_results["local_file_read"]["output"]["direct_file_read_performed"])
+        self.assertTrue(tool_results["evidence_packet"]["execution_record"]["local_artifact_written"])
+        self.assertEqual(
+            tool_results["evidence_packet"]["execution_record"]["local_artifact_file"],
+            "evidence_packet_result.json",
+        )
         self.assertEqual(tool_results["local_file_write"]["output"]["schema"], "paideia-tool-local-file-write-plan/v1")
         self.assertFalse(tool_results["local_file_write"]["output"]["direct_file_write_performed"])
         evidence = tool_results["evidence_packet"]["output"]
@@ -2957,10 +2982,24 @@ class TalentFoundryTests(unittest.TestCase):
                 ]
             )
             data = json.loads(output_path.read_text(encoding="utf-8"))
+            artifact_dir = Path(tmp) / "agent_run_tool_artifacts"
+            artifact_manifest_path = artifact_dir / "tool_execution_artifact_manifest.json"
+            artifact_manifest_path_exists = artifact_manifest_path.exists()
+            artifact_manifest = json.loads(artifact_manifest_path.read_text(encoding="utf-8"))
+            artifact_files_exist = all(
+                (artifact_dir / item["relative_path"]).exists() for item in artifact_manifest["artifacts"]
+            )
 
         self.assertEqual(exit_code, 0)
         self.assertEqual(data["schema"], "ai-talent-agent-run/v1")
         self.assertTrue(data["tool_policy_enforced"])
+        self.assertTrue(artifact_manifest_path_exists)
+        self.assertEqual(data["tool_execution"]["artifact_manifest"]["schema"], "paideia-tool-execution-artifact-manifest/v1")
+        self.assertEqual(data["tool_execution"]["artifact_manifest"]["status"], "materialized")
+        self.assertEqual(artifact_manifest["status"], "materialized")
+        self.assertIn("evidence_packet", {item["tool"] for item in artifact_manifest["artifacts"]})
+        self.assertTrue(artifact_files_exist)
+        self.assertFalse(data["tool_execution_status_card"]["public_safe"]["external_side_effects_performed"])
 
     def test_agent_runner_blocks_forbidden_financial_action_tasks(self) -> None:
         from ai22b.talent_foundry.agent_runner import run_agent_from_manifest

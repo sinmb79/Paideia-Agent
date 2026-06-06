@@ -19,6 +19,7 @@ def run_agent_from_manifest(
     llm_mode: str = "offline",
     llm_model: str | None = None,
     llm_client: LLMClient | None = None,
+    tool_artifact_dir: Path | None = None,
 ) -> dict[str, Any]:
     """Run a Paideia agent through the P0 execution loop.
 
@@ -34,6 +35,7 @@ def run_agent_from_manifest(
         llm_mode=llm_mode,
         llm_model=llm_model,
         llm_client=llm_client,
+        tool_artifact_dir=tool_artifact_dir,
     )
     if output_log_path is not None:
         write_agent_run_log(output_log_path, result)

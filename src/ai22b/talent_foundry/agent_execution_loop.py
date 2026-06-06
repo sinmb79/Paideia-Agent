@@ -547,6 +547,8 @@ def _build_tool_execution_status_card(
     )
     capability_scope = tool_execution.get("capability_scope", {})
     capability_scope = capability_scope if isinstance(capability_scope, dict) else {}
+    artifact_manifest = tool_execution.get("artifact_manifest", {})
+    artifact_manifest = artifact_manifest if isinstance(artifact_manifest, dict) else {}
     evidence_required = "work_session" in selected_tools
     evidence_completed = "evidence_packet" in completed_tools
     if run_status == "blocked":
@@ -583,6 +585,8 @@ def _build_tool_execution_status_card(
                 "subprocess_executed": record.get("subprocess_executed", False),
                 "side_effects_declared": record.get("side_effects_declared", scope.get("side_effects")),
                 "side_effects_performed": record.get("side_effects_performed", False),
+                "local_artifact_written": record.get("local_artifact_written", False),
+                "local_artifact_file": record.get("local_artifact_file"),
                 "output_schema": item.get("output", {}).get("schema") if isinstance(item.get("output"), dict) else None,
                 "output_digest_sha256": item.get("output_digest_sha256") or record.get("output_digest_sha256"),
                 "execution_record_schema": record.get("schema"),
@@ -624,6 +628,22 @@ def _build_tool_execution_status_card(
             "required": evidence_required,
             "completed": evidence_completed,
         },
+        "artifact_manifest": {
+            "schema": artifact_manifest.get("schema"),
+            "status": artifact_manifest.get("status"),
+            "artifact_count": artifact_manifest.get("artifact_count", 0),
+            "manifest_file": artifact_manifest.get("manifest_file"),
+            "artifacts": [
+                {
+                    "tool": item.get("tool"),
+                    "relative_path": item.get("relative_path"),
+                    "sha256": item.get("sha256"),
+                    "output_digest_sha256": item.get("output_digest_sha256"),
+                }
+                for item in artifact_manifest.get("artifacts", [])
+                if isinstance(item, dict)
+            ],
+        },
         "capability_scope": {
             "schema": capability_scope.get("schema"),
             "mode": capability_scope.get("mode"),
@@ -645,6 +665,7 @@ def _build_tool_execution_status_card(
             "raw_provider_payload_saved": False,
             "private_reasoning_trace": "do_not_store",
             "external_side_effects_performed": external_side_effects_performed,
+            "local_tool_artifacts_materialized": artifact_manifest.get("status") == "materialized",
         },
         "user_visible_summary": {
             "ko": (
@@ -838,6 +859,7 @@ def run_agent_execution_loop(
     llm_mode: str = "offline",
     llm_model: str | None = None,
     llm_client: LLMClient | None = None,
+    tool_artifact_dir: Path | None = None,
 ) -> dict[str, Any]:
     if manifest.get("schema") != "ai-talent-agent-manifest/v1":
         raise ValueError("Unsupported agent manifest schema")
@@ -912,6 +934,7 @@ def run_agent_execution_loop(
         task=task,
         llm_result=llm_result,
         policy_decision=policy_decision,
+        artifact_dir=tool_artifact_dir,
     )
     llm_tool_plan_alignment = _build_llm_tool_plan_alignment(
         llm_result=llm_result,

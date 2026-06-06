@@ -488,6 +488,10 @@ def _build_parser() -> argparse.ArgumentParser:
     run_agent.add_argument("--task", required=True)
     run_agent.add_argument("--output", default=str(DEFAULT_AGENT_RUN_OUTPUT))
     run_agent.add_argument("--log", default=str(DEFAULT_AGENT_RUN_LOG))
+    run_agent.add_argument(
+        "--tool-artifact-dir",
+        help="Directory for public-safe materialized registered-tool outputs. Defaults to <output-stem>_tool_artifacts.",
+    )
     run_agent.add_argument("--llm-engine", default="deterministic_local")
     run_agent.add_argument("--llm-model")
     run_agent.add_argument("--llm-model-path")
@@ -1379,6 +1383,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             model=args.llm_model,
             model_path=args.llm_model_path,
         )
+        output_path = Path(args.output)
+        tool_artifact_dir = (
+            Path(args.tool_artifact_dir)
+            if args.tool_artifact_dir
+            else output_path.parent / f"{output_path.stem}_tool_artifacts"
+        )
         result = run_agent_from_manifest(
             manifest,
             task=args.task,
@@ -1386,8 +1396,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             runtime_config=runtime_config,
             llm_mode=llm_mode,
             llm_model=args.llm_model,
+            tool_artifact_dir=tool_artifact_dir,
         )
-        output_path = Path(args.output)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
         print(str(output_path))
