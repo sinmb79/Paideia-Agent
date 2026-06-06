@@ -39,6 +39,7 @@ from ai22b.talent_foundry.dossier import build_hiring_dossier, render_hiring_dos
 from ai22b.talent_foundry.employment import create_employment_contract
 from ai22b.talent_foundry.execution_proof import verify_workspace_execution_file
 from ai22b.talent_foundry.family import create_child_seed, create_child_training_blueprint, create_family_union
+from ai22b.talent_foundry.first_run_doctor import doctor_first_run
 from ai22b.talent_foundry.graduate_package_builder import build_graduate_package
 from ai22b.talent_foundry.growth_profile import build_growth_profile
 from ai22b.talent_foundry.institutions import default_major_gate_submissions, run_institutional_review
@@ -224,6 +225,19 @@ def _build_parser() -> argparse.ArgumentParser:
         "--strict",
         action="store_true",
         help="Return exit code 2 when the onboarding doctor report does not pass.",
+    )
+
+    first_run_doctor = subparsers.add_parser(
+        "doctor-first-run",
+        help="Run the public-safe first-run verification pack for a new Paideia Agent install.",
+    )
+    first_run_doctor.add_argument("--repo-root", default=".")
+    first_run_doctor.add_argument("--onboarding-session")
+    first_run_doctor.add_argument("--output", required=True)
+    first_run_doctor.add_argument(
+        "--strict",
+        action="store_true",
+        help="Return exit code 2 when the first-run doctor report does not pass.",
     )
 
     onboard = subparsers.add_parser(
@@ -1045,6 +1059,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.strict and not report.get("passed"):
             return 2
         return 0
+
+    if args.command == "doctor-first-run":
+        report = doctor_first_run(
+            repo_root=Path(args.repo_root),
+            onboarding_session=Path(args.onboarding_session) if args.onboarding_session else None,
+            output_path=Path(args.output),
+        )
+        print(str(Path(args.output)))
+        if args.strict and not report.get("passed"):
+            return 2
+        return 0 if report.get("passed") else 1
 
     if args.command == "onboard-agent":
         output_dir = Path(args.output_dir)

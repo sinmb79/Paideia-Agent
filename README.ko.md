@@ -102,7 +102,7 @@ python -m pip install -e ".[dev]"        # 테스트
 
 CI의 package smoke 테스트는 `pip install -e ".[dev]"` 이후 실행됩니다. 설치된 distribution metadata, 노출된 console script entry point, 실제 callable script target, 기능별 optional extras 분리, 패키지 메타데이터 hygiene를 확인합니다.
 
-CI는 공개 안전 first-run CLI smoke 테스트도 실행합니다. 이 테스트는 `list-role-models`, `list-llm-services`, `build-llm-onboarding-checklist --llm-engine deterministic_local`, `doctor-llm-provider --llm-engine deterministic_local`, `run-llm-application-smoke --llm-engine deterministic_local`, `run-agent-runtime-smoke --llm-engine deterministic_local`, `audit-tool-capabilities --strict`, `run-action-policy-eval`, `audit-public-release-readiness`, `build-source-sbom`이 비공개 파일, API 키, 네트워크 접근 없이 실행되고 검토 가능한 JSON 리포트를 쓰는지 확인합니다.
+CI는 공개 안전 first-run CLI smoke 테스트도 실행합니다. 이 테스트는 `list-role-models`, `list-llm-services`, `build-llm-onboarding-checklist --llm-engine deterministic_local`, `doctor-llm-provider --llm-engine deterministic_local`, `run-llm-application-smoke --llm-engine deterministic_local`, `run-agent-runtime-smoke --llm-engine deterministic_local`, `audit-tool-capabilities --strict`, `run-action-policy-eval`, `audit-public-release-readiness`, `build-source-sbom`, `doctor-first-run`이 비공개 파일, API 키, 네트워크 접근 없이 실행되고 검토 가능한 JSON 리포트를 쓰는지 확인합니다.
 
 롤모델 목록:
 
@@ -134,6 +134,17 @@ ai22b-talent-foundry doctor-onboarding-session `
   --strict `
   --output .\onboarding_doctor.json
 ```
+
+분리된 여러 점검 대신 설치 직후 한 번에 검증하려면 first-run doctor를 실행합니다.
+
+```powershell
+ai22b-talent-foundry doctor-first-run `
+  --repo-root . `
+  --strict `
+  --output .\first_run_doctor.json
+```
+
+이미 생성한 wizard 세션까지 같은 보고서에 포함하려면 `--onboarding-session .\console_session.json`을 추가합니다. 이 doctor는 롤모델 카탈로그, LLM provider matrix, deterministic checklist, provider doctor, application smoke, 전체 agent runtime smoke, tool capability audit, action policy eval, public release readiness, source SBOM을 live provider 호출 없이 검증합니다.
 
 전체 온보딩을 실행하기 전에 선택 가능한 LLM 서비스 전체와 준비 상태를 먼저 볼 수 있습니다.
 
@@ -493,9 +504,14 @@ ai22b-talent-foundry audit-public-release-readiness `
 ai22b-talent-foundry build-source-sbom `
   --repo-root . `
   --output .\source_sbom.json
+
+ai22b-talent-foundry doctor-first-run `
+  --repo-root . `
+  --strict `
+  --output .\first_run_doctor.json
 ```
 
-readiness audit는 네트워크 호출이나 서브프로세스 실행 없이 공개 필수 파일, 패키지 라이선스 메타데이터, CI marker, 릴리스 준비도 문서, 보안 정책, 공개 hygiene 정책을 검사합니다. source SBOM은 패키지 메타데이터, optional dependency group, console entrypoint, 공개 후보 파일 hash, repository digest를 기록합니다. 이것은 인벤토리이며 취약점 스캔은 아닙니다.
+readiness audit는 네트워크 호출이나 서브프로세스 실행 없이 공개 필수 파일, 패키지 라이선스 메타데이터, CI marker, 릴리스 준비도 문서, 보안 정책, 공개 hygiene 정책을 검사합니다. source SBOM은 패키지 메타데이터, optional dependency group, console entrypoint, 공개 후보 파일 hash, repository digest를 기록합니다. first-run doctor는 설치 직후 확인해야 할 공개 안전 점검을 하나의 보고서로 묶습니다. SBOM은 인벤토리이며 취약점 스캔은 아닙니다.
 
 P0 action policy 회귀 평가:
 

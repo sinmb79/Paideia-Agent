@@ -22,6 +22,7 @@ class CliSmokeTests(unittest.TestCase):
             policy_eval_path = tmp_path / "policy_eval_report.json"
             public_release_path = tmp_path / "public_release_readiness.json"
             source_sbom_path = tmp_path / "source_sbom.json"
+            first_run_doctor_path = tmp_path / "first_run_doctor.json"
 
             role_models_code = cli_main(
                 [
@@ -106,6 +107,16 @@ class CliSmokeTests(unittest.TestCase):
                     str(source_sbom_path),
                 ]
             )
+            first_run_doctor_code = cli_main(
+                [
+                    "doctor-first-run",
+                    "--repo-root",
+                    ".",
+                    "--strict",
+                    "--output",
+                    str(first_run_doctor_path),
+                ]
+            )
 
             role_models = json.loads(role_models_path.read_text(encoding="utf-8"))
             llm_services = json.loads(llm_services_path.read_text(encoding="utf-8"))
@@ -117,6 +128,7 @@ class CliSmokeTests(unittest.TestCase):
             policy_eval = json.loads(policy_eval_path.read_text(encoding="utf-8"))
             public_release = json.loads(public_release_path.read_text(encoding="utf-8"))
             source_sbom = json.loads(source_sbom_path.read_text(encoding="utf-8"))
+            first_run_doctor = json.loads(first_run_doctor_path.read_text(encoding="utf-8"))
 
         self.assertEqual(role_models_code, 0)
         self.assertEqual(llm_services_code, 0)
@@ -128,6 +140,7 @@ class CliSmokeTests(unittest.TestCase):
         self.assertEqual(policy_eval_code, 0)
         self.assertEqual(public_release_code, 0)
         self.assertEqual(source_sbom_code, 0)
+        self.assertEqual(first_run_doctor_code, 0)
 
         self.assertEqual(role_models["schema"], "ai-talent-role-model-list/v1")
         self.assertEqual(role_models["domain"], "securities_research")
@@ -248,6 +261,33 @@ class CliSmokeTests(unittest.TestCase):
         self.assertEqual(source_sbom["release_readiness"]["public_candidate_issue_count"], 0)
         self.assertFalse(source_sbom["policy"]["network_call_performed"])
         self.assertFalse(source_sbom["policy"]["subprocess_executed"])
+
+        self.assertEqual(first_run_doctor["schema"], "paideia-first-run-doctor/v1")
+        self.assertTrue(first_run_doctor["passed"])
+        self.assertEqual(first_run_doctor["status"], "passed")
+        self.assertEqual(first_run_doctor["summary"]["failed_count"], 0)
+        self.assertFalse(first_run_doctor["summary"]["network_call_performed"])
+        self.assertFalse(first_run_doctor["summary"]["subprocess_executed"])
+        self.assertFalse(first_run_doctor["summary"]["live_provider_called"])
+        self.assertEqual(first_run_doctor["public_safe"]["private_reasoning_trace"], "do_not_store")
+        first_run_checks = {item["id"]: item for item in first_run_doctor["checks"]}
+        for check_id in {
+            "role_model_catalog_available",
+            "llm_provider_matrix_public_safe",
+            "llm_onboarding_checklist_public_safe",
+            "deterministic_provider_doctor_ready",
+            "application_engine_smoke_passed",
+            "agent_runtime_smoke_passed",
+            "tool_capability_audit_passed",
+            "action_policy_eval_passed",
+            "public_release_readiness_passed",
+            "source_sbom_public_safe",
+            "no_network_or_llm_by_default",
+        }:
+            self.assertTrue(first_run_checks[check_id]["passed"], check_id)
+        self.assertIn("graham_value_investing", first_run_doctor["artifacts"]["role_models"]["role_model_ids"])
+        self.assertEqual(first_run_doctor["artifacts"]["llm_provider_doctor"]["network_access"], "blocked")
+        self.assertEqual(first_run_doctor["artifacts"]["agent_runtime_smoke"]["execution_contract_status"], "passed")
 
 
 if __name__ == "__main__":

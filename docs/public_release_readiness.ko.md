@@ -13,6 +13,7 @@ python -B -m pytest tests\test_package_smoke.py tests\test_cli_smoke.py -q
 .\scripts\check_public_repo_hygiene.ps1
 ai22b-talent-foundry audit-public-release-readiness --repo-root . --strict --output .\public_release_readiness.json
 ai22b-talent-foundry build-source-sbom --repo-root . --output .\source_sbom.json
+ai22b-talent-foundry doctor-first-run --repo-root . --strict --output .\first_run_doctor.json
 ```
 
 테스트는 `python -m pip install -e ".[dev]"` 이후 실행합니다. package smoke는 정적 `pyproject.toml`만 보는 것이 아니라 설치된 distribution metadata와 노출된 console script entry point도 확인합니다.
@@ -27,6 +28,8 @@ Python readiness audit는 검토 가능한 `paideia-public-release-readiness/v1`
 first-run smoke suite는 `paideia-llm-provider-matrix/v1`와 deterministic local engine 기반 `paideia-llm-onboarding-checklist/v1`도 생성합니다. 이를 통해 LLM/service 선택 경로가 모든 선택 가능한 provider를 나열하고, provider doctor, live-check, application smoke, agent runtime smoke, 첫 채팅 명령을 기본 provider 호출 없이 만들 수 있음을 증명합니다.
 
 source SBOM은 `paideia-source-sbom/v1` 보고서를 씁니다. 패키지 메타데이터, optional dependency group, console script, 공개 후보 파일 SHA-256, repository public-candidate digest를 기록합니다. 검토 가능한 재현성 인벤토리이며 취약점 스캔은 아닙니다.
+
+first-run doctor는 `paideia-first-run-doctor/v1` 보고서를 씁니다. 롤모델 카탈로그, LLM provider matrix, deterministic checklist, provider doctor, application smoke, 전체 agent runtime smoke, tool capability audit, action policy eval, public release readiness, source SBOM을 설치 직후 한 번에 검증합니다. `--onboarding-session <console_session.json>`을 추가하면 wizard health 검증도 같은 보고서에 포함됩니다.
 
 ## 에이전트 번들 게이트
 

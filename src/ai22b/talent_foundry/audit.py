@@ -126,6 +126,7 @@ REQUIRED_PUBLIC_PROGRAM_COMMANDS = {
     "blueprint",
     "list-llm-services",
     "doctor-onboarding-session",
+    "doctor-first-run",
     "start-console",
     "onboard-agent",
     "build-llm-onboarding-checklist",
@@ -178,6 +179,7 @@ PUBLIC_SAFE_FIRST_RUN_COMMANDS = {
     "run-action-policy-eval",
     "audit-public-release-readiness",
     "build-source-sbom",
+    "doctor-first-run",
 }
 
 

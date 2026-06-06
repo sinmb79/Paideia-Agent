@@ -13,6 +13,7 @@ python -B -m pytest tests\test_package_smoke.py tests\test_cli_smoke.py -q
 .\scripts\check_public_repo_hygiene.ps1
 ai22b-talent-foundry audit-public-release-readiness --repo-root . --strict --output .\public_release_readiness.json
 ai22b-talent-foundry build-source-sbom --repo-root . --output .\source_sbom.json
+ai22b-talent-foundry doctor-first-run --repo-root . --strict --output .\first_run_doctor.json
 ```
 
 Run the tests after `python -m pip install -e ".[dev]"`. The package smoke test checks installed distribution metadata and exposed console script entry points, not only the static `pyproject.toml` file.
@@ -27,6 +28,8 @@ The Python readiness audit writes a reviewable `paideia-public-release-readiness
 The first-run smoke suite also writes `paideia-llm-provider-matrix/v1` and builds `paideia-llm-onboarding-checklist/v1` with the deterministic local engine. This proves the LLM/service selection path can list all selectable providers and produce provider doctor, live-check, application smoke, agent runtime smoke, and first chat commands without calling a provider by default.
 
 The source SBOM writes `paideia-source-sbom/v1`. It records package metadata, optional dependency groups, console scripts, public candidate file SHA-256 values, and a repository public-candidate digest. It is a reproducible inventory for review; it is not a vulnerability scan.
+
+The first-run doctor writes `paideia-first-run-doctor/v1`. It bundles the role-model catalog, LLM provider matrix, selected deterministic checklist, provider doctor, application smoke, full agent runtime smoke, tool capability audit, action policy eval, public release readiness, and source SBOM into one install-time report. Add `--onboarding-session <console_session.json>` to include wizard health verification in the same report.
 
 ## Agent Bundle Gates
 
