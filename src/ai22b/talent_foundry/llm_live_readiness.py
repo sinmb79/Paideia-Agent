@@ -69,6 +69,7 @@ def _build_live_connection_status_card(
     else:
         status = "needs_live_configuration"
     chat_check = checks.get("chat_runtime_smoke", {})
+    agent_check = checks.get("agent_runtime_smoke", {})
     check_statuses = {
         key: {
             "status": value.get("status"),
@@ -98,6 +99,30 @@ def _build_live_connection_status_card(
             "fallback_used": chat_check.get("runtime_status_card_fallback_used"),
             "presented_as_live": chat_check.get("runtime_status_card_presented_as_live"),
             "learning_decision": chat_check.get("runtime_status_card_learning_decision"),
+            "memory_lifecycle": {
+                "schema": chat_check.get("runtime_status_card_memory_lifecycle_schema"),
+                "status": chat_check.get("runtime_status_card_memory_lifecycle_status"),
+                "selected_count": chat_check.get("runtime_status_card_memory_lifecycle_selected_count"),
+                "quarantined_excluded": chat_check.get(
+                    "runtime_status_card_memory_lifecycle_quarantined_excluded"
+                ),
+                "learning_decision": chat_check.get(
+                    "runtime_status_card_memory_lifecycle_learning_decision"
+                ),
+            },
+        },
+        "agent_runtime_status_card": {
+            "schema": agent_check.get("agent_runtime_status_card_schema"),
+            "status": agent_check.get("agent_runtime_status_card_status"),
+            "public_safe": agent_check.get("agent_runtime_status_card_public_safe"),
+            "memory_decision": agent_check.get("agent_runtime_status_card_memory_decision"),
+        },
+        "chat_memory_lifecycle_status_card": {
+            "schema": chat_check.get("memory_lifecycle_status_card_schema"),
+            "status": chat_check.get("memory_lifecycle_status_card_status"),
+            "selected_count": chat_check.get("memory_lifecycle_status_card_selected_count"),
+            "quarantined_excluded": chat_check.get("memory_lifecycle_status_card_quarantined_excluded"),
+            "learning_decision": chat_check.get("memory_lifecycle_status_card_learning_decision"),
         },
         "public_safe": {
             "secret_values_exported": False,
@@ -259,6 +284,26 @@ def run_llm_live_readiness_suite(
             "llm_client_contract_status": agent_smoke.get("details", {}).get("llm_client_contract_status")
             if isinstance(agent_smoke.get("details"), dict)
             else None,
+            "agent_runtime_status_card_schema": agent_smoke.get("details", {}).get(
+                "agent_runtime_status_card_schema"
+            )
+            if isinstance(agent_smoke.get("details"), dict)
+            else None,
+            "agent_runtime_status_card_status": agent_smoke.get("details", {}).get(
+                "agent_runtime_status_card_status"
+            )
+            if isinstance(agent_smoke.get("details"), dict)
+            else None,
+            "agent_runtime_status_card_public_safe": agent_smoke.get("details", {}).get(
+                "agent_runtime_status_card_public_safe"
+            )
+            if isinstance(agent_smoke.get("details"), dict)
+            else None,
+            "agent_runtime_status_card_memory_decision": agent_smoke.get("details", {}).get(
+                "agent_runtime_status_card_memory_decision"
+            )
+            if isinstance(agent_smoke.get("details"), dict)
+            else None,
         },
         "chat_runtime_smoke": {
             "schema": chat_smoke.get("schema"),
@@ -291,6 +336,56 @@ def run_llm_live_readiness_suite(
             else None,
             "runtime_status_card_learning_decision": chat_smoke.get("details", {}).get(
                 "runtime_status_card_learning_decision"
+            )
+            if isinstance(chat_smoke.get("details"), dict)
+            else None,
+            "memory_lifecycle_status_card_schema": chat_smoke.get("details", {}).get(
+                "memory_lifecycle_status_card_schema"
+            )
+            if isinstance(chat_smoke.get("details"), dict)
+            else None,
+            "memory_lifecycle_status_card_status": chat_smoke.get("details", {}).get(
+                "memory_lifecycle_status_card_status"
+            )
+            if isinstance(chat_smoke.get("details"), dict)
+            else None,
+            "memory_lifecycle_status_card_selected_count": chat_smoke.get("details", {}).get(
+                "memory_lifecycle_status_card_selected_count"
+            )
+            if isinstance(chat_smoke.get("details"), dict)
+            else None,
+            "memory_lifecycle_status_card_quarantined_excluded": chat_smoke.get("details", {}).get(
+                "memory_lifecycle_status_card_quarantined_excluded"
+            )
+            if isinstance(chat_smoke.get("details"), dict)
+            else None,
+            "memory_lifecycle_status_card_learning_decision": chat_smoke.get("details", {}).get(
+                "memory_lifecycle_status_card_learning_decision"
+            )
+            if isinstance(chat_smoke.get("details"), dict)
+            else None,
+            "runtime_status_card_memory_lifecycle_schema": chat_smoke.get("details", {}).get(
+                "runtime_status_card_memory_lifecycle_schema"
+            )
+            if isinstance(chat_smoke.get("details"), dict)
+            else None,
+            "runtime_status_card_memory_lifecycle_status": chat_smoke.get("details", {}).get(
+                "runtime_status_card_memory_lifecycle_status"
+            )
+            if isinstance(chat_smoke.get("details"), dict)
+            else None,
+            "runtime_status_card_memory_lifecycle_selected_count": chat_smoke.get("details", {}).get(
+                "runtime_status_card_memory_lifecycle_selected_count"
+            )
+            if isinstance(chat_smoke.get("details"), dict)
+            else None,
+            "runtime_status_card_memory_lifecycle_quarantined_excluded": chat_smoke.get("details", {}).get(
+                "runtime_status_card_memory_lifecycle_quarantined_excluded"
+            )
+            if isinstance(chat_smoke.get("details"), dict)
+            else None,
+            "runtime_status_card_memory_lifecycle_learning_decision": chat_smoke.get("details", {}).get(
+                "runtime_status_card_memory_lifecycle_learning_decision"
             )
             if isinstance(chat_smoke.get("details"), dict)
             else None,

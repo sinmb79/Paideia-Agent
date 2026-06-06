@@ -3228,6 +3228,16 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("evidence_packet", first_run_details["agent_runtime_smoke_completed_tools"])
         self.assertEqual(first_run_details["agent_runtime_smoke_missing_required_tools"], [])
         self.assertEqual(
+            first_run_details["agent_runtime_status_card_schema"],
+            "paideia-agent-runtime-status-card/v1",
+        )
+        self.assertEqual(first_run_details["agent_runtime_status_card_status"], "completed_verified")
+        self.assertTrue(first_run_details["agent_runtime_status_card_public_safe"])
+        self.assertEqual(
+            first_run_details["agent_runtime_status_card_memory_decision"],
+            "candidate_pending_boss_review",
+        )
+        self.assertEqual(
             first_run_details["agent_runtime_tool_status_card_schema"],
             "paideia-tool-execution-status-card/v1",
         )
@@ -3265,6 +3275,27 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertFalse(first_run_details["chat_runtime_status_card_fallback_used"])
         self.assertFalse(first_run_details["chat_runtime_status_card_presented_as_live"])
         self.assertEqual(first_run_details["chat_runtime_status_card_learning_decision"], "not_requested")
+        self.assertEqual(
+            first_run_details["chat_memory_lifecycle_status_card_schema"],
+            "paideia-memory-lifecycle-status-card/v1",
+        )
+        self.assertEqual(first_run_details["chat_memory_lifecycle_status_card_status"], "passed")
+        self.assertIsInstance(first_run_details["chat_memory_lifecycle_status_card_selected_count"], int)
+        self.assertTrue(first_run_details["chat_memory_lifecycle_status_card_quarantined_excluded"])
+        self.assertEqual(
+            first_run_details["chat_memory_lifecycle_status_card_learning_decision"],
+            "not_requested",
+        )
+        self.assertEqual(
+            first_run_details["chat_runtime_status_card_memory_lifecycle_schema"],
+            "paideia-memory-lifecycle-status-card/v1",
+        )
+        self.assertEqual(first_run_details["chat_runtime_status_card_memory_lifecycle_status"], "passed")
+        self.assertTrue(first_run_details["chat_runtime_status_card_memory_lifecycle_quarantined_excluded"])
+        self.assertEqual(
+            first_run_details["chat_runtime_status_card_memory_lifecycle_learning_decision"],
+            "not_requested",
+        )
         self.assertFalse(first_run_details["chat_runtime_smoke_secret_values_exported"])
         self.assertFalse(first_run_details["chat_runtime_smoke_raw_provider_payload_saved"])
         self.assertEqual(first_run_details["chat_runtime_smoke_private_reasoning_trace"], "do_not_store")

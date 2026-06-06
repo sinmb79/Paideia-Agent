@@ -171,6 +171,16 @@ def run_chat_runtime_smoke(
         if isinstance(chat.get("chat_runtime_status_card"), dict)
         else {}
     )
+    memory_lifecycle_status_card = (
+        chat.get("memory_lifecycle_status_card", {})
+        if isinstance(chat.get("memory_lifecycle_status_card"), dict)
+        else {}
+    )
+    status_card_memory_lifecycle = (
+        status_card.get("memory_lifecycle", {})
+        if isinstance(status_card.get("memory_lifecycle"), dict)
+        else {}
+    )
     trace = chat.get("chat_execution_trace", []) if isinstance(chat.get("chat_execution_trace"), list) else []
     selected_nodes = (
         chat.get("chat_context", {})
@@ -222,6 +232,34 @@ def run_chat_runtime_smoke(
             "runtime_status_card_user_summary_ko": status_card.get("user_visible_summary", {}).get("ko")
             if isinstance(status_card.get("user_visible_summary"), dict)
             else None,
+            "memory_lifecycle_status_card_schema": memory_lifecycle_status_card.get("schema"),
+            "memory_lifecycle_status_card_status": memory_lifecycle_status_card.get("status"),
+            "memory_lifecycle_status_card_selected_count": memory_lifecycle_status_card.get(
+                "active_context", {}
+            ).get("selected_count")
+            if isinstance(memory_lifecycle_status_card.get("active_context"), dict)
+            else None,
+            "memory_lifecycle_status_card_quarantined_excluded": memory_lifecycle_status_card.get(
+                "active_context", {}
+            ).get("quarantined_excluded")
+            if isinstance(memory_lifecycle_status_card.get("active_context"), dict)
+            else None,
+            "memory_lifecycle_status_card_learning_decision": memory_lifecycle_status_card.get(
+                "learning", {}
+            ).get("decision")
+            if isinstance(memory_lifecycle_status_card.get("learning"), dict)
+            else None,
+            "runtime_status_card_memory_lifecycle_schema": status_card_memory_lifecycle.get("schema"),
+            "runtime_status_card_memory_lifecycle_status": status_card_memory_lifecycle.get("status"),
+            "runtime_status_card_memory_lifecycle_selected_count": status_card_memory_lifecycle.get(
+                "selected_count"
+            ),
+            "runtime_status_card_memory_lifecycle_quarantined_excluded": status_card_memory_lifecycle.get(
+                "quarantined_excluded"
+            ),
+            "runtime_status_card_memory_lifecycle_learning_decision": status_card_memory_lifecycle.get(
+                "learning_decision"
+            ),
         },
         "artifacts": {
             "employment_record": str(employment_record_path),

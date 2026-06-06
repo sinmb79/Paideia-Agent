@@ -350,6 +350,19 @@ class CliSmokeTests(unittest.TestCase):
         self.assertEqual(agent_runtime_smoke["details"]["network_default"], "blocked")
         self.assertEqual(agent_runtime_smoke["details"]["subprocess_default"], "blocked")
         self.assertTrue(agent_runtime_smoke["details"]["public_safe"])
+        self.assertEqual(
+            agent_runtime_smoke["details"]["agent_runtime_status_card_schema"],
+            "paideia-agent-runtime-status-card/v1",
+        )
+        self.assertEqual(
+            agent_runtime_smoke["details"]["agent_runtime_status_card_status"],
+            "completed_verified",
+        )
+        self.assertTrue(agent_runtime_smoke["details"]["agent_runtime_status_card_public_safe"])
+        self.assertEqual(
+            agent_runtime_smoke["details"]["agent_runtime_status_card_memory_decision"],
+            "candidate_pending_boss_review",
+        )
 
         self.assertEqual(chat_runtime_smoke["schema"], "paideia-chat-runtime-smoke/v1")
         self.assertTrue(chat_runtime_smoke["passed"])
@@ -371,6 +384,25 @@ class CliSmokeTests(unittest.TestCase):
         self.assertFalse(chat_runtime_smoke["details"]["runtime_status_card_fallback_used"])
         self.assertFalse(chat_runtime_smoke["details"]["runtime_status_card_presented_as_live"])
         self.assertEqual(chat_runtime_smoke["details"]["runtime_status_card_learning_decision"], "not_requested")
+        self.assertEqual(
+            chat_runtime_smoke["details"]["memory_lifecycle_status_card_schema"],
+            "paideia-memory-lifecycle-status-card/v1",
+        )
+        self.assertEqual(chat_runtime_smoke["details"]["memory_lifecycle_status_card_status"], "passed")
+        self.assertIsInstance(chat_runtime_smoke["details"]["memory_lifecycle_status_card_selected_count"], int)
+        self.assertTrue(chat_runtime_smoke["details"]["memory_lifecycle_status_card_quarantined_excluded"])
+        self.assertEqual(
+            chat_runtime_smoke["details"]["memory_lifecycle_status_card_learning_decision"],
+            "not_requested",
+        )
+        self.assertEqual(
+            chat_runtime_smoke["details"]["runtime_status_card_memory_lifecycle_schema"],
+            "paideia-memory-lifecycle-status-card/v1",
+        )
+        self.assertEqual(chat_runtime_smoke["details"]["runtime_status_card_memory_lifecycle_status"], "passed")
+        self.assertTrue(
+            chat_runtime_smoke["details"]["runtime_status_card_memory_lifecycle_quarantined_excluded"]
+        )
         self.assertFalse(chat_runtime_smoke["data_policy"]["secret_values_exported"])
         self.assertFalse(chat_runtime_smoke["data_policy"]["raw_provider_payload_saved"])
         self.assertEqual(chat_runtime_smoke["data_policy"]["private_reasoning_trace"], "do_not_store")
@@ -407,9 +439,50 @@ class CliSmokeTests(unittest.TestCase):
                 "live_provider_call_attempted_only_when_requested"
             ]
         )
+        self.assertEqual(
+            llm_live_readiness["live_connection_status_card"]["agent_runtime_status_card"]["schema"],
+            "paideia-agent-runtime-status-card/v1",
+        )
+        self.assertEqual(
+            llm_live_readiness["live_connection_status_card"]["agent_runtime_status_card"]["status"],
+            "completed_verified",
+        )
+        self.assertTrue(
+            llm_live_readiness["live_connection_status_card"]["agent_runtime_status_card"]["public_safe"]
+        )
+        self.assertEqual(
+            llm_live_readiness["live_connection_status_card"]["chat_memory_lifecycle_status_card"]["schema"],
+            "paideia-memory-lifecycle-status-card/v1",
+        )
+        self.assertEqual(
+            llm_live_readiness["live_connection_status_card"]["chat_memory_lifecycle_status_card"]["status"],
+            "passed",
+        )
+        self.assertTrue(
+            llm_live_readiness["live_connection_status_card"]["chat_memory_lifecycle_status_card"][
+                "quarantined_excluded"
+            ]
+        )
+        self.assertEqual(
+            llm_live_readiness["live_connection_status_card"]["chat_runtime_status_card"]["memory_lifecycle"][
+                "schema"
+            ],
+            "paideia-memory-lifecycle-status-card/v1",
+        )
         self.assertTrue(llm_live_readiness["checks"]["provider_doctor"]["passed"])
         self.assertTrue(llm_live_readiness["checks"]["application_smoke"]["passed"])
         self.assertTrue(llm_live_readiness["checks"]["agent_runtime_smoke"]["passed"])
+        self.assertEqual(
+            llm_live_readiness["checks"]["agent_runtime_smoke"]["agent_runtime_status_card_schema"],
+            "paideia-agent-runtime-status-card/v1",
+        )
+        self.assertEqual(
+            llm_live_readiness["checks"]["agent_runtime_smoke"]["agent_runtime_status_card_status"],
+            "completed_verified",
+        )
+        self.assertTrue(
+            llm_live_readiness["checks"]["agent_runtime_smoke"]["agent_runtime_status_card_public_safe"]
+        )
         self.assertTrue(llm_live_readiness["checks"]["chat_runtime_smoke"]["passed"])
         self.assertEqual(llm_live_readiness["checks"]["chat_runtime_smoke"]["chat_status"], "completed")
         self.assertEqual(
@@ -427,6 +500,19 @@ class CliSmokeTests(unittest.TestCase):
         self.assertEqual(
             llm_live_readiness["checks"]["chat_runtime_smoke"]["runtime_status_card_learning_decision"],
             "not_requested",
+        )
+        self.assertEqual(
+            llm_live_readiness["checks"]["chat_runtime_smoke"]["memory_lifecycle_status_card_schema"],
+            "paideia-memory-lifecycle-status-card/v1",
+        )
+        self.assertEqual(
+            llm_live_readiness["checks"]["chat_runtime_smoke"]["memory_lifecycle_status_card_status"],
+            "passed",
+        )
+        self.assertTrue(
+            llm_live_readiness["checks"]["chat_runtime_smoke"][
+                "memory_lifecycle_status_card_quarantined_excluded"
+            ]
         )
         self.assertFalse(llm_live_readiness["data_policy"]["secret_values_exported"])
         self.assertFalse(llm_live_readiness["data_policy"]["raw_provider_payload_saved"])
@@ -550,6 +636,17 @@ class CliSmokeTests(unittest.TestCase):
         self.assertEqual(first_run_doctor["artifacts"]["llm_connection_profile"]["status"], "offline_ready_no_setup")
         self.assertEqual(first_run_doctor["artifacts"]["agent_runtime_smoke"]["execution_contract_status"], "passed")
         self.assertEqual(
+            first_run_doctor["artifacts"]["agent_runtime_smoke"]["agent_runtime_status_card_schema"],
+            "paideia-agent-runtime-status-card/v1",
+        )
+        self.assertEqual(
+            first_run_doctor["artifacts"]["agent_runtime_smoke"]["agent_runtime_status_card_status"],
+            "completed_verified",
+        )
+        self.assertTrue(
+            first_run_doctor["artifacts"]["agent_runtime_smoke"]["agent_runtime_status_card_public_safe"]
+        )
+        self.assertEqual(
             first_run_doctor["artifacts"]["agent_runtime_smoke"]["tool_execution_status_card_schema"],
             "paideia-tool-execution-status-card/v1",
         )
@@ -577,6 +674,19 @@ class CliSmokeTests(unittest.TestCase):
             "not_requested",
         )
         self.assertEqual(
+            first_run_doctor["artifacts"]["chat_runtime_smoke"]["memory_lifecycle_status_card_schema"],
+            "paideia-memory-lifecycle-status-card/v1",
+        )
+        self.assertEqual(
+            first_run_doctor["artifacts"]["chat_runtime_smoke"]["memory_lifecycle_status_card_status"],
+            "passed",
+        )
+        self.assertTrue(
+            first_run_doctor["artifacts"]["chat_runtime_smoke"][
+                "memory_lifecycle_status_card_quarantined_excluded"
+            ]
+        )
+        self.assertEqual(
             first_run_doctor["artifacts"]["llm_live_readiness"]["schema"],
             "paideia-llm-live-readiness-suite/v1",
         )
@@ -587,6 +697,22 @@ class CliSmokeTests(unittest.TestCase):
         self.assertEqual(
             first_run_doctor["artifacts"]["llm_live_readiness"]["live_connection_status_card_status"],
             "offline_verified_live_not_attempted",
+        )
+        self.assertEqual(
+            first_run_doctor["artifacts"]["llm_live_readiness"]["agent_runtime_status_card_schema"],
+            "paideia-agent-runtime-status-card/v1",
+        )
+        self.assertEqual(
+            first_run_doctor["artifacts"]["llm_live_readiness"]["agent_runtime_status_card_status"],
+            "completed_verified",
+        )
+        self.assertEqual(
+            first_run_doctor["artifacts"]["llm_live_readiness"]["chat_memory_lifecycle_status_card_schema"],
+            "paideia-memory-lifecycle-status-card/v1",
+        )
+        self.assertEqual(
+            first_run_doctor["artifacts"]["llm_live_readiness"]["chat_memory_lifecycle_status_card_status"],
+            "passed",
         )
         self.assertFalse(first_run_doctor["artifacts"]["llm_live_readiness"]["ready_for_live_chat"])
         self.assertFalse(first_run_doctor["artifacts"]["llm_live_readiness"]["ready_for_live_agent_work"])

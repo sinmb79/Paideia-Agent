@@ -156,6 +156,10 @@ def _live_readiness_summary(report: dict[str, Any]) -> dict[str, Any]:
     checks = _as_dict(report.get("checks"))
     status_card = _as_dict(report.get("live_connection_status_card"))
     blocking_step = _as_dict(status_card.get("blocking_step"))
+    agent_card = _as_dict(status_card.get("agent_runtime_status_card"))
+    chat_memory_card = _as_dict(status_card.get("chat_memory_lifecycle_status_card"))
+    chat_runtime_card = _as_dict(status_card.get("chat_runtime_status_card"))
+    chat_runtime_memory = _as_dict(chat_runtime_card.get("memory_lifecycle"))
     return {
         "schema": report.get("schema"),
         "status": report.get("status"),
@@ -176,6 +180,19 @@ def _live_readiness_summary(report: dict[str, Any]) -> dict[str, Any]:
         "ready_for_live_chat": status_card.get("ready_for_live_chat"),
         "ready_for_live_agent_work": status_card.get("ready_for_live_agent_work"),
         "blocking_step_id": blocking_step.get("id"),
+        "agent_runtime_status_card_schema": agent_card.get("schema"),
+        "agent_runtime_status_card_status": agent_card.get("status"),
+        "agent_runtime_status_card_public_safe": agent_card.get("public_safe"),
+        "agent_runtime_status_card_memory_decision": agent_card.get("memory_decision"),
+        "chat_memory_lifecycle_status_card_schema": chat_memory_card.get("schema"),
+        "chat_memory_lifecycle_status_card_status": chat_memory_card.get("status"),
+        "chat_memory_lifecycle_status_card_selected_count": chat_memory_card.get("selected_count"),
+        "chat_memory_lifecycle_status_card_quarantined_excluded": chat_memory_card.get(
+            "quarantined_excluded"
+        ),
+        "chat_memory_lifecycle_status_card_learning_decision": chat_memory_card.get("learning_decision"),
+        "chat_runtime_status_card_memory_lifecycle_schema": chat_runtime_memory.get("schema"),
+        "chat_runtime_status_card_memory_lifecycle_status": chat_runtime_memory.get("status"),
     }
 
 
@@ -218,6 +235,30 @@ def _chat_smoke_summary(report: dict[str, Any]) -> dict[str, Any]:
         "runtime_status_card_presented_as_live": details.get("runtime_status_card_presented_as_live"),
         "runtime_status_card_learning_decision": details.get("runtime_status_card_learning_decision"),
         "runtime_status_card_user_summary_ko": details.get("runtime_status_card_user_summary_ko"),
+        "memory_lifecycle_status_card_schema": details.get("memory_lifecycle_status_card_schema"),
+        "memory_lifecycle_status_card_status": details.get("memory_lifecycle_status_card_status"),
+        "memory_lifecycle_status_card_selected_count": details.get("memory_lifecycle_status_card_selected_count"),
+        "memory_lifecycle_status_card_quarantined_excluded": details.get(
+            "memory_lifecycle_status_card_quarantined_excluded"
+        ),
+        "memory_lifecycle_status_card_learning_decision": details.get(
+            "memory_lifecycle_status_card_learning_decision"
+        ),
+        "runtime_status_card_memory_lifecycle_schema": details.get(
+            "runtime_status_card_memory_lifecycle_schema"
+        ),
+        "runtime_status_card_memory_lifecycle_status": details.get(
+            "runtime_status_card_memory_lifecycle_status"
+        ),
+        "runtime_status_card_memory_lifecycle_selected_count": details.get(
+            "runtime_status_card_memory_lifecycle_selected_count"
+        ),
+        "runtime_status_card_memory_lifecycle_quarantined_excluded": details.get(
+            "runtime_status_card_memory_lifecycle_quarantined_excluded"
+        ),
+        "runtime_status_card_memory_lifecycle_learning_decision": details.get(
+            "runtime_status_card_memory_lifecycle_learning_decision"
+        ),
         "secret_values_exported": data_policy.get("secret_values_exported"),
         "raw_provider_payload_saved": data_policy.get("raw_provider_payload_saved"),
         "private_reasoning_trace": data_policy.get("private_reasoning_trace"),
@@ -442,6 +483,8 @@ def doctor_first_run(
         and agent_runtime_smoke.get("passed") is True
         and agent_details.get("run_status") == "completed"
         and agent_details.get("execution_contract_status") == "passed"
+        and agent_details.get("agent_runtime_status_card_status") == "completed_verified"
+        and agent_details.get("agent_runtime_status_card_public_safe") is True
         and agent_details.get("tool_execution_status_card_status") == "completed_verified"
         and agent_details.get("public_safe") is True
         and agent_details.get("memory_auto_promotion_performed") is False,
@@ -450,6 +493,12 @@ def doctor_first_run(
             "status": agent_runtime_smoke.get("status"),
             "run_status": agent_details.get("run_status"),
             "execution_contract_status": agent_details.get("execution_contract_status"),
+            "agent_runtime_status_card_schema": agent_details.get("agent_runtime_status_card_schema"),
+            "agent_runtime_status_card_status": agent_details.get("agent_runtime_status_card_status"),
+            "agent_runtime_status_card_public_safe": agent_details.get("agent_runtime_status_card_public_safe"),
+            "agent_runtime_status_card_memory_decision": agent_details.get(
+                "agent_runtime_status_card_memory_decision"
+            ),
             "tool_execution_status_card_schema": agent_details.get("tool_execution_status_card_schema"),
             "tool_execution_status_card_status": agent_details.get("tool_execution_status_card_status"),
             "completed_tools": agent_details.get("completed_tools"),
@@ -463,6 +512,8 @@ def doctor_first_run(
         and chat_details.get("chat_status") == "completed"
         and chat_details.get("preflight_network_call_made") is False
         and chat_details.get("stored_private_reasoning_trace") is False
+        and chat_details.get("memory_lifecycle_status_card_status") == "passed"
+        and chat_details.get("memory_lifecycle_status_card_quarantined_excluded") is True
         and chat_policy.get("learning_auto_promotion_performed") is False,
         details=_chat_smoke_summary(chat_runtime_smoke),
     )
@@ -647,6 +698,14 @@ def doctor_first_run(
                 "status": agent_runtime_smoke.get("status"),
                 "run_status": agent_details.get("run_status"),
                 "execution_contract_status": agent_details.get("execution_contract_status"),
+                "agent_runtime_status_card_schema": agent_details.get("agent_runtime_status_card_schema"),
+                "agent_runtime_status_card_status": agent_details.get("agent_runtime_status_card_status"),
+                "agent_runtime_status_card_public_safe": agent_details.get(
+                    "agent_runtime_status_card_public_safe"
+                ),
+                "agent_runtime_status_card_memory_decision": agent_details.get(
+                    "agent_runtime_status_card_memory_decision"
+                ),
                 "tool_execution_status_card_schema": agent_details.get("tool_execution_status_card_schema"),
                 "tool_execution_status_card_status": agent_details.get("tool_execution_status_card_status"),
             },

@@ -33,6 +33,7 @@ from ai22b.talent_foundry.llm_runtime import (
     run_llm_application_smoke,
 )
 from ai22b.talent_foundry.learning_loop import build_reasoning_kernel, create_learning_ledger
+from ai22b.talent_foundry.memory_lifecycle import MEMORY_LIFECYCLE_STATUS_CARD_SCHEMA
 from ai22b.talent_foundry.memory_substrate import CHAT_RUNTIME_STATUS_CARD_SCHEMA
 from ai22b.talent_foundry.llm_adapter_contracts import LLM_ADAPTER_CONTRACTS_SCHEMA, run_llm_adapter_contracts
 from ai22b.talent_foundry.llm_onboarding import build_llm_connection_profile
@@ -48,7 +49,10 @@ from ai22b.talent_foundry.runtime_contract_doctor import (
     run_fail_closed_runtime_contract,
     run_live_agent_loop_contract,
 )
-from ai22b.talent_foundry.agent_execution_loop import TOOL_EXECUTION_STATUS_CARD_SCHEMA
+from ai22b.talent_foundry.agent_execution_loop import (
+    AGENT_RUNTIME_STATUS_CARD_SCHEMA,
+    TOOL_EXECUTION_STATUS_CARD_SCHEMA,
+)
 from ai22b.talent_foundry.source_sbom import SOURCE_SBOM_SCHEMA, build_source_sbom
 from ai22b.talent_foundry.tool_registry import TOOL_CAPABILITY_AUDIT_SCHEMA, audit_tool_capability_registry
 
@@ -1246,6 +1250,12 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
         "agent_runtime_smoke_execution_contract_status": agent_runtime_details.get("execution_contract_status"),
         "agent_runtime_smoke_completed_tools": agent_runtime_details.get("completed_tools"),
         "agent_runtime_smoke_missing_required_tools": agent_runtime_details.get("missing_required_tools"),
+        "agent_runtime_status_card_schema": agent_runtime_details.get("agent_runtime_status_card_schema"),
+        "agent_runtime_status_card_status": agent_runtime_details.get("agent_runtime_status_card_status"),
+        "agent_runtime_status_card_public_safe": agent_runtime_details.get("agent_runtime_status_card_public_safe"),
+        "agent_runtime_status_card_memory_decision": agent_runtime_details.get(
+            "agent_runtime_status_card_memory_decision"
+        ),
         "agent_runtime_tool_status_card_schema": agent_runtime_details.get("tool_execution_status_card_schema"),
         "agent_runtime_tool_status_card_status": agent_runtime_details.get("tool_execution_status_card_status"),
         "agent_runtime_tool_status_card_evidence_completed": agent_runtime_details.get(
@@ -1290,6 +1300,33 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
         ),
         "chat_runtime_status_card_learning_decision": chat_runtime_details.get(
             "runtime_status_card_learning_decision"
+        ),
+        "chat_memory_lifecycle_status_card_schema": chat_runtime_details.get(
+            "memory_lifecycle_status_card_schema"
+        ),
+        "chat_memory_lifecycle_status_card_status": chat_runtime_details.get(
+            "memory_lifecycle_status_card_status"
+        ),
+        "chat_memory_lifecycle_status_card_selected_count": chat_runtime_details.get(
+            "memory_lifecycle_status_card_selected_count"
+        ),
+        "chat_memory_lifecycle_status_card_quarantined_excluded": chat_runtime_details.get(
+            "memory_lifecycle_status_card_quarantined_excluded"
+        ),
+        "chat_memory_lifecycle_status_card_learning_decision": chat_runtime_details.get(
+            "memory_lifecycle_status_card_learning_decision"
+        ),
+        "chat_runtime_status_card_memory_lifecycle_schema": chat_runtime_details.get(
+            "runtime_status_card_memory_lifecycle_schema"
+        ),
+        "chat_runtime_status_card_memory_lifecycle_status": chat_runtime_details.get(
+            "runtime_status_card_memory_lifecycle_status"
+        ),
+        "chat_runtime_status_card_memory_lifecycle_quarantined_excluded": chat_runtime_details.get(
+            "runtime_status_card_memory_lifecycle_quarantined_excluded"
+        ),
+        "chat_runtime_status_card_memory_lifecycle_learning_decision": chat_runtime_details.get(
+            "runtime_status_card_memory_lifecycle_learning_decision"
         ),
         "chat_runtime_smoke_secret_values_exported": chat_runtime_policy.get("secret_values_exported"),
         "chat_runtime_smoke_raw_provider_payload_saved": chat_runtime_policy.get("raw_provider_payload_saved"),
@@ -1441,6 +1478,10 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
         and isinstance(details["agent_runtime_smoke_completed_tools"], list)
         and "evidence_packet" in details["agent_runtime_smoke_completed_tools"]
         and details["agent_runtime_smoke_missing_required_tools"] == []
+        and details["agent_runtime_status_card_schema"] == AGENT_RUNTIME_STATUS_CARD_SCHEMA
+        and details["agent_runtime_status_card_status"] == "completed_verified"
+        and details["agent_runtime_status_card_public_safe"] is True
+        and details["agent_runtime_status_card_memory_decision"] == "candidate_pending_boss_review"
         and details["agent_runtime_tool_status_card_schema"] == TOOL_EXECUTION_STATUS_CARD_SCHEMA
         and details["agent_runtime_tool_status_card_status"] == "completed_verified"
         and details["agent_runtime_tool_status_card_evidence_completed"] is True
@@ -1470,6 +1511,15 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
         and details["chat_runtime_status_card_fallback_used"] is False
         and details["chat_runtime_status_card_presented_as_live"] is False
         and details["chat_runtime_status_card_learning_decision"] == "not_requested"
+        and details["chat_memory_lifecycle_status_card_schema"] == MEMORY_LIFECYCLE_STATUS_CARD_SCHEMA
+        and details["chat_memory_lifecycle_status_card_status"] == "passed"
+        and isinstance(details["chat_memory_lifecycle_status_card_selected_count"], int)
+        and details["chat_memory_lifecycle_status_card_quarantined_excluded"] is True
+        and details["chat_memory_lifecycle_status_card_learning_decision"] == "not_requested"
+        and details["chat_runtime_status_card_memory_lifecycle_schema"] == MEMORY_LIFECYCLE_STATUS_CARD_SCHEMA
+        and details["chat_runtime_status_card_memory_lifecycle_status"] == "passed"
+        and details["chat_runtime_status_card_memory_lifecycle_quarantined_excluded"] is True
+        and details["chat_runtime_status_card_memory_lifecycle_learning_decision"] == "not_requested"
         and details["chat_runtime_smoke_secret_values_exported"] is False
         and details["chat_runtime_smoke_raw_provider_payload_saved"] is False
         and details["chat_runtime_smoke_private_reasoning_trace"] == "do_not_store"
