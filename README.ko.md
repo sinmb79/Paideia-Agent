@@ -493,8 +493,19 @@ ai22b-talent-foundry onboard-agent `
 - `22b_paideia_agent_program.json`
 - `llm_connection_profile.json`: 선택된 LLM, 모델/endpoint, no-network doctor와 live-check 순서를 기록한 연결 프로필
 - `paideia_runtime_readiness.json`: 설치형 kit의 LLM preflight, 첫 실행 smoke 명령, fail-closed 정책을 검증하는 준비 카드
+- `paideia_kit_first_run_doctor.json`: kit doctor와 offline 첫 채팅 smoke를 함께 검증한 첫 실행 보고서
+- `paideia_first_run_chat_smoke.json`: live provider 호출 없이 생성한 첫 대화 검증 산출물
 - Hermes/OpenClaw 스타일 어댑터 manifest
 - `agent_identity_envelope.json`: [Agent_warrent / Agent Identity Layer](https://github.com/sinmb79/Agent_warrent) `ail.v1` 로컬 미등록 신원 envelope
+
+설치형 kit를 만든 뒤에는 첫 대화를 시작하기 전에 다음 명령으로 kit doctor와 offline 첫 채팅 smoke를 함께 확인할 수 있습니다.
+
+```powershell
+ai22b-talent-foundry doctor-paideia-kit-first-run `
+  --kit-dir .\paideia-agent-kits\grham_junior_paideia_agent `
+  --strict `
+  --output .\paideia-agent-kits\grham_junior_paideia_agent\paideia_kit_first_run_doctor.json
+```
 
 `learning_ledger.json`에는 `memory_lifecycle` 리포트가 포함됩니다. 이 리포트는 기억 쓰기 정책, 승격/격리 기준, 수동 삭제 정책, 복구/마이그레이션 방침, 검색 품질 상태, 개인정보/secret/로컬 경로 위생 검사를 기록합니다. 격리된 경험은 active context에서 제외되고, private reasoning trace 저장은 계속 금지됩니다.
 

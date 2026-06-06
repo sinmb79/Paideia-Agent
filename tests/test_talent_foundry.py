@@ -3297,6 +3297,7 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("doctor-package-install", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])
         self.assertIn("doctor-runtime-contract", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])
         self.assertIn("doctor-bundle", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])
+        self.assertIn("doctor-paideia-kit-first-run", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])
         self.assertIn("run-hired-agent-job", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])
         self.assertIn("run-hired-agent-job-cycle", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])
         self.assertIn("family", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])
@@ -3447,6 +3448,7 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("build-agent-program", {command["id"] for command in manifest["commands"]})
         self.assertIn("build-paideia-agent-kit", {command["id"] for command in manifest["commands"]})
         self.assertIn("doctor-agent-program", {command["id"] for command in manifest["commands"]})
+        self.assertIn("doctor-paideia-kit-first-run", {command["id"] for command in manifest["commands"]})
         self.assertIn("migrate-agent-assets", {command["id"] for command in manifest["commands"]})
         self.assertIn("run-agent-program-chat", {command["id"] for command in manifest["commands"]})
 
@@ -3572,6 +3574,56 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(report["schema"], "ai22b-paideia-agent-program-doctor/v1")
         self.assertTrue(report["checks"]["llm_connection_profile"]["passed"])
         self.assertTrue(report["checks"]["runtime_readiness"]["passed"])
+
+    def test_cli_doctor_paideia_kit_first_run_runs_offline_chat_smoke(self) -> None:
+        from ai22b.talent_foundry.cli import main as cli_main
+        from ai22b.talent_foundry.demo import run_demo
+
+        with tempfile.TemporaryDirectory() as tmp:
+            outputs = run_demo(output_dir=Path(tmp) / "runs")
+            kit_dir = Path(tmp) / "kit"
+            report_path = kit_dir / "first_run_doctor.json"
+            build_exit = cli_main(
+                [
+                    "build-paideia-agent-kit",
+                    "--employment-record",
+                    str(outputs["local_employment_record"]),
+                    "--output-dir",
+                    str(kit_dir),
+                ]
+            )
+            doctor_exit = cli_main(
+                [
+                    "doctor-paideia-kit-first-run",
+                    "--kit-dir",
+                    str(kit_dir),
+                    "--strict",
+                    "--output",
+                    str(report_path),
+                ]
+            )
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            first_chat = json.loads((kit_dir / "paideia_first_run_chat_smoke.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(build_exit, 0)
+        self.assertEqual(doctor_exit, 0)
+        self.assertEqual(report["schema"], "ai22b-paideia-kit-first-run-doctor/v1")
+        self.assertTrue(report["passed"])
+        self.assertEqual(report["status"], "passed")
+        self.assertEqual(report["summary"]["failed_count"], 0)
+        self.assertFalse(report["summary"]["network_call_performed"])
+        self.assertFalse(report["summary"]["live_provider_called"])
+        self.assertFalse(report["summary"]["subprocess_executed"])
+        check_by_id = {item["id"]: item for item in report["checks"]}
+        self.assertTrue(check_by_id["program_doctor_passed"]["passed"])
+        self.assertTrue(check_by_id["runtime_readiness_passed"]["passed"])
+        self.assertTrue(check_by_id["runtime_preflight_no_network"]["passed"])
+        self.assertTrue(check_by_id["llm_connection_profile_public_safe"]["passed"])
+        self.assertTrue(check_by_id["offline_first_chat_completed"]["passed"])
+        self.assertEqual(report["artifacts"]["first_chat"]["chat_status"], "completed")
+        self.assertEqual(report["artifacts"]["first_chat"]["output"], "paideia_first_run_chat_smoke.json")
+        self.assertEqual(first_chat["chat_status"], "completed")
+        self.assertFalse(first_chat["stored_private_reasoning_trace"])
 
     def test_migrate_openclaw_skill_wraps_and_quarantines_imported_asset(self) -> None:
         from ai22b.talent_foundry.agent_program import build_paideia_agent_install_kit, doctor_agent_program

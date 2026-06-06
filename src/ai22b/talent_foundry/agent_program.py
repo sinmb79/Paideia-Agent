@@ -26,6 +26,7 @@ from ai22b.talent_foundry.role_models import list_role_models, summarize_role_mo
 AGENT_PROGRAM_SCHEMA = "ai22b-paideia-agent-program/v1"
 INSTALL_KIT_SCHEMA = "ai22b-paideia-agent-install-kit/v1"
 PROGRAM_DOCTOR_SCHEMA = "ai22b-paideia-agent-program-doctor/v1"
+KIT_FIRST_RUN_DOCTOR_SCHEMA = "ai22b-paideia-kit-first-run-doctor/v1"
 DEFAULT_AGENT_PROGRAM_NAME = "Paideia Agent"
 DEFAULT_AGENT_PROGRAM_NAME_KO = "Paideia Agent"
 DEFAULT_AGENT_PROGRAM_FILE = "22b_paideia_agent_program.json"
@@ -35,6 +36,8 @@ DEFAULT_INSTALL_MANIFEST = "paideia_agent_install_manifest.json"
 DEFAULT_DOCTOR_SCRIPT = "doctor_paideia.ps1"
 DEFAULT_LLM_CONNECTION_PROFILE = "llm_connection_profile.json"
 DEFAULT_RUNTIME_READINESS = "paideia_runtime_readiness.json"
+DEFAULT_KIT_FIRST_RUN_DOCTOR = "paideia_kit_first_run_doctor.json"
+DEFAULT_KIT_FIRST_RUN_CHAT = "paideia_first_run_chat_smoke.json"
 
 
 def _now() -> str:
@@ -1214,6 +1217,211 @@ def doctor_agent_program(program_path: Path, *, output_path: Path | None = None)
     }
     if output_path:
         _write_json(output_path, report)
+    return report
+
+
+def _check(check_id: str, passed: bool, **details: Any) -> dict[str, Any]:
+    return {
+        "id": check_id,
+        "passed": passed,
+        "status": "passed" if passed else "failed",
+        "details": details,
+    }
+
+
+def doctor_paideia_kit_first_run(
+    kit_dir: Path,
+    *,
+    output_path: Path | None = None,
+    message: str = "안녕, 오늘 맡길 업무를 같이 정리해보자.",
+) -> dict[str, Any]:
+    """Verify an install kit can pass doctor checks and run its first offline chat."""
+
+    kit_dir = kit_dir.resolve()
+    output_path = output_path or kit_dir / DEFAULT_KIT_FIRST_RUN_DOCTOR
+    program_path = kit_dir / DEFAULT_AGENT_PROGRAM_FILE
+    install_manifest_path = kit_dir / DEFAULT_INSTALL_MANIFEST
+    readiness_path = kit_dir / DEFAULT_RUNTIME_READINESS
+    llm_profile_path = kit_dir / DEFAULT_LLM_CONNECTION_PROFILE
+    program_doctor_path = kit_dir / "paideia_doctor_report.json"
+    first_chat_path = kit_dir / DEFAULT_KIT_FIRST_RUN_CHAT
+    checks: list[dict[str, Any]] = []
+
+    checks.append(_check("kit_directory_exists", kit_dir.exists() and kit_dir.is_dir(), kit_dir=kit_dir.name))
+    checks.append(_check("program_manifest_exists", program_path.exists(), program=program_path.name))
+    checks.append(_check("install_manifest_exists", install_manifest_path.exists(), manifest=install_manifest_path.name))
+
+    install_manifest: dict[str, Any] = {}
+    if install_manifest_path.exists():
+        install_manifest = _read_json(install_manifest_path)
+    checks.append(
+        _check(
+            "install_manifest_schema",
+            install_manifest.get("schema") == INSTALL_KIT_SCHEMA,
+            schema=install_manifest.get("schema"),
+            status=install_manifest.get("status"),
+        )
+    )
+
+    program_doctor: dict[str, Any] = {}
+    if program_path.exists():
+        program_doctor = doctor_agent_program(program_path, output_path=program_doctor_path)
+    checks.append(
+        _check(
+            "program_doctor_passed",
+            program_doctor.get("passed") is True,
+            schema=program_doctor.get("schema"),
+            status=program_doctor.get("status", "passed" if program_doctor.get("passed") else "failed"),
+            failed_checks=[
+                key
+                for key, value in (program_doctor.get("checks", {}) if isinstance(program_doctor.get("checks"), dict) else {}).items()
+                if isinstance(value, dict) and value.get("passed") is not True
+            ],
+        )
+    )
+
+    readiness = _read_json(readiness_path) if readiness_path.exists() else {}
+    readiness_public_safe = readiness.get("public_safe", {}) if isinstance(readiness.get("public_safe"), dict) else {}
+    checks.append(
+        _check(
+            "runtime_readiness_passed",
+            readiness.get("schema") == "ai22b-paideia-kit-runtime-readiness/v1"
+            and readiness.get("passed") is True
+            and readiness_public_safe.get("network_call_performed") is False
+            and readiness_public_safe.get("live_provider_called") is False,
+            schema=readiness.get("schema"),
+            status=readiness.get("status"),
+            selected_engine=readiness.get("runtime_config", {}).get("engine")
+            if isinstance(readiness.get("runtime_config"), dict)
+            else None,
+        )
+    )
+    offline_preflight = readiness.get("provider_preflight", {}).get("offline", {}) if isinstance(readiness.get("provider_preflight"), dict) else {}
+    live_preflight = readiness.get("provider_preflight", {}).get("live", {}) if isinstance(readiness.get("provider_preflight"), dict) else {}
+    checks.append(
+        _check(
+            "runtime_preflight_no_network",
+            offline_preflight.get("network_call_made_by_preflight") is False
+            and live_preflight.get("network_call_made_by_preflight") is False
+            and live_preflight.get("live_check_requires_explicit_flag") is True,
+            offline_status=offline_preflight.get("status"),
+            live_status=live_preflight.get("status"),
+        )
+    )
+
+    llm_profile = _read_json(llm_profile_path) if llm_profile_path.exists() else {}
+    llm_public_safe = llm_profile.get("public_safe", {}) if isinstance(llm_profile.get("public_safe"), dict) else {}
+    checks.append(
+        _check(
+            "llm_connection_profile_public_safe",
+            llm_profile.get("schema") == "paideia-llm-connection-profile/v1"
+            and llm_public_safe.get("network_call_performed") is False
+            and llm_public_safe.get("secret_values_exported") is False
+            and llm_public_safe.get("raw_provider_payload_saved") is False,
+            schema=llm_profile.get("schema"),
+            status=llm_profile.get("status"),
+        )
+    )
+
+    chat: dict[str, Any] = {}
+    if program_path.exists():
+        chat = run_agent_program_chat(
+            program_path,
+            message=message,
+            output_path=first_chat_path,
+            llm_mode="offline",
+            learn_from_chat=False,
+        )
+    chat_preflight = chat.get("llm_provider_preflight", {}) if isinstance(chat.get("llm_provider_preflight"), dict) else {}
+    checks.append(
+        _check(
+            "offline_first_chat_completed",
+            chat.get("chat_status") == "completed"
+            and bool(chat.get("assistant_reply") or chat.get("assistant_answer"))
+            and chat.get("stored_private_reasoning_trace") is False
+            and chat_preflight.get("network_call_made_by_preflight") is False,
+            chat_status=chat.get("chat_status"),
+            reply_generation_mode=chat.get("reply_generation_mode"),
+            active_operator=chat.get("active_operator"),
+            output=first_chat_path.name,
+        )
+    )
+    checks.append(
+        _check(
+            "first_chat_learning_not_auto_promoted",
+            chat.get("learning_update", {}).get("automatic_promotion_performed") is not True
+            if isinstance(chat.get("learning_update"), dict)
+            else True,
+            learn_from_chat=False,
+        )
+    )
+
+    passed = all(item["passed"] for item in checks)
+    report = {
+        "schema": KIT_FIRST_RUN_DOCTOR_SCHEMA,
+        "created_at_utc": _now(),
+        "kit": {
+            "name": kit_dir.name,
+            "program": DEFAULT_AGENT_PROGRAM_FILE,
+            "install_manifest": DEFAULT_INSTALL_MANIFEST,
+            "llm_connection_profile": DEFAULT_LLM_CONNECTION_PROFILE,
+            "runtime_readiness": DEFAULT_RUNTIME_READINESS,
+            "first_chat_output": first_chat_path.name,
+            "program_doctor_output": program_doctor_path.name,
+        },
+        "passed": passed,
+        "status": "passed" if passed else "failed",
+        "summary": {
+            "failed_count": sum(1 for item in checks if not item["passed"]),
+            "network_call_performed": False,
+            "live_provider_called": False,
+            "subprocess_executed": False,
+            "offline_first_chat_attempted": program_path.exists(),
+            "offline_first_chat_completed": chat.get("chat_status") == "completed",
+        },
+        "public_safe": {
+            "network_call_performed": False,
+            "live_provider_called": False,
+            "localhost_called": False,
+            "subprocess_executed": False,
+            "secret_values_exported": False,
+            "raw_provider_payload_saved": False,
+            "private_reasoning_trace": "do_not_store",
+        },
+        "checks": checks,
+        "artifacts": {
+            "program_doctor": {
+                "schema": program_doctor.get("schema"),
+                "passed": program_doctor.get("passed"),
+                "output": program_doctor_path.name if program_doctor_path.exists() else None,
+            },
+            "runtime_readiness": {
+                "schema": readiness.get("schema"),
+                "status": readiness.get("status"),
+                "selected_engine": readiness.get("runtime_config", {}).get("engine")
+                if isinstance(readiness.get("runtime_config"), dict)
+                else None,
+            },
+            "llm_connection_profile": {
+                "schema": llm_profile.get("schema"),
+                "status": llm_profile.get("status"),
+            },
+            "first_chat": {
+                "schema": chat.get("schema"),
+                "chat_status": chat.get("chat_status"),
+                "reply_generation_mode": chat.get("reply_generation_mode"),
+                "active_operator": chat.get("active_operator"),
+                "stored_private_reasoning_trace": chat.get("stored_private_reasoning_trace"),
+                "output": first_chat_path.name if first_chat_path.exists() else None,
+            },
+        },
+        "next_actions": [
+            "Review paideia_doctor_report.json before enabling live LLM mode.",
+            "Use start_paideia_chat.ps1 or run-agent-program-chat in offline mode for the first conversation.",
+            "Run the provider live-check command from paideia_runtime_readiness.json only after credentials or local server setup is intentional.",
+        ],
+    }
+    _write_json(output_path, report)
     return report
 
 

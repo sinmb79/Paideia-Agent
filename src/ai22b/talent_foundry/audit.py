@@ -169,6 +169,7 @@ REQUIRED_PUBLIC_PROGRAM_COMMANDS = {
     "build-agent-program",
     "build-paideia-agent-kit",
     "doctor-agent-program",
+    "doctor-paideia-kit-first-run",
     "migrate-agent-assets",
     "run-agent-program-chat",
     "run-hired-agent-job-cycle",

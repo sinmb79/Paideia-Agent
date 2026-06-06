@@ -330,6 +330,15 @@ ai22b-talent-foundry doctor-agent-program `
 
 The kit doctor now checks `llm_connection_profile.json` and `paideia_runtime_readiness.json` when they are present. Together they show the selected LLM engine, no-network provider preflight, first-run smoke commands, and fail-closed expectations before any live API or localhost model call is attempted.
 
+Run the install-kit first-run smoke when you want proof that the kit can move from doctor checks into an actual offline first chat:
+
+```powershell
+ai22b-talent-foundry doctor-paideia-kit-first-run `
+  --kit-dir "$env:AI22B_STORAGE_ROOT\paideia-agent-kits\grham_junior_paideia_agent" `
+  --strict `
+  --output "$env:AI22B_STORAGE_ROOT\paideia-agent-kits\grham_junior_paideia_agent\paideia_kit_first_run_doctor.json"
+```
+
 Chat through the local education records and Reasoning Ledger:
 
 ```powershell
@@ -376,6 +385,8 @@ A Paideia Agent kit can include:
 - `paideia_onboarding.template.json`
 - `llm_connection_profile.json`
 - `paideia_runtime_readiness.json`
+- `paideia_kit_first_run_doctor.json`
+- `paideia_first_run_chat_smoke.json`
 - `doctor_paideia.ps1`
 - `start_paideia_chat.ps1`
 - `adapter_manifests/codex_native.json`

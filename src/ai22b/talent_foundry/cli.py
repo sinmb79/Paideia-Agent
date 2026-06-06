@@ -20,6 +20,7 @@ from ai22b.talent_foundry.agent_program import (
     build_agent_program,
     build_paideia_agent_install_kit,
     doctor_agent_program,
+    doctor_paideia_kit_first_run,
     run_agent_program_chat,
 )
 from ai22b.talent_foundry.agent_runner import run_agent_from_manifest
@@ -1027,6 +1028,22 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     doctor_agent_program_command.add_argument("--program", required=True)
     doctor_agent_program_command.add_argument("--output")
+
+    doctor_paideia_kit_first_run_command = subparsers.add_parser(
+        "doctor-paideia-kit-first-run",
+        help="Doctor an install kit and run its first offline chat smoke without live provider calls.",
+    )
+    doctor_paideia_kit_first_run_command.add_argument("--kit-dir", required=True)
+    doctor_paideia_kit_first_run_command.add_argument("--output")
+    doctor_paideia_kit_first_run_command.add_argument(
+        "--message",
+        default="안녕, 오늘 맡길 업무를 같이 정리해보자.",
+    )
+    doctor_paideia_kit_first_run_command.add_argument(
+        "--strict",
+        action="store_true",
+        help="Return exit code 2 when the kit first-run doctor report does not pass.",
+    )
 
     migrate_agent_assets_command = subparsers.add_parser(
         "migrate-agent-assets",
@@ -2094,6 +2111,18 @@ def main(argv: Sequence[str] | None = None) -> int:
             output_path=output_path,
         )
         print(str(output_path))
+        return 0
+
+    if args.command == "doctor-paideia-kit-first-run":
+        output_path = Path(args.output) if args.output else Path(args.kit_dir) / "paideia_kit_first_run_doctor.json"
+        report = doctor_paideia_kit_first_run(
+            Path(args.kit_dir),
+            output_path=output_path,
+            message=args.message,
+        )
+        print(str(output_path))
+        if args.strict and not report.get("passed"):
+            return 2
         return 0
 
     if args.command == "migrate-agent-assets":
