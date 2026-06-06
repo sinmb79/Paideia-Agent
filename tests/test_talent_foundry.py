@@ -226,11 +226,11 @@ class TalentFoundryTests(unittest.TestCase):
         from ai22b.talent_foundry.program import create_talent_plan
         from ai22b.talent_foundry.records import build_career_records
 
-        plan = create_talent_plan(name="?좎슜", gender="?⑥옄", specialty="利앷텒 AI 諛뺤궗")
+        plan = create_talent_plan(name="신용", gender="남자", specialty="증권 AI 박사")
         packet = {
             **plan,
             "career_records": build_career_records(plan),
-            "employment_contract": create_employment_contract(plan, role="利앷텒 由ъ꽌移??먯씠?꾪듃"),
+            "employment_contract": create_employment_contract(plan, role="증권 리서치 에이전트"),
             "employment_ready": True,
         }
         assessment = evaluate_assessment(
@@ -262,7 +262,7 @@ class TalentFoundryTests(unittest.TestCase):
         markdown = render_hiring_dossier_markdown(dossier)
 
         self.assertEqual(dossier["schema"], "ai-talent-hiring-dossier/v1")
-        self.assertEqual(dossier["candidate"]["name"], "?좎슜")
+        self.assertEqual(dossier["candidate"]["name"], "신용")
         self.assertTrue(dossier["academic_record"]["grades"])
         self.assertTrue(dossier["academic_record"]["papers"])
         self.assertTrue(dossier["academic_record"]["activities"])
@@ -327,11 +327,11 @@ class TalentFoundryTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            plan = create_talent_plan(name="?좎슜", gender="?⑥옄", specialty="利앷텒 AI 諛뺤궗")
+            plan = create_talent_plan(name="신용", gender="남자", specialty="증권 AI 박사")
             packet = {
                 **plan,
                 "career_records": build_career_records(plan),
-                "employment_contract": create_employment_contract(plan, role="利앷텒 由ъ꽌移??먯씠?꾪듃"),
+                "employment_contract": create_employment_contract(plan, role="증권 리서치 에이전트"),
                 "employment_ready": True,
             }
             review = run_institutional_review(plan, submissions=default_major_gate_submissions())
@@ -1278,6 +1278,11 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertTrue(result["execution_contract"]["llm_runtime"]["attempted"])
         self.assertTrue(result["execution_contract"]["tool_execution"]["attempted"])
         self.assertFalse(result["execution_contract"]["memory_write"]["automatic_promotion_performed"])
+        self.assertEqual(result["tool_execution_status_card"]["schema"], "paideia-tool-execution-status-card/v1")
+        self.assertEqual(result["tool_execution_status_card"]["status"], "completed_verified")
+        self.assertTrue(result["tool_execution_status_card"]["evidence_packet"]["completed"])
+        self.assertFalse(result["tool_execution_status_card"]["public_safe"]["external_side_effects_performed"])
+        self.assertEqual(result["tool_execution_status_card"]["capability_scope"]["network_default"], "blocked")
         self.assertEqual(result["policy_decision"]["decision_model"], "action_intent_capability_arguments_v2")
         self.assertEqual(result["verification"]["status"], "passed")
         self.assertEqual(result["runtime_observability"]["schema"], "paideia-runtime-observability/v1")
@@ -2031,6 +2036,10 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(report["details"]["policy_status"], "approved")
         self.assertEqual(report["details"]["verification_status"], "passed")
         self.assertEqual(report["details"]["execution_contract_status"], "passed")
+        self.assertEqual(report["details"]["tool_execution_status_card_schema"], "paideia-tool-execution-status-card/v1")
+        self.assertEqual(report["details"]["tool_execution_status_card_status"], "completed_verified")
+        self.assertTrue(report["details"]["tool_execution_status_card_evidence_completed"])
+        self.assertFalse(report["details"]["tool_execution_status_card_external_side_effects_performed"])
         self.assertEqual(report["details"]["missing_required_tools"], [])
         self.assertIn("work_session", report["details"]["completed_tools"])
         self.assertIn("evidence_packet", report["details"]["completed_tools"])
@@ -2185,6 +2194,10 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertTrue(report["details"]["preflight_live_path_selected"])
         self.assertFalse(report["details"]["preflight_network_call_made"])
         self.assertEqual(report["details"]["completed_tools"], [])
+        self.assertEqual(report["details"]["tool_execution_status_card_schema"], "paideia-tool-execution-status-card/v1")
+        self.assertEqual(report["details"]["tool_execution_status_card_status"], "skipped_provider_not_ready")
+        self.assertEqual(report["details"]["tool_execution_status_card_completed_count"], 0)
+        self.assertFalse(report["details"]["tool_execution_status_card_external_side_effects_performed"])
         self.assertEqual(report["details"]["memory_decision"], "skipped_provider_not_ready")
         self.assertFalse(report["details"]["memory_auto_promotion_performed"])
         self.assertTrue(report["details"]["public_safe"])
@@ -2494,6 +2507,10 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(result["execution_contract"]["status"], "blocked_before_execution")
         self.assertFalse(result["execution_contract"]["llm_runtime"]["attempted"])
         self.assertFalse(result["execution_contract"]["tool_execution"]["attempted"])
+        self.assertEqual(result["tool_execution_status_card"]["schema"], "paideia-tool-execution-status-card/v1")
+        self.assertEqual(result["tool_execution_status_card"]["status"], "skipped_policy_block")
+        self.assertFalse(result["tool_execution_status_card"]["attempted"])
+        self.assertFalse(result["tool_execution_status_card"]["public_safe"]["external_side_effects_performed"])
         self.assertEqual(result["execution_contract"]["memory_write"]["decision"], "quarantine")
         self.assertFalse(result["execution_contract"]["memory_write"]["automatic_promotion_performed"])
         self.assertEqual(result["execution_contract"]["issues"], [])
@@ -2807,6 +2824,10 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(result["execution_contract"]["status"], "approval_required_before_execution")
         self.assertFalse(result["execution_contract"]["llm_runtime"]["attempted"])
         self.assertFalse(result["execution_contract"]["tool_execution"]["attempted"])
+        self.assertEqual(result["tool_execution_status_card"]["schema"], "paideia-tool-execution-status-card/v1")
+        self.assertEqual(result["tool_execution_status_card"]["status"], "skipped_pending_boss_approval")
+        self.assertFalse(result["tool_execution_status_card"]["attempted"])
+        self.assertFalse(result["tool_execution_status_card"]["public_safe"]["external_side_effects_performed"])
         self.assertEqual(result["execution_contract"]["policy_gate"]["approval_required_count"], 1)
         self.assertEqual(result["execution_contract"]["memory_write"]["decision"], "pending_boss_approval")
         self.assertFalse(result["execution_contract"]["memory_write"]["automatic_promotion_performed"])
@@ -3160,6 +3181,13 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(first_run_details["agent_runtime_smoke_execution_contract_status"], "passed")
         self.assertIn("evidence_packet", first_run_details["agent_runtime_smoke_completed_tools"])
         self.assertEqual(first_run_details["agent_runtime_smoke_missing_required_tools"], [])
+        self.assertEqual(
+            first_run_details["agent_runtime_tool_status_card_schema"],
+            "paideia-tool-execution-status-card/v1",
+        )
+        self.assertEqual(first_run_details["agent_runtime_tool_status_card_status"], "completed_verified")
+        self.assertTrue(first_run_details["agent_runtime_tool_status_card_evidence_completed"])
+        self.assertFalse(first_run_details["agent_runtime_tool_status_card_external_side_effects"])
         self.assertEqual(first_run_details["agent_runtime_smoke_memory_decision"], "candidate_pending_boss_review")
         self.assertEqual(
             first_run_details["agent_runtime_smoke_memory_review_candidate_schema"],

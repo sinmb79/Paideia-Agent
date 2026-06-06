@@ -442,6 +442,7 @@ def doctor_first_run(
         and agent_runtime_smoke.get("passed") is True
         and agent_details.get("run_status") == "completed"
         and agent_details.get("execution_contract_status") == "passed"
+        and agent_details.get("tool_execution_status_card_status") == "completed_verified"
         and agent_details.get("public_safe") is True
         and agent_details.get("memory_auto_promotion_performed") is False,
         details={
@@ -449,6 +450,8 @@ def doctor_first_run(
             "status": agent_runtime_smoke.get("status"),
             "run_status": agent_details.get("run_status"),
             "execution_contract_status": agent_details.get("execution_contract_status"),
+            "tool_execution_status_card_schema": agent_details.get("tool_execution_status_card_schema"),
+            "tool_execution_status_card_status": agent_details.get("tool_execution_status_card_status"),
             "completed_tools": agent_details.get("completed_tools"),
         },
     )
@@ -644,6 +647,8 @@ def doctor_first_run(
                 "status": agent_runtime_smoke.get("status"),
                 "run_status": agent_details.get("run_status"),
                 "execution_contract_status": agent_details.get("execution_contract_status"),
+                "tool_execution_status_card_schema": agent_details.get("tool_execution_status_card_schema"),
+                "tool_execution_status_card_status": agent_details.get("tool_execution_status_card_status"),
             },
             "chat_runtime_smoke": _chat_smoke_summary(chat_runtime_smoke),
             "llm_live_readiness": _live_readiness_summary(llm_live_readiness),

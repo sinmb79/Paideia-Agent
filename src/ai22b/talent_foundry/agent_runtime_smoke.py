@@ -4,6 +4,7 @@ import json
 from datetime import datetime, timezone
 from typing import Any
 
+from ai22b.talent_foundry.agent_execution_loop import TOOL_EXECUTION_STATUS_CARD_SCHEMA
 from ai22b.talent_foundry.agent_runner import run_agent_from_manifest
 from ai22b.talent_foundry.llm_clients import LLMClient
 from ai22b.talent_foundry.llm_runtime import build_llm_provider_preflight, build_llm_runtime_config
@@ -117,6 +118,11 @@ def run_agent_runtime_smoke(
                 "completed_tools": [],
                 "missing_required_tools": sorted(AGENT_RUNTIME_SMOKE_REQUIRED_TOOLS),
                 "tool_statuses": {},
+                "tool_execution_status_card_schema": TOOL_EXECUTION_STATUS_CARD_SCHEMA,
+                "tool_execution_status_card_status": "skipped_provider_not_ready",
+                "tool_execution_status_card_completed_count": 0,
+                "tool_execution_status_card_evidence_completed": False,
+                "tool_execution_status_card_external_side_effects_performed": False,
                 "network_default": "blocked",
                 "subprocess_default": "blocked",
                 "verification_status": "skipped_provider_not_ready",
@@ -164,6 +170,21 @@ def run_agent_runtime_smoke(
     preflight = run.get("llm_provider_preflight", {}) if isinstance(run.get("llm_provider_preflight"), dict) else preflight
     policy_decision = run.get("policy_decision", {}) if isinstance(run.get("policy_decision"), dict) else {}
     tool_execution = run.get("tool_execution", {}) if isinstance(run.get("tool_execution"), dict) else {}
+    tool_status_card = (
+        run.get("tool_execution_status_card", {})
+        if isinstance(run.get("tool_execution_status_card"), dict)
+        else {}
+    )
+    tool_status_card_public_safe = (
+        tool_status_card.get("public_safe", {})
+        if isinstance(tool_status_card.get("public_safe"), dict)
+        else {}
+    )
+    tool_status_card_evidence = (
+        tool_status_card.get("evidence_packet", {})
+        if isinstance(tool_status_card.get("evidence_packet"), dict)
+        else {}
+    )
     tool_scope = (
         tool_execution.get("capability_scope", {})
         if isinstance(tool_execution.get("capability_scope"), dict)
@@ -246,6 +267,15 @@ def run_agent_runtime_smoke(
         "completed_tools": completed_tools,
         "tool_statuses": _tool_statuses(tool_execution),
         "missing_required_tools": missing_required_tools,
+        "tool_execution_status_card_schema": tool_status_card.get("schema"),
+        "tool_execution_status_card_status": tool_status_card.get("status"),
+        "tool_execution_status_card_completed_count": len(tool_status_card.get("completed_tools", []))
+        if isinstance(tool_status_card.get("completed_tools"), list)
+        else None,
+        "tool_execution_status_card_evidence_completed": tool_status_card_evidence.get("completed"),
+        "tool_execution_status_card_external_side_effects_performed": tool_status_card_public_safe.get(
+            "external_side_effects_performed"
+        ),
         "tool_execution_model": tool_execution.get("execution_model"),
         "network_default": tool_scope.get("network_default"),
         "subprocess_default": tool_scope.get("subprocess_default"),
@@ -268,6 +298,10 @@ def run_agent_runtime_smoke(
         and details["llm_status"] in AGENT_RUNTIME_SMOKE_ACCEPTED_LLM_STATUSES
         and details["llm_plan_schema"] == "paideia-llm-reviewable-plan/v1"
         and details["tool_execution_model"] == "registered_capability_checked_local_tools_v1"
+        and details["tool_execution_status_card_schema"] == TOOL_EXECUTION_STATUS_CARD_SCHEMA
+        and details["tool_execution_status_card_status"] == "completed_verified"
+        and details["tool_execution_status_card_evidence_completed"] is True
+        and details["tool_execution_status_card_external_side_effects_performed"] is False
         and details["missing_required_tools"] == []
         and details["verification_status"] == "passed"
         and details["execution_contract_status"] == "passed"

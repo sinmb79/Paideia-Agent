@@ -444,7 +444,7 @@ ai22b-talent-foundry promote-simulation-rollout-winner `
 
 등록형 리서치 도구 실행에는 `evidence_packet` 도구가 포함됩니다. 이 도구는 사용자 요청, LLM 초안, 정책 판단, 선택된 로컬 기억 요약을 검토 가능한 근거 항목, 체크리스트, 미지원 주장 처리 정책, 후속 질문으로 구조화합니다. 리서치 work-session이 이 evidence packet 없이 실행되면 검증은 통과가 아니라 review 필요로 표시됩니다.
 
-모든 manifest agent run은 `execution_contract`도 남깁니다. 이 패킷은 P0 실행 루프의 공개 가능한 증거입니다. 정책이 LLM과 도구보다 먼저 검사됐는지, LLM runtime이 실제로 시도됐는지 또는 정책 때문에 생략됐는지, 등록 도구가 실행/생략됐는지, 리서치 도구 실행 시 evidence packet이 있었는지, 검증 상태와 메모리 승격 차단 상태가 무엇인지를 기록합니다. 즉 실행 결과가 단순 응답 템플릿인지, 정책-실행-검증-메모리 후보 흐름을 실제로 탔는지를 확인할 수 있습니다.
+모든 manifest agent run은 `execution_contract`도 남깁니다. 이 패킷은 P0 실행 루프의 공개 가능한 증거입니다. 정책이 LLM과 도구보다 먼저 검사됐는지, LLM runtime이 실제로 시도됐는지 또는 정책 때문에 생략됐는지, 등록 도구가 실행/생략됐는지, 리서치 도구 실행 시 evidence packet이 있었는지, 검증 상태와 메모리 승격 차단 상태가 무엇인지를 기록합니다. 즉 실행 결과가 단순 응답 템플릿인지, 정책-실행-검증-메모리 후보 흐름을 실제로 탔는지를 확인할 수 있습니다. 각 실행은 `tool_execution_status_card`도 포함해 선택/완료/스킵/차단/미등록 도구, evidence packet 결과, 네트워크·서브프로세스 기본 차단, 외부 side effect 수행 여부를 운영자가 한눈에 확인할 수 있게 합니다.
 
 매니페스트에는 이름만 있는 ghost tool 권한을 남기지 않습니다. `local_file_read`, `local_file_write`, `work_session`, `evidence_packet`, `assessment`, `memory_consolidation`, projection-team 도구는 모두 명시적 capability scope와 함께 등록됩니다. 파일 도구는 일반 agent run에서 임의 경로를 직접 읽거나 쓰지 않고, workspace 읽기/쓰기는 `WorkspaceSandbox`에 위임되어 rollback 가능 산출물 또는 검토 artifact로 선언됩니다. job spec에는 `max_input_file_bytes`, `max_declared_outputs`, `max_total_output_bytes`, `max_runtime_seconds`, `allowed_network_hosts`, `allowed_subprocess_commands` 같은 `resource_limits`를 넣을 수 있습니다. `assessment` 도구는 실행 후 검토 단계로 선택되어, 승인된 실행이 학습을 조용히 승격하지 않고 보스 검토용 review packet을 남기게 합니다.
 

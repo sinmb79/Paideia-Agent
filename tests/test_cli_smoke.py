@@ -335,6 +335,13 @@ class CliSmokeTests(unittest.TestCase):
         self.assertEqual(agent_runtime_smoke["details"]["llm_status"], "completed")
         self.assertEqual(agent_runtime_smoke["details"]["verification_status"], "passed")
         self.assertEqual(agent_runtime_smoke["details"]["execution_contract_status"], "passed")
+        self.assertEqual(
+            agent_runtime_smoke["details"]["tool_execution_status_card_schema"],
+            "paideia-tool-execution-status-card/v1",
+        )
+        self.assertEqual(agent_runtime_smoke["details"]["tool_execution_status_card_status"], "completed_verified")
+        self.assertTrue(agent_runtime_smoke["details"]["tool_execution_status_card_evidence_completed"])
+        self.assertFalse(agent_runtime_smoke["details"]["tool_execution_status_card_external_side_effects_performed"])
         self.assertIn("evidence_packet", agent_runtime_smoke["details"]["completed_tools"])
         self.assertEqual(agent_runtime_smoke["details"]["missing_required_tools"], [])
         self.assertEqual(agent_runtime_smoke["details"]["memory_decision"], "candidate_pending_boss_review")
@@ -542,6 +549,14 @@ class CliSmokeTests(unittest.TestCase):
         self.assertFalse(first_run_doctor["artifacts"]["llm_adapter_contracts"]["network_call_performed"])
         self.assertEqual(first_run_doctor["artifacts"]["llm_connection_profile"]["status"], "offline_ready_no_setup")
         self.assertEqual(first_run_doctor["artifacts"]["agent_runtime_smoke"]["execution_contract_status"], "passed")
+        self.assertEqual(
+            first_run_doctor["artifacts"]["agent_runtime_smoke"]["tool_execution_status_card_schema"],
+            "paideia-tool-execution-status-card/v1",
+        )
+        self.assertEqual(
+            first_run_doctor["artifacts"]["agent_runtime_smoke"]["tool_execution_status_card_status"],
+            "completed_verified",
+        )
         self.assertEqual(first_run_doctor["artifacts"]["chat_runtime_smoke"]["schema"], "paideia-chat-runtime-smoke/v1")
         self.assertEqual(first_run_doctor["artifacts"]["chat_runtime_smoke"]["chat_status"], "completed")
         self.assertFalse(first_run_doctor["artifacts"]["chat_runtime_smoke"]["stored_private_reasoning_trace"])

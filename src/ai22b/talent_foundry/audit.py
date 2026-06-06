@@ -48,6 +48,7 @@ from ai22b.talent_foundry.runtime_contract_doctor import (
     run_fail_closed_runtime_contract,
     run_live_agent_loop_contract,
 )
+from ai22b.talent_foundry.agent_execution_loop import TOOL_EXECUTION_STATUS_CARD_SCHEMA
 from ai22b.talent_foundry.source_sbom import SOURCE_SBOM_SCHEMA, build_source_sbom
 from ai22b.talent_foundry.tool_registry import TOOL_CAPABILITY_AUDIT_SCHEMA, audit_tool_capability_registry
 
@@ -1245,6 +1246,14 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
         "agent_runtime_smoke_execution_contract_status": agent_runtime_details.get("execution_contract_status"),
         "agent_runtime_smoke_completed_tools": agent_runtime_details.get("completed_tools"),
         "agent_runtime_smoke_missing_required_tools": agent_runtime_details.get("missing_required_tools"),
+        "agent_runtime_tool_status_card_schema": agent_runtime_details.get("tool_execution_status_card_schema"),
+        "agent_runtime_tool_status_card_status": agent_runtime_details.get("tool_execution_status_card_status"),
+        "agent_runtime_tool_status_card_evidence_completed": agent_runtime_details.get(
+            "tool_execution_status_card_evidence_completed"
+        ),
+        "agent_runtime_tool_status_card_external_side_effects": agent_runtime_details.get(
+            "tool_execution_status_card_external_side_effects_performed"
+        ),
         "agent_runtime_smoke_memory_decision": agent_runtime_details.get("memory_decision"),
         "agent_runtime_smoke_memory_review_candidate_schema": agent_runtime_details.get("memory_review_candidate_schema"),
         "agent_runtime_smoke_memory_auto_promotion_performed": agent_runtime_details.get(
@@ -1432,6 +1441,10 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
         and isinstance(details["agent_runtime_smoke_completed_tools"], list)
         and "evidence_packet" in details["agent_runtime_smoke_completed_tools"]
         and details["agent_runtime_smoke_missing_required_tools"] == []
+        and details["agent_runtime_tool_status_card_schema"] == TOOL_EXECUTION_STATUS_CARD_SCHEMA
+        and details["agent_runtime_tool_status_card_status"] == "completed_verified"
+        and details["agent_runtime_tool_status_card_evidence_completed"] is True
+        and details["agent_runtime_tool_status_card_external_side_effects"] is False
         and details["agent_runtime_smoke_memory_decision"] == "candidate_pending_boss_review"
         and details["agent_runtime_smoke_memory_review_candidate_schema"] == MEMORY_REVIEW_CANDIDATE_SCHEMA
         and details["agent_runtime_smoke_memory_auto_promotion_performed"] is False

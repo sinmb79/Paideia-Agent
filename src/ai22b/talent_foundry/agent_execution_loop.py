@@ -25,6 +25,7 @@ RUN_SCHEMA = "ai-talent-agent-run/v1"
 EXECUTION_CONTRACT_SCHEMA = "paideia-agent-execution-contract/v1"
 LLM_TOOL_PLAN_ALIGNMENT_SCHEMA = "paideia-llm-tool-plan-alignment/v1"
 MEMORY_REVIEW_CANDIDATE_SCHEMA = "paideia-memory-review-candidate/v1"
+TOOL_EXECUTION_STATUS_CARD_SCHEMA = "paideia-tool-execution-status-card/v1"
 
 
 def _now() -> str:
@@ -510,6 +511,146 @@ def _build_execution_contract(
     }
 
 
+def _build_tool_execution_status_card(
+    *,
+    run_status: str,
+    policy_decision: dict[str, Any],
+    selected_tools: list[str],
+    tool_execution: dict[str, Any],
+    verification: dict[str, Any],
+    execution_contract: dict[str, Any],
+) -> dict[str, Any]:
+    tool_results = tool_execution.get("tool_results", []) if isinstance(tool_execution.get("tool_results"), list) else []
+    completed_tools = sorted(
+        str(item.get("tool"))
+        for item in tool_results
+        if isinstance(item, dict) and item.get("status") == "completed"
+    )
+    skipped_tools = sorted(
+        str(item.get("tool"))
+        for item in tool_results
+        if isinstance(item, dict) and item.get("status") == "skipped"
+    )
+    blocked_tools = sorted(
+        str(item.get("tool"))
+        for item in tool_results
+        if isinstance(item, dict) and item.get("status") == "blocked"
+    )
+    unregistered_tools = sorted(
+        str(item.get("tool"))
+        for item in tool_results
+        if isinstance(item, dict)
+        and item.get("status") == "skipped"
+        and isinstance(item.get("capability_scope"), dict)
+        and item.get("capability_scope", {}).get("registered") is False
+    )
+    capability_scope = tool_execution.get("capability_scope", {})
+    capability_scope = capability_scope if isinstance(capability_scope, dict) else {}
+    evidence_required = "work_session" in selected_tools
+    evidence_completed = "evidence_packet" in completed_tools
+    if run_status == "blocked":
+        status = "skipped_policy_block"
+    elif run_status == "needs_approval":
+        status = "skipped_pending_boss_approval"
+    elif run_status == "needs_configuration":
+        status = "skipped_provider_not_ready"
+    elif blocked_tools or unregistered_tools or execution_contract.get("status") == "needs_review":
+        status = "needs_review"
+    elif selected_tools and verification.get("status") == "passed":
+        status = "completed_verified"
+    elif not selected_tools:
+        status = "no_tools_selected"
+    else:
+        status = "needs_review"
+    tool_cards: list[dict[str, Any]] = []
+    for item in tool_results:
+        if not isinstance(item, dict):
+            continue
+        scope = item.get("capability_scope", {}) if isinstance(item.get("capability_scope"), dict) else {}
+        tool_cards.append(
+            {
+                "tool": item.get("tool"),
+                "status": item.get("status"),
+                "capability": item.get("capability"),
+                "registered": scope.get("registered"),
+                "capability_granted": scope.get("capability_granted"),
+                "network": scope.get("network"),
+                "subprocess": scope.get("subprocess"),
+                "output_schema": item.get("output", {}).get("schema") if isinstance(item.get("output"), dict) else None,
+            }
+        )
+    next_actions = (
+        ["Review the evidence packet and memory review candidate before promoting this run."]
+        if status == "completed_verified"
+        else [
+            "Inspect the policy gate and execution contract before retrying.",
+            "Grant only reviewed capabilities and keep network/subprocess blocked by default.",
+        ]
+        if status == "needs_review"
+        else [
+            "Resolve provider or policy gate first, then rerun the agent loop.",
+        ]
+    )
+    return {
+        "schema": TOOL_EXECUTION_STATUS_CARD_SCHEMA,
+        "status": status,
+        "execution_model": tool_execution.get("execution_model"),
+        "policy_status": policy_decision.get("status"),
+        "run_status": run_status,
+        "attempted": bool(tool_results),
+        "selected_tools": selected_tools,
+        "selected_count": len(selected_tools),
+        "completed_tools": completed_tools,
+        "skipped_tools": skipped_tools,
+        "blocked_tools": blocked_tools,
+        "unregistered_tools": unregistered_tools,
+        "tool_cards": tool_cards,
+        "evidence_packet": {
+            "required": evidence_required,
+            "completed": evidence_completed,
+        },
+        "capability_scope": {
+            "schema": capability_scope.get("schema"),
+            "mode": capability_scope.get("mode"),
+            "granted_capabilities": capability_scope.get("granted_capabilities", []),
+            "network_default": capability_scope.get("network_default"),
+            "subprocess_default": capability_scope.get("subprocess_default"),
+            "private_reasoning_trace": capability_scope.get("private_reasoning_trace"),
+        },
+        "verification": {
+            "status": verification.get("status"),
+            "issues": verification.get("issues", []),
+            "execution_contract_status": execution_contract.get("status"),
+        },
+        "public_safe": {
+            "registered_tool_executor_is_authority": True,
+            "llm_tool_suggestions_are_non_authoritative": True,
+            "network_default": capability_scope.get("network_default", "blocked"),
+            "subprocess_default": capability_scope.get("subprocess_default", "blocked"),
+            "raw_provider_payload_saved": False,
+            "private_reasoning_trace": "do_not_store",
+            "external_side_effects_performed": False,
+        },
+        "user_visible_summary": {
+            "ko": (
+                "등록 도구 실행이 검증됐고 evidence packet이 준비됐습니다."
+                if status == "completed_verified"
+                else "등록 도구 실행 결과에 검토가 필요합니다."
+                if status == "needs_review"
+                else "정책, 승인, 또는 provider 설정 때문에 도구 실행을 시작하지 않았습니다."
+            ),
+            "en": (
+                "Registered tool execution was verified and the evidence packet is ready."
+                if status == "completed_verified"
+                else "Registered tool execution needs review."
+                if status == "needs_review"
+                else "Tool execution did not start because policy, approval, or provider setup blocked the run."
+            ),
+        },
+        "next_actions": next_actions,
+    }
+
+
 def run_agent_execution_loop(
     manifest: dict[str, Any],
     *,
@@ -667,6 +808,14 @@ def run_agent_execution_loop(
         verification=verification,
         memory_write=memory_write,
     )
+    tool_execution_status_card = _build_tool_execution_status_card(
+        run_status=run_status,
+        policy_decision=policy_decision,
+        selected_tools=selected_tools,
+        tool_execution=tool_execution,
+        verification=verification,
+        execution_contract=execution_contract,
+    )
     runtime_observability = build_agent_runtime_observability(
         manifest=manifest,
         task=task,
@@ -709,6 +858,13 @@ def run_agent_execution_loop(
             "event": "llm_provider_preflight_recorded",
             "status": llm_provider_preflight["status"],
             "live_check_performed": llm_provider_preflight["live_check_performed"],
+        },
+        {
+            "recorded_at_utc": _now(),
+            "event": "tool_execution_status_card_recorded",
+            "status": tool_execution_status_card["status"],
+            "completed_count": len(tool_execution_status_card["completed_tools"]),
+            "blocked_count": len(tool_execution_status_card["blocked_tools"]),
         },
     ]
 
@@ -756,6 +912,7 @@ def run_agent_execution_loop(
             },
         },
         "execution_contract": execution_contract,
+        "tool_execution_status_card": tool_execution_status_card,
         "tool_execution": tool_execution,
         "llm_tool_plan_alignment": llm_tool_plan_alignment,
         "verification": verification,
