@@ -289,6 +289,10 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertTrue(commands["application_engine_live_smoke"]["network_call"])
         self.assertTrue(commands["agent_runtime_live_smoke"]["required_before_agent_work"])
         self.assertIn("--live-check", commands["agent_runtime_live_smoke"]["command"])
+        self.assertTrue(commands["llm_live_readiness_suite"]["required_before_agent_work"])
+        self.assertIn("doctor-llm-live-readiness", commands["llm_live_readiness_suite"]["command"])
+        self.assertIn("--live-check", commands["llm_live_readiness_suite"]["command"])
+        self.assertIn("--output-dir", commands["llm_live_readiness_suite"]["command"])
         self.assertIn("OPENROUTER_API_KEY", json.dumps(checklist["readiness"], ensure_ascii=False))
         matrix = build_llm_provider_matrix()
         service_by_id = {item["service_id"]: item for item in matrix["services"]}

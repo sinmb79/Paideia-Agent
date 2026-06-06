@@ -12,6 +12,7 @@ from ai22b.talent_foundry.llm_onboarding import (
     build_llm_onboarding_checklist,
     build_llm_provider_matrix,
 )
+from ai22b.talent_foundry.llm_live_readiness import run_llm_live_readiness_suite
 from ai22b.talent_foundry.llm_runtime import doctor_llm_provider, run_llm_application_smoke
 from ai22b.talent_foundry.onboarding_doctor import doctor_onboarding_session
 from ai22b.talent_foundry.package_install_doctor import doctor_package_install
@@ -148,6 +149,27 @@ def _runtime_contract_summary(runtime_doctor: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _live_readiness_summary(report: dict[str, Any]) -> dict[str, Any]:
+    data_policy = _as_dict(report.get("data_policy"))
+    checks = _as_dict(report.get("checks"))
+    return {
+        "schema": report.get("schema"),
+        "status": report.get("status"),
+        "passed": report.get("passed"),
+        "engine": report.get("engine"),
+        "llm_mode": report.get("llm_mode"),
+        "live_check_requested": report.get("live_check_requested"),
+        "live_ready": report.get("live_ready"),
+        "provider_doctor_passed": _as_dict(checks.get("provider_doctor")).get("passed"),
+        "application_smoke_passed": _as_dict(checks.get("application_smoke")).get("passed"),
+        "agent_runtime_smoke_passed": _as_dict(checks.get("agent_runtime_smoke")).get("passed"),
+        "secret_values_exported": data_policy.get("secret_values_exported"),
+        "raw_provider_payload_saved": data_policy.get("raw_provider_payload_saved"),
+        "private_reasoning_trace": data_policy.get("private_reasoning_trace"),
+        "live_provider_call_attempted": data_policy.get("live_provider_call_attempted"),
+    }
+
+
 def _tool_audit_summary(tool_audit: dict[str, Any]) -> dict[str, Any]:
     details = _as_dict(tool_audit.get("details"))
     public_safe = _public_safe(tool_audit)
@@ -235,6 +257,15 @@ def doctor_first_run(
         llm_mode="offline",
         task="Paideia first-run doctor full agent runtime smoke.",
     )
+    live_readiness_output_dir = (
+        (output_path.parent if output_path is not None else root / "runs") / "llm_live_readiness"
+    )
+    llm_live_readiness = run_llm_live_readiness_suite(
+        engine="deterministic_local",
+        live_check=False,
+        output_dir=live_readiness_output_dir,
+        task="Paideia first-run doctor live-readiness suite smoke.",
+    )
     tool_audit = audit_tool_capability_registry()
     policy_eval = run_action_policy_eval(suite_path=DEFAULT_POLICY_EVAL_SUITE)
     release_readiness = audit_public_release_readiness(root)
@@ -248,6 +279,7 @@ def doctor_first_run(
     application_runtime = _as_dict(application_smoke.get("runtime_result"))
     application_policy = _as_dict(application_smoke.get("data_policy"))
     agent_details = _as_dict(agent_runtime_smoke.get("details"))
+    live_readiness_policy = _as_dict(llm_live_readiness.get("data_policy"))
     tool_public = _public_safe(tool_audit)
     policy_runtime = _as_dict(policy_eval.get("runtime_policy"))
     release_policy = _as_dict(release_readiness.get("policy"))
@@ -343,6 +375,19 @@ def doctor_first_run(
     )
     _check(
         checks,
+        "llm_live_readiness_suite_public_safe",
+        llm_live_readiness.get("schema") == "paideia-llm-live-readiness-suite/v1"
+        and llm_live_readiness.get("passed") is True
+        and llm_live_readiness.get("engine") == "deterministic_local"
+        and llm_live_readiness.get("llm_mode") == "offline"
+        and llm_live_readiness.get("live_check_requested") is False
+        and live_readiness_policy.get("secret_values_exported") is False
+        and live_readiness_policy.get("raw_provider_payload_saved") is False
+        and live_readiness_policy.get("live_provider_call_attempted") is False,
+        details=_live_readiness_summary(llm_live_readiness),
+    )
+    _check(
+        checks,
         "tool_capability_audit_passed",
         tool_audit.get("schema") == "paideia-tool-capability-audit/v1"
         and tool_audit.get("passed") is True
@@ -417,6 +462,8 @@ def doctor_first_run(
         and connection_public.get("secret_values_exported") is False
         and application_runtime.get("network_access") == "blocked"
         and agent_details.get("preflight_network_call_made") is False
+        and live_readiness_policy.get("live_provider_call_attempted") is False
+        and live_readiness_policy.get("secret_values_exported") is False
         and agent_details.get("network_default") == "blocked"
         and agent_details.get("subprocess_default") == "blocked"
         and tool_public.get("network_call_performed") is False
@@ -440,6 +487,9 @@ def doctor_first_run(
         details={
             "provider_live_check_requested": provider_doctor.get("live_check_requested"),
             "application_network_access": application_runtime.get("network_access"),
+            "llm_live_readiness_live_provider_call_attempted": live_readiness_policy.get(
+                "live_provider_call_attempted"
+            ),
             "agent_network_default": agent_details.get("network_default"),
             "policy_eval_llm_called": policy_runtime.get("llm_called"),
         },
@@ -495,6 +545,7 @@ def doctor_first_run(
                 "run_status": agent_details.get("run_status"),
                 "execution_contract_status": agent_details.get("execution_contract_status"),
             },
+            "llm_live_readiness": _live_readiness_summary(llm_live_readiness),
             "tool_capability_audit": _tool_audit_summary(tool_audit),
             "action_policy_eval": _policy_summary(policy_eval),
             "public_release_readiness": _release_summary(release_readiness),

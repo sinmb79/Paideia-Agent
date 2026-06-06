@@ -2224,6 +2224,56 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(report["runtime_result"]["reason"], "OPENROUTER_API_KEY_not_set")
         self.assertFalse(report["data_policy"]["secret_values_exported"])
 
+    def test_cli_llm_live_readiness_strict_fails_closed_when_live_provider_not_ready(self) -> None:
+        import os
+
+        from ai22b.talent_foundry.cli import main as cli_main
+
+        old_key = os.environ.pop("OPENROUTER_API_KEY", None)
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                output_dir = Path(tmp) / "openrouter_live_readiness"
+                exit_code = cli_main(
+                    [
+                        "doctor-llm-live-readiness",
+                        "--llm-engine",
+                        "openrouter_api",
+                        "--llm-model",
+                        "openai/gpt-4.1-mini",
+                        "--live-check",
+                        "--strict",
+                        "--output-dir",
+                        str(output_dir),
+                    ]
+                )
+                report = json.loads((output_dir / "llm_live_readiness_suite.json").read_text(encoding="utf-8"))
+                artifact_exists = {
+                    name: Path(artifact_path).exists()
+                    for name, artifact_path in report["artifacts"].items()
+                }
+        finally:
+            if old_key is not None:
+                os.environ["OPENROUTER_API_KEY"] = old_key
+
+        self.assertEqual(exit_code, 2)
+        self.assertEqual(report["schema"], "paideia-llm-live-readiness-suite/v1")
+        self.assertFalse(report["passed"])
+        self.assertFalse(report["live_ready"])
+        self.assertTrue(report["live_check_requested"])
+        self.assertEqual(report["llm_mode"], "live")
+        self.assertEqual(report["checks"]["provider_doctor"]["status"], "needs_configuration")
+        self.assertFalse(report["checks"]["provider_doctor"]["passed"])
+        self.assertEqual(report["checks"]["application_smoke"]["status"], "failed")
+        self.assertFalse(report["checks"]["application_smoke"]["passed"])
+        self.assertEqual(report["checks"]["agent_runtime_smoke"]["status"], "needs_configuration")
+        self.assertFalse(report["checks"]["agent_runtime_smoke"]["passed"])
+        self.assertEqual(report["checks"]["agent_runtime_smoke"]["failure_mode"], "live_provider_not_ready")
+        self.assertFalse(report["data_policy"]["secret_values_exported"])
+        self.assertFalse(report["data_policy"]["raw_provider_payload_saved"])
+        self.assertTrue(report["data_policy"]["live_provider_call_attempted"])
+        self.assertEqual(report["data_policy"]["private_reasoning_trace"], "do_not_store")
+        self.assertTrue(all(artifact_exists.values()), artifact_exists)
+
     def test_agent_execution_uses_registered_tool_executor(self) -> None:
         from ai22b.talent_foundry.agent_runner import run_agent_from_manifest
         from ai22b.talent_foundry.demo import run_demo
@@ -2937,6 +2987,7 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("doctor-llm-provider", first_run_details["commands"])
         self.assertIn("run-llm-application-smoke", first_run_details["commands"])
         self.assertIn("run-agent-runtime-smoke", first_run_details["commands"])
+        self.assertIn("doctor-llm-live-readiness", first_run_details["commands"])
         self.assertIn("audit-tool-capabilities", first_run_details["commands"])
         self.assertIn("run-action-policy-eval", first_run_details["commands"])
         self.assertIn("audit-public-release-readiness", first_run_details["commands"])
@@ -3159,6 +3210,7 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("build-llm-connection-profile", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])
         self.assertIn("run-llm-application-smoke", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])
         self.assertIn("run-agent-runtime-smoke", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])
+        self.assertIn("doctor-llm-live-readiness", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])
         self.assertIn("audit-tool-capabilities", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])
         self.assertIn("doctor-first-run", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])
         self.assertIn("doctor-package-install", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])

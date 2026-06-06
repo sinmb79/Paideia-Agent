@@ -19,6 +19,7 @@ class CliSmokeTests(unittest.TestCase):
             doctor_path = tmp_path / "llm_provider_doctor.json"
             llm_smoke_path = tmp_path / "llm_application_smoke.json"
             agent_runtime_smoke_path = tmp_path / "agent_runtime_smoke.json"
+            llm_live_readiness_dir = tmp_path / "llm_live_readiness"
             tool_audit_path = tmp_path / "tool_capability_audit.json"
             policy_eval_path = tmp_path / "policy_eval_report.json"
             public_release_path = tmp_path / "public_release_readiness.json"
@@ -91,6 +92,16 @@ class CliSmokeTests(unittest.TestCase):
                     str(agent_runtime_smoke_path),
                 ]
             )
+            llm_live_readiness_code = cli_main(
+                [
+                    "doctor-llm-live-readiness",
+                    "--llm-engine",
+                    "deterministic_local",
+                    "--strict",
+                    "--output-dir",
+                    str(llm_live_readiness_dir),
+                ]
+            )
             tool_audit_code = cli_main(
                 [
                     "audit-tool-capabilities",
@@ -157,6 +168,13 @@ class CliSmokeTests(unittest.TestCase):
             doctor = json.loads(doctor_path.read_text(encoding="utf-8"))
             llm_smoke = json.loads(llm_smoke_path.read_text(encoding="utf-8"))
             agent_runtime_smoke = json.loads(agent_runtime_smoke_path.read_text(encoding="utf-8"))
+            llm_live_readiness = json.loads(
+                (llm_live_readiness_dir / "llm_live_readiness_suite.json").read_text(encoding="utf-8")
+            )
+            llm_live_readiness_artifact_exists = {
+                name: Path(artifact_path).exists()
+                for name, artifact_path in llm_live_readiness["artifacts"].items()
+            }
             tool_audit = json.loads(tool_audit_path.read_text(encoding="utf-8"))
             policy_eval = json.loads(policy_eval_path.read_text(encoding="utf-8"))
             public_release = json.loads(public_release_path.read_text(encoding="utf-8"))
@@ -172,6 +190,7 @@ class CliSmokeTests(unittest.TestCase):
         self.assertEqual(doctor_code, 0)
         self.assertEqual(llm_smoke_code, 0)
         self.assertEqual(agent_runtime_smoke_code, 0)
+        self.assertEqual(llm_live_readiness_code, 0)
         self.assertEqual(tool_audit_code, 0)
         self.assertEqual(policy_eval_code, 0)
         self.assertEqual(public_release_code, 0)
@@ -210,6 +229,7 @@ class CliSmokeTests(unittest.TestCase):
                 "provider_doctor_no_network",
                 "application_engine_no_network_smoke",
                 "agent_runtime_no_network_smoke",
+                "llm_live_readiness_suite",
                 "chat_surface_first_turn",
             },
             command_ids,
@@ -217,6 +237,11 @@ class CliSmokeTests(unittest.TestCase):
         live_command = next(item for item in llm_onboarding["command_plan"] if item["id"] == "provider_doctor_live_check")
         self.assertIn("--live-check", live_command["command"])
         self.assertIn("--strict", live_command["command"])
+        readiness_command = next(
+            item for item in llm_onboarding["command_plan"] if item["id"] == "llm_live_readiness_suite"
+        )
+        self.assertIn("doctor-llm-live-readiness", readiness_command["command"])
+        self.assertIn("--output-dir", readiness_command["command"])
 
         self.assertEqual(llm_connection_profile["schema"], "paideia-llm-connection-profile/v1")
         self.assertEqual(llm_connection_profile["status"], "offline_ready_no_setup")
@@ -273,6 +298,25 @@ class CliSmokeTests(unittest.TestCase):
         self.assertEqual(agent_runtime_smoke["details"]["network_default"], "blocked")
         self.assertEqual(agent_runtime_smoke["details"]["subprocess_default"], "blocked")
         self.assertTrue(agent_runtime_smoke["details"]["public_safe"])
+
+        self.assertEqual(llm_live_readiness["schema"], "paideia-llm-live-readiness-suite/v1")
+        self.assertTrue(llm_live_readiness["passed"])
+        self.assertFalse(llm_live_readiness["live_ready"])
+        self.assertEqual(llm_live_readiness["engine"], "deterministic_local")
+        self.assertEqual(llm_live_readiness["llm_mode"], "offline")
+        self.assertFalse(llm_live_readiness["live_check_requested"])
+        self.assertEqual(
+            llm_live_readiness["summary_path"],
+            str(llm_live_readiness_dir / "llm_live_readiness_suite.json"),
+        )
+        self.assertTrue(llm_live_readiness["checks"]["provider_doctor"]["passed"])
+        self.assertTrue(llm_live_readiness["checks"]["application_smoke"]["passed"])
+        self.assertTrue(llm_live_readiness["checks"]["agent_runtime_smoke"]["passed"])
+        self.assertFalse(llm_live_readiness["data_policy"]["secret_values_exported"])
+        self.assertFalse(llm_live_readiness["data_policy"]["raw_provider_payload_saved"])
+        self.assertFalse(llm_live_readiness["data_policy"]["live_provider_call_attempted"])
+        self.assertEqual(llm_live_readiness["data_policy"]["private_reasoning_trace"], "do_not_store")
+        self.assertTrue(all(llm_live_readiness_artifact_exists.values()), llm_live_readiness_artifact_exists)
 
         self.assertEqual(tool_audit["schema"], "paideia-tool-capability-audit/v1")
         self.assertTrue(tool_audit["passed"])
@@ -370,6 +414,7 @@ class CliSmokeTests(unittest.TestCase):
             "deterministic_provider_doctor_ready",
             "application_engine_smoke_passed",
             "agent_runtime_smoke_passed",
+            "llm_live_readiness_suite_public_safe",
             "tool_capability_audit_passed",
             "action_policy_eval_passed",
             "public_release_readiness_passed",
@@ -383,6 +428,11 @@ class CliSmokeTests(unittest.TestCase):
         self.assertEqual(first_run_doctor["artifacts"]["llm_provider_doctor"]["network_access"], "blocked")
         self.assertEqual(first_run_doctor["artifacts"]["llm_connection_profile"]["status"], "offline_ready_no_setup")
         self.assertEqual(first_run_doctor["artifacts"]["agent_runtime_smoke"]["execution_contract_status"], "passed")
+        self.assertEqual(
+            first_run_doctor["artifacts"]["llm_live_readiness"]["schema"],
+            "paideia-llm-live-readiness-suite/v1",
+        )
+        self.assertFalse(first_run_doctor["artifacts"]["llm_live_readiness"]["live_provider_call_attempted"])
         self.assertTrue(first_run_doctor["artifacts"]["package_install_doctor"]["distribution_installed"])
         self.assertEqual(first_run_doctor["artifacts"]["runtime_contract_doctor"]["status"], "passed")
         self.assertFalse(first_run_doctor["artifacts"]["runtime_contract_doctor"]["live_provider_called"])

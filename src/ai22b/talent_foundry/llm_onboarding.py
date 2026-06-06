@@ -74,6 +74,29 @@ def _command(
     return " ".join(part for part in parts if part)
 
 
+def _readiness_suite_command(
+    *,
+    engine: str,
+    model: str | None = None,
+    model_path: str | None = None,
+    live: bool = False,
+    strict: bool = False,
+    output_dir: str,
+) -> str:
+    needs_model = engine in EXTERNAL_API_ENGINES or engine in LOCAL_HTTP_ENGINES
+    needs_path = engine in LOCAL_HTTP_ENGINES or engine in LOCAL_MODEL_ENGINES
+    parts = [
+        "ai22b-talent-foundry doctor-llm-live-readiness",
+        f"--llm-engine {engine}",
+        _arg("--llm-model", model, "<model>" if needs_model else None).strip(),
+        _arg("--llm-model-path", model_path, "<localhost-url-or-local-model-path>" if needs_path else None).strip(),
+        "--live-check" if live else "",
+        "--strict" if strict else "",
+        f"--output-dir {output_dir}",
+    ]
+    return " ".join(part for part in parts if part)
+
+
 def _chat_command(
     *,
     engine: str,
@@ -420,6 +443,23 @@ def build_llm_onboarding_checklist(
             "expected": "after provider credentials/server are ready, this proves policy, LLM planning, tools, verification, and memory gating with the selected provider.",
         },
         {
+            "id": "llm_live_readiness_suite",
+            "required_before_agent_work": live_provider,
+            "network_call": live_provider,
+            "command": _readiness_suite_command(
+                engine=engine,
+                model=model,
+                model_path=model_path,
+                live=live_provider,
+                strict=True,
+                output_dir="llm_live_readiness",
+            ),
+            "expected": (
+                "one command writes provider doctor, application smoke, and full agent runtime smoke artifacts; "
+                "without provider readiness it fails closed before daily live work."
+            ),
+        },
+        {
             "id": "chat_surface_first_turn",
             "required_before_daily_use": False,
             "network_call": False,
@@ -448,6 +488,7 @@ def build_llm_onboarding_checklist(
             "doctor report exists and exports no secret values",
             "application smoke stores no raw provider payload or hidden reasoning trace",
             "agent runtime smoke proves policy before LLM and tools",
+            "live readiness suite ties provider doctor, application smoke, and full runtime smoke together",
             "chat turn records provider preflight and selected memory route",
             "learning promotion remains review-gated after provider fallback or failure",
         ],

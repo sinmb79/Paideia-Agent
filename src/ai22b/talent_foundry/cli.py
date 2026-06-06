@@ -54,6 +54,7 @@ from ai22b.talent_foundry.llm_runtime import (
     doctor_llm_provider,
     run_llm_application_smoke,
 )
+from ai22b.talent_foundry.llm_live_readiness import run_llm_live_readiness_suite
 from ai22b.talent_foundry.llm_onboarding import (
     build_llm_connection_profile,
     build_llm_onboarding_checklist,
@@ -559,6 +560,30 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Return exit code 2 when the full agent runtime smoke report does not pass.",
     )
     agent_runtime_smoke.add_argument("--output", required=True)
+
+    llm_live_readiness = subparsers.add_parser(
+        "doctor-llm-live-readiness",
+        help="Run provider doctor, application smoke, and agent runtime smoke as one readiness suite.",
+    )
+    llm_live_readiness.add_argument("--llm-engine", required=True)
+    llm_live_readiness.add_argument("--llm-service")
+    llm_live_readiness.add_argument("--llm-model")
+    llm_live_readiness.add_argument("--llm-model-path")
+    llm_live_readiness.add_argument(
+        "--live-check",
+        action="store_true",
+        help="Actually call the selected provider/local server through the suite.",
+    )
+    llm_live_readiness.add_argument(
+        "--task",
+        default="Run a Paideia live readiness suite for the selected LLM provider.",
+    )
+    llm_live_readiness.add_argument(
+        "--strict",
+        action="store_true",
+        help="Return exit code 2 when the readiness suite does not pass.",
+    )
+    llm_live_readiness.add_argument("--output-dir", required=True)
 
     run_workspace_agent = subparsers.add_parser(
         "run-workspace-agent",
@@ -1497,6 +1522,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
         print(str(output_path))
+        if args.strict and not report.get("passed"):
+            return 2
+        return 0
+
+    if args.command == "doctor-llm-live-readiness":
+        report = run_llm_live_readiness_suite(
+            engine=args.llm_engine,
+            service=args.llm_service,
+            model=args.llm_model,
+            model_path=args.llm_model_path,
+            live_check=args.live_check,
+            output_dir=Path(args.output_dir),
+            task=args.task,
+        )
+        print(str(Path(report["summary_path"])))
         if args.strict and not report.get("passed"):
             return 2
         return 0
