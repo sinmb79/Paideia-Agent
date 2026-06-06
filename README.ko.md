@@ -507,7 +507,7 @@ ai22b-talent-foundry doctor-paideia-kit-first-run `
   --output .\paideia-agent-kits\grham_junior_paideia_agent\paideia_kit_first_run_doctor.json
 ```
 
-`learning_ledger.json`에는 `memory_lifecycle` 리포트가 포함됩니다. 이 리포트는 기억 쓰기 정책, 승격/격리 기준, 수동 삭제 정책, 복구/마이그레이션 방침, 검색 품질 상태, 개인정보/secret/로컬 경로 위생 검사를 기록합니다. 격리된 경험은 active context에서 제외되고, private reasoning trace 저장은 계속 금지됩니다.
+`learning_ledger.json`에는 `memory_lifecycle` 리포트가 포함됩니다. 이 리포트는 기억 쓰기 정책, 승격/격리 기준, 수동 삭제 정책, 복구/마이그레이션 방침, 검색 품질 상태, 개인정보/secret/로컬 경로 위생 검사를 기록합니다. active memory route와 hired chat turn에는 `memory_lifecycle_status_card`도 포함되어 선택된 기억 수, 격리 기억 제외 여부, route degradation, 학습 쓰기 결정, 위생 검사를 운영자가 한눈에 확인할 수 있습니다. 격리된 경험은 active context에서 제외되고, private reasoning trace 저장은 계속 금지됩니다.
 
 기억 수명주기 운영은 `maintain-hired-memory` 명령으로 실행합니다.
 

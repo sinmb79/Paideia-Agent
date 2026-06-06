@@ -1118,6 +1118,17 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(len(route["selected_memories"]), 1)
         self.assertIn("macro_research_question_framing", route["selected_memories"][0]["promoted_skills"])
         self.assertIn("evidence_first_verification", route["rehearsal_plan"]["procedural_skills_to_rehearse"])
+        self.assertEqual(
+            route["memory_lifecycle_status_card"]["schema"],
+            "paideia-memory-lifecycle-status-card/v1",
+        )
+        self.assertEqual(route["memory_lifecycle_status_card"]["status"], "passed")
+        self.assertEqual(route["memory_lifecycle_status_card"]["counts"]["selected"], 1)
+        self.assertTrue(route["memory_lifecycle_status_card"]["active_context"]["quarantined_excluded"])
+        self.assertEqual(
+            route["memory_lifecycle_status_card"]["hygiene"]["private_reasoning_trace_not_stored"],
+            True,
+        )
         self.assertNotIn("private trace must not be exported", serialized)
         self.assertNotIn(r"C:\Users", serialized)
         self.assertNotIn("소문을 근거처럼 사용했다", serialized)
@@ -4860,6 +4871,14 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(run["active_memory_route"]["schema"], "ai-talent-active-memory-route/v1")
         self.assertEqual(run["active_memory_route"]["routing_policy"]["quarantined_experiences"], "excluded")
         self.assertGreater(run["active_memory_route"]["memory_health"]["selected_experience_count"], 0)
+        self.assertEqual(
+            run["active_memory_route"]["memory_lifecycle_status_card"]["schema"],
+            "paideia-memory-lifecycle-status-card/v1",
+        )
+        self.assertEqual(run["active_memory_route"]["memory_lifecycle_status_card"]["status"], "passed")
+        self.assertTrue(
+            run["active_memory_route"]["memory_lifecycle_status_card"]["active_context"]["quarantined_excluded"]
+        )
         self.assertTrue(task_plan_exists)
         self.assertTrue(trace_exists)
 
@@ -5499,7 +5518,10 @@ class TalentFoundryTests(unittest.TestCase):
                         "id": "bad",
                         "source": "fixture",
                         "summary": "bad memory",
-                        "safe_reference": {"token": "sk-fixture_secret_value_1234567890"},
+                        "safe_reference": {
+                            "contact": "boss@example.com",
+                            "token": "sk-fixture_secret_value_1234567890",
+                        },
                     }
                 ],
             },
@@ -5509,11 +5531,15 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(ledger["memory_lifecycle"]["schema"], "paideia-memory-lifecycle/v1")
         self.assertEqual(ledger["memory_lifecycle"]["status"], "passed")
         self.assertTrue(ledger["memory_lifecycle"]["checks"]["local_absolute_paths_redacted"])
-        self.assertTrue(ledger["memory_lifecycle"]["issues"])
-        self.assertEqual(ledger["memory_lifecycle"]["issues"][0]["id"], "possible_pii_in_memory")
+        self.assertEqual(ledger["memory_lifecycle"]["issues"], [])
         self.assertEqual(route["memory_lifecycle"]["retrieval_quality"]["objective_supplied"], True)
         self.assertGreaterEqual(route["memory_lifecycle"]["retrieval_quality"]["selected_candidate_count"], 1)
+        self.assertEqual(route["memory_lifecycle_status_card"]["schema"], "paideia-memory-lifecycle-status-card/v1")
+        self.assertEqual(route["memory_lifecycle_status_card"]["status"], "passed")
+        self.assertEqual(route["memory_lifecycle_status_card"]["issues"], [])
+        self.assertTrue(route["memory_lifecycle_status_card"]["active_context"]["quarantined_excluded"])
         self.assertEqual(lifecycle["status"], "failed")
+        self.assertIn("possible_pii_in_memory", {item["id"] for item in lifecycle["issues"]})
         self.assertIn("secret_like_value_in_memory", {item["id"] for item in lifecycle["issues"]})
 
     def test_learning_ledger_keeps_projection_events_as_bounded_summaries(self) -> None:

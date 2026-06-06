@@ -6,7 +6,7 @@ import re
 from datetime import datetime, timezone
 from typing import Any
 
-from ai22b.talent_foundry.memory_lifecycle import audit_learning_ledger
+from ai22b.talent_foundry.memory_lifecycle import audit_learning_ledger, build_memory_lifecycle_status_card
 
 
 LEDGER_SCHEMA = "ai-talent-learning-ledger/v1"
@@ -547,7 +547,7 @@ def route_active_memory(
         )
 
     procedural_skills = list(dict.fromkeys(kernel.get("procedural_skills", [])))
-    return {
+    route = {
         "schema": ACTIVE_MEMORY_ROUTE_SCHEMA,
         "owner": ledger["owner"],
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -574,3 +574,10 @@ def route_active_memory(
         },
         "memory_lifecycle": audit_learning_ledger(ledger, objective=objective),
     }
+    route["memory_lifecycle_status_card"] = build_memory_lifecycle_status_card(
+        ledger,
+        active_memory_route=route,
+        objective=objective,
+        source="active_memory_route",
+    )
+    return route

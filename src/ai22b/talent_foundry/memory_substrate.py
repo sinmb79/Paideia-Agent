@@ -20,6 +20,7 @@ from ai22b.talent_foundry.llm_clients import (
     sanitize_llm_result_packet,
 )
 from ai22b.talent_foundry.llm_runtime import build_llm_provider_preflight, invoke_llm_application_engine
+from ai22b.talent_foundry.memory_lifecycle import build_memory_lifecycle_status_card
 
 
 MEMORY_SUBSTRATE_SCHEMA = "ai-talent-memory-substrate/v1"
@@ -1664,6 +1665,8 @@ def _record_chat_learning(
         "quarantined_count_after": quarantined_after,
         "latest_promoted_skills": latest_entry.get("promoted_skills", []),
         "policy": "reviewable_chat_summary_only_no_hidden_chain_of_thought",
+        "automatic_promotion_performed": False,
+        "ledger_write_performed": True,
     }
     update_path = target_root / "chat_learning_update.json"
     _write_json(update_path, update)
@@ -2550,12 +2553,27 @@ def run_chat_turn_from_employment(
             )
         )
 
+    latest_learning_ledger = _read_json(ledger_path) if ledger_path.exists() else learning_ledger
+    run["memory_lifecycle_status_card"] = build_memory_lifecycle_status_card(
+        latest_learning_ledger,
+        active_memory_route=chat_context["active_memory_route"],
+        objective=message,
+        learning_update=run.get("chat_learning_update"),
+        source="chat_turn",
+    )
     run["chat_runtime_status_card"] = _build_chat_runtime_status_card(
         run=run,
         llm_provider_preflight=llm_provider_preflight,
         live_llm_attempt=live_llm_attempt,
         learn_from_chat=learn_from_chat,
     )
+    run["chat_runtime_status_card"]["memory_lifecycle"] = {
+        "schema": run["memory_lifecycle_status_card"]["schema"],
+        "status": run["memory_lifecycle_status_card"]["status"],
+        "selected_count": run["memory_lifecycle_status_card"]["active_context"]["selected_count"],
+        "quarantined_excluded": run["memory_lifecycle_status_card"]["active_context"]["quarantined_excluded"],
+        "learning_decision": run["memory_lifecycle_status_card"]["learning"]["decision"],
+    }
     run["chat_execution_trace"].append(
         _chat_trace_entry(
             "chat_runtime_status_card_recorded",

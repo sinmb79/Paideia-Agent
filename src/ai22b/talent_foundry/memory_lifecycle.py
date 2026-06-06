@@ -7,11 +7,12 @@ from typing import Any
 
 
 MEMORY_LIFECYCLE_SCHEMA = "paideia-memory-lifecycle/v1"
+MEMORY_LIFECYCLE_STATUS_CARD_SCHEMA = "paideia-memory-lifecycle-status-card/v1"
 
 WINDOWS_ABSOLUTE_PATH = re.compile(r"[A-Za-z]:\\")
 POSIX_HOME_PATH = re.compile(r"(/home/|/Users/)[^\s\"']+")
 EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
-PHONE_RE = re.compile(r"(?<!\d)(?:\+?\d{1,3}[-.\s]?)?(?:\d{2,4}[-.\s]?){2,3}\d{3,4}(?!\d)")
+PHONE_RE = re.compile(r"(?<!\d)(?:\+?\d{1,3}[-.\s])?(?:\d{2,4}[-.\s]){2,3}\d{3,4}(?!\d)")
 SECRET_RE = re.compile(r"(sk-[A-Za-z0-9_-]{16,}|Bearer\s+[A-Za-z0-9._-]+|api[_-]?key\s*[:=])", re.I)
 PRIVATE_REASONING_KEYS = {
     "chain_of_thought",
@@ -177,4 +178,156 @@ def audit_learning_ledger(ledger: dict[str, Any], *, objective: str | None = Non
             "deletion_requires_manual_audit": True,
         },
         "issues": issues,
+    }
+
+
+def _selected_active_context_ids(active_memory_route: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(active_memory_route, dict):
+        return {
+            "selected_experience_ids": [],
+            "selected_node_ids": [],
+            "selected_count": 0,
+            "route_is_degraded": True,
+        }
+    selected_memories = active_memory_route.get("selected_memories", [])
+    selected_nodes = active_memory_route.get("selected_nodes", [])
+    selected_experience_ids = [
+        str(item.get("experience_id"))
+        for item in selected_memories
+        if isinstance(item, dict) and item.get("experience_id")
+    ]
+    selected_node_ids = [
+        str(item.get("id"))
+        for item in selected_nodes
+        if isinstance(item, dict) and item.get("id")
+    ]
+    selected_node_ids.extend(str(item) for item in active_memory_route.get("selected_node_ids", []) if item)
+    selected_node_ids = list(dict.fromkeys(selected_node_ids))
+    selected_count = max(
+        len(selected_experience_ids),
+        len(selected_node_ids),
+        len(selected_memories) if isinstance(selected_memories, list) else 0,
+        len(selected_nodes) if isinstance(selected_nodes, list) else 0,
+    )
+    memory_health = active_memory_route.get("memory_health", {})
+    route_is_degraded = (
+        bool(memory_health.get("route_is_degraded"))
+        if isinstance(memory_health, dict) and "route_is_degraded" in memory_health
+        else selected_count == 0
+    )
+    return {
+        "selected_experience_ids": selected_experience_ids,
+        "selected_node_ids": selected_node_ids,
+        "selected_count": selected_count,
+        "route_is_degraded": route_is_degraded,
+    }
+
+
+def build_memory_lifecycle_status_card(
+    ledger: dict[str, Any],
+    *,
+    active_memory_route: dict[str, Any] | None = None,
+    objective: str | None = None,
+    learning_update: dict[str, Any] | None = None,
+    source: str = "active_memory_route",
+) -> dict[str, Any]:
+    """Build a compact operator card for memory routing and write safety."""
+
+    route_lifecycle = (
+        active_memory_route.get("memory_lifecycle", {})
+        if isinstance(active_memory_route, dict) and isinstance(active_memory_route.get("memory_lifecycle"), dict)
+        else {}
+    )
+    lifecycle = route_lifecycle if route_lifecycle.get("schema") == MEMORY_LIFECYCLE_SCHEMA else audit_learning_ledger(ledger, objective=objective)
+    selected = _selected_active_context_ids(active_memory_route)
+    checks = lifecycle.get("checks", {}) if isinstance(lifecycle.get("checks"), dict) else {}
+    retrieval_quality = (
+        lifecycle.get("retrieval_quality", {}) if isinstance(lifecycle.get("retrieval_quality"), dict) else {}
+    )
+    issues = lifecycle.get("issues", []) if isinstance(lifecycle.get("issues"), list) else []
+    blocking = [issue for issue in issues if isinstance(issue, dict) and issue.get("severity") == "error"]
+    learning = learning_update if isinstance(learning_update, dict) else {}
+    quarantined_excluded = checks.get("quarantined_excluded_from_active_context") is True
+    if lifecycle.get("status") == "failed" or blocking or not quarantined_excluded:
+        status = "failed"
+    elif issues or selected["route_is_degraded"]:
+        status = "needs_review"
+    else:
+        status = "passed"
+
+    return {
+        "schema": MEMORY_LIFECYCLE_STATUS_CARD_SCHEMA,
+        "status": status,
+        "source": source,
+        "owner": ledger.get("owner"),
+        "created_at_utc": _now(),
+        "objective_supplied": bool(objective),
+        "counts": {
+            "promoted": lifecycle.get("counts", {}).get("promoted", len(ledger.get("promoted_experiences", [])))
+            if isinstance(lifecycle.get("counts"), dict)
+            else len(ledger.get("promoted_experiences", [])),
+            "quarantined": lifecycle.get("counts", {}).get("quarantined", len(ledger.get("quarantined_experiences", [])))
+            if isinstance(lifecycle.get("counts"), dict)
+            else len(ledger.get("quarantined_experiences", [])),
+            "selected": selected["selected_count"],
+            "issues": len(issues),
+        },
+        "active_context": {
+            "selected_experience_ids": selected["selected_experience_ids"],
+            "selected_node_ids": selected["selected_node_ids"],
+            "selected_count": selected["selected_count"],
+            "quarantined_excluded": quarantined_excluded,
+            "compression_policy": (
+                active_memory_route.get("compression_policy")
+                if isinstance(active_memory_route, dict)
+                else None
+            )
+            or "summaries_and_skills_only",
+            "route_is_degraded": selected["route_is_degraded"],
+        },
+        "learning": {
+            "decision": learning.get("decision", "not_requested"),
+            "ledger_write_performed": bool(learning.get("ledger_write_performed", False)),
+            "latest_experience_id": learning.get("latest_experience_id"),
+            "automatic_promotion_performed": bool(learning.get("automatic_promotion_performed", False)),
+            "promotion_gate": "explicit_review_or_learn_from_chat_request_required",
+        },
+        "hygiene": {
+            "private_reasoning_trace_not_stored": checks.get("private_reasoning_trace_not_stored"),
+            "local_absolute_paths_redacted": checks.get("local_absolute_paths_redacted"),
+            "secret_like_values_absent": checks.get("secret_like_values_absent"),
+            "raw_provider_payload_saved": False,
+            "full_session_replay_stored": False,
+        },
+        "retrieval_quality": retrieval_quality,
+        "issues": issues,
+        "user_visible_summary": {
+            "ko": (
+                "기억 경로가 통과했습니다. 검증된 요약 기억만 active context에 들어갔고 격리 기억은 제외됐습니다."
+                if status == "passed"
+                else "기억 경로 검토가 필요합니다. 선택된 기억, 격리 제외, 개인정보/secret 위생을 확인하세요."
+                if status == "needs_review"
+                else "기억 생명주기 검사가 실패했습니다. 오류가 해결되기 전에는 이 기억 경로를 사용하지 마세요."
+            ),
+            "en": (
+                "Memory routing passed. Only reviewed summary memory entered active context, while quarantined memory stayed excluded."
+                if status == "passed"
+                else "Memory routing needs review. Inspect selected memory, quarantine exclusion, and privacy/secret hygiene."
+                if status == "needs_review"
+                else "Memory lifecycle checks failed. Do not use this memory route until the errors are resolved."
+            ),
+        },
+        "next_actions": (
+            ["Use this active memory route for the current task and keep future writes review-gated."]
+            if status == "passed"
+            else [
+                "Review lifecycle issues before promoting or exporting memory.",
+                "Run memory lifecycle maintenance if quarantine, deletion, or recovery evidence is stale.",
+            ]
+            if status == "needs_review"
+            else [
+                "Remove or redact unsafe memory fields, then rebuild the active route.",
+                "Do not promote new memory until lifecycle checks pass.",
+            ]
+        ),
     }

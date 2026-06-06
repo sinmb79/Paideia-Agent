@@ -456,6 +456,17 @@ class TalentFoundryMemorySubstrateChatTests(unittest.TestCase):
         self.assertEqual(chat["chat_execution_trace"][-1]["action"], "chat_runtime_status_card_recorded")
         self.assertEqual(chat["chat_runtime_status_card"]["status"], "completed_live")
         self.assertEqual(chat["chat_runtime_status_card"]["learning"]["decision"], "promoted")
+        self.assertEqual(
+            chat["memory_lifecycle_status_card"]["schema"],
+            "paideia-memory-lifecycle-status-card/v1",
+        )
+        self.assertEqual(chat["memory_lifecycle_status_card"]["source"], "chat_turn")
+        self.assertEqual(chat["memory_lifecycle_status_card"]["learning"]["decision"], "promoted")
+        self.assertTrue(chat["memory_lifecycle_status_card"]["active_context"]["quarantined_excluded"])
+        self.assertEqual(
+            chat["chat_runtime_status_card"]["memory_lifecycle"]["status"],
+            chat["memory_lifecycle_status_card"]["status"],
+        )
         self.assertEqual(ledger["promoted_experiences"][-1]["source"], "chat_turn")
         self.assertIn("conversation_context_learning", ledger["promoted_experiences"][-1]["promoted_skills"])
         self.assertTrue(
@@ -687,6 +698,13 @@ class TalentFoundryMemorySubstrateChatTests(unittest.TestCase):
         self.assertFalse(chat["chat_runtime_status_card"]["fallback"]["presented_as_live"])
         self.assertEqual(chat["chat_runtime_status_card"]["learning"]["decision"], "skipped_provider_not_ready")
         self.assertIn("live provider 설정이 필요", chat["chat_runtime_status_card"]["user_visible_summary"]["ko"])
+        self.assertEqual(
+            chat["memory_lifecycle_status_card"]["schema"],
+            "paideia-memory-lifecycle-status-card/v1",
+        )
+        self.assertEqual(chat["memory_lifecycle_status_card"]["learning"]["decision"], "skipped_provider_not_ready")
+        self.assertFalse(chat["memory_lifecycle_status_card"]["learning"]["ledger_write_performed"])
+        self.assertTrue(chat["memory_lifecycle_status_card"]["active_context"]["quarantined_excluded"])
         self.assertNotIn("fallback_used", chat["llm_runtime_result"])
         self.assertEqual(chat["chat_learning_update"]["decision"], "skipped_provider_not_ready")
         self.assertFalse(chat["chat_learning_update"]["ledger_write_performed"])
@@ -754,6 +772,13 @@ class TalentFoundryMemorySubstrateChatTests(unittest.TestCase):
         self.assertEqual(chat["chat_runtime_status_card"]["provider_preflight"]["status"], "needs_configuration")
         self.assertEqual(chat["chat_runtime_status_card"]["learning"]["decision"], "quarantined")
         self.assertIn("deterministic fallback", chat["chat_runtime_status_card"]["user_visible_summary"]["en"])
+        self.assertEqual(
+            chat["memory_lifecycle_status_card"]["schema"],
+            "paideia-memory-lifecycle-status-card/v1",
+        )
+        self.assertEqual(chat["memory_lifecycle_status_card"]["learning"]["decision"], "quarantined")
+        self.assertTrue(chat["memory_lifecycle_status_card"]["learning"]["ledger_write_performed"])
+        self.assertTrue(chat["memory_lifecycle_status_card"]["active_context"]["quarantined_excluded"])
         self.assertEqual(chat["chat_learning_update"]["decision"], "quarantined")
         self.assertEqual(ledger["quarantined_experiences"][-1]["source"], "chat_turn")
 

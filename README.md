@@ -699,7 +699,7 @@ Key files:
 - `learning_ledger.json`: verified learning experiences.
 - `reasoning_kibo.jsonl`: internal compatibility file for the Reasoning Ledger.
 
-The learning ledger carries a `memory_lifecycle` report. It records the write policy, promotion/quarantine criteria, manual deletion policy, recovery/migration posture, retrieval-quality status, and PII/secret/path hygiene checks. Quarantined experience is excluded from active context, and private reasoning traces remain forbidden.
+The learning ledger carries a `memory_lifecycle` report. It records the write policy, promotion/quarantine criteria, manual deletion policy, recovery/migration posture, retrieval-quality status, and PII/secret/path hygiene checks. Active memory routes and hired chat turns also include a `memory_lifecycle_status_card`, a compact operator view showing selected memory counts, quarantine exclusion, route degradation, learning-write decisions, and hygiene checks. Quarantined experience is excluded from active context, and private reasoning traces remain forbidden.
 
 Memory lifecycle operations are available through `maintain-hired-memory`:
 
