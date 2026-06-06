@@ -4434,6 +4434,7 @@ class TalentFoundryTests(unittest.TestCase):
             )
             employment_record = json.loads(hiring["employment_record"].read_text(encoding="utf-8"))
             registry_index = json.loads(hiring["registry_index"].read_text(encoding="utf-8"))
+            llm_connection_profile = json.loads(hiring["llm_connection_profile"].read_text(encoding="utf-8"))
 
         self.assertEqual(employment_record["schema"], "ai-talent-local-employment/v1")
         self.assertEqual(employment_record["employer"], "보스")
@@ -4441,6 +4442,12 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(employment_record["status"], "active")
         self.assertTrue(employment_record["growth_after_hire"]["continues"])
         self.assertEqual(employment_record["relationship"], "installed_ai_talent_hired_as_local_agent")
+        self.assertEqual(employment_record["entrypoints"]["llm_connection_profile"], "llm_connection_profile.json")
+        self.assertEqual(employment_record["llm_connection_profile"]["schema"], "paideia-llm-connection-profile/v1")
+        self.assertEqual(employment_record["llm_connection_profile"]["entrypoint"], "llm_connection_profile.json")
+        self.assertEqual(employment_record["llm_connection_profile"]["selected_engine"], "deterministic_local")
+        self.assertEqual(llm_connection_profile["schema"], "paideia-llm-connection-profile/v1")
+        self.assertFalse(llm_connection_profile["public_safe"]["network_call_performed"])
         self.assertIn(employment_record["employment_id"], {entry["employment_id"] for entry in registry_index["employments"]})
 
     def test_run_hired_agent_uses_installed_manifest_and_records_employment_context(self) -> None:
@@ -5949,11 +5956,14 @@ class TalentFoundryTests(unittest.TestCase):
                 llm_engine="deterministic_local",
             )
             employment_record = json.loads(hiring["employment_record"].read_text(encoding="utf-8"))
+            llm_connection_profile = json.loads(hiring["llm_connection_profile"].read_text(encoding="utf-8"))
 
         self.assertEqual(employment_record["llm_runtime"]["schema"], "ai-talent-llm-runtime/v1")
         self.assertEqual(employment_record["llm_runtime"]["identity_policy"], "application_engine_not_identity")
         self.assertEqual(employment_record["llm_runtime"]["engine"], "deterministic_local")
         self.assertEqual(employment_record["llm_runtime"]["network_access"], "blocked")
+        self.assertEqual(employment_record["llm_connection_profile"]["status"], "offline_ready_no_setup")
+        self.assertEqual(llm_connection_profile["selected_llm_service"]["engine"], "deterministic_local")
 
     def test_hire_installed_agent_uses_distinct_ids_for_distinct_llm_runtime_contracts(self) -> None:
         from ai22b.talent_foundry.demo import run_demo
@@ -5974,10 +5984,16 @@ class TalentFoundryTests(unittest.TestCase):
                 role="증권 리서치 에이전트",
                 llm_engine="bigram_local",
                 llm_model_path=str(Path(tmp) / "missing_bigram.json"),
+                record_name="employment_record.bigram.json",
             )
             second_record = json.loads(second["employment_record"].read_text(encoding="utf-8"))
 
         self.assertNotEqual(first_record["employment_id"], second_record["employment_id"])
+        self.assertEqual(first_record["entrypoints"]["llm_connection_profile"], "llm_connection_profile.json")
+        self.assertEqual(
+            second_record["entrypoints"]["llm_connection_profile"],
+            "employment_record.bigram.llm_connection_profile.json",
+        )
 
     def test_cli_install_package_command_writes_installed_manifest(self) -> None:
         from ai22b.talent_foundry.cli import main as cli_main

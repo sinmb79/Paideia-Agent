@@ -29,6 +29,7 @@ from ai22b.talent_foundry.llm_runtime import (
     build_llm_runtime_config,
     invoke_llm_application_engine,
 )
+from ai22b.talent_foundry.llm_onboarding import build_llm_connection_profile
 from ai22b.talent_foundry.onboarding_choices import resolve_chat_surface, resolve_llm_service
 from ai22b.talent_foundry.team import DEFAULT_TEAM_ROLES
 from ai22b.talent_foundry.workspace_agent import run_workspace_agent_from_manifest, run_workspace_agent_job_from_manifest
@@ -103,6 +104,45 @@ def _load_registry_index(registry_index_path: Path) -> dict[str, Any]:
     }
 
 
+def _llm_connection_profile_entrypoint(record_name: str) -> str:
+    stem = Path(record_name).stem or "employment_record"
+    if stem == "employment_record":
+        return "llm_connection_profile.json"
+    return f"{stem}.llm_connection_profile.json"
+
+
+def _summarize_llm_connection_profile(profile: dict[str, Any], *, entrypoint: str) -> dict[str, Any]:
+    setup = profile.get("setup_requirements", {})
+    public_safe = profile.get("public_safe", {})
+    selected = profile.get("selected_llm_service", {})
+    return {
+        "schema": profile.get("schema"),
+        "entrypoint": entrypoint,
+        "status": profile.get("status"),
+        "selected_engine": selected.get("engine") if isinstance(selected, dict) else None,
+        "selected_service_id": selected.get("service_id") if isinstance(selected, dict) else None,
+        "requires_live_check_before_agent_work": bool(
+            setup.get("requires_live_check_before_agent_work")
+        )
+        if isinstance(setup, dict)
+        else False,
+        "public_safe": {
+            "network_call_performed": bool(public_safe.get("network_call_performed"))
+            if isinstance(public_safe, dict)
+            else False,
+            "secret_values_exported": bool(public_safe.get("secret_values_exported"))
+            if isinstance(public_safe, dict)
+            else False,
+            "raw_provider_payload_saved": bool(public_safe.get("raw_provider_payload_saved"))
+            if isinstance(public_safe, dict)
+            else False,
+            "private_reasoning_trace": public_safe.get("private_reasoning_trace")
+            if isinstance(public_safe, dict)
+            else "do_not_store",
+        },
+    }
+
+
 def hire_installed_agent(
     installed_manifest_path: Path,
     *,
@@ -132,6 +172,16 @@ def hire_installed_agent(
         llm_model_path=llm_model_path,
     )
     selected_chat_surface = resolve_chat_surface(chat_surface)
+    llm_connection_profile_entrypoint = _llm_connection_profile_entrypoint(record_name)
+    llm_connection_profile_path = target_root / llm_connection_profile_entrypoint
+    llm_connection_profile = build_llm_connection_profile(
+        llm_service=selected_llm_service["service_id"],
+        llm_engine=selected_llm_service["engine"],
+        llm_model=selected_llm_service.get("selected_model"),
+        llm_model_path=selected_llm_service.get("selected_model_path"),
+        chat_surface=selected_chat_surface["id"],
+        output_path=llm_connection_profile_path,
+    )
     employment_id = _employment_id(
         install_id=installed_manifest["install_id"],
         employer=employer,
@@ -173,6 +223,7 @@ def hire_installed_agent(
             ),
             "life_trace": installed_manifest["entrypoints"].get("life_trace", "life_trace.jsonl"),
             "growth_profile": installed_manifest["entrypoints"].get("growth_profile", "growth_profile.json"),
+            "llm_connection_profile": llm_connection_profile_entrypoint,
             "chat_log": "employment_chat_log.jsonl",
             "last_chat": "last_hired_agent_chat.json",
             "run_log": "employment_run_log.jsonl",
@@ -199,6 +250,10 @@ def hire_installed_agent(
         "guardrails": agent_manifest.get("tool_policy", {}).get("blocked_tools", []),
         "llm_service": selected_llm_service,
         "chat_surface": selected_chat_surface,
+        "llm_connection_profile": _summarize_llm_connection_profile(
+            llm_connection_profile,
+            entrypoint=llm_connection_profile_entrypoint,
+        ),
         "llm_runtime": build_llm_runtime_config(
             engine=selected_llm_service["engine"],
             model_path=selected_llm_service.get("selected_model_path"),
@@ -241,6 +296,7 @@ def hire_installed_agent(
     return {
         "employment_record": employment_record_path,
         "registry_index": registry_index_path,
+        "llm_connection_profile": llm_connection_profile_path,
     }
 
 

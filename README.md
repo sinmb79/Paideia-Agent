@@ -466,6 +466,8 @@ ai22b-talent-foundry build-llm-connection-profile `
 
 The profile records `setup_requirements`, `readiness`, `verification_sequence`, `daily_use_commands`, `fail_closed_expectation`, and `data_policy`. API providers show the required environment-variable placeholder; local HTTP providers such as Ollama show the localhost endpoint. The file itself is generated without a live provider call.
 
+Hiring an installed talent also writes the same no-network profile next to the `employment_record.json` and links it through `entrypoints.llm_connection_profile`. This keeps the selected LLM/chat setup attached to the hired agent, not only to the onboarding session, so later `run-hired-agent`, chat, workspace, and dataflow checks can be audited from the employment record folder.
+
 Before hiring or running a talent with a live/local provider, run the provider doctor:
 
 ```powershell

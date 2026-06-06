@@ -252,6 +252,8 @@ ai22b-talent-foundry build-llm-connection-profile `
 
 profile에는 `setup_requirements`, `readiness`, `verification_sequence`, `daily_use_commands`, `fail_closed_expectation`, `data_policy`가 들어갑니다. API provider는 필요한 환경변수 placeholder를, Ollama 같은 로컬 HTTP provider는 localhost endpoint를 보여줍니다. 이 파일을 만드는 동안 live provider 호출은 발생하지 않습니다.
 
+설치된 인재를 고용할 때도 같은 no-network profile이 `employment_record.json` 옆에 자동으로 생성되고 `entrypoints.llm_connection_profile`로 연결됩니다. 그래서 선택한 LLM/채팅 설정이 온보딩 세션에만 남지 않고, 고용된 에이전트 폴더에서 `run-hired-agent`, 채팅, workspace, dataflow 검증까지 추적할 수 있습니다.
+
 live 또는 로컬 provider로 인재를 고용/실행하기 전에는 provider doctor를 먼저 실행할 수 있습니다.
 
 ```powershell

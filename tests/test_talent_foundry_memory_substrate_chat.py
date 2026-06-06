@@ -32,6 +32,9 @@ class TalentFoundryMemorySubstrateChatTests(unittest.TestCase):
             )
             installed_manifest = json.loads(artifacts["installed_agent_manifest"].read_text(encoding="utf-8"))
             employment_record = json.loads(artifacts["employment_record"].read_text(encoding="utf-8"))
+            hired_llm_profile = json.loads(
+                artifacts["hired_llm_connection_profile"].read_text(encoding="utf-8")
+            )
 
         self.assertEqual(substrate["schema"], "ai-talent-memory-substrate/v1")
         self.assertEqual(substrate["agent"]["name"], "grham-쥬니어")
@@ -63,6 +66,17 @@ class TalentFoundryMemorySubstrateChatTests(unittest.TestCase):
         self.assertIn("developmental_ecology", employment_record["entrypoints"])
         self.assertIn("life_trace", employment_record["entrypoints"])
         self.assertIn("growth_profile", employment_record["entrypoints"])
+        self.assertIn("llm_connection_profile", employment_record["entrypoints"])
+        self.assertEqual(hired_llm_profile["schema"], "paideia-llm-connection-profile/v1")
+        self.assertEqual(
+            employment_record["llm_connection_profile"]["entrypoint"],
+            employment_record["entrypoints"]["llm_connection_profile"],
+        )
+        self.assertEqual(
+            employment_record["llm_connection_profile"]["selected_engine"],
+            hired_llm_profile["selected_llm_service"]["engine"],
+        )
+        self.assertFalse(hired_llm_profile["public_safe"]["network_call_performed"])
 
     def test_chat_turn_uses_codex_as_engine_and_local_kibo_as_identity(self) -> None:
         from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
