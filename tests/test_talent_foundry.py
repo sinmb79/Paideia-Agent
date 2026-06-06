@@ -4435,6 +4435,9 @@ class TalentFoundryTests(unittest.TestCase):
             employment_record = json.loads(hiring["employment_record"].read_text(encoding="utf-8"))
             registry_index = json.loads(hiring["registry_index"].read_text(encoding="utf-8"))
             llm_connection_profile = json.loads(hiring["llm_connection_profile"].read_text(encoding="utf-8"))
+            agent_id_payload = json.loads(hiring["agent_id_card_payload"].read_text(encoding="utf-8"))
+            agent_identity_envelope = json.loads(hiring["agent_identity_envelope"].read_text(encoding="utf-8"))
+            agent_identity_verification = json.loads(hiring["agent_identity_verification"].read_text(encoding="utf-8"))
 
         self.assertEqual(employment_record["schema"], "ai-talent-local-employment/v1")
         self.assertEqual(employment_record["employer"], "보스")
@@ -4448,6 +4451,21 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(employment_record["llm_connection_profile"]["selected_engine"], "deterministic_local")
         self.assertEqual(llm_connection_profile["schema"], "paideia-llm-connection-profile/v1")
         self.assertFalse(llm_connection_profile["public_safe"]["network_call_performed"])
+        self.assertEqual(employment_record["entrypoints"]["agent_id_card_payload"], "agent_id_card_payload.json")
+        self.assertEqual(employment_record["entrypoints"]["agent_identity_envelope"], "agent_identity_envelope.json")
+        self.assertEqual(employment_record["entrypoints"]["agent_identity_verification"], "agent_identity_verification.json")
+        self.assertEqual(agent_id_payload["schema"], "ai-talent-agent-id-card-payload/v1")
+        self.assertEqual(agent_identity_envelope["version"], "ail.v1")
+        self.assertEqual(agent_identity_envelope["ail_id"], None)
+        self.assertEqual(agent_identity_envelope["delegation"]["task_ref"], "employment:" + employment_record["employment_id"])
+        self.assertTrue(agent_identity_verification["valid"])
+        self.assertEqual(agent_identity_verification["status"], "passed")
+        self.assertFalse(agent_identity_verification["network_action_performed"])
+        self.assertEqual(employment_record["agent_identity"]["local_verification"]["status"], "passed")
+        self.assertEqual(
+            employment_record["agent_identity"]["agent_identity_layer"]["registration_state"],
+            "local_unregistered",
+        )
         self.assertIn(employment_record["employment_id"], {entry["employment_id"] for entry in registry_index["employments"]})
 
     def test_run_hired_agent_uses_installed_manifest_and_records_employment_context(self) -> None:

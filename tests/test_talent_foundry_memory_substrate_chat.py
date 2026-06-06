@@ -35,6 +35,11 @@ class TalentFoundryMemorySubstrateChatTests(unittest.TestCase):
             hired_llm_profile = json.loads(
                 artifacts["hired_llm_connection_profile"].read_text(encoding="utf-8")
             )
+            agent_id_payload = json.loads(artifacts["agent_id_card_payload"].read_text(encoding="utf-8"))
+            agent_identity_envelope = json.loads(artifacts["agent_identity_envelope"].read_text(encoding="utf-8"))
+            agent_identity_verification = json.loads(
+                artifacts["agent_identity_verification"].read_text(encoding="utf-8")
+            )
 
         self.assertEqual(substrate["schema"], "ai-talent-memory-substrate/v1")
         self.assertEqual(substrate["agent"]["name"], "grham-쥬니어")
@@ -77,6 +82,21 @@ class TalentFoundryMemorySubstrateChatTests(unittest.TestCase):
             hired_llm_profile["selected_llm_service"]["engine"],
         )
         self.assertFalse(hired_llm_profile["public_safe"]["network_call_performed"])
+        self.assertIn("agent_id_card_payload", employment_record["entrypoints"])
+        self.assertIn("agent_identity_envelope", employment_record["entrypoints"])
+        self.assertIn("agent_identity_verification", employment_record["entrypoints"])
+        self.assertEqual(agent_id_payload["schema"], "ai-talent-agent-id-card-payload/v1")
+        self.assertEqual(agent_identity_envelope["version"], "ail.v1")
+        self.assertEqual(
+            agent_identity_envelope["delegation"]["task_ref"],
+            "employment:" + employment_record["employment_id"],
+        )
+        self.assertEqual(agent_identity_verification["status"], "passed")
+        self.assertFalse(agent_identity_verification["network_action_performed"])
+        self.assertEqual(
+            employment_record["agent_identity"]["agent_identity_layer"]["registration_state"],
+            "local_unregistered",
+        )
 
     def test_chat_turn_uses_codex_as_engine_and_local_kibo_as_identity(self) -> None:
         from ai22b.talent_foundry.blueprint import create_agent_training_blueprint

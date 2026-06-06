@@ -415,6 +415,9 @@ def materialize_training_blueprint(
     artifacts["employment_record"] = hiring["employment_record"]
     artifacts["employment_registry"] = hiring["registry_index"]
     artifacts["hired_llm_connection_profile"] = hiring["llm_connection_profile"]
+    artifacts["agent_id_card_payload"] = hiring["agent_id_card_payload"]
+    artifacts["agent_identity_envelope"] = hiring["agent_identity_envelope"]
+    artifacts["agent_identity_verification"] = hiring["agent_identity_verification"]
     installed_root = artifacts["employment_record"].parent
     artifacts["hired_agent_run"] = installed_root / "last_hired_agent_run.json"
     artifacts["hired_dataflow_workspace"] = installed_root / "agent_dataflow_workspace"
