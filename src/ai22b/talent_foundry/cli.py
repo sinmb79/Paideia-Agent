@@ -56,6 +56,7 @@ from ai22b.talent_foundry.llm_runtime import (
 from ai22b.talent_foundry.llm_onboarding import build_llm_onboarding_checklist, build_llm_provider_matrix
 from ai22b.talent_foundry.memory_substrate import run_chat_turn_from_employment
 from ai22b.talent_foundry.onboarding import run_agent_onboarding
+from ai22b.talent_foundry.onboarding_doctor import doctor_onboarding_session
 from ai22b.talent_foundry.onboarding_choices import (
     DEFAULT_CHAT_SURFACE_ID,
     chat_surface_ids,
@@ -212,6 +213,18 @@ def _build_parser() -> argparse.ArgumentParser:
     onboard_wizard.add_argument("--answers", help="JSON file with console answers for non-interactive runs.")
     onboard_wizard.add_argument("--output-dir", default=str(DEFAULT_RUN_DIR / "console_onboarding"))
     onboard_wizard.add_argument("--output")
+
+    onboarding_doctor = subparsers.add_parser(
+        "doctor-onboarding-session",
+        help="Verify a generated Paideia onboarding session, LLM matrix, selected checklist, config, and local policy.",
+    )
+    onboarding_doctor.add_argument("--session", required=True)
+    onboarding_doctor.add_argument("--output", required=True)
+    onboarding_doctor.add_argument(
+        "--strict",
+        action="store_true",
+        help="Return exit code 2 when the onboarding doctor report does not pass.",
+    )
 
     onboard = subparsers.add_parser(
         "onboard-agent",
@@ -1021,6 +1034,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             mode=mode,
         )
         print(str(output_path))
+        return 0
+
+    if args.command == "doctor-onboarding-session":
+        report = doctor_onboarding_session(
+            Path(args.session),
+            output_path=Path(args.output),
+        )
+        print(str(Path(args.output)))
+        if args.strict and not report.get("passed"):
+            return 2
         return 0
 
     if args.command == "onboard-agent":

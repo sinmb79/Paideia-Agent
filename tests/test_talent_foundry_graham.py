@@ -351,6 +351,13 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             config = json.loads(Path(session["artifacts"]["paideia_onboarding_config"]).read_text(encoding="utf-8"))
             provider_matrix = json.loads(Path(session["artifacts"]["llm_provider_matrix"]).read_text(encoding="utf-8"))
             llm_checklist = json.loads(Path(session["artifacts"]["llm_onboarding_checklist"]).read_text(encoding="utf-8"))
+            doctor_path = output_dir / "onboarding_doctor.json"
+            from ai22b.talent_foundry.onboarding_doctor import doctor_onboarding_session
+
+            doctor = doctor_onboarding_session(
+                Path(session["artifacts"]["console_session"]),
+                output_path=doctor_path,
+            )
             identity_payload = json.loads(Path(session["artifacts"]["agent_id_card_payload"]).read_text(encoding="utf-8"))
             identity_envelope = json.loads(Path(session["artifacts"]["agent_identity_envelope"]).read_text(encoding="utf-8"))
             rollouts = json.loads(Path(session["artifacts"]["simulation_rollouts"]).read_text(encoding="utf-8"))
@@ -366,6 +373,15 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertEqual(llm_checklist["schema"], "paideia-llm-onboarding-checklist/v1")
         self.assertEqual(session["onboarding_summary"]["llm_provider_matrix"]["schema"], provider_matrix["schema"])
         self.assertFalse(session["onboarding_summary"]["llm_provider_matrix"]["network_call_performed"])
+        self.assertEqual(doctor["schema"], "paideia-onboarding-session-doctor/v1")
+        self.assertTrue(doctor["passed"])
+        self.assertEqual(doctor["summary"]["failed_count"], 0)
+        self.assertFalse(doctor["public_safe"]["network_call_performed"])
+        check_by_id = {item["id"]: item for item in doctor["checks"]}
+        self.assertTrue(check_by_id["llm_provider_matrix_valid"]["passed"])
+        self.assertTrue(check_by_id["llm_onboarding_checklist_valid"]["passed"])
+        self.assertTrue(check_by_id["config_links_llm_artifacts"]["passed"])
+        self.assertTrue(check_by_id["wizard_health_passed"]["passed"])
         self.assertEqual(config["gateway"]["mode"], "local_loopback")
         self.assertEqual(config["channels"]["external_channels"], "disabled_until_explicit_configuration")
         self.assertEqual(identity_payload["schema"], "ai-talent-agent-id-card-payload/v1")

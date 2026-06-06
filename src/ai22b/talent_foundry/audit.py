@@ -125,6 +125,7 @@ REQUIRED_LLM_SERVICE_IDS = {
 REQUIRED_PUBLIC_PROGRAM_COMMANDS = {
     "blueprint",
     "list-llm-services",
+    "doctor-onboarding-session",
     "start-console",
     "onboard-agent",
     "build-llm-onboarding-checklist",

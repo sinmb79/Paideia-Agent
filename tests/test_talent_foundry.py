@@ -3479,6 +3479,7 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertTrue(employment_record_exists)
 
     def test_guided_console_session_runs_onboarding_from_answers(self) -> None:
+        from ai22b.talent_foundry.cli import main as cli_main
         from ai22b.talent_foundry.console import run_console_session
 
         answers = {
@@ -3496,10 +3497,22 @@ class TalentFoundryTests(unittest.TestCase):
                 output_dir=output_dir,
                 output_path=output_dir / "console_session.json",
             )
+            doctor_path = output_dir / "onboarding_doctor.json"
+            doctor_exit_code = cli_main(
+                [
+                    "doctor-onboarding-session",
+                    "--session",
+                    session["artifacts"]["console_session"],
+                    "--strict",
+                    "--output",
+                    str(doctor_path),
+                ]
+            )
             saved_session = json.loads(Path(session["artifacts"]["console_session"]).read_text(encoding="utf-8"))
             onboarding = json.loads(Path(session["artifacts"]["onboarding_session"]).read_text(encoding="utf-8"))
             provider_matrix = json.loads(Path(session["artifacts"]["llm_provider_matrix"]).read_text(encoding="utf-8"))
             llm_checklist = json.loads(Path(session["artifacts"]["llm_onboarding_checklist"]).read_text(encoding="utf-8"))
+            doctor = json.loads(doctor_path.read_text(encoding="utf-8"))
             artifact_exists = {
                 key: Path(session["artifacts"][key]).exists()
                 for key in [
@@ -3514,6 +3527,10 @@ class TalentFoundryTests(unittest.TestCase):
             }
 
         self.assertEqual(session["schema"], "ai-talent-guided-console-session/v1")
+        self.assertEqual(doctor_exit_code, 0)
+        self.assertEqual(doctor["schema"], "paideia-onboarding-session-doctor/v1")
+        self.assertTrue(doctor["passed"])
+        self.assertEqual(doctor["summary"]["failed_count"], 0)
         self.assertEqual(saved_session["status"], "hired_agent_first_goal_cycle_completed")
         self.assertEqual(session["mode"], "answers_file")
         question_ids = [question["id"] for question in session["questions"]]

@@ -126,6 +126,15 @@ ai22b-talent-foundry onboard
 
 이 wizard는 기존 설정 감지, QuickStart/Advanced, Model/Auth, Workspace, Gateway/Channels, Skills, Education Path, Runtime, Agent Identity, Health Check, Finish 순서로 진행합니다. 실행 결과에는 `llm_provider_matrix.json`와 선택 provider 체크리스트가 함께 남습니다.
 
+생성된 wizard 세션과 health artifact는 다음 명령으로 다시 검증할 수 있습니다.
+
+```powershell
+ai22b-talent-foundry doctor-onboarding-session `
+  --session .\console_session.json `
+  --strict `
+  --output .\onboarding_doctor.json
+```
+
 전체 온보딩을 실행하기 전에 선택 가능한 LLM 서비스 전체와 준비 상태를 먼저 볼 수 있습니다.
 
 ```powershell

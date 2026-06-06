@@ -181,6 +181,15 @@ This wizard uses config detection, QuickStart/Advanced mode, Model/Auth, Workspa
 
 This sample first selects the LLM service and chat surface, writes `llm_provider_matrix.json` plus a selected-provider checklist, then lets that selected LLM act as the curriculum researcher for the Graham-inspired securities research track.
 
+Verify a generated wizard session and its health artifacts:
+
+```powershell
+ai22b-talent-foundry doctor-onboarding-session `
+  --session .\console_session.json `
+  --strict `
+  --output .\onboarding_doctor.json
+```
+
 List every selectable LLM service and its no-network readiness posture:
 
 ```powershell
