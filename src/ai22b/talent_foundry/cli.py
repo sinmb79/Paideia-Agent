@@ -53,7 +53,7 @@ from ai22b.talent_foundry.llm_runtime import (
     doctor_llm_provider,
     run_llm_application_smoke,
 )
-from ai22b.talent_foundry.llm_onboarding import build_llm_onboarding_checklist
+from ai22b.talent_foundry.llm_onboarding import build_llm_onboarding_checklist, build_llm_provider_matrix
 from ai22b.talent_foundry.memory_substrate import run_chat_turn_from_employment
 from ai22b.talent_foundry.onboarding import run_agent_onboarding
 from ai22b.talent_foundry.onboarding_choices import (
@@ -151,6 +151,13 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     list_role_models_command.add_argument("--domain")
     list_role_models_command.add_argument("--output")
+
+    list_llm_services_command = subparsers.add_parser(
+        "list-llm-services",
+        help="List selectable LLM services with no-network readiness and exact first-run commands.",
+    )
+    list_llm_services_command.add_argument("--chat-surface", default=DEFAULT_CHAT_SURFACE_ID, choices=chat_surface_ids())
+    list_llm_services_command.add_argument("--output", required=True)
 
     owner_intake = subparsers.add_parser(
         "prepare-owner-self-extension-intake",
@@ -943,6 +950,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0
+
+    if args.command == "list-llm-services":
+        matrix = build_llm_provider_matrix(
+            chat_surface=args.chat_surface,
+            output_path=Path(args.output),
+        )
+        print(str(Path(args.output)))
+        return 0 if matrix.get("schema") else 1
 
     if args.command == "prepare-owner-self-extension-intake":
         result = build_owner_self_extension_intake(

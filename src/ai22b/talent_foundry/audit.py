@@ -124,6 +124,7 @@ REQUIRED_LLM_SERVICE_IDS = {
 }
 REQUIRED_PUBLIC_PROGRAM_COMMANDS = {
     "blueprint",
+    "list-llm-services",
     "start-console",
     "onboard-agent",
     "build-llm-onboarding-checklist",
@@ -167,6 +168,7 @@ REQUIRED_PUBLIC_PROGRAM_LIFECYCLE = {
 REQUIRED_PUBLIC_PROGRAM_ROLES = {"education_committee", "home_care", "oversight_committee"}
 PUBLIC_SAFE_FIRST_RUN_COMMANDS = {
     "list-role-models",
+    "list-llm-services",
     "build-llm-onboarding-checklist",
     "doctor-llm-provider",
     "run-llm-application-smoke",

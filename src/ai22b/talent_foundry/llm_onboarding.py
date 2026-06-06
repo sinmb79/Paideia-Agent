@@ -14,6 +14,7 @@ from ai22b.talent_foundry.onboarding_choices import (
     DEFAULT_CHAT_SURFACE_ID,
     DEFAULT_LLM_SERVICE_ID,
     EXTERNAL_API_ENGINES,
+    LLM_SERVICE_CATALOG,
     LOCAL_HTTP_ENGINES,
     LOCAL_MODEL_ENGINES,
     resolve_chat_surface,
@@ -22,6 +23,7 @@ from ai22b.talent_foundry.onboarding_choices import (
 
 
 LLM_ONBOARDING_CHECKLIST_SCHEMA = "paideia-llm-onboarding-checklist/v1"
+LLM_PROVIDER_MATRIX_SCHEMA = "paideia-llm-provider-matrix/v1"
 
 
 def _write_json(path: Path, data: dict[str, Any]) -> None:
@@ -265,3 +267,112 @@ def build_llm_onboarding_checklist(
     if output_path is not None:
         _write_json(output_path, checklist)
     return checklist
+
+
+def build_llm_provider_matrix(
+    *,
+    chat_surface: str | None = DEFAULT_CHAT_SURFACE_ID,
+    output_path: Path | None = None,
+) -> dict[str, Any]:
+    """Build a public-safe matrix of all selectable LLM providers.
+
+    This is the OpenClaw-style first screen in JSON form: it lets an owner see
+    every selectable language engine, its readiness posture, and the exact next
+    commands before choosing one. It intentionally performs no live checks.
+    """
+
+    services: list[dict[str, Any]] = []
+    status_counts: dict[str, int] = {}
+    live_required_count = 0
+    for item in LLM_SERVICE_CATALOG:
+        checklist = build_llm_onboarding_checklist(
+            llm_service=item["id"],
+            chat_surface=chat_surface,
+        )
+        command_by_id = {command["id"]: command for command in checklist["command_plan"]}
+        service = checklist["selected_llm_service"]
+        live_required = bool(
+            command_by_id.get("provider_doctor_live_check", {}).get("required_before_live")
+            or command_by_id.get("agent_runtime_live_smoke", {}).get("required_before_agent_work")
+        )
+        if live_required:
+            live_required_count += 1
+        status = checklist["status"]
+        status_counts[status] = status_counts.get(status, 0) + 1
+        services.append(
+            {
+                "service_id": service["service_id"],
+                "label": service["label"],
+                "engine": service["engine"],
+                "status": status,
+                "researcher_fit": service.get("researcher_fit"),
+                "default_chat_mode": service.get("default_chat_mode"),
+                "network_access": service.get("network_access"),
+                "runtime_readiness": service.get("runtime_readiness"),
+                "model_policy": service.get("model_policy"),
+                "requires": service.get("requires", []),
+                "privacy_note": service.get("privacy_note"),
+                "cost_warning": service.get("cost_warning"),
+                "doctor_command": command_by_id["provider_doctor_no_network"]["command"],
+                "live_check_command": command_by_id["provider_doctor_live_check"]["command"],
+                "application_smoke_command": command_by_id["application_engine_no_network_smoke"]["command"],
+                "application_live_smoke_command": command_by_id["application_engine_live_smoke"]["command"],
+                "agent_runtime_smoke_command": command_by_id["agent_runtime_no_network_smoke"]["command"],
+                "agent_runtime_live_smoke_command": command_by_id["agent_runtime_live_smoke"]["command"],
+                "chat_command": command_by_id["chat_surface_first_turn"]["command"],
+                "live_required_before_agent_work": live_required,
+                "blocking_checks": checklist["readiness"].get("blocking_checks", []),
+                "next_actions": checklist["readiness"].get("next_actions", []),
+                "data_transfer_policy": service.get("data_transfer_policy", {}),
+                "failure_policy": service.get("failure_policy", {}),
+            }
+        )
+
+    selected_chat = resolve_chat_surface(chat_surface)
+    matrix = {
+        "schema": LLM_PROVIDER_MATRIX_SCHEMA,
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "selected_chat_surface": selected_chat,
+        "summary": {
+            "service_count": len(services),
+            "status_counts": status_counts,
+            "live_required_count": live_required_count,
+            "no_network_service_ids": [
+                item["service_id"]
+                for item in services
+                if item["network_access"] == "blocked"
+            ],
+            "localhost_service_ids": [
+                item["service_id"]
+                for item in services
+                if item["network_access"] == "localhost_only"
+            ],
+            "external_api_service_ids": [
+                item["service_id"]
+                for item in services
+                if str(item["network_access"]).startswith("external_api")
+                or item["service_id"] == "openai_chatgpt_codex"
+            ],
+        },
+        "selection_policy": {
+            "llm_is_identity": False,
+            "identity_source": "local_training_records_memory_substrate_and_reasoning_ledger",
+            "live_checks_require_explicit_command": True,
+            "default_network_call_performed": False,
+            "secret_values_exported": False,
+            "raw_provider_payload_saved": False,
+            "private_reasoning_trace": "do_not_store",
+        },
+        "services": services,
+        "public_safe": {
+            "network_call_performed": False,
+            "live_check_performed": False,
+            "subprocess_executed": False,
+            "secret_values_exported": False,
+            "raw_provider_payload_saved": False,
+            "private_reasoning_trace": "do_not_store",
+        },
+    }
+    if output_path is not None:
+        _write_json(output_path, matrix)
+    return matrix

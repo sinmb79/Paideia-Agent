@@ -256,7 +256,7 @@ class GrahamTalentFoundryTests(unittest.TestCase):
 
     def test_onboarding_exposes_multi_provider_llms_and_role_model_choices(self) -> None:
         from ai22b.talent_foundry.console import questions_with_choices
-        from ai22b.talent_foundry.llm_onboarding import build_llm_onboarding_checklist
+        from ai22b.talent_foundry.llm_onboarding import build_llm_onboarding_checklist, build_llm_provider_matrix
         from ai22b.talent_foundry.llm_runtime import build_llm_runtime_config, invoke_llm_application_engine
         from ai22b.talent_foundry.onboarding_choices import LLM_SERVICE_CATALOG, llm_service_ids, resolve_llm_service
 
@@ -290,6 +290,15 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertTrue(commands["agent_runtime_live_smoke"]["required_before_agent_work"])
         self.assertIn("--live-check", commands["agent_runtime_live_smoke"]["command"])
         self.assertIn("OPENROUTER_API_KEY", json.dumps(checklist["readiness"], ensure_ascii=False))
+        matrix = build_llm_provider_matrix()
+        service_by_id = {item["service_id"]: item for item in matrix["services"]}
+        self.assertEqual(matrix["schema"], "paideia-llm-provider-matrix/v1")
+        self.assertEqual(matrix["summary"]["service_count"], len(LLM_SERVICE_CATALOG))
+        self.assertFalse(matrix["public_safe"]["network_call_performed"])
+        self.assertFalse(matrix["selection_policy"]["llm_is_identity"])
+        self.assertIn("openrouter_api", service_by_id)
+        self.assertIn("--live-check", service_by_id["openrouter_api"]["application_live_smoke_command"])
+        self.assertEqual(service_by_id["deterministic_local"]["status"], "offline_ready")
 
         config = build_llm_runtime_config(engine="openrouter_api", model="user-selected-model")
         result = invoke_llm_application_engine(
