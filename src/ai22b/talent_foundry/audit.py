@@ -33,6 +33,7 @@ from ai22b.talent_foundry.llm_runtime import (
 )
 from ai22b.talent_foundry.learning_loop import build_reasoning_kernel, create_learning_ledger
 from ai22b.talent_foundry.onboarding_choices import LLM_SERVICE_CATALOG
+from ai22b.talent_foundry.package_install_doctor import PACKAGE_INSTALL_DOCTOR_SCHEMA, doctor_package_install
 from ai22b.talent_foundry.role_models import list_role_models, summarize_role_model
 from ai22b.talent_foundry.runtime_benchmark import RUNTIME_OBSERVABILITY_COMPARISON_SCHEMA
 from ai22b.talent_foundry.source_sbom import SOURCE_SBOM_SCHEMA, build_source_sbom
@@ -127,6 +128,7 @@ REQUIRED_PUBLIC_PROGRAM_COMMANDS = {
     "list-llm-services",
     "doctor-onboarding-session",
     "doctor-first-run",
+    "doctor-package-install",
     "start-console",
     "onboard-agent",
     "build-llm-onboarding-checklist",
@@ -180,6 +182,7 @@ PUBLIC_SAFE_FIRST_RUN_COMMANDS = {
     "audit-public-release-readiness",
     "build-source-sbom",
     "doctor-first-run",
+    "doctor-package-install",
 }
 
 
@@ -1038,6 +1041,17 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
         if isinstance(source_sbom.get("release_readiness"), dict)
         else {}
     )
+    package_install_doctor = doctor_package_install(PROJECT_ROOT)
+    package_install_summary = (
+        package_install_doctor.get("summary", {})
+        if isinstance(package_install_doctor.get("summary"), dict)
+        else {}
+    )
+    package_install_public = (
+        package_install_doctor.get("public_safe", {})
+        if isinstance(package_install_doctor.get("public_safe"), dict)
+        else {}
+    )
     console_script_present = (
         'ai22b-talent-foundry = "ai22b.talent_foundry.cli:main"' in pyproject_text
         and "[project.scripts]" in pyproject_text
@@ -1149,6 +1163,15 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
         "source_sbom_subprocess_executed": source_sbom_policy.get("subprocess_executed"),
         "source_sbom_private_runtime_outputs_scanned": source_sbom_policy.get("private_runtime_outputs_scanned"),
         "source_sbom_not_vulnerability_scan": source_sbom_policy.get("not_a_vulnerability_scan"),
+        "package_install_doctor_schema": package_install_doctor.get("schema"),
+        "package_install_doctor_passed": package_install_doctor.get("passed"),
+        "package_install_doctor_status": package_install_doctor.get("status"),
+        "package_install_distribution_installed": package_install_summary.get("distribution_installed"),
+        "package_install_console_script_count": package_install_summary.get("console_script_count"),
+        "package_install_optional_group_count": package_install_summary.get("optional_group_count"),
+        "package_install_network_call_performed": package_install_public.get("network_call_performed"),
+        "package_install_subprocess_executed": package_install_public.get("subprocess_executed"),
+        "package_install_local_paths_exported": package_install_public.get("local_absolute_paths_exported"),
         "no_network_or_llm_by_default": (
             doctor.get("network_access") == "blocked"
             and doctor.get("live_check_requested") is False
@@ -1165,6 +1188,8 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
             and policy_runtime.get("llm_called") is False
             and source_sbom_policy.get("network_call_performed") is False
             and source_sbom_policy.get("subprocess_executed") is False
+            and package_install_public.get("network_call_performed") is False
+            and package_install_public.get("subprocess_executed") is False
         ),
     }
     passed = (
@@ -1242,6 +1267,17 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
         and details["source_sbom_subprocess_executed"] is False
         and details["source_sbom_private_runtime_outputs_scanned"] is False
         and details["source_sbom_not_vulnerability_scan"] is True
+        and details["package_install_doctor_schema"] == PACKAGE_INSTALL_DOCTOR_SCHEMA
+        and details["package_install_doctor_passed"] is True
+        and details["package_install_doctor_status"] == "passed"
+        and details["package_install_distribution_installed"] is True
+        and isinstance(details["package_install_console_script_count"], int)
+        and details["package_install_console_script_count"] >= 3
+        and isinstance(details["package_install_optional_group_count"], int)
+        and details["package_install_optional_group_count"] >= 6
+        and details["package_install_network_call_performed"] is False
+        and details["package_install_subprocess_executed"] is False
+        and details["package_install_local_paths_exported"] is False
         and details["no_network_or_llm_by_default"] is True
     )
     return _checkpoint(

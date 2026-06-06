@@ -64,6 +64,7 @@ from ai22b.talent_foundry.onboarding_choices import (
     llm_service_ids,
 )
 from ai22b.talent_foundry.owner_self_extension import build_owner_self_extension_intake
+from ai22b.talent_foundry.package_install_doctor import doctor_package_install
 from ai22b.talent_foundry.policy_eval import DEFAULT_POLICY_EVAL_SUITE, run_action_policy_eval
 from ai22b.talent_foundry.program import create_talent_plan
 from ai22b.talent_foundry.program_manifest import build_public_program_manifest
@@ -238,6 +239,18 @@ def _build_parser() -> argparse.ArgumentParser:
         "--strict",
         action="store_true",
         help="Return exit code 2 when the first-run doctor report does not pass.",
+    )
+
+    package_install_doctor = subparsers.add_parser(
+        "doctor-package-install",
+        help="Verify installed Paideia package metadata, console scripts, extras, and callable targets.",
+    )
+    package_install_doctor.add_argument("--repo-root", default=".")
+    package_install_doctor.add_argument("--output", required=True)
+    package_install_doctor.add_argument(
+        "--strict",
+        action="store_true",
+        help="Return exit code 2 when the package install doctor report does not pass.",
     )
 
     onboard = subparsers.add_parser(
@@ -1064,6 +1077,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         report = doctor_first_run(
             repo_root=Path(args.repo_root),
             onboarding_session=Path(args.onboarding_session) if args.onboarding_session else None,
+            output_path=Path(args.output),
+        )
+        print(str(Path(args.output)))
+        if args.strict and not report.get("passed"):
+            return 2
+        return 0 if report.get("passed") else 1
+
+    if args.command == "doctor-package-install":
+        report = doctor_package_install(
+            repo_root=Path(args.repo_root),
             output_path=Path(args.output),
         )
         print(str(Path(args.output)))

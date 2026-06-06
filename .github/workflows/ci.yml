@@ -40,6 +40,8 @@ jobs:
           python -B -m pytest tests\test_cli_smoke.py tests\test_package_smoke.py tests\test_talent_foundry_policy_eval.py tests\test_talent_foundry_action_approval.py tests\test_talent_foundry_llm_clients.py tests\test_talent_foundry_llm_plan.py tests\test_talent_foundry_memory_substrate_chat.py tests\test_talent_foundry_graham.py tests\test_talent_foundry_graham_kibo_lifecycle.py tests\test_talent_foundry_growth_package.py tests\test_talent_foundry_execution_proof.py -q
           ai22b-talent-foundry audit-public-release-readiness --repo-root . --strict --output runs\public_release_readiness.json
           ai22b-talent-foundry build-source-sbom --repo-root . --output runs\source_sbom.json
+          ai22b-talent-foundry doctor-package-install --repo-root . --strict --output runs\package_install_doctor.json
+          ai22b-talent-foundry doctor-first-run --repo-root . --strict --output runs\first_run_doctor.json
 
       - name: Public repository hygiene
         shell: pwsh

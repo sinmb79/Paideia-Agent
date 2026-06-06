@@ -47,6 +47,25 @@ class PackageSmokeTests(unittest.TestCase):
         }
         self.assertEqual(installed_console_scripts, project["scripts"])
 
+    def test_package_install_doctor_reports_installed_console_scripts(self) -> None:
+        from ai22b.talent_foundry.package_install_doctor import doctor_package_install
+
+        report = doctor_package_install(Path("."))
+
+        self.assertEqual(report["schema"], "paideia-package-install-doctor/v1")
+        self.assertTrue(report["passed"])
+        self.assertEqual(report["status"], "passed")
+        self.assertTrue(report["summary"]["distribution_installed"])
+        self.assertGreaterEqual(report["summary"]["console_script_count"], 3)
+        self.assertFalse(report["public_safe"]["network_call_performed"])
+        self.assertFalse(report["public_safe"]["subprocess_executed"])
+        self.assertFalse(report["public_safe"]["local_absolute_paths_exported"])
+        check_by_id = {item["id"]: item for item in report["checks"]}
+        self.assertTrue(check_by_id["pyproject_package_metadata_readable"]["passed"])
+        self.assertTrue(check_by_id["installed_distribution_metadata_matches_pyproject"]["passed"])
+        self.assertTrue(check_by_id["distribution_console_scripts_match_pyproject"]["passed"])
+        self.assertTrue(check_by_id["console_script_targets_importable_callables"]["passed"])
+
     def test_optional_dependencies_are_split_by_runtime_capability(self) -> None:
         project = self._pyproject()["project"]
         optional = project.get("optional-dependencies", {})

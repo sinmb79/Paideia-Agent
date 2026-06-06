@@ -23,6 +23,7 @@ class CliSmokeTests(unittest.TestCase):
             public_release_path = tmp_path / "public_release_readiness.json"
             source_sbom_path = tmp_path / "source_sbom.json"
             first_run_doctor_path = tmp_path / "first_run_doctor.json"
+            package_install_doctor_path = tmp_path / "package_install_doctor.json"
 
             role_models_code = cli_main(
                 [
@@ -117,6 +118,16 @@ class CliSmokeTests(unittest.TestCase):
                     str(first_run_doctor_path),
                 ]
             )
+            package_install_doctor_code = cli_main(
+                [
+                    "doctor-package-install",
+                    "--repo-root",
+                    ".",
+                    "--strict",
+                    "--output",
+                    str(package_install_doctor_path),
+                ]
+            )
 
             role_models = json.loads(role_models_path.read_text(encoding="utf-8"))
             llm_services = json.loads(llm_services_path.read_text(encoding="utf-8"))
@@ -129,6 +140,7 @@ class CliSmokeTests(unittest.TestCase):
             public_release = json.loads(public_release_path.read_text(encoding="utf-8"))
             source_sbom = json.loads(source_sbom_path.read_text(encoding="utf-8"))
             first_run_doctor = json.loads(first_run_doctor_path.read_text(encoding="utf-8"))
+            package_install_doctor = json.loads(package_install_doctor_path.read_text(encoding="utf-8"))
 
         self.assertEqual(role_models_code, 0)
         self.assertEqual(llm_services_code, 0)
@@ -141,6 +153,7 @@ class CliSmokeTests(unittest.TestCase):
         self.assertEqual(public_release_code, 0)
         self.assertEqual(source_sbom_code, 0)
         self.assertEqual(first_run_doctor_code, 0)
+        self.assertEqual(package_install_doctor_code, 0)
 
         self.assertEqual(role_models["schema"], "ai-talent-role-model-list/v1")
         self.assertEqual(role_models["domain"], "securities_research")
@@ -262,6 +275,19 @@ class CliSmokeTests(unittest.TestCase):
         self.assertFalse(source_sbom["policy"]["network_call_performed"])
         self.assertFalse(source_sbom["policy"]["subprocess_executed"])
 
+        self.assertEqual(package_install_doctor["schema"], "paideia-package-install-doctor/v1")
+        self.assertTrue(package_install_doctor["passed"])
+        self.assertEqual(package_install_doctor["status"], "passed")
+        self.assertTrue(package_install_doctor["summary"]["distribution_installed"])
+        self.assertGreaterEqual(package_install_doctor["summary"]["console_script_count"], 3)
+        self.assertFalse(package_install_doctor["public_safe"]["network_call_performed"])
+        self.assertFalse(package_install_doctor["public_safe"]["subprocess_executed"])
+        self.assertFalse(package_install_doctor["public_safe"]["local_absolute_paths_exported"])
+        package_checks = {item["id"]: item for item in package_install_doctor["checks"]}
+        self.assertTrue(package_checks["installed_distribution_metadata_matches_pyproject"]["passed"])
+        self.assertTrue(package_checks["distribution_console_scripts_match_pyproject"]["passed"])
+        self.assertTrue(package_checks["console_script_targets_importable_callables"]["passed"])
+
         self.assertEqual(first_run_doctor["schema"], "paideia-first-run-doctor/v1")
         self.assertTrue(first_run_doctor["passed"])
         self.assertEqual(first_run_doctor["status"], "passed")
@@ -282,12 +308,14 @@ class CliSmokeTests(unittest.TestCase):
             "action_policy_eval_passed",
             "public_release_readiness_passed",
             "source_sbom_public_safe",
+            "package_install_doctor_passed",
             "no_network_or_llm_by_default",
         }:
             self.assertTrue(first_run_checks[check_id]["passed"], check_id)
         self.assertIn("graham_value_investing", first_run_doctor["artifacts"]["role_models"]["role_model_ids"])
         self.assertEqual(first_run_doctor["artifacts"]["llm_provider_doctor"]["network_access"], "blocked")
         self.assertEqual(first_run_doctor["artifacts"]["agent_runtime_smoke"]["execution_contract_status"], "passed")
+        self.assertTrue(first_run_doctor["artifacts"]["package_install_doctor"]["distribution_installed"])
 
 
 if __name__ == "__main__":

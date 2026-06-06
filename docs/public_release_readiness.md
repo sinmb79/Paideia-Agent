@@ -13,6 +13,7 @@ python -B -m pytest tests\test_package_smoke.py tests\test_cli_smoke.py -q
 .\scripts\check_public_repo_hygiene.ps1
 ai22b-talent-foundry audit-public-release-readiness --repo-root . --strict --output .\public_release_readiness.json
 ai22b-talent-foundry build-source-sbom --repo-root . --output .\source_sbom.json
+ai22b-talent-foundry doctor-package-install --repo-root . --strict --output .\package_install_doctor.json
 ai22b-talent-foundry doctor-first-run --repo-root . --strict --output .\first_run_doctor.json
 ```
 
@@ -29,7 +30,9 @@ The first-run smoke suite also writes `paideia-llm-provider-matrix/v1` and build
 
 The source SBOM writes `paideia-source-sbom/v1`. It records package metadata, optional dependency groups, console scripts, public candidate file SHA-256 values, and a repository public-candidate digest. It is a reproducible inventory for review; it is not a vulnerability scan.
 
-The first-run doctor writes `paideia-first-run-doctor/v1`. It bundles the role-model catalog, LLM provider matrix, selected deterministic checklist, provider doctor, application smoke, full agent runtime smoke, tool capability audit, action policy eval, public release readiness, and source SBOM into one install-time report. Add `--onboarding-session <console_session.json>` to include wizard health verification in the same report.
+The package install doctor writes `paideia-package-install-doctor/v1`. It checks that the current Python environment exposes the installed distribution metadata, console scripts, optional extras, and callable entrypoint targets without running subprocesses or exporting local paths.
+
+The first-run doctor writes `paideia-first-run-doctor/v1`. It bundles the role-model catalog, LLM provider matrix, selected deterministic checklist, provider doctor, application smoke, full agent runtime smoke, tool capability audit, action policy eval, public release readiness, source SBOM, and package install doctor into one install-time report. Add `--onboarding-session <console_session.json>` to include wizard health verification in the same report.
 
 ## Agent Bundle Gates
 

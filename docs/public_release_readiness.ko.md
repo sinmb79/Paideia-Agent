@@ -13,6 +13,7 @@ python -B -m pytest tests\test_package_smoke.py tests\test_cli_smoke.py -q
 .\scripts\check_public_repo_hygiene.ps1
 ai22b-talent-foundry audit-public-release-readiness --repo-root . --strict --output .\public_release_readiness.json
 ai22b-talent-foundry build-source-sbom --repo-root . --output .\source_sbom.json
+ai22b-talent-foundry doctor-package-install --repo-root . --strict --output .\package_install_doctor.json
 ai22b-talent-foundry doctor-first-run --repo-root . --strict --output .\first_run_doctor.json
 ```
 
@@ -29,7 +30,9 @@ first-run smoke suite는 `paideia-llm-provider-matrix/v1`와 deterministic local
 
 source SBOM은 `paideia-source-sbom/v1` 보고서를 씁니다. 패키지 메타데이터, optional dependency group, console script, 공개 후보 파일 SHA-256, repository public-candidate digest를 기록합니다. 검토 가능한 재현성 인벤토리이며 취약점 스캔은 아닙니다.
 
-first-run doctor는 `paideia-first-run-doctor/v1` 보고서를 씁니다. 롤모델 카탈로그, LLM provider matrix, deterministic checklist, provider doctor, application smoke, 전체 agent runtime smoke, tool capability audit, action policy eval, public release readiness, source SBOM을 설치 직후 한 번에 검증합니다. `--onboarding-session <console_session.json>`을 추가하면 wizard health 검증도 같은 보고서에 포함됩니다.
+package install doctor는 `paideia-package-install-doctor/v1` 보고서를 씁니다. 현재 Python 환경에서 설치된 distribution metadata, console script, optional extras, callable entrypoint target이 노출되는지 확인하며, 서브프로세스를 실행하거나 로컬 절대경로를 내보내지 않습니다.
+
+first-run doctor는 `paideia-first-run-doctor/v1` 보고서를 씁니다. 롤모델 카탈로그, LLM provider matrix, deterministic checklist, provider doctor, application smoke, 전체 agent runtime smoke, tool capability audit, action policy eval, public release readiness, source SBOM, package install doctor를 설치 직후 한 번에 검증합니다. `--onboarding-session <console_session.json>`을 추가하면 wizard health 검증도 같은 보고서에 포함됩니다.
 
 ## 에이전트 번들 게이트
 

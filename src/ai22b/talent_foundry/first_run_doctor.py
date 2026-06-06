@@ -13,6 +13,7 @@ from ai22b.talent_foundry.llm_onboarding import (
 )
 from ai22b.talent_foundry.llm_runtime import doctor_llm_provider, run_llm_application_smoke
 from ai22b.talent_foundry.onboarding_doctor import doctor_onboarding_session
+from ai22b.talent_foundry.package_install_doctor import doctor_package_install
 from ai22b.talent_foundry.policy_eval import DEFAULT_POLICY_EVAL_SUITE, run_action_policy_eval
 from ai22b.talent_foundry.public_release import audit_public_release_readiness
 from ai22b.talent_foundry.role_models import list_role_models, summarize_role_model
@@ -105,6 +106,24 @@ def _sbom_summary(source_sbom: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _package_install_summary(package_doctor: dict[str, Any]) -> dict[str, Any]:
+    summary = _as_dict(package_doctor.get("summary"))
+    public_safe = _public_safe(package_doctor)
+    return {
+        "schema": package_doctor.get("schema"),
+        "status": package_doctor.get("status"),
+        "passed": package_doctor.get("passed"),
+        "package": summary.get("package"),
+        "version": summary.get("version"),
+        "distribution_installed": summary.get("distribution_installed"),
+        "console_script_count": summary.get("console_script_count"),
+        "optional_group_count": summary.get("optional_group_count"),
+        "network_call_performed": public_safe.get("network_call_performed"),
+        "subprocess_executed": public_safe.get("subprocess_executed"),
+        "local_absolute_paths_exported": public_safe.get("local_absolute_paths_exported"),
+    }
+
+
 def _tool_audit_summary(tool_audit: dict[str, Any]) -> dict[str, Any]:
     details = _as_dict(tool_audit.get("details"))
     public_safe = _public_safe(tool_audit)
@@ -173,6 +192,7 @@ def doctor_first_run(
     policy_eval = run_action_policy_eval(suite_path=DEFAULT_POLICY_EVAL_SUITE)
     release_readiness = audit_public_release_readiness(root)
     source_sbom = build_source_sbom(root)
+    package_doctor = doctor_package_install(root)
 
     provider_matrix_public = _public_safe(provider_matrix)
     checklist_public = _public_safe(llm_checklist)
@@ -183,6 +203,7 @@ def doctor_first_run(
     policy_runtime = _as_dict(policy_eval.get("runtime_policy"))
     release_policy = _as_dict(release_readiness.get("policy"))
     sbom_policy = _as_dict(source_sbom.get("policy"))
+    package_public = _public_safe(package_doctor)
 
     _check(
         checks,
@@ -297,6 +318,16 @@ def doctor_first_run(
         and sbom_policy.get("subprocess_executed") is False,
         details=_sbom_summary(source_sbom),
     )
+    _check(
+        checks,
+        "package_install_doctor_passed",
+        package_doctor.get("schema") == "paideia-package-install-doctor/v1"
+        and package_doctor.get("passed") is True
+        and package_public.get("network_call_performed") is False
+        and package_public.get("subprocess_executed") is False
+        and package_public.get("local_absolute_paths_exported") is False,
+        details=_package_install_summary(package_doctor),
+    )
 
     onboarding_report = None
     if onboarding_session is not None:
@@ -325,6 +356,8 @@ def doctor_first_run(
         and _as_dict(release_readiness.get("summary")).get("subprocess_executed") is False
         and sbom_policy.get("network_call_performed") is False
         and sbom_policy.get("subprocess_executed") is False
+        and package_public.get("network_call_performed") is False
+        and package_public.get("subprocess_executed") is False
     )
     _check(
         checks,
@@ -391,6 +424,7 @@ def doctor_first_run(
             "action_policy_eval": _policy_summary(policy_eval),
             "public_release_readiness": _release_summary(release_readiness),
             "source_sbom": _sbom_summary(source_sbom),
+            "package_install_doctor": _package_install_summary(package_doctor),
             **(
                 {"onboarding_session_doctor": _onboarding_summary(onboarding_report)}
                 if onboarding_report is not None
