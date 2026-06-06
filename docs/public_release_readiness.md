@@ -15,6 +15,8 @@ ai22b-talent-foundry audit-public-release-readiness --repo-root . --strict --out
 ai22b-talent-foundry build-source-sbom --repo-root . --output .\source_sbom.json
 ```
 
+Run the tests after `python -m pip install -e ".[dev]"`. The package smoke test checks installed distribution metadata and exposed console script entry points, not only the static `pyproject.toml` file.
+
 The hygiene script now checks two classes of release risk:
 
 - blocked paths and blocked content such as private folders, local owner paths, API keys, tokens, and generated runtime outputs;

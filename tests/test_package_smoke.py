@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+from importlib import metadata
 import tomllib
 import unittest
 from pathlib import Path
@@ -26,6 +27,25 @@ class PackageSmokeTests(unittest.TestCase):
             module_name, function_name = target.split(":")
             function = getattr(importlib.import_module(module_name), function_name)
             self.assertTrue(callable(function), target)
+
+    def test_installed_distribution_metadata_and_console_scripts_are_visible(self) -> None:
+        distribution = metadata.distribution("paideia-agent")
+        project = self._pyproject()["project"]
+
+        self.assertEqual(distribution.metadata["Name"], project["name"])
+        self.assertEqual(distribution.version, project["version"])
+        console_scripts = {
+            entry.name: entry.value
+            for entry in distribution.entry_points
+            if entry.group == "console_scripts"
+        }
+        self.assertEqual(console_scripts, project["scripts"])
+        installed_console_scripts = {
+            entry.name: entry.value
+            for entry in metadata.entry_points(group="console_scripts")
+            if entry.name in project["scripts"]
+        }
+        self.assertEqual(installed_console_scripts, project["scripts"])
 
     def test_optional_dependencies_are_split_by_runtime_capability(self) -> None:
         project = self._pyproject()["project"]
@@ -93,6 +113,7 @@ class PackageSmokeTests(unittest.TestCase):
         self.assertFalse(report["summary"]["private_runtime_outputs_scanned"])
         self.assertFalse(report["policy"]["secret_values_exported"])
         check_by_id = {item["id"]: item for item in report["checks"]}
+        self.assertTrue(check_by_id["installed_package_metadata_smoke"]["passed"])
         self.assertTrue(check_by_id["public_candidate_content_scan"]["passed"])
         self.assertEqual(check_by_id["public_candidate_content_scan"]["details"]["issue_count"], 0)
 

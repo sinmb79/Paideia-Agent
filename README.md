@@ -144,9 +144,9 @@ python -m pip install -e ".[rag]"        # retrieval/eval lab tools
 python -m pip install -e ".[dev]"        # tests
 ```
 
-CI runs a package smoke test that verifies the `pyproject.toml` console scripts import as callables, optional extras stay split by runtime capability, and package metadata does not reference private/local paths.
+CI runs a package smoke test after `pip install -e ".[dev]"`. It verifies the installed distribution metadata, exposed console script entry points, callable script targets, optional extras split by runtime capability, and package metadata hygiene.
 
-CI also runs a CLI smoke test for public-safe first-run commands. It verifies that `list-role-models`, `doctor-llm-provider --llm-engine deterministic_local`, `run-llm-application-smoke --llm-engine deterministic_local`, `run-agent-runtime-smoke --llm-engine deterministic_local`, `audit-tool-capabilities --strict`, and `run-action-policy-eval` execute without private files, API keys, or network access while writing reviewable JSON reports.
+CI also runs a CLI smoke test for public-safe first-run commands. It verifies that `list-role-models`, `doctor-llm-provider --llm-engine deterministic_local`, `run-llm-application-smoke --llm-engine deterministic_local`, `run-agent-runtime-smoke --llm-engine deterministic_local`, `audit-tool-capabilities --strict`, `run-action-policy-eval`, `audit-public-release-readiness`, and `build-source-sbom` execute without private files, API keys, or network access while writing reviewable JSON reports.
 
 The source package declares an MIT license in `LICENSE` and `pyproject.toml`. Public release readiness is tracked separately from generated agent bundles; see [Public Release Readiness](docs/public_release_readiness.md) and [공개 릴리스 준비도](docs/public_release_readiness.ko.md).
 

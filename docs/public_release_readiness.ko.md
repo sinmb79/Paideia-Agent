@@ -15,6 +15,8 @@ ai22b-talent-foundry audit-public-release-readiness --repo-root . --strict --out
 ai22b-talent-foundry build-source-sbom --repo-root . --output .\source_sbom.json
 ```
 
+테스트는 `python -m pip install -e ".[dev]"` 이후 실행합니다. package smoke는 정적 `pyproject.toml`만 보는 것이 아니라 설치된 distribution metadata와 노출된 console script entry point도 확인합니다.
+
 hygiene 스크립트는 두 가지 위험을 검사합니다.
 
 - 비공개 폴더, 로컬 사용자 경로, API 키, 토큰, 생성된 런타임 산출물 같은 차단 경로와 차단 내용

@@ -45,6 +45,11 @@ REQUIRED_README_LINKS = [
     "README.ko.md",
 ]
 
+REQUIRED_PACKAGE_SMOKE_MARKERS = [
+    'metadata.distribution("paideia-agent")',
+    'metadata.entry_points(group="console_scripts")',
+]
+
 REQUIRED_SECURITY_FRAGMENTS = [
     "data/private/**",
     "runs/**",
@@ -301,6 +306,24 @@ def audit_public_release_readiness(
         passed="MIT License" in license_text and "THE SOFTWARE IS PROVIDED" in license_text,
         details={"license": "MIT" if "MIT License" in license_text else "missing_or_unknown"},
         issue="license_file_missing_or_unrecognized",
+    )
+
+    package_smoke_path = root / "tests" / "test_package_smoke.py"
+    package_smoke_text = _read_text(package_smoke_path) if package_smoke_path.is_file() else ""
+    missing_package_smoke = [
+        marker for marker in REQUIRED_PACKAGE_SMOKE_MARKERS if marker not in package_smoke_text
+    ]
+    _check(
+        checks,
+        issues,
+        check_id="installed_package_metadata_smoke",
+        passed=not missing_package_smoke,
+        details={
+            "test_path": "tests/test_package_smoke.py",
+            "missing_markers": missing_package_smoke,
+            "required_markers": REQUIRED_PACKAGE_SMOKE_MARKERS,
+        },
+        issue="installed_package_metadata_smoke_missing",
     )
 
     ci_path = root / ".github" / "workflows" / "ci.yml"
