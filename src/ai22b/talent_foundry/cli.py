@@ -10,6 +10,7 @@ from ai22b.config import talent_foundry_storage_path
 from ai22b.talent_foundry.agent_identity_card import (
     build_agent_id_card_payload,
     build_agent_identity_layer_envelope,
+    build_agent_warrent_registration_request,
     import_agent_identity_registration,
     verify_agent_identity_artifacts,
 )
@@ -694,6 +695,16 @@ def _build_parser() -> argparse.ArgumentParser:
     agent_identity_envelope.add_argument("--surface", default="paideia_cli")
     agent_identity_envelope.add_argument("--task-ref")
     agent_identity_envelope.add_argument("--output", required=True)
+
+    agent_warrent_registration = subparsers.add_parser(
+        "export-agent-warrent-registration-request",
+        help="Build a local Agent_warrent POST /agents/register request draft for explicit owner signing/submission.",
+    )
+    agent_warrent_registration.add_argument("--installed-manifest", required=True)
+    agent_warrent_registration.add_argument("--employment-record")
+    agent_warrent_registration.add_argument("--owner-key-id", required=True)
+    agent_warrent_registration.add_argument("--owner-signature")
+    agent_warrent_registration.add_argument("--output", required=True)
 
     verify_agent_id_card = subparsers.add_parser(
         "verify-agent-id-card",
@@ -1755,6 +1766,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         print(json.dumps(envelope, ensure_ascii=False, indent=2))
         return 0
+
+    if args.command == "export-agent-warrent-registration-request":
+        request = build_agent_warrent_registration_request(
+            installed_manifest_path=Path(args.installed_manifest),
+            employment_record_path=Path(args.employment_record) if args.employment_record else None,
+            owner_key_id=args.owner_key_id,
+            owner_signature=args.owner_signature,
+            output_path=Path(args.output),
+        )
+        print(json.dumps(request, ensure_ascii=False, indent=2))
+        return 0 if request["validation"]["valid"] else 2
 
     if args.command == "verify-agent-id-card":
         report = verify_agent_identity_artifacts(

@@ -12,7 +12,9 @@ AGENT_ID_CARD_PAYLOAD_SCHEMA = "ai-talent-agent-id-card-payload/v1"
 AGENT_IDENTITY_LAYER_ENVELOPE_SCHEMA = "agent-identity-layer-envelope/ail.v1"
 AGENT_ID_CARD_VERIFICATION_SCHEMA = "paideia-agent-id-card-verification/v1"
 AGENT_ID_CARD_REGISTRATION_IMPORT_SCHEMA = "paideia-agent-id-card-registration-import/v1"
+AGENT_WARRENT_REGISTRATION_REQUEST_SCHEMA = "paideia-agent-warrent-registration-request/v1"
 AGENT_WARRENT_REPO_URL = "https://github.com/sinmb79/Agent_warrent"
+AGENT_WARRENT_REGISTER_ENDPOINT = "POST /agents/register"
 AGENT_WARRENT_EXTERNAL_REGISTRATION_STATES = {
     "manual_owner_action_only",
     "owner_completed_outside_paideia",
@@ -40,6 +42,10 @@ def _fingerprint(*parts: str) -> str:
 def _canonical_hash(value: dict[str, Any]) -> str:
     raw = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return "sha256:" + hashlib.sha256(raw).hexdigest()
+
+
+def _canonical_json(value: Any) -> str:
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
 def _secret_hash(value: str) -> str:
@@ -380,6 +386,210 @@ def build_agent_identity_layer_envelope(
     return envelope
 
 
+def validate_agent_warrent_registration_request(request: dict[str, Any]) -> dict[str, Any]:
+    payload = request.get("payload", {}) if isinstance(request.get("payload"), dict) else {}
+    scope = payload.get("scope", {}) if isinstance(payload.get("scope"), dict) else {}
+    registration_body = (
+        request.get("registration_body", {})
+        if isinstance(request.get("registration_body"), dict)
+        else {}
+    )
+    missing = _required_path_missing(
+        request,
+        [
+            ("schema",),
+            ("owner_key_id",),
+            ("payload", "display_name"),
+            ("payload", "role"),
+            ("payload", "scope"),
+            ("payload", "scope", "network"),
+            ("payload", "scope", "secrets"),
+            ("payload", "scope", "write_access"),
+            ("payload", "scope", "approval_policy"),
+            ("registration_body", "owner_key_id"),
+            ("registration_body", "payload"),
+            ("canonical_payload_sha256",),
+        ],
+    )
+    issues: list[dict[str, Any]] = []
+    if request.get("schema") != AGENT_WARRENT_REGISTRATION_REQUEST_SCHEMA:
+        issues.append(
+            {
+                "id": "unsupported_registration_request_schema",
+                "severity": "error",
+                "message": "Agent_warrent registration request schema is not supported.",
+            }
+        )
+    if request.get("network_action_performed") is not False:
+        issues.append(
+            {
+                "id": "network_action_performed",
+                "severity": "error",
+                "message": "Registration request export must not call Agent_warrent or upload data.",
+            }
+        )
+    if request.get("external_registration") != "manual_owner_action_only":
+        issues.append(
+            {
+                "id": "external_registration_not_manual",
+                "severity": "error",
+                "message": "Agent_warrent registration must remain an explicit owner action.",
+            }
+        )
+    if scope.get("network") not in {"none", "restricted", "allowed"}:
+        issues.append(
+            {
+                "id": "scope_network_invalid",
+                "severity": "error",
+                "message": "Agent_warrent scope.network must be one of none, restricted, or allowed.",
+            }
+        )
+    if scope.get("secrets") not in {"none", "indirect", "direct"}:
+        issues.append(
+            {
+                "id": "scope_secrets_invalid",
+                "severity": "error",
+                "message": "Agent_warrent scope.secrets must be one of none, indirect, or direct.",
+            }
+        )
+    if not isinstance(scope.get("write_access"), bool):
+        issues.append(
+            {
+                "id": "scope_write_access_invalid",
+                "severity": "error",
+                "message": "Agent_warrent scope.write_access must be boolean.",
+            }
+        )
+    if not isinstance(scope.get("approval_policy"), dict):
+        issues.append(
+            {
+                "id": "scope_approval_policy_invalid",
+                "severity": "error",
+                "message": "Agent_warrent scope.approval_policy must be an object.",
+            }
+        )
+    if registration_body.get("payload") != payload:
+        issues.append(
+            {
+                "id": "registration_body_payload_mismatch",
+                "severity": "error",
+                "message": "registration_body.payload must match the canonical payload to be signed.",
+            }
+        )
+    if missing:
+        issues.append(
+            {
+                "id": "required_fields_missing",
+                "severity": "error",
+                "message": "Agent_warrent registration request is missing required fields.",
+                "missing": missing,
+            }
+        )
+    issues.extend(_privacy_issues(request))
+    blocking = [issue for issue in issues if issue["severity"] == "error"]
+    owner_signature = registration_body.get("owner_signature")
+    signature_ready = isinstance(owner_signature, str) and owner_signature.strip() and owner_signature != "<OWNER_SIGNATURE_REQUIRED>"
+    return {
+        "schema": "agent-warrent-registration-request-validation/v1",
+        "artifact_type": "agent_warrent_registration_request",
+        "valid": not blocking,
+        "submit_ready": not blocking and signature_ready,
+        "network_action_performed": bool(request.get("network_action_performed")),
+        "signature_required": not signature_ready,
+        "issues": issues,
+        "privacy": {
+            "local_absolute_paths_exported": any(issue["id"] == "local_absolute_path_exported" for issue in issues),
+            "credential_like_values_exported": any(issue["id"] == "credential_like_value_exported" for issue in issues),
+            "raw_owner_email_exported": any(issue["id"] == "raw_owner_email_exported" for issue in issues),
+        },
+    }
+
+
+def build_agent_warrent_registration_request(
+    *,
+    installed_manifest_path: Path,
+    owner_key_id: str,
+    employment_record_path: Path | None = None,
+    owner_signature: str | None = None,
+    output_path: Path | None = None,
+) -> dict[str, Any]:
+    """Build a local Agent_warrent registration body draft.
+
+    Paideia does not submit this request. The owner signs the canonical payload
+    with their Agent_warrent owner private key, then manually submits it to
+    `POST /agents/register` in the Agent_warrent service.
+    """
+
+    envelope = build_agent_identity_layer_envelope(
+        installed_manifest_path=installed_manifest_path,
+        employment_record_path=employment_record_path,
+        surface="agent_warrent_registration_request",
+        task_ref="agent-warrent-owner-registration",
+    )
+    agent = envelope.get("agent", {})
+    scope = envelope.get("scope", {})
+    payload = {
+        "display_name": agent.get("display_name"),
+        "role": agent.get("role"),
+        "provider": agent.get("provider"),
+        "model": agent.get("model"),
+        "scope": {
+            "workspace": scope.get("workspace", []),
+            "repos": scope.get("repos", []),
+            "network": scope.get("network", "none"),
+            "secrets": scope.get("secrets", "none"),
+            "write_access": bool(scope.get("write_access")),
+            "approval_policy": scope.get("approval_policy", {}),
+        },
+    }
+    canonical_payload_json = _canonical_json(payload)
+    registration_body = {
+        "owner_key_id": owner_key_id,
+        "payload": payload,
+        "owner_signature": owner_signature if owner_signature else "<OWNER_SIGNATURE_REQUIRED>",
+    }
+    request = {
+        "schema": AGENT_WARRENT_REGISTRATION_REQUEST_SCHEMA,
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "status": "ready_for_manual_submit" if owner_signature else "signature_required_owner_action",
+        "network_action_performed": False,
+        "external_registration": "manual_owner_action_only",
+        "agent_warrent": {
+            "repo_url": AGENT_WARRENT_REPO_URL,
+            "endpoint": AGENT_WARRENT_REGISTER_ENDPOINT,
+            "request_contract": "{ owner_key_id, payload, owner_signature }",
+            "source_reference": "server/routes/agents.mjs POST /agents/register",
+        },
+        "owner_key_id": owner_key_id,
+        "owner_signature": {
+            "included": bool(owner_signature),
+            "storage": "included_by_explicit_owner_input" if owner_signature else "placeholder_only",
+            "fingerprint_sha256": _secret_hash(owner_signature) if owner_signature else None,
+        },
+        "payload": payload,
+        "canonical_payload_json": canonical_payload_json,
+        "canonical_payload_sha256": _secret_hash(canonical_payload_json),
+        "registration_body": registration_body,
+        "submit_ready": bool(owner_signature),
+        "signing_instructions": [
+            "Serialize payload as canonical JSON with sorted keys recursively.",
+            "Sign canonical_payload_json with the Agent_warrent owner EC P-256 private key using ECDSA/SHA-256.",
+            "Encode the IEEE P1363 64-byte signature as base64url.",
+            "Replace registration_body.owner_signature, then submit the body manually to Agent_warrent POST /agents/register.",
+        ],
+        "public_safe": {
+            "no_network_call": True,
+            "raw_owner_private_key_stored": False,
+            "raw_owner_email_exported": False,
+            "local_absolute_paths_exported": False,
+        },
+    }
+    request["validation"] = validate_agent_warrent_registration_request(request)
+    if output_path is not None:
+        _write_json(output_path, request)
+    return request
+
+
 def validate_agent_id_card_payload(payload: dict[str, Any]) -> dict[str, Any]:
     missing = _required_path_missing(
         payload,
@@ -616,27 +826,38 @@ def import_agent_identity_registration(
         _nested_value(registration_result, ("agent_id_card", "ail_id")),
         _nested_value(registration_result, ("credential_subject", "ail_id")),
     )
-    credential = _first_text(
-        registration_result.get("credential"),
+    credential_object = registration_result.get("credential") if isinstance(registration_result.get("credential"), dict) else None
+    credential_token = _first_text(
+        credential_object.get("token") if credential_object else None,
+        registration_result.get("credential") if not isinstance(registration_result.get("credential"), dict) else None,
         registration_result.get("credential_token"),
         registration_result.get("jwt"),
         _nested_value(registration_result, ("agent_identity", "credential")),
+        _nested_value(registration_result, ("agent_identity", "credential", "token")),
         _nested_value(registration_result, ("agent_id_card", "credential")),
+        _nested_value(registration_result, ("agent_id_card", "credential", "token")),
+    )
+    signal_glyph = registration_result.get("signal_glyph") if isinstance(registration_result.get("signal_glyph"), dict) else None
+    behavior_fingerprint = (
+        registration_result.get("behavior_fingerprint")
+        if isinstance(registration_result.get("behavior_fingerprint"), dict)
+        else None
     )
     signed = _to_bool(
         _nested_value(registration_result, ("verification", "signed"))
         if _nested_value(registration_result, ("verification", "signed")) is not None
         else registration_result.get("signed")
-    )
+    ) or bool(credential_token)
     verification_strength = _first_text(
         _nested_value(registration_result, ("verification", "strength")),
         registration_result.get("verification_strength"),
-        "owner_imported_external_registration",
+        "cryptographically_signed" if credential_object else "owner_imported_external_registration",
     )
     attestation_ref = _first_text(
         registration_result.get("attestation_ref"),
         _nested_value(registration_result, ("verification", "attestation_ref")),
         _nested_value(registration_result, ("agent_id_card", "attestation_ref")),
+        f"ail_id:{ail_id}" if ail_id else None,
     )
     issues: list[dict[str, Any]] = []
     if not envelope_validation["valid"]:
@@ -667,35 +888,48 @@ def import_agent_identity_registration(
     blocking = [issue for issue in issues if issue["severity"] == "error"]
     updated_envelope: dict[str, Any] | None = None
     updated_envelope_validation: dict[str, Any] | None = None
-    credential_fingerprint = _secret_hash(credential) if credential else None
+    credential_fingerprint = _secret_hash(credential_token) if credential_token else None
     if not blocking:
         updated_envelope = json.loads(json.dumps(envelope, ensure_ascii=False))
         updated_envelope["ail_id"] = ail_id
-        updated_envelope["credential"] = credential if include_credential_token else None
+        if include_credential_token and credential_object:
+            updated_envelope["credential"] = credential_object
+        elif include_credential_token and credential_token:
+            updated_envelope["credential"] = {"token": credential_token}
+        else:
+            updated_envelope["credential"] = None
         if credential_fingerprint:
             updated_envelope["credential_fingerprint_sha256"] = credential_fingerprint
+        if signal_glyph:
+            updated_envelope["signal_glyph"] = signal_glyph
+        if behavior_fingerprint:
+            updated_envelope["behavior_fingerprint"] = behavior_fingerprint
         verification = updated_envelope.setdefault("verification", {})
         verification["signed"] = True
         verification["strength"] = verification_strength
         verification["attestation_ref"] = attestation_ref
+        if credential_object:
+            verification["issuer"] = credential_object.get("issuer")
+            verification["issuer_key_id"] = credential_object.get("issuer_key_id")
+            verification["token_type"] = "JWT"
         agent_warrent = updated_envelope.setdefault("extensions", {}).setdefault("agent_warrent", {})
         agent_warrent["registration_state"] = "owner_imported_registered"
         agent_warrent["external_registration"] = "owner_completed_outside_paideia"
         agent_warrent["credential_storage"] = (
-            "raw_token_included_by_explicit_owner_request"
-            if include_credential_token and credential
+            "raw_credential_included_by_explicit_owner_request"
+            if include_credential_token and (credential_token or credential_object)
             else "token_omitted_hash_only"
         )
         paideia = updated_envelope.setdefault("extensions", {}).setdefault("paideia", {})
         privacy = paideia.setdefault("privacy", {})
-        privacy["credential_token_exported"] = bool(include_credential_token and credential)
+        privacy["credential_token_exported"] = bool(include_credential_token and credential_token)
         privacy["network_action_performed"] = False
         paideia["agent_id_card_import"] = {
             "schema": AGENT_ID_CARD_REGISTRATION_IMPORT_SCHEMA,
             "imported_at_utc": datetime.now(timezone.utc).isoformat(),
             "source_result": registration_result_path.name,
             "network_action_performed_by_paideia": False,
-            "credential_token_exported": bool(include_credential_token and credential),
+            "credential_token_exported": bool(include_credential_token and credential_token),
         }
         updated_envelope_validation = validate_agent_identity_layer_envelope(updated_envelope)
         if not updated_envelope_validation["valid"]:
@@ -721,11 +955,13 @@ def import_agent_identity_registration(
             "file": registration_result_path.name,
             "fingerprint_sha256": _canonical_hash(registration_result),
             "ail_id_present": bool(ail_id),
-            "credential_token_present": bool(credential),
-            "credential_token_exported": bool(include_credential_token and credential),
+            "credential_token_present": bool(credential_token),
+            "credential_token_exported": bool(include_credential_token and credential_token),
             "credential_fingerprint_sha256": credential_fingerprint,
             "signed": signed,
             "verification_strength": verification_strength,
+            "signal_glyph_present": bool(signal_glyph),
+            "behavior_fingerprint_present": bool(behavior_fingerprint),
         },
         "source_envelope_validation": envelope_validation,
         "updated_envelope_validation": updated_envelope_validation,

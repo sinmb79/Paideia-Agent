@@ -88,6 +88,16 @@ ai22b-talent-foundry export-agent-identity-envelope `
   --output agent_identity_envelope.json
 ```
 
+Agent_warrent 서버의 `POST /agents/register` 입력 형태에 맞춘 등록 요청 초안도 만들 수 있습니다. 이 명령은 canonical payload와 서명 안내만 만들고, 실제 owner signature 생성이나 외부 등록은 보스가 직접 수행해야 합니다.
+
+```powershell
+ai22b-talent-foundry export-agent-warrent-registration-request `
+  --installed-manifest <installed_agent_manifest.json> `
+  --employment-record <employment_record.json> `
+  --owner-key-id <owk_...> `
+  --output agent_warrent_registration_request.json
+```
+
 외부 등록 전에는 두 산출물을 함께 검증합니다. 이 명령은 네트워크를 사용하지 않고, 필수 필드, credential-like 값, 원문 이메일, 로컬 절대경로, 수동 등록 정책을 검사합니다.
 
 ```powershell

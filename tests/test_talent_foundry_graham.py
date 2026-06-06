@@ -584,6 +584,7 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             payload_output = Path(tmp) / "agent_id_card_payload.json"
             output = Path(tmp) / "agent_identity_envelope.json"
             verify_output = Path(tmp) / "agent_identity_verification.json"
+            registration_request_output = Path(tmp) / "agent_warrent_registration_request.json"
             registration_result_output = Path(tmp) / "agent_id_card_registration_result.json"
             registration_receipt_output = Path(tmp) / "agent_identity_registration_receipt.json"
             registered_envelope_output = Path(tmp) / "agent_identity_envelope.registered.json"
@@ -624,15 +625,40 @@ class GrahamTalentFoundryTests(unittest.TestCase):
                     str(verify_output),
                 ]
             )
+            registration_request_exit = cli_main(
+                [
+                    "export-agent-warrent-registration-request",
+                    "--installed-manifest",
+                    str(artifacts["installed_agent_manifest"]),
+                    "--employment-record",
+                    str(artifacts["employment_record"]),
+                    "--owner-key-id",
+                    "owk_test_agent_warrent_001",
+                    "--output",
+                    str(registration_request_output),
+                ]
+            )
             registration_result_output.write_text(
                 json.dumps(
                     {
-                        "ail_id": "ail_test_agent_warrent_001",
-                        "credential": "eyJlocal-test-credential.signature",
-                        "verification": {
-                            "signed": True,
-                            "strength": "agentidcard_owner_registered",
-                            "attestation_ref": "agentidcard-test-attestation",
+                        "ail_id": "AIL-2026-00042",
+                        "credential": {
+                            "type": "AIL.SignedCredential.v1",
+                            "issuer": "22blabs.ai",
+                            "issuer_key_id": "22blabs-master-2026",
+                            "issued_at": "2026-03-17T00:00:00Z",
+                            "expires_at": "2027-03-17T00:00:00Z",
+                            "token": "eyJlocal-test-credential.signature",
+                        },
+                        "signal_glyph": {
+                            "seed": "AIL-2026-00042:agent-warrent-test:owk_test_agent_warrent_001",
+                            "algorithm": "sha256-visual-v1",
+                            "version": "glyph.v1",
+                        },
+                        "behavior_fingerprint": {
+                            "hash": "sha256:test-behavior-hash",
+                            "algorithm": "sha256",
+                            "inputs": ["role", "scope.network", "scope.secrets", "scope.write_access", "provider"],
                         },
                     },
                     ensure_ascii=False,
@@ -655,12 +681,14 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             payload = json.loads(payload_output.read_text(encoding="utf-8"))
             envelope = json.loads(output.read_text(encoding="utf-8"))
             verification = json.loads(verify_output.read_text(encoding="utf-8"))
+            registration_request = json.loads(registration_request_output.read_text(encoding="utf-8"))
             registration_receipt = json.loads(registration_receipt_output.read_text(encoding="utf-8"))
             registered_envelope = json.loads(registered_envelope_output.read_text(encoding="utf-8"))
 
         self.assertEqual(payload_exit, 0)
         self.assertEqual(exit_code, 0)
         self.assertEqual(verify_exit, 0)
+        self.assertEqual(registration_request_exit, 0)
         self.assertEqual(import_exit, 0)
         self.assertEqual(payload["schema"], "ai-talent-agent-id-card-payload/v1")
         self.assertEqual(envelope["version"], "ail.v1")
@@ -677,6 +705,15 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertEqual(verification["external_registration"], "not_performed_manual_owner_action_only")
         self.assertFalse(verification["validations"]["payload"]["privacy"]["credential_like_values_exported"])
         self.assertFalse(verification["validations"]["envelope"]["privacy"]["local_absolute_paths_exported"])
+        self.assertEqual(registration_request["schema"], "paideia-agent-warrent-registration-request/v1")
+        self.assertEqual(registration_request["agent_warrent"]["endpoint"], "POST /agents/register")
+        self.assertEqual(registration_request["owner_key_id"], "owk_test_agent_warrent_001")
+        self.assertEqual(registration_request["registration_body"]["payload"], registration_request["payload"])
+        self.assertEqual(registration_request["registration_body"]["owner_signature"], "<OWNER_SIGNATURE_REQUIRED>")
+        self.assertTrue(registration_request["validation"]["valid"])
+        self.assertFalse(registration_request["validation"]["submit_ready"])
+        self.assertFalse(registration_request["network_action_performed"])
+        self.assertNotIn("C:\\Users\\", json.dumps(registration_request, ensure_ascii=False))
         self.assertEqual(registration_receipt["schema"], "paideia-agent-id-card-registration-import/v1")
         self.assertTrue(registration_receipt["valid"])
         self.assertEqual(registration_receipt["status"], "imported")
@@ -684,11 +721,15 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertTrue(registration_receipt["registration_result"]["credential_token_present"])
         self.assertFalse(registration_receipt["registration_result"]["credential_token_exported"])
         self.assertIn("credential_fingerprint_sha256", registration_receipt["registration_result"])
-        self.assertEqual(registered_envelope["ail_id"], "ail_test_agent_warrent_001")
+        self.assertEqual(registered_envelope["ail_id"], "AIL-2026-00042")
         self.assertIsNone(registered_envelope["credential"])
+        self.assertEqual(registered_envelope["signal_glyph"]["version"], "glyph.v1")
+        self.assertEqual(registered_envelope["behavior_fingerprint"]["hash"], "sha256:test-behavior-hash")
         self.assertEqual(registered_envelope["extensions"]["agent_warrent"]["registration_state"], "owner_imported_registered")
         self.assertEqual(registered_envelope["extensions"]["agent_warrent"]["external_registration"], "owner_completed_outside_paideia")
         self.assertTrue(registered_envelope["verification"]["signed"])
+        self.assertEqual(registered_envelope["verification"]["issuer"], "22blabs.ai")
+        self.assertEqual(registered_envelope["verification"]["token_type"], "JWT")
         self.assertTrue(registration_receipt["updated_envelope_validation"]["registered"])
         self.assertNotIn("eyJlocal-test-credential.signature", json.dumps(registration_receipt, ensure_ascii=False))
         self.assertNotIn("eyJlocal-test-credential.signature", json.dumps(registered_envelope, ensure_ascii=False))
