@@ -54,7 +54,11 @@ from ai22b.talent_foundry.llm_runtime import (
     doctor_llm_provider,
     run_llm_application_smoke,
 )
-from ai22b.talent_foundry.llm_onboarding import build_llm_onboarding_checklist, build_llm_provider_matrix
+from ai22b.talent_foundry.llm_onboarding import (
+    build_llm_connection_profile,
+    build_llm_onboarding_checklist,
+    build_llm_provider_matrix,
+)
 from ai22b.talent_foundry.memory_substrate import run_chat_turn_from_employment
 from ai22b.talent_foundry.onboarding import run_agent_onboarding
 from ai22b.talent_foundry.onboarding_doctor import doctor_onboarding_session
@@ -301,6 +305,17 @@ def _build_parser() -> argparse.ArgumentParser:
     llm_onboarding.add_argument("--llm-model-path")
     llm_onboarding.add_argument("--chat-surface", default=DEFAULT_CHAT_SURFACE_ID, choices=chat_surface_ids())
     llm_onboarding.add_argument("--output", required=True)
+
+    llm_connection_profile = subparsers.add_parser(
+        "build-llm-connection-profile",
+        help="Build a no-network setup and verification profile for one selected LLM provider.",
+    )
+    llm_connection_profile.add_argument("--llm-service", choices=llm_service_ids())
+    llm_connection_profile.add_argument("--llm-engine")
+    llm_connection_profile.add_argument("--llm-model")
+    llm_connection_profile.add_argument("--llm-model-path")
+    llm_connection_profile.add_argument("--chat-surface", default=DEFAULT_CHAT_SURFACE_ID, choices=chat_surface_ids())
+    llm_connection_profile.add_argument("--output", required=True)
 
     raise_command = subparsers.add_parser("raise", help="Materialize a blueprint into employable local agent outputs.")
     raise_command.add_argument("--blueprint", required=True)
@@ -1421,6 +1436,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         print(str(Path(args.output)))
         return 0 if checklist.get("schema") else 1
+
+    if args.command == "build-llm-connection-profile":
+        profile = build_llm_connection_profile(
+            llm_service=args.llm_service,
+            llm_engine=args.llm_engine,
+            llm_model=args.llm_model,
+            llm_model_path=args.llm_model_path,
+            chat_surface=args.chat_surface,
+            output_path=Path(args.output),
+        )
+        print(str(Path(args.output)))
+        return 0 if profile.get("schema") else 1
 
     if args.command == "doctor-llm-provider":
         report = doctor_llm_provider(

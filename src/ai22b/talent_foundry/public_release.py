@@ -29,6 +29,7 @@ REQUIRED_CI_MARKERS = [
     "tests\\test_cli_smoke.py",
     "tests\\test_package_smoke.py",
     ".\\scripts\\check_public_repo_hygiene.ps1",
+    "ai22b-talent-foundry build-llm-connection-profile",
     "ai22b-talent-foundry doctor-package-install",
     "ai22b-talent-foundry doctor-first-run",
     "ai22b-talent-foundry doctor-runtime-contract",

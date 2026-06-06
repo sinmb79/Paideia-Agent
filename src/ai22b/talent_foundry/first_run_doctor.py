@@ -8,6 +8,7 @@ from typing import Any
 from ai22b.config import PROJECT_ROOT
 from ai22b.talent_foundry.agent_runtime_smoke import run_agent_runtime_smoke
 from ai22b.talent_foundry.llm_onboarding import (
+    build_llm_connection_profile,
     build_llm_onboarding_checklist,
     build_llm_provider_matrix,
 )
@@ -182,6 +183,24 @@ def _onboarding_summary(report: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _connection_profile_summary(profile: dict[str, Any]) -> dict[str, Any]:
+    public_safe = _public_safe(profile)
+    setup = _as_dict(profile.get("setup_requirements"))
+    readiness = _as_dict(profile.get("readiness"))
+    return {
+        "schema": profile.get("schema"),
+        "status": profile.get("status"),
+        "selected_engine": _as_dict(profile.get("selected_llm_service")).get("engine"),
+        "requires_live_check_before_agent_work": setup.get("requires_live_check_before_agent_work"),
+        "requires_model_argument": setup.get("requires_model_argument"),
+        "live_preflight_status": readiness.get("live_preflight_status"),
+        "network_call_performed": public_safe.get("network_call_performed"),
+        "subprocess_executed": public_safe.get("subprocess_executed"),
+        "secret_values_exported": public_safe.get("secret_values_exported"),
+        "private_reasoning_trace": public_safe.get("private_reasoning_trace"),
+    }
+
+
 def doctor_first_run(
     *,
     repo_root: Path | None = None,
@@ -196,6 +215,11 @@ def doctor_first_run(
     role_model_ids = {str(item.get("role_model_id", "")) for item in role_models}
     provider_matrix = build_llm_provider_matrix(chat_surface="codex-bridge-chat")
     llm_checklist = build_llm_onboarding_checklist(
+        llm_service="deterministic_local",
+        llm_engine="deterministic_local",
+        chat_surface="codex-bridge-chat",
+    )
+    llm_connection_profile = build_llm_connection_profile(
         llm_service="deterministic_local",
         llm_engine="deterministic_local",
         chat_surface="codex-bridge-chat",
@@ -220,6 +244,7 @@ def doctor_first_run(
 
     provider_matrix_public = _public_safe(provider_matrix)
     checklist_public = _public_safe(llm_checklist)
+    connection_public = _public_safe(llm_connection_profile)
     application_runtime = _as_dict(application_smoke.get("runtime_result"))
     application_policy = _as_dict(application_smoke.get("data_policy"))
     agent_details = _as_dict(agent_runtime_smoke.get("details"))
@@ -260,6 +285,15 @@ def doctor_first_run(
             "status": llm_checklist.get("status"),
             "selected_engine": _as_dict(llm_checklist.get("selected_llm_service")).get("engine"),
         },
+    )
+    _check(
+        checks,
+        "llm_connection_profile_public_safe",
+        llm_connection_profile.get("schema") == "paideia-llm-connection-profile/v1"
+        and llm_connection_profile.get("status") == "offline_ready_no_setup"
+        and connection_public.get("network_call_performed") is False
+        and connection_public.get("secret_values_exported") is False,
+        details=_connection_profile_summary(llm_connection_profile),
     )
     _check(
         checks,
@@ -379,6 +413,8 @@ def doctor_first_run(
         and checklist_public.get("network_call_performed") is False
         and provider_doctor.get("network_access") == "blocked"
         and provider_doctor.get("live_check_requested") is False
+        and connection_public.get("network_call_performed") is False
+        and connection_public.get("secret_values_exported") is False
         and application_runtime.get("network_access") == "blocked"
         and agent_details.get("preflight_network_call_made") is False
         and agent_details.get("network_default") == "blocked"
@@ -442,6 +478,7 @@ def doctor_first_run(
                 if isinstance(llm_checklist.get("command_plan"), list)
                 else 0,
             },
+            "llm_connection_profile": _connection_profile_summary(llm_connection_profile),
             "llm_provider_doctor": {
                 "schema": provider_doctor.get("schema"),
                 "status": provider_doctor.get("status"),

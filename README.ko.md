@@ -102,7 +102,7 @@ python -m pip install -e ".[dev]"        # 테스트
 
 CI의 package smoke 테스트는 `pip install -e ".[dev]"` 이후 실행됩니다. 설치된 distribution metadata, 노출된 console script entry point, 실제 callable script target, 기능별 optional extras 분리, 패키지 메타데이터 hygiene를 확인합니다.
 
-CI는 공개 안전 first-run CLI smoke 테스트도 실행합니다. 이 테스트는 `list-role-models`, `list-llm-services`, `build-llm-onboarding-checklist --llm-engine deterministic_local`, `doctor-llm-provider --llm-engine deterministic_local`, `run-llm-application-smoke --llm-engine deterministic_local`, `run-agent-runtime-smoke --llm-engine deterministic_local`, `audit-tool-capabilities --strict`, `run-action-policy-eval`, `audit-public-release-readiness`, `build-source-sbom`, `doctor-package-install`, `doctor-runtime-contract`, `doctor-first-run`이 비공개 파일, API 키, 네트워크 접근 없이 실행되고 검토 가능한 JSON 리포트를 쓰는지 확인합니다.
+CI는 공개 안전 first-run CLI smoke 테스트도 실행합니다. 이 테스트는 `list-role-models`, `list-llm-services`, `build-llm-onboarding-checklist --llm-engine deterministic_local`, `build-llm-connection-profile --llm-engine deterministic_local`, `doctor-llm-provider --llm-engine deterministic_local`, `run-llm-application-smoke --llm-engine deterministic_local`, `run-agent-runtime-smoke --llm-engine deterministic_local`, `audit-tool-capabilities --strict`, `run-action-policy-eval`, `audit-public-release-readiness`, `build-source-sbom`, `doctor-package-install`, `doctor-runtime-contract`, `doctor-first-run`이 비공개 파일, API 키, 네트워크 접근 없이 실행되고 검토 가능한 JSON 리포트를 쓰는지 확인합니다.
 
 롤모델 목록:
 
@@ -181,6 +181,22 @@ ai22b-talent-foundry build-llm-onboarding-checklist `
 
 이 체크리스트는 선택한 LLM 서비스, 채팅 표면, provider doctor 명령, live-check 명령, application smoke 명령, 전체 agent runtime smoke 명령, 첫 채팅 명령을 기록합니다. 체크리스트 생성 자체는 네트워크를 호출하지 않으며, 실제 provider 호출은 체크리스트 안에 표시된 명시적 live 명령을 실행할 때만 수행됩니다.
 
+선택한 provider를 실제로 연결하기 전에, 필요한 환경변수, 모델명, localhost endpoint, no-network doctor, 명시적 live-check 순서, 첫 live 채팅 템플릿을 한 파일로 볼 수도 있습니다.
+
+```powershell
+ai22b-talent-foundry build-llm-connection-profile `
+  --llm-service openai_chatgpt_codex `
+  --llm-model gpt-4.1-mini `
+  --output .\llm_connection_profile.openai.json
+
+ai22b-talent-foundry build-llm-connection-profile `
+  --llm-service ollama_local `
+  --llm-model llama3.1 `
+  --output .\llm_connection_profile.ollama.json
+```
+
+이 profile은 공개 안전 기본값으로 생성됩니다. 예를 들어 `OPENAI_API_KEY` 환경변수 placeholder는 기록하지만 실제 secret 값은 저장하지 않고, 파일 생성 중 API나 localhost 서버를 호출하지 않습니다.
+
 ## P0 실행 루프
 
 고용된 에이전트 실행은 이제 단순 응답 템플릿이 아니라 다음 흐름을 따릅니다.
@@ -201,7 +217,7 @@ ai22b-talent-foundry run-hired-agent `
 API 키나 localhost 모델 서버가 준비되어 있으면 live 실행을 켤 수 있습니다.
 
 ```powershell
-$env:OPENAI_API_KEY = "<your key>"
+[Environment]::SetEnvironmentVariable("OPENAI_API_KEY", "<your key>", "Process")
 ai22b-talent-foundry run-hired-agent `
   --employment-record .\employment_record.json `
   --task "검토 가능한 증권 리서치 체크리스트 초안을 작성해줘." `
@@ -224,6 +240,17 @@ live provider 설정:
 | `lm_studio_local_http` | 로컬 LM Studio 서버 | `--llm-model`, 선택적 `--llm-model-path` endpoint |
 
 온보딩의 LLM 선택지는 단순 이름 목록이 아니라 readiness card로 제공됩니다. 각 선택지는 `runtime_readiness`, 실행할 `doctor-llm-provider` 명령, 명시적 `--live-check` 명령, 기본 no-network live-check 정책, secret 비공개 정책, 데이터 전송 범위, 실패 시 fallback 동작, 비용/로컬 자원 경고를 포함합니다. 그래서 LLM은 선택 가능한 언어 엔진으로 남고, 에이전트의 정체성은 로컬 육성 기록과 기억기판에 남습니다.
+
+첫 live 실행 전에 구체적인 연결 산출물이 필요하면 LLM connection profile을 생성합니다.
+
+```powershell
+ai22b-talent-foundry build-llm-connection-profile `
+  --llm-service openai_chatgpt_codex `
+  --llm-model gpt-4.1-mini `
+  --output .\llm_connection_profile.openai.json
+```
+
+profile에는 `setup_requirements`, `readiness`, `verification_sequence`, `daily_use_commands`, `fail_closed_expectation`, `data_policy`가 들어갑니다. API provider는 필요한 환경변수 placeholder를, Ollama 같은 로컬 HTTP provider는 localhost endpoint를 보여줍니다. 이 파일을 만드는 동안 live provider 호출은 발생하지 않습니다.
 
 live 또는 로컬 provider로 인재를 고용/실행하기 전에는 provider doctor를 먼저 실행할 수 있습니다.
 
@@ -523,6 +550,10 @@ ai22b-talent-foundry build-source-sbom `
   --repo-root . `
   --output .\source_sbom.json
 
+ai22b-talent-foundry build-llm-connection-profile `
+  --llm-engine deterministic_local `
+  --output .\llm_connection_profile.json
+
 ai22b-talent-foundry doctor-package-install `
   --repo-root . `
   --strict `
@@ -539,7 +570,7 @@ ai22b-talent-foundry doctor-first-run `
   --output .\first_run_doctor.json
 ```
 
-readiness audit는 네트워크 호출이나 서브프로세스 실행 없이 공개 필수 파일, 패키지 라이선스 메타데이터, CI marker, 릴리스 준비도 문서, 보안 정책, 공개 hygiene 정책을 검사합니다. source SBOM은 패키지 메타데이터, optional dependency group, console entrypoint, 공개 후보 파일 hash, repository digest를 기록합니다. package install doctor는 현재 환경의 설치된 distribution metadata, console script, optional extras, callable target을 확인합니다. runtime contract doctor는 외부 provider 호출 없이 live-like agent loop, 등록 도구 경계, memory review gate, fail-closed live provider 동작을 확인합니다. first-run doctor는 설치 직후 확인해야 할 공개 안전 점검을 하나의 보고서로 묶습니다. SBOM은 인벤토리이며 취약점 스캔은 아닙니다.
+readiness audit는 네트워크 호출이나 서브프로세스 실행 없이 공개 필수 파일, 패키지 라이선스 메타데이터, CI marker, 릴리스 준비도 문서, 보안 정책, 공개 hygiene 정책을 검사합니다. source SBOM은 패키지 메타데이터, optional dependency group, console entrypoint, 공개 후보 파일 hash, repository digest를 기록합니다. connection profile은 선택한 LLM 연결 경로가 secret 유출이나 provider 호출 없이 파일로 구체화되는지 증명합니다. package install doctor는 현재 환경의 설치된 distribution metadata, console script, optional extras, callable target을 확인합니다. runtime contract doctor는 외부 provider 호출 없이 live-like agent loop, 등록 도구 경계, memory review gate, fail-closed live provider 동작을 확인합니다. first-run doctor는 설치 직후 확인해야 할 공개 안전 점검을 하나의 보고서로 묶습니다. SBOM은 인벤토리이며 취약점 스캔은 아닙니다.
 
 P0 action policy 회귀 평가:
 

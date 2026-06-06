@@ -15,6 +15,7 @@ class CliSmokeTests(unittest.TestCase):
             role_models_path = tmp_path / "role_models.json"
             llm_services_path = tmp_path / "llm_services.json"
             llm_onboarding_path = tmp_path / "llm_onboarding_checklist.json"
+            llm_connection_profile_path = tmp_path / "llm_connection_profile.json"
             doctor_path = tmp_path / "llm_provider_doctor.json"
             llm_smoke_path = tmp_path / "llm_application_smoke.json"
             agent_runtime_smoke_path = tmp_path / "agent_runtime_smoke.json"
@@ -49,6 +50,15 @@ class CliSmokeTests(unittest.TestCase):
                     "deterministic_local",
                     "--output",
                     str(llm_onboarding_path),
+                ]
+            )
+            llm_connection_profile_code = cli_main(
+                [
+                    "build-llm-connection-profile",
+                    "--llm-engine",
+                    "deterministic_local",
+                    "--output",
+                    str(llm_connection_profile_path),
                 ]
             )
             doctor_code = cli_main(
@@ -143,6 +153,7 @@ class CliSmokeTests(unittest.TestCase):
             role_models = json.loads(role_models_path.read_text(encoding="utf-8"))
             llm_services = json.loads(llm_services_path.read_text(encoding="utf-8"))
             llm_onboarding = json.loads(llm_onboarding_path.read_text(encoding="utf-8"))
+            llm_connection_profile = json.loads(llm_connection_profile_path.read_text(encoding="utf-8"))
             doctor = json.loads(doctor_path.read_text(encoding="utf-8"))
             llm_smoke = json.loads(llm_smoke_path.read_text(encoding="utf-8"))
             agent_runtime_smoke = json.loads(agent_runtime_smoke_path.read_text(encoding="utf-8"))
@@ -157,6 +168,7 @@ class CliSmokeTests(unittest.TestCase):
         self.assertEqual(role_models_code, 0)
         self.assertEqual(llm_services_code, 0)
         self.assertEqual(llm_onboarding_code, 0)
+        self.assertEqual(llm_connection_profile_code, 0)
         self.assertEqual(doctor_code, 0)
         self.assertEqual(llm_smoke_code, 0)
         self.assertEqual(agent_runtime_smoke_code, 0)
@@ -205,6 +217,24 @@ class CliSmokeTests(unittest.TestCase):
         live_command = next(item for item in llm_onboarding["command_plan"] if item["id"] == "provider_doctor_live_check")
         self.assertIn("--live-check", live_command["command"])
         self.assertIn("--strict", live_command["command"])
+
+        self.assertEqual(llm_connection_profile["schema"], "paideia-llm-connection-profile/v1")
+        self.assertEqual(llm_connection_profile["status"], "offline_ready_no_setup")
+        self.assertEqual(llm_connection_profile["selected_llm_service"]["engine"], "deterministic_local")
+        self.assertFalse(llm_connection_profile["setup_requirements"]["requires_live_check_before_agent_work"])
+        self.assertFalse(llm_connection_profile["setup_requirements"]["requires_model_argument"])
+        self.assertFalse(llm_connection_profile["public_safe"]["network_call_performed"])
+        self.assertFalse(llm_connection_profile["public_safe"]["secret_values_exported"])
+        profile_sequence_ids = {item["id"] for item in llm_connection_profile["verification_sequence"]}
+        self.assertLessEqual(
+            {
+                "no_network_doctor",
+                "explicit_live_provider_check",
+                "live_application_engine_smoke",
+                "live_agent_runtime_smoke",
+            },
+            profile_sequence_ids,
+        )
 
         self.assertEqual(doctor["schema"], "paideia-llm-provider-doctor/v1")
         self.assertEqual(doctor["engine"], "deterministic_local")
@@ -336,6 +366,7 @@ class CliSmokeTests(unittest.TestCase):
             "role_model_catalog_available",
             "llm_provider_matrix_public_safe",
             "llm_onboarding_checklist_public_safe",
+            "llm_connection_profile_public_safe",
             "deterministic_provider_doctor_ready",
             "application_engine_smoke_passed",
             "agent_runtime_smoke_passed",
@@ -350,6 +381,7 @@ class CliSmokeTests(unittest.TestCase):
             self.assertTrue(first_run_checks[check_id]["passed"], check_id)
         self.assertIn("graham_value_investing", first_run_doctor["artifacts"]["role_models"]["role_model_ids"])
         self.assertEqual(first_run_doctor["artifacts"]["llm_provider_doctor"]["network_access"], "blocked")
+        self.assertEqual(first_run_doctor["artifacts"]["llm_connection_profile"]["status"], "offline_ready_no_setup")
         self.assertEqual(first_run_doctor["artifacts"]["agent_runtime_smoke"]["execution_contract_status"], "passed")
         self.assertTrue(first_run_doctor["artifacts"]["package_install_doctor"]["distribution_installed"])
         self.assertEqual(first_run_doctor["artifacts"]["runtime_contract_doctor"]["status"], "passed")

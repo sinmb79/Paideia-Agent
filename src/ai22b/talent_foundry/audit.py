@@ -32,6 +32,7 @@ from ai22b.talent_foundry.llm_runtime import (
     run_llm_application_smoke,
 )
 from ai22b.talent_foundry.learning_loop import build_reasoning_kernel, create_learning_ledger
+from ai22b.talent_foundry.llm_onboarding import build_llm_connection_profile
 from ai22b.talent_foundry.onboarding_choices import LLM_SERVICE_CATALOG
 from ai22b.talent_foundry.package_install_doctor import PACKAGE_INSTALL_DOCTOR_SCHEMA, doctor_package_install
 from ai22b.talent_foundry.role_models import list_role_models, summarize_role_model
@@ -141,6 +142,7 @@ REQUIRED_PUBLIC_PROGRAM_COMMANDS = {
     "start-console",
     "onboard-agent",
     "build-llm-onboarding-checklist",
+    "build-llm-connection-profile",
     "raise",
     "doctor-llm-provider",
     "run-llm-application-smoke",
@@ -183,6 +185,7 @@ PUBLIC_SAFE_FIRST_RUN_COMMANDS = {
     "list-role-models",
     "list-llm-services",
     "build-llm-onboarding-checklist",
+    "build-llm-connection-profile",
     "doctor-llm-provider",
     "run-llm-application-smoke",
     "run-agent-runtime-smoke",
@@ -1004,6 +1007,21 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
         llm_mode="offline",
         task="Public-safe first-run application-engine smoke.",
     )
+    llm_connection_profile = build_llm_connection_profile(
+        llm_service="deterministic_local",
+        llm_engine="deterministic_local",
+        chat_surface="codex-bridge-chat",
+    )
+    connection_profile_public = (
+        llm_connection_profile.get("public_safe", {})
+        if isinstance(llm_connection_profile.get("public_safe"), dict)
+        else {}
+    )
+    connection_profile_setup = (
+        llm_connection_profile.get("setup_requirements", {})
+        if isinstance(llm_connection_profile.get("setup_requirements"), dict)
+        else {}
+    )
     agent_runtime_smoke = run_agent_runtime_smoke(
         engine="deterministic_local",
         llm_mode="offline",
@@ -1129,6 +1147,16 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
         "smoke_raw_provider_payload_saved": smoke_retention.get("raw_provider_payload_saved"),
         "smoke_private_reasoning_trace": smoke_data_policy.get("private_reasoning_trace"),
         "application_smoke_schema": application_smoke.get("schema"),
+        "llm_connection_profile_schema": llm_connection_profile.get("schema"),
+        "llm_connection_profile_status": llm_connection_profile.get("status"),
+        "llm_connection_profile_selected_engine": llm_connection_profile.get("selected_llm_service", {}).get("engine")
+        if isinstance(llm_connection_profile.get("selected_llm_service"), dict)
+        else None,
+        "llm_connection_profile_requires_live_check": connection_profile_setup.get(
+            "requires_live_check_before_agent_work"
+        ),
+        "llm_connection_profile_network_call_performed": connection_profile_public.get("network_call_performed"),
+        "llm_connection_profile_secret_values_exported": connection_profile_public.get("secret_values_exported"),
         "application_smoke_passed": application_smoke.get("passed"),
         "application_smoke_status": application_smoke.get("status"),
         "application_smoke_engine": application_smoke.get("engine"),
@@ -1224,6 +1252,8 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
             and doctor.get("live_check_requested") is False
             and smoke_contract.get("provider_call_attempted") is False
             and smoke_contract.get("network_call_made_by_doctor") is False
+            and connection_profile_public.get("network_call_performed") is False
+            and connection_profile_public.get("secret_values_exported") is False
             and application_runtime.get("network_access") == "blocked"
             and application_preflight.get("network_call_made_by_preflight") is False
             and agent_runtime_details.get("preflight_network_call_made") is False
@@ -1255,6 +1285,12 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
         and details["smoke_raw_provider_text_saved"] is False
         and details["smoke_raw_provider_payload_saved"] is False
         and details["smoke_private_reasoning_trace"] == "do_not_store"
+        and details["llm_connection_profile_schema"] == "paideia-llm-connection-profile/v1"
+        and details["llm_connection_profile_status"] == "offline_ready_no_setup"
+        and details["llm_connection_profile_selected_engine"] == "deterministic_local"
+        and details["llm_connection_profile_requires_live_check"] is False
+        and details["llm_connection_profile_network_call_performed"] is False
+        and details["llm_connection_profile_secret_values_exported"] is False
         and details["application_smoke_schema"] == LLM_APPLICATION_SMOKE_SCHEMA
         and details["application_smoke_passed"] is True
         and details["application_smoke_status"] == "passed"

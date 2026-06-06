@@ -1854,6 +1854,86 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(checks["live_smoke"]["status"], "skipped")
         self.assertFalse(report["secret_values_exported"])
 
+    def test_llm_connection_profile_guides_openai_without_storing_secrets(self) -> None:
+        import os
+
+        from ai22b.talent_foundry.llm_onboarding import build_llm_connection_profile
+
+        old_key = os.environ.pop("OPENAI_API_KEY", None)
+        try:
+            profile = build_llm_connection_profile(
+                llm_service="openai_chatgpt_codex",
+                llm_model="gpt-4.1-mini",
+            )
+        finally:
+            if old_key is not None:
+                os.environ["OPENAI_API_KEY"] = old_key
+
+        setup = profile["setup_requirements"]
+        required_env = setup["required_env"][0]
+        sequence = {item["id"]: item for item in profile["verification_sequence"]}
+        serialized = json.dumps(profile, ensure_ascii=False)
+
+        self.assertEqual(profile["schema"], "paideia-llm-connection-profile/v1")
+        self.assertEqual(profile["status"], "needs_credentials_before_live")
+        self.assertEqual(profile["selected_llm_service"]["engine"], "openai_chatgpt_codex")
+        self.assertEqual(profile["runtime_identity_policy"], "application_engine_not_identity")
+        self.assertTrue(setup["requires_live_check_before_agent_work"])
+        self.assertTrue(setup["requires_model_argument"])
+        self.assertFalse(setup["requires_model_path"])
+        self.assertFalse(setup["requires_localhost_endpoint"])
+        self.assertEqual(required_env["preferred"], "OPENAI_API_KEY")
+        self.assertEqual(required_env["one_of"], ["OPENAI_API_KEY"])
+        self.assertFalse(required_env["stores_secret_in_profile"])
+        self.assertIn("$env:OPENAI_API_KEY", required_env["powershell"])
+        self.assertEqual(setup["recommended_model_argument"], "gpt-4.1-mini")
+        self.assertEqual(profile["readiness"]["doctor_status"], "needs_configuration")
+        self.assertFalse(profile["readiness"]["doctor_passed"])
+        self.assertEqual(profile["readiness"]["live_preflight_status"], "needs_configuration")
+        self.assertFalse(sequence["no_network_doctor"]["network_call"])
+        self.assertTrue(sequence["explicit_live_provider_check"]["network_call"])
+        self.assertIn("--live-check", sequence["explicit_live_provider_check"]["command"])
+        self.assertIn("--llm-model gpt-4.1-mini", sequence["live_application_engine_smoke"]["command"])
+        self.assertIn("--llm-mode live", profile["daily_use_commands"]["live_chat_template"])
+        self.assertFalse(profile["data_policy"]["llm_is_identity"])
+        self.assertFalse(profile["data_policy"]["secret_values_exported"])
+        self.assertFalse(profile["public_safe"]["network_call_performed"])
+        self.assertFalse(profile["public_safe"]["secret_values_exported"])
+        self.assertNotIn("sk-", serialized)
+        self.assertNotIn("fixture_value_should_not_be_exported", serialized)
+
+    def test_llm_connection_profile_guides_ollama_localhost_live_check(self) -> None:
+        from ai22b.talent_foundry.llm_onboarding import build_llm_connection_profile
+
+        profile = build_llm_connection_profile(
+            llm_service="ollama_local",
+            llm_model="llama3.1",
+        )
+        setup = profile["setup_requirements"]
+        sequence = {item["id"]: item for item in profile["verification_sequence"]}
+
+        self.assertEqual(profile["schema"], "paideia-llm-connection-profile/v1")
+        self.assertEqual(profile["status"], "ready_for_localhost_live_check")
+        self.assertEqual(profile["selected_llm_service"]["engine"], "ollama_local_http")
+        self.assertTrue(setup["requires_live_check_before_agent_work"])
+        self.assertTrue(setup["requires_model_argument"])
+        self.assertFalse(setup["requires_model_path"])
+        self.assertTrue(setup["requires_localhost_endpoint"])
+        self.assertEqual(setup["required_env"], [])
+        self.assertEqual(setup["recommended_model_argument"], "llama3.1")
+        self.assertEqual(setup["recommended_model_path_argument"], "http://localhost:11434")
+        self.assertEqual(profile["readiness"]["doctor_status"], "ready")
+        self.assertTrue(profile["readiness"]["doctor_passed"])
+        self.assertEqual(profile["readiness"]["live_preflight_status"], "ready_for_explicit_live_attempt")
+        self.assertFalse(sequence["no_network_doctor"]["network_call"])
+        self.assertTrue(sequence["explicit_live_provider_check"]["network_call"])
+        self.assertIn("--live-check", sequence["explicit_live_provider_check"]["command"])
+        self.assertIn("--llm-model llama3.1", sequence["live_agent_runtime_smoke"]["command"])
+        self.assertIn("http://localhost:11434", profile["daily_use_commands"]["live_chat_template"])
+        self.assertFalse(profile["public_safe"]["network_call_performed"])
+        self.assertFalse(profile["public_safe"]["live_check_performed"])
+        self.assertEqual(profile["public_safe"]["private_reasoning_trace"], "do_not_store")
+
     def test_llm_application_smoke_uses_runtime_path_without_raw_provider_storage(self) -> None:
         import os
 
@@ -2825,6 +2905,7 @@ class TalentFoundryTests(unittest.TestCase):
         first_run_details = audit["checkpoints"]["public_safe_first_run_smoke"]["details"]
         self.assertEqual(first_run_details["schema"], "paideia-public-safe-first-run-smoke/v1")
         self.assertIn("list-role-models", first_run_details["commands"])
+        self.assertIn("build-llm-connection-profile", first_run_details["commands"])
         self.assertIn("doctor-llm-provider", first_run_details["commands"])
         self.assertIn("run-llm-application-smoke", first_run_details["commands"])
         self.assertIn("run-agent-runtime-smoke", first_run_details["commands"])
@@ -2840,6 +2921,12 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertTrue(first_run_details["cli_smoke_covers_required_commands"])
         self.assertTrue(first_run_details["graham_value_investing_present"])
         self.assertTrue(first_run_details["deterministic_doctor_ready"])
+        self.assertEqual(first_run_details["llm_connection_profile_schema"], "paideia-llm-connection-profile/v1")
+        self.assertEqual(first_run_details["llm_connection_profile_status"], "offline_ready_no_setup")
+        self.assertEqual(first_run_details["llm_connection_profile_selected_engine"], "deterministic_local")
+        self.assertFalse(first_run_details["llm_connection_profile_requires_live_check"])
+        self.assertFalse(first_run_details["llm_connection_profile_network_call_performed"])
+        self.assertFalse(first_run_details["llm_connection_profile_secret_values_exported"])
         self.assertEqual(first_run_details["doctor_network_access"], "blocked")
         self.assertFalse(first_run_details["doctor_live_check_requested"])
         self.assertFalse(first_run_details["smoke_provider_call_attempted"])
@@ -3041,6 +3128,7 @@ class TalentFoundryTests(unittest.TestCase):
             audit["checkpoints"]["runtime_observability_comparison"]["details"]["all_records_avoid_full_session_replay"]
         )
         self.assertIn("hire-installed", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])
+        self.assertIn("build-llm-connection-profile", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])
         self.assertIn("run-llm-application-smoke", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])
         self.assertIn("run-agent-runtime-smoke", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])
         self.assertIn("audit-tool-capabilities", audit["checkpoints"]["public_program_manifest"]["details"]["commands"])
