@@ -568,18 +568,32 @@ def _build_tool_execution_status_card(
         if not isinstance(item, dict):
             continue
         scope = item.get("capability_scope", {}) if isinstance(item.get("capability_scope"), dict) else {}
+        record = item.get("execution_record", {}) if isinstance(item.get("execution_record"), dict) else {}
         tool_cards.append(
             {
                 "tool": item.get("tool"),
                 "status": item.get("status"),
                 "capability": item.get("capability"),
                 "registered": scope.get("registered"),
-                "capability_granted": scope.get("capability_granted"),
+                "capability_granted": scope.get("capability_granted", scope.get("granted")),
+                "filesystem_scope": scope.get("filesystem_scope"),
                 "network": scope.get("network"),
+                "network_call_performed": record.get("network_call_performed", False),
                 "subprocess": scope.get("subprocess"),
+                "subprocess_executed": record.get("subprocess_executed", False),
+                "side_effects_declared": record.get("side_effects_declared", scope.get("side_effects")),
+                "side_effects_performed": record.get("side_effects_performed", False),
                 "output_schema": item.get("output", {}).get("schema") if isinstance(item.get("output"), dict) else None,
+                "output_digest_sha256": item.get("output_digest_sha256") or record.get("output_digest_sha256"),
+                "execution_record_schema": record.get("schema"),
             }
         )
+    external_side_effects_performed = any(
+        bool(card.get("network_call_performed"))
+        or bool(card.get("subprocess_executed"))
+        or bool(card.get("side_effects_performed"))
+        for card in tool_cards
+    )
     next_actions = (
         ["Review the evidence packet and memory review candidate before promoting this run."]
         if status == "completed_verified"
@@ -630,7 +644,7 @@ def _build_tool_execution_status_card(
             "subprocess_default": capability_scope.get("subprocess_default", "blocked"),
             "raw_provider_payload_saved": False,
             "private_reasoning_trace": "do_not_store",
-            "external_side_effects_performed": False,
+            "external_side_effects_performed": external_side_effects_performed,
         },
         "user_visible_summary": {
             "ko": (

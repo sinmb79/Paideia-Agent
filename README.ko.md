@@ -444,7 +444,7 @@ ai22b-talent-foundry promote-simulation-rollout-winner `
 
 이 명령은 검토된 winner summary만 learning ledger와 Reasoning Ledger 후보로 남깁니다. 전체 rollout replay, private reasoning trace, 별도 projection 정체성은 저장하지 않습니다.
 
-등록형 리서치 도구 실행에는 `evidence_packet` 도구가 포함됩니다. 이 도구는 사용자 요청, LLM 초안, 정책 판단, 선택된 로컬 기억 요약을 검토 가능한 근거 항목, 체크리스트, 미지원 주장 처리 정책, 후속 질문으로 구조화합니다. 리서치 work-session이 이 evidence packet 없이 실행되면 검증은 통과가 아니라 review 필요로 표시됩니다.
+등록형 리서치 도구 실행에는 `evidence_packet` 도구가 포함됩니다. 이 도구는 사용자 요청, LLM 초안, 정책 판단, 선택된 로컬 기억 요약을 검토 가능한 근거 항목, 체크리스트, 미지원 주장 처리 정책, 후속 질문으로 구조화합니다. 리서치 work-session이 이 evidence packet 없이 실행되면 검증은 통과가 아니라 review 필요로 표시됩니다. 각 등록 도구 결과에는 `paideia-tool-result-record/v1`도 붙어 capability 승인 여부, output digest, 선언된 side effect, network/subprocess/raw-provider-payload/숨은 추론 저장 발생 여부를 digest-only 방식으로 기록합니다.
 
 모든 manifest agent run은 `execution_contract`도 남깁니다. 이 패킷은 P0 실행 루프의 공개 가능한 증거입니다. 정책이 LLM과 도구보다 먼저 검사됐는지, LLM runtime이 실제로 시도됐는지 또는 정책 때문에 생략됐는지, 등록 도구가 실행/생략됐는지, 리서치 도구 실행 시 evidence packet이 있었는지, 검증 상태와 메모리 승격 차단 상태가 무엇인지를 기록합니다. 즉 실행 결과가 단순 응답 템플릿인지, 정책-실행-검증-메모리 후보 흐름을 실제로 탔는지를 확인할 수 있습니다. 각 실행은 전체 요청 -> 정책 -> LLM -> 등록 도구 -> 검증 -> 메모리 결정 경로를 요약하는 `agent_runtime_status_card`와, 선택/완료/스킵/차단/미등록 도구, evidence packet 결과, 네트워크·서브프로세스 기본 차단, 외부 side effect 수행 여부를 보여주는 `tool_execution_status_card`를 함께 남겨 운영자가 한눈에 확인할 수 있게 합니다.
 

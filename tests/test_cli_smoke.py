@@ -620,6 +620,12 @@ class CliSmokeTests(unittest.TestCase):
         self.assertEqual(tool_audit["details"]["subprocess_default"], "blocked")
         self.assertFalse(tool_audit["public_safe"]["network_call_performed"])
         self.assertFalse(tool_audit["public_safe"]["subprocess_executed"])
+        self.assertTrue(tool_audit["details"]["result_record_checks"]["all_have_execution_record_schema"])
+        self.assertTrue(tool_audit["details"]["result_record_checks"]["all_have_output_digest"])
+        self.assertTrue(tool_audit["details"]["result_record_checks"]["no_network_calls"])
+        self.assertTrue(tool_audit["details"]["result_record_checks"]["no_subprocess_execution"])
+        self.assertTrue(tool_audit["details"]["result_record_checks"]["no_side_effects_performed"])
+        self.assertTrue(tool_audit["details"]["result_record_checks"]["private_reasoning_not_stored"])
 
         self.assertEqual(policy_eval["schema"], "paideia-action-policy-eval-report/v1")
         self.assertEqual(policy_eval["status"], "passed")

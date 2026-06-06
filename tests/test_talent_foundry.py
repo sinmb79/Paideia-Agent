@@ -2536,6 +2536,34 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("assessment", tool_results)
         self.assertIn("memory_consolidation", tool_results)
         self.assertIn("parent_controlled_projection_team", tool_results)
+        for tool_id, item in tool_results.items():
+            record = item["execution_record"]
+            self.assertEqual(record["schema"], "paideia-tool-result-record/v1", tool_id)
+            self.assertEqual(record["status"], item["status"], tool_id)
+            self.assertEqual(record["output_digest_sha256"], item["output_digest_sha256"], tool_id)
+            self.assertEqual(len(record["output_digest_sha256"]), 64, tool_id)
+            self.assertTrue(record["registered"], tool_id)
+            self.assertTrue(record["capability_granted"], tool_id)
+            self.assertFalse(record["network_call_performed"], tool_id)
+            self.assertFalse(record["subprocess_executed"], tool_id)
+            self.assertFalse(record["side_effects_performed"], tool_id)
+            self.assertFalse(record["raw_provider_payload_saved"], tool_id)
+            self.assertEqual(record["private_reasoning_trace"], "do_not_store", tool_id)
+        tool_cards = {item["tool"]: item for item in result["tool_execution_status_card"]["tool_cards"]}
+        self.assertEqual(tool_cards["local_file_read"]["execution_record_schema"], "paideia-tool-result-record/v1")
+        self.assertTrue(tool_cards["local_file_read"]["capability_granted"])
+        self.assertEqual(
+            tool_cards["local_file_read"]["output_digest_sha256"],
+            tool_results["local_file_read"]["output_digest_sha256"],
+        )
+        self.assertEqual(tool_cards["local_file_read"]["filesystem_scope"], "declared_context_only")
+        self.assertFalse(tool_cards["local_file_read"]["network_call_performed"])
+        self.assertFalse(tool_cards["local_file_read"]["subprocess_executed"])
+        self.assertFalse(tool_cards["local_file_read"]["side_effects_performed"])
+        self.assertEqual(
+            result["tool_execution_status_card"]["public_safe"]["external_side_effects_performed"],
+            False,
+        )
         self.assertEqual(tool_results["local_file_read"]["capability_scope"]["filesystem_scope"], "declared_context_only")
         self.assertEqual(
             tool_results["local_file_write"]["capability_scope"]["filesystem_scope"],
@@ -2589,6 +2617,16 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(result["run_status"], "completed")
         self.assertEqual(result["tool_execution"]["tool_results"][0]["status"], "skipped")
         self.assertEqual(result["tool_execution"]["tool_results"][0]["capability_scope"]["registered"], False)
+        self.assertEqual(
+            result["tool_execution"]["tool_results"][0]["execution_record"]["schema"],
+            "paideia-tool-result-record/v1",
+        )
+        self.assertFalse(result["tool_execution"]["tool_results"][0]["execution_record"]["registered"])
+        self.assertFalse(result["tool_execution"]["tool_results"][0]["execution_record"]["capability_granted"])
+        self.assertEqual(len(result["tool_execution"]["tool_results"][0]["output_digest_sha256"]), 64)
+        self.assertFalse(result["tool_execution"]["tool_results"][0]["execution_record"]["network_call_performed"])
+        self.assertFalse(result["tool_execution"]["tool_results"][0]["execution_record"]["subprocess_executed"])
+        self.assertFalse(result["tool_execution"]["tool_results"][0]["execution_record"]["side_effects_performed"])
         self.assertEqual(result["verification"]["status"], "needs_review")
         self.assertIn("unregistered_tool_selected:ghost_research_tool", result["verification"]["issues"])
         self.assertEqual(result["execution_contract"]["status"], "needs_review")

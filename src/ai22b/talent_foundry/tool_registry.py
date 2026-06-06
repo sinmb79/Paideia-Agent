@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Callable
 
 
 TOOL_EXECUTION_SCHEMA = "paideia-tool-execution/v1"
+TOOL_RESULT_RECORD_SCHEMA = "paideia-tool-result-record/v1"
 TOOL_CAPABILITY_SCOPE_SCHEMA = "paideia-tool-capability-scope/v1"
 TOOL_CAPABILITY_AUDIT_SCHEMA = "paideia-tool-capability-audit/v1"
 REQUIRED_DEFAULT_TOOLS = {
@@ -64,6 +66,7 @@ class ToolSpec:
             "registered": True,
             "capability": self.capability,
             "granted": granted,
+            "capability_granted": granted,
             "data_classes": list(self.data_classes),
             "filesystem": self.filesystem_scope,
             "filesystem_scope": self.filesystem_scope,
@@ -370,6 +373,7 @@ def _unknown_tool_scope(tool_id: str) -> dict[str, Any]:
         "registered": False,
         "capability": "unknown",
         "granted": False,
+        "capability_granted": False,
         "data_classes": [],
         "filesystem": "none",
         "filesystem_scope": "none",
@@ -378,6 +382,62 @@ def _unknown_tool_scope(tool_id: str) -> dict[str, Any]:
         "subprocess": "blocked",
         "subprocess_scope": "blocked",
         "side_effects": "unknown",
+    }
+
+
+def _stable_digest(value: Any) -> str:
+    return hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
+
+
+def _tool_result_record(
+    *,
+    tool_id: str,
+    status: str,
+    capability: str,
+    capability_scope: dict[str, Any],
+    output: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "schema": TOOL_RESULT_RECORD_SCHEMA,
+        "recorded_at_utc": datetime.now(timezone.utc).isoformat(),
+        "tool": tool_id,
+        "status": status,
+        "capability": capability,
+        "registered": capability_scope.get("registered"),
+        "capability_granted": capability_scope.get("capability_granted", capability_scope.get("granted")),
+        "output_digest_sha256": _stable_digest(output),
+        "side_effects_declared": capability_scope.get("side_effects"),
+        "side_effects_performed": False,
+        "network_call_performed": False,
+        "subprocess_executed": False,
+        "raw_provider_payload_saved": False,
+        "private_reasoning_trace": "do_not_store",
+    }
+
+
+def _tool_result(
+    *,
+    tool_id: str,
+    status: str,
+    capability: str,
+    capability_scope: dict[str, Any],
+    output: dict[str, Any],
+) -> dict[str, Any]:
+    record = _tool_result_record(
+        tool_id=tool_id,
+        status=status,
+        capability=capability,
+        capability_scope=capability_scope,
+        output=output,
+    )
+    return {
+        "tool": tool_id,
+        "status": status,
+        "capability": capability,
+        "capability_scope": capability_scope,
+        "output": output,
+        "output_digest_sha256": record["output_digest_sha256"],
+        "execution_record": record,
     }
 
 
@@ -429,25 +489,26 @@ def execute_registered_tools(
     for tool_id in selected_tools:
         tool = active_registry.get(tool_id)
         if not tool:
+            scope = scope_by_tool.get(tool_id, _unknown_tool_scope(tool_id))
             results.append(
-                {
-                    "tool": tool_id,
-                    "status": "skipped",
-                    "capability": "unknown",
-                    "capability_scope": scope_by_tool.get(tool_id, _unknown_tool_scope(tool_id)),
-                    "output": {"reason": "tool_not_registered"},
-                }
+                _tool_result(
+                    tool_id=tool_id,
+                    status="skipped",
+                    capability="unknown",
+                    capability_scope=scope,
+                    output={"reason": "tool_not_registered"},
+                )
             )
             continue
         if tool.capability not in granted:
             results.append(
-                {
-                    "tool": tool_id,
-                    "status": "blocked",
-                    "capability": tool.capability,
-                    "capability_scope": scope_by_tool[tool_id],
-                    "output": {"reason": "capability_not_granted"},
-                }
+                _tool_result(
+                    tool_id=tool_id,
+                    status="blocked",
+                    capability=tool.capability,
+                    capability_scope=scope_by_tool[tool_id],
+                    output={"reason": "capability_not_granted"},
+                )
             )
             continue
         output = tool.handler(
@@ -460,13 +521,13 @@ def execute_registered_tools(
             }
         )
         results.append(
-            {
-                "tool": tool_id,
-                "status": "completed",
-                "capability": tool.capability,
-                "capability_scope": scope_by_tool[tool_id],
-                "output": output,
-            }
+            _tool_result(
+                tool_id=tool_id,
+                status="completed",
+                capability=tool.capability,
+                capability_scope=scope_by_tool[tool_id],
+                output=output,
+            )
         )
     return {
         "schema": TOOL_EXECUTION_SCHEMA,
@@ -620,6 +681,27 @@ def audit_tool_capability_registry(registry: dict[str, ToolSpec] | None = None) 
         .get("separate_consciousness")
         is False,
     }
+    result_records = [
+        item.get("execution_record", {})
+        for item in [
+            *denied_execution.get("tool_results", []),
+            *granted_execution.get("tool_results", []),
+            *unknown_execution.get("tool_results", []),
+        ]
+        if isinstance(item, dict)
+    ]
+    result_record_checks = {
+        "all_have_execution_record_schema": bool(result_records)
+        and all(record.get("schema") == TOOL_RESULT_RECORD_SCHEMA for record in result_records),
+        "all_have_output_digest": bool(result_records)
+        and all(len(str(record.get("output_digest_sha256", ""))) == 64 for record in result_records),
+        "no_network_calls": all(record.get("network_call_performed") is False for record in result_records),
+        "no_subprocess_execution": all(record.get("subprocess_executed") is False for record in result_records),
+        "no_side_effects_performed": all(record.get("side_effects_performed") is False for record in result_records),
+        "private_reasoning_not_stored": all(
+            record.get("private_reasoning_trace") == "do_not_store" for record in result_records
+        ),
+    }
     unknown_result = unknown_execution["tool_results"][0] if unknown_execution["tool_results"] else {}
     details = {
         "tool_count": len(tool_ids),
@@ -643,6 +725,7 @@ def audit_tool_capability_registry(registry: dict[str, ToolSpec] | None = None) 
         and all(status == "completed" for status in granted_statuses.values()),
         "granted_statuses": granted_statuses,
         "output_checks": output_checks,
+        "result_record_checks": result_record_checks,
         "unknown_tool_status": unknown_result.get("status"),
         "unknown_tool_registered": unknown_result.get("capability_scope", {}).get("registered"),
         "network_default": denied_execution.get("capability_scope", {}).get("network_default"),
@@ -661,6 +744,7 @@ def audit_tool_capability_registry(registry: dict[str, ToolSpec] | None = None) 
         and details["granted_execution_model"] == "registered_capability_checked_local_tools_v1"
         and details["granted_all_completed"] is True
         and all(output_checks.values())
+        and all(result_record_checks.values())
         and details["unknown_tool_status"] == "skipped"
         and details["unknown_tool_registered"] is False
         and details["network_default"] == "blocked"
