@@ -3905,12 +3905,33 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertTrue(check_by_id["offline_first_chat_completed"]["passed"])
         self.assertEqual(report["artifacts"]["first_chat"]["chat_status"], "completed")
         self.assertEqual(report["artifacts"]["first_chat"]["output"], "paideia_first_run_chat_smoke.json")
+        self.assertEqual(
+            report["artifacts"]["first_chat"]["program_chat_status_card"]["schema"],
+            "ai22b-paideia-agent-program-chat-status-card/v1",
+        )
+        self.assertEqual(report["artifacts"]["first_chat"]["program_chat_status_card"]["status"], "completed_verified")
         self.assertEqual(first_chat["chat_status"], "completed")
         self.assertFalse(first_chat["stored_private_reasoning_trace"])
         self.assertEqual(first_chat["chat_runtime_status_card"]["schema"], "paideia-chat-runtime-status-card/v1")
         self.assertEqual(first_chat["chat_runtime_status_card"]["status"], "completed_offline")
         self.assertFalse(first_chat["chat_runtime_status_card"]["fallback"]["used"])
         self.assertEqual(first_chat["chat_runtime_status_card"]["learning"]["decision"], "not_requested")
+        self.assertEqual(
+            first_chat["agent_program_chat_status_card"]["schema"],
+            "ai22b-paideia-agent-program-chat-status-card/v1",
+        )
+        self.assertEqual(first_chat["agent_program_chat_status_card"]["status"], "completed_verified")
+        self.assertEqual(first_chat["agent_program_chat_status_card"]["command_surface"], "run-agent-program-chat")
+        self.assertEqual(
+            first_chat["agent_program_chat_status_card"]["chat_surface"]["chat_runtime_status"],
+            "completed_offline",
+        )
+        self.assertFalse(
+            first_chat["agent_program_chat_status_card"]["public_safe"]["program_wrapper_network_call_performed"]
+        )
+        self.assertFalse(
+            first_chat["agent_program_chat_status_card"]["public_safe"]["private_reasoning_trace_stored"]
+        )
 
     def test_migrate_openclaw_skill_wraps_and_quarantines_imported_asset(self) -> None:
         from ai22b.talent_foundry.agent_program import build_paideia_agent_install_kit, doctor_agent_program
@@ -4061,6 +4082,18 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(chat["agent_program"]["schema"], "ai22b-paideia-agent-program/v1")
         self.assertEqual(chat["agent_program"]["name"], "Paideia Agent")
         self.assertIn("reasoning_kibo_contract", chat["agent_program"])
+        self.assertEqual(
+            chat["agent_program_chat_status_card"]["schema"],
+            "ai22b-paideia-agent-program-chat-status-card/v1",
+        )
+        self.assertEqual(chat["agent_program_chat_status_card"]["status"], "completed_verified")
+        self.assertEqual(chat["agent_program_chat_status_card"]["command_surface"], "run-agent-program-chat")
+        self.assertEqual(chat["agent_program_chat_status_card"]["llm_runtime"]["selected_mode"], "offline")
+        self.assertEqual(
+            chat["agent_program_chat_status_card"]["memory_route"]["reasoning_ledger_display_name"],
+            "Reasoning Ledger (Ariadne Thread)",
+        )
+        self.assertFalse(chat["agent_program_chat_status_card"]["provider_gate"]["fallback_presented_as_live"])
         self.assertEqual(chat["conversation_intent"], "paideia_program_scope_question")
         self.assertEqual(chat["active_operator"], "paideia.education_axis_scope")
         self.assertIn("Reasoning Ledger(Ariadne Thread)는 Paideia가 길러낸 여러 결과 중 하나", chat["assistant_answer"])

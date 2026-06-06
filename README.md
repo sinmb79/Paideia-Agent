@@ -347,6 +347,8 @@ ai22b-talent-foundry run-agent-program-chat `
   --message "Explain how you would begin a valuation memo."
 ```
 
+Each installed-program chat output now includes `agent_program_chat_status_card`. This card ties the chat turn back to the installable Paideia program, selected LLM mode, chat surface, provider preflight, bounded memory route, learning decision, and public-safe proof flags. It lets an operator verify that the conversation went through the installed agent program instead of a loose prompt wrapper.
+
 ## Hermes/OpenClaw-Style Skill Migration
 
 Hermes and OpenClaw both make skill and memory systems central to agent usefulness. Paideia supports migration from those ecosystems, but does not execute imported skills automatically.

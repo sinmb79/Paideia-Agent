@@ -497,6 +497,7 @@ ai22b-talent-foundry onboard-agent `
 - `paideia_runtime_readiness.json`: 설치형 kit의 LLM preflight, 첫 실행 smoke 명령, fail-closed 정책을 검증하는 준비 카드
 - `paideia_kit_first_run_doctor.json`: kit doctor와 offline 첫 채팅 smoke를 함께 검증한 첫 실행 보고서
 - `paideia_first_run_chat_smoke.json`: live provider 호출 없이 생성한 첫 대화 검증 산출물
+- 채팅 JSON 내부의 `agent_program_chat_status_card`: 설치형 Paideia 프로그램, 선택한 LLM mode, 채팅 표면, provider preflight, bounded memory route, 학습 결정, public-safe 증거를 한 번에 확인하는 카드
 - Hermes/OpenClaw 스타일 어댑터 manifest
 - `agent_identity_envelope.json`: [Agent_warrent / Agent Identity Layer](https://github.com/sinmb79/Agent_warrent) `ail.v1` 로컬 미등록 신원 envelope
 
@@ -508,6 +509,8 @@ ai22b-talent-foundry doctor-paideia-kit-first-run `
   --strict `
   --output .\paideia-agent-kits\grham_junior_paideia_agent\paideia_kit_first_run_doctor.json
 ```
+
+`run-agent-program-chat`가 쓰는 모든 채팅 산출물에는 `agent_program_chat_status_card`가 포함됩니다. 이 카드는 대화가 느슨한 프롬프트 래퍼가 아니라 설치된 Paideia Agent 프로그램, 로컬 성장 기록, Reasoning Ledger, provider gate를 실제로 통과했는지 검토할 수 있게 합니다.
 
 `learning_ledger.json`에는 `memory_lifecycle` 리포트가 포함됩니다. 이 리포트는 기억 쓰기 정책, 승격/격리 기준, 수동 삭제 정책, 복구/마이그레이션 방침, 검색 품질 상태, 개인정보/secret/로컬 경로 위생 검사를 기록합니다. active memory route와 hired chat turn에는 `memory_lifecycle_status_card`도 포함되어 선택된 기억 수, 격리 기억 제외 여부, route degradation, 학습 쓰기 결정, 위생 검사를 운영자가 한눈에 확인할 수 있습니다. 격리된 경험은 active context에서 제외되고, private reasoning trace 저장은 계속 금지됩니다.
 

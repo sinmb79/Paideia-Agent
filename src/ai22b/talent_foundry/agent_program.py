@@ -27,6 +27,7 @@ AGENT_PROGRAM_SCHEMA = "ai22b-paideia-agent-program/v1"
 INSTALL_KIT_SCHEMA = "ai22b-paideia-agent-install-kit/v1"
 PROGRAM_DOCTOR_SCHEMA = "ai22b-paideia-agent-program-doctor/v1"
 KIT_FIRST_RUN_DOCTOR_SCHEMA = "ai22b-paideia-kit-first-run-doctor/v1"
+PROGRAM_CHAT_STATUS_CARD_SCHEMA = "ai22b-paideia-agent-program-chat-status-card/v1"
 DEFAULT_AGENT_PROGRAM_NAME = "Paideia Agent"
 DEFAULT_AGENT_PROGRAM_NAME_KO = "Paideia Agent"
 DEFAULT_AGENT_PROGRAM_FILE = "22b_paideia_agent_program.json"
@@ -371,6 +372,137 @@ def _program_scope_reply(program: dict[str, Any]) -> tuple[str, list[dict[str, s
         },
     ]
     return answer, summary
+
+
+def _build_agent_program_chat_status_card(
+    *,
+    program: dict[str, Any],
+    chat: dict[str, Any],
+    program_path: Path,
+    output_path: Path,
+    employment_record_path: Path,
+    selected_llm_mode: str,
+    selected_learn: bool,
+    llm_model: str | None,
+) -> dict[str, Any]:
+    chat_runtime = chat.get("chat_runtime_status_card", {})
+    if not isinstance(chat_runtime, dict):
+        chat_runtime = {}
+    memory_lifecycle = chat_runtime.get("memory_lifecycle", {})
+    if not isinstance(memory_lifecycle, dict):
+        memory_lifecycle = {}
+    provider_preflight = chat.get("llm_provider_preflight", {})
+    if not isinstance(provider_preflight, dict):
+        provider_preflight = {}
+    fallback = chat_runtime.get("fallback", {})
+    if not isinstance(fallback, dict):
+        fallback = {}
+    learning = chat_runtime.get("learning", {})
+    if not isinstance(learning, dict):
+        learning = {}
+    selected_service = program.get("onboarding_flow", {}).get("selected_llm_service", {})
+    if not isinstance(selected_service, dict):
+        selected_service = {}
+    selected_surface = program.get("onboarding_flow", {}).get("selected_chat_surface", {})
+    if not isinstance(selected_surface, dict):
+        selected_surface = {}
+
+    chat_status = chat.get("chat_status")
+    chat_runtime_status = chat_runtime.get("status")
+    stored_private_trace = chat.get("stored_private_reasoning_trace")
+    if chat_status == "needs_configuration" or chat_runtime_status == "needs_configuration":
+        status = "needs_configuration"
+    elif (
+        chat_status == "completed"
+        and chat_runtime.get("schema") == "paideia-chat-runtime-status-card/v1"
+        and stored_private_trace is False
+    ):
+        status = "completed_verified"
+    elif chat_status == "completed":
+        status = "completed_needs_runtime_review"
+    else:
+        status = "needs_review"
+
+    return {
+        "schema": PROGRAM_CHAT_STATUS_CARD_SCHEMA,
+        "created_at_utc": _now(),
+        "status": status,
+        "command_surface": "run-agent-program-chat",
+        "program": {
+            "schema": program.get("schema"),
+            "name": program.get("name"),
+            "name_ko": program.get("name_ko"),
+            "program_file": program_path.name,
+            "output_file": output_path.name,
+            "employment_record": employment_record_path.name,
+            "profile_isolation": program.get("security", {}).get("profile_isolation"),
+        },
+        "llm_runtime": {
+            "selected_mode": selected_llm_mode,
+            "selected_model": llm_model,
+            "selected_service_id": selected_service.get("service_id") or selected_service.get("id"),
+            "selected_engine": selected_service.get("engine"),
+            "reply_generation_mode": chat.get("reply_generation_mode"),
+            "identity_policy": program.get("runtime_topology", {}).get("connected_llm_role"),
+            "application_engine_not_identity": True,
+        },
+        "chat_surface": {
+            "selected_chat_surface": selected_surface.get("id"),
+            "active_operator": chat.get("active_operator"),
+            "conversation_intent": chat.get("conversation_intent"),
+            "chat_status": chat_status,
+            "chat_runtime_status": chat_runtime_status,
+            "chat_runtime_status_card_schema": chat_runtime.get("schema"),
+        },
+        "provider_gate": {
+            "preflight_status": provider_preflight.get("status"),
+            "live_check_performed": provider_preflight.get("live_check_performed"),
+            "network_call_made_by_preflight": provider_preflight.get("network_call_made_by_preflight"),
+            "fallback_used": fallback.get("used"),
+            "fallback_presented_as_live": fallback.get("presented_as_live"),
+        },
+        "memory_route": {
+            "reasoning_ledger_display_name": program.get("reasoning_kibo_contract", {}).get("display_name"),
+            "bounded_selected_context": program.get("security", {}).get("memory_replay_policy"),
+            "memory_lifecycle_schema": memory_lifecycle.get("schema"),
+            "memory_lifecycle_status": memory_lifecycle.get("status"),
+            "selected_count": memory_lifecycle.get("selected_count"),
+            "quarantined_excluded": memory_lifecycle.get("quarantined_excluded"),
+        },
+        "learning": {
+            "learn_from_chat_requested": selected_learn,
+            "decision": learning.get("decision"),
+            "automatic_promotion_performed": chat.get("learning_update", {}).get("automatic_promotion_performed")
+            if isinstance(chat.get("learning_update"), dict)
+            else False,
+            "review_required": learning.get("review_required"),
+        },
+        "public_safe": {
+            "program_wrapper_network_call_performed": False,
+            "program_wrapper_subprocess_executed": False,
+            "secret_values_exported": False,
+            "raw_provider_payload_saved": False,
+            "private_reasoning_trace_stored": stored_private_trace is not False,
+            "full_session_replay_saved": False,
+            "absolute_paths_exported": False,
+        },
+        "evidence": {
+            "chat_runtime_status_card_present": chat_runtime.get("schema") == "paideia-chat-runtime-status-card/v1",
+            "memory_lifecycle_status_card_present": bool(memory_lifecycle.get("schema")),
+            "stored_private_reasoning_trace": stored_private_trace,
+            "chat_execution_trace_count": len(chat.get("chat_execution_trace", []))
+            if isinstance(chat.get("chat_execution_trace"), list)
+            else 0,
+            "last_trace_action": chat.get("chat_execution_trace", [{}])[-1].get("action")
+            if isinstance(chat.get("chat_execution_trace"), list) and chat.get("chat_execution_trace")
+            else None,
+        },
+        "next_actions": [
+            "Review this card before presenting the chat as a verified installed-agent conversation.",
+            "Use live mode only after the selected provider profile and privacy posture are ready.",
+            "Promote chat learning only from reviewable summaries, never hidden chain-of-thought.",
+        ],
+    }
 
 
 def _optional_cli_arg(flag: str, value: Any) -> list[str]:
@@ -1346,6 +1478,24 @@ def doctor_paideia_kit_first_run(
             output=first_chat_path.name,
         )
     )
+    program_chat_card = (
+        chat.get("agent_program_chat_status_card", {})
+        if isinstance(chat.get("agent_program_chat_status_card"), dict)
+        else {}
+    )
+    checks.append(
+        _check(
+            "first_chat_program_runtime_card",
+            program_chat_card.get("schema") == PROGRAM_CHAT_STATUS_CARD_SCHEMA
+            and program_chat_card.get("status") == "completed_verified"
+            and program_chat_card.get("command_surface") == "run-agent-program-chat"
+            and program_chat_card.get("public_safe", {}).get("program_wrapper_network_call_performed") is False
+            and program_chat_card.get("public_safe", {}).get("private_reasoning_trace_stored") is False,
+            schema=program_chat_card.get("schema"),
+            status=program_chat_card.get("status"),
+            command_surface=program_chat_card.get("command_surface"),
+        )
+    )
     checks.append(
         _check(
             "first_chat_learning_not_auto_promoted",
@@ -1412,6 +1562,14 @@ def doctor_paideia_kit_first_run(
                 "reply_generation_mode": chat.get("reply_generation_mode"),
                 "active_operator": chat.get("active_operator"),
                 "stored_private_reasoning_trace": chat.get("stored_private_reasoning_trace"),
+                "program_chat_status_card": {
+                    "schema": program_chat_card.get("schema"),
+                    "status": program_chat_card.get("status"),
+                    "command_surface": program_chat_card.get("command_surface"),
+                    "chat_runtime_status": program_chat_card.get("chat_surface", {}).get("chat_runtime_status")
+                    if isinstance(program_chat_card.get("chat_surface"), dict)
+                    else None,
+                },
                 "output": first_chat_path.name if first_chat_path.exists() else None,
             },
         },
@@ -1469,5 +1627,15 @@ def run_agent_program_chat(
         "selected_llm_service": program.get("onboarding_flow", {}).get("selected_llm_service"),
         "selected_chat_surface": program.get("onboarding_flow", {}).get("selected_chat_surface"),
     }
+    chat["agent_program_chat_status_card"] = _build_agent_program_chat_status_card(
+        program=program,
+        chat=chat,
+        program_path=program_path,
+        output_path=output_path,
+        employment_record_path=employment_record_path,
+        selected_llm_mode=selected_llm_mode,
+        selected_learn=selected_learn,
+        llm_model=llm_model,
+    )
     _write_json(output_path, chat)
     return chat
