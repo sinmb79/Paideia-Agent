@@ -328,6 +328,8 @@ ai22b-talent-foundry doctor-agent-program `
   --program "$env:AI22B_STORAGE_ROOT\paideia-agent-kits\grham_junior_paideia_agent\22b_paideia_agent_program.json"
 ```
 
+The kit doctor now checks `llm_connection_profile.json` and `paideia_runtime_readiness.json` when they are present. Together they show the selected LLM engine, no-network provider preflight, first-run smoke commands, and fail-closed expectations before any live API or localhost model call is attempted.
+
 Chat through the local education records and Reasoning Ledger:
 
 ```powershell
@@ -372,6 +374,8 @@ A Paideia Agent kit can include:
 - `22b_paideia_agent_program.json`
 - `paideia_agent_install_manifest.json`
 - `paideia_onboarding.template.json`
+- `llm_connection_profile.json`
+- `paideia_runtime_readiness.json`
 - `doctor_paideia.ps1`
 - `start_paideia_chat.ps1`
 - `adapter_manifests/codex_native.json`

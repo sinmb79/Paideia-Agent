@@ -491,6 +491,8 @@ ai22b-talent-foundry onboard-agent `
 - `learning_ledger.json`
 - `memory_substrate.json`
 - `22b_paideia_agent_program.json`
+- `llm_connection_profile.json`: 선택된 LLM, 모델/endpoint, no-network doctor와 live-check 순서를 기록한 연결 프로필
+- `paideia_runtime_readiness.json`: 설치형 kit의 LLM preflight, 첫 실행 smoke 명령, fail-closed 정책을 검증하는 준비 카드
 - Hermes/OpenClaw 스타일 어댑터 manifest
 - `agent_identity_envelope.json`: [Agent_warrent / Agent Identity Layer](https://github.com/sinmb79/Agent_warrent) `ail.v1` 로컬 미등록 신원 envelope
 

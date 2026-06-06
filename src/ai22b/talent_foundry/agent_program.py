@@ -10,6 +10,8 @@ from ai22b.talent_foundry.agent_identity_card import (
     build_agent_id_card_payload,
     build_agent_identity_layer_envelope,
 )
+from ai22b.talent_foundry.llm_onboarding import build_llm_connection_profile
+from ai22b.talent_foundry.llm_runtime import build_llm_provider_preflight, build_llm_runtime_config
 from ai22b.talent_foundry.memory_substrate import build_memory_substrate, run_chat_turn_from_employment, write_memory_substrate
 from ai22b.talent_foundry.onboarding_choices import (
     CHAT_SURFACE_CATALOG,
@@ -31,6 +33,8 @@ DEFAULT_CHAT_SCRIPT = "start_paideia_chat.ps1"
 DEFAULT_ONBOARDING_TEMPLATE = "paideia_onboarding.template.json"
 DEFAULT_INSTALL_MANIFEST = "paideia_agent_install_manifest.json"
 DEFAULT_DOCTOR_SCRIPT = "doctor_paideia.ps1"
+DEFAULT_LLM_CONNECTION_PROFILE = "llm_connection_profile.json"
+DEFAULT_RUNTIME_READINESS = "paideia_runtime_readiness.json"
 
 
 def _now() -> str:
@@ -234,6 +238,8 @@ powershell -ExecutionPolicy Bypass -File .\\doctor_paideia.ps1
 powershell -ExecutionPolicy Bypass -File .\\start_paideia_chat.ps1
 ```
 
+The doctor checks `llm_connection_profile.json` and `paideia_runtime_readiness.json` when they are present. These files describe the selected LLM engine, no-network preflight result, first-run smoke commands, and fail-closed behavior before any live provider call is attempted.
+
 To let the selected LLM service answer when it is available, use auto mode:
 
 ```powershell
@@ -362,6 +368,202 @@ def _program_scope_reply(program: dict[str, Any]) -> tuple[str, list[dict[str, s
         },
     ]
     return answer, summary
+
+
+def _optional_cli_arg(flag: str, value: Any) -> list[str]:
+    if value is None or str(value).strip() == "":
+        return []
+    return [flag, str(value)]
+
+
+def _command_text(parts: list[str]) -> str:
+    return " ".join(parts)
+
+
+def _runtime_config_from_employment(employment: dict[str, Any]) -> dict[str, Any]:
+    runtime = employment.get("llm_runtime", {}) if isinstance(employment.get("llm_runtime"), dict) else {}
+    llm_service = employment.get("llm_service", {}) if isinstance(employment.get("llm_service"), dict) else {}
+    engine = runtime.get("engine") or llm_service.get("engine") or "deterministic_local"
+    return build_llm_runtime_config(
+        engine=str(engine),
+        service=runtime.get("service") or llm_service.get("service_id") or str(engine),
+        model=runtime.get("model") or llm_service.get("selected_model"),
+        model_path=runtime.get("model_path") or llm_service.get("selected_model_path"),
+    )
+
+
+def _build_kit_runtime_readiness(
+    *,
+    employment: dict[str, Any],
+    program: dict[str, Any],
+    llm_connection_profile: dict[str, Any] | None,
+    output_path: Path,
+) -> dict[str, Any]:
+    runtime_config = _runtime_config_from_employment(employment)
+    engine = runtime_config["engine"]
+    model = runtime_config.get("model")
+    model_path = runtime_config.get("model_path")
+    offline_preflight = build_llm_provider_preflight(runtime_config, llm_mode="offline", llm_model=model)
+    live_preflight = build_llm_provider_preflight(runtime_config, llm_mode="live", llm_model=model)
+    verification_sequence = (
+        llm_connection_profile.get("verification_sequence", [])
+        if isinstance(llm_connection_profile, dict)
+        else []
+    )
+    verification_ids = [str(item.get("id")) for item in verification_sequence if isinstance(item, dict)]
+    provider_args = [
+        "--llm-engine",
+        engine,
+        *_optional_cli_arg("--llm-model", model),
+        *_optional_cli_arg("--llm-model-path", model_path),
+    ]
+    checks = [
+        {
+            "id": "llm_connection_profile_present",
+            "passed": isinstance(llm_connection_profile, dict)
+            and llm_connection_profile.get("schema") == "paideia-llm-connection-profile/v1",
+        },
+        {
+            "id": "connection_profile_public_safe",
+            "passed": isinstance(llm_connection_profile, dict)
+            and llm_connection_profile.get("public_safe", {}).get("network_call_performed") is False
+            and llm_connection_profile.get("public_safe", {}).get("secret_values_exported") is False
+            and llm_connection_profile.get("public_safe", {}).get("raw_provider_payload_saved") is False,
+        },
+        {
+            "id": "identity_boundary",
+            "passed": runtime_config.get("identity_policy") == "application_engine_not_identity",
+        },
+        {
+            "id": "offline_preflight_no_network",
+            "passed": offline_preflight.get("network_call_made_by_preflight") is False
+            and offline_preflight.get("live_check_performed") is False,
+        },
+        {
+            "id": "live_preflight_fail_closed_no_network",
+            "passed": live_preflight.get("network_call_made_by_preflight") is False
+            and live_preflight.get("live_check_performed") is False
+            and live_preflight.get("live_check_requires_explicit_flag") is True,
+        },
+        {
+            "id": "verification_sequence_covers_runtime",
+            "passed": {
+                "no_network_doctor",
+                "explicit_live_provider_check",
+                "live_agent_runtime_smoke",
+                "chat_runtime_smoke",
+            }
+            <= set(verification_ids),
+        },
+    ]
+    readiness = {
+        "schema": "ai22b-paideia-kit-runtime-readiness/v1",
+        "created_at_utc": _now(),
+        "program": program.get("name"),
+        "agent": program.get("agent"),
+        "selected_llm_service": program.get("onboarding_flow", {}).get("selected_llm_service"),
+        "selected_chat_surface": program.get("onboarding_flow", {}).get("selected_chat_surface"),
+        "llm_connection_profile": {
+            "entrypoint": program.get("entrypoints", {}).get("llm_connection_profile"),
+            "schema": llm_connection_profile.get("schema") if isinstance(llm_connection_profile, dict) else None,
+            "status": llm_connection_profile.get("status") if isinstance(llm_connection_profile, dict) else None,
+            "public_safe": llm_connection_profile.get("public_safe", {}) if isinstance(llm_connection_profile, dict) else {},
+        },
+        "runtime_config": {
+            "schema": runtime_config["schema"],
+            "engine": engine,
+            "service": runtime_config.get("service"),
+            "model": model,
+            "model_path": model_path,
+            "identity_policy": runtime_config.get("identity_policy"),
+            "network_access": runtime_config.get("network_access"),
+            "private_reasoning_trace": runtime_config.get("private_reasoning_trace"),
+        },
+        "provider_preflight": {
+            "offline": offline_preflight,
+            "live": live_preflight,
+        },
+        "first_run_commands": {
+            "doctor_program": _command_text(
+                [
+                    "ai22b-talent-foundry",
+                    "doctor-agent-program",
+                    "--program",
+                    DEFAULT_AGENT_PROGRAM_FILE,
+                    "--output",
+                    "paideia_doctor_report.json",
+                ]
+            ),
+            "provider_doctor_no_network": _command_text(
+                [
+                    "ai22b-talent-foundry",
+                    "doctor-llm-provider",
+                    *provider_args,
+                    "--output",
+                    "llm_provider_doctor.json",
+                ]
+            ),
+            "runtime_readiness_suite_no_network": _command_text(
+                [
+                    "ai22b-talent-foundry",
+                    "doctor-llm-live-readiness",
+                    *provider_args,
+                    "--output-dir",
+                    "llm_live_readiness",
+                ]
+            ),
+            "offline_chat": _command_text(
+                [
+                    "ai22b-talent-foundry",
+                    "run-agent-program-chat",
+                    "--program",
+                    DEFAULT_AGENT_PROGRAM_FILE,
+                    "--message",
+                    "\"안녕, 오늘 맡길 업무를 같이 정리해보자.\"",
+                    "--llm-mode",
+                    "offline",
+                    "--output",
+                    "paideia_chat_offline.json",
+                ]
+            ),
+            "live_chat_template": _command_text(
+                [
+                    "ai22b-talent-foundry",
+                    "run-agent-program-chat",
+                    "--program",
+                    DEFAULT_AGENT_PROGRAM_FILE,
+                    "--message",
+                    "\"안녕, 오늘 맡길 업무를 같이 정리해보자.\"",
+                    "--llm-mode",
+                    "live",
+                    *_optional_cli_arg("--llm-model", model),
+                    "--output",
+                    "paideia_chat_live.json",
+                ]
+            ),
+        },
+        "fail_closed_expectation": {
+            "missing_key_or_local_server_status": "needs_configuration",
+            "live_provider_requires_explicit_flag": True,
+            "tool_execution_before_provider_ready": False,
+            "workspace_artifacts_before_provider_ready": False,
+            "learning_promotion_before_review": False,
+        },
+        "public_safe": {
+            "network_call_performed": False,
+            "live_provider_called": False,
+            "localhost_called": False,
+            "subprocess_executed": False,
+            "secret_values_exported": False,
+            "raw_provider_payload_saved": False,
+            "private_reasoning_trace": "do_not_store",
+        },
+        "checks": checks,
+    }
+    readiness["passed"] = all(check["passed"] for check in checks)
+    readiness["status"] = "passed" if readiness["passed"] else "needs_review"
+    _write_json(output_path, readiness)
+    return readiness
 
 
 def build_agent_program(
@@ -574,6 +776,11 @@ def build_agent_program(
         },
         "status": "ready",
     }
+    llm_profile_name = entrypoints.get("llm_connection_profile") or employment.get("llm_connection_profile", {}).get(
+        "entrypoint"
+    )
+    if llm_profile_name:
+        program["entrypoints"]["llm_connection_profile"] = str(llm_profile_name)
     _write_json(output_path, program)
     return program
 
@@ -611,11 +818,46 @@ def build_paideia_agent_install_kit(
         entrypoints.get("learning_ledger", "learning_ledger.json"),
         entrypoints.get("memory_substrate", "memory_substrate.json"),
         entrypoints.get("language_development_program", "language_development_program.json"),
+        entrypoints.get("llm_connection_profile", DEFAULT_LLM_CONNECTION_PROFILE),
     ]
     for name in dict.fromkeys(required_names):
         copied_name = _copy_if_present(source_root / name, output_dir / name)
         if copied_name:
             copied[name] = copied_name
+
+    employment_copy_path = output_dir / "employment_record.json"
+    llm_profile_name = entrypoints.get("llm_connection_profile") or DEFAULT_LLM_CONNECTION_PROFILE
+    llm_profile_path = output_dir / llm_profile_name
+    if not llm_profile_path.exists():
+        embedded_profile = employment.get("llm_connection_profile")
+        if isinstance(embedded_profile, dict) and embedded_profile.get("schema") == "paideia-llm-connection-profile/v1":
+            _write_json(llm_profile_path, embedded_profile)
+            copied[llm_profile_name] = "generated_from_employment_record_embedded_profile"
+        else:
+            runtime = employment.get("llm_runtime", {}) if isinstance(employment.get("llm_runtime"), dict) else {}
+            llm_service = employment.get("llm_service", {}) if isinstance(employment.get("llm_service"), dict) else {}
+            chat_surface = employment.get("chat_surface", {}) if isinstance(employment.get("chat_surface"), dict) else {}
+            profile = build_llm_connection_profile(
+                llm_service=llm_service.get("service_id"),
+                llm_engine=runtime.get("engine") or llm_service.get("engine") or "deterministic_local",
+                llm_model=runtime.get("model") or llm_service.get("selected_model"),
+                llm_model_path=runtime.get("model_path") or llm_service.get("selected_model_path"),
+                chat_surface=chat_surface.get("id") or DEFAULT_CHAT_SURFACE_ID,
+                output_path=llm_profile_path,
+            )
+            employment.setdefault("entrypoints", {})["llm_connection_profile"] = llm_profile_name
+            employment["llm_connection_profile"] = {
+                "schema": profile["schema"],
+                "entrypoint": llm_profile_name,
+                "selected_engine": profile["selected_llm_service"]["engine"],
+                "status": profile["status"],
+                "public_safe": profile["public_safe"],
+            }
+            _write_json(employment_copy_path, employment)
+            copied[llm_profile_name] = "generated_no_network_from_employment_llm_runtime"
+    if llm_profile_path.exists() and not employment.get("entrypoints", {}).get("llm_connection_profile"):
+        employment.setdefault("entrypoints", {})["llm_connection_profile"] = llm_profile_name
+        _write_json(employment_copy_path, employment)
 
     optional_patterns = [
         "hiring_dossier.json",
@@ -685,6 +927,28 @@ def build_paideia_agent_install_kit(
         }
         _write_json(program_path, program)
 
+    llm_connection_profile = _read_json(llm_profile_path) if llm_profile_path.exists() else None
+    if llm_connection_profile:
+        program["entrypoints"]["llm_connection_profile"] = _rel(llm_profile_path, output_dir)
+    runtime_readiness_path = output_dir / DEFAULT_RUNTIME_READINESS
+    runtime_readiness = _build_kit_runtime_readiness(
+        employment=employment,
+        program=program,
+        llm_connection_profile=llm_connection_profile,
+        output_path=runtime_readiness_path,
+    )
+    copied[runtime_readiness_path.name] = "generated_no_network_kit_runtime_readiness"
+    program["entrypoints"]["runtime_readiness"] = runtime_readiness_path.name
+    program["installable_runtime"]["runtime_readiness"] = {
+        "entrypoint": runtime_readiness_path.name,
+        "schema": runtime_readiness["schema"],
+        "status": runtime_readiness["status"],
+        "selected_engine": runtime_readiness["runtime_config"]["engine"],
+        "network_call_performed": False,
+        "live_provider_called": False,
+    }
+    _write_json(program_path, program)
+
     adapters_dir = output_dir / "adapter_manifests"
     adapters_dir.mkdir(exist_ok=True)
     for adapter_name, adapter in program["adapter_manifests"].items():
@@ -709,7 +973,10 @@ def build_paideia_agent_install_kit(
         "program": program_path.name,
         "onboarding_template": DEFAULT_ONBOARDING_TEMPLATE,
         "adapter_manifests": "adapter_manifests",
+        "runtime_readiness": DEFAULT_RUNTIME_READINESS,
     }
+    if llm_profile_path.exists():
+        kit_entrypoints["llm_connection_profile"] = llm_profile_path.name
     if (output_dir / "agent_id_card_payload.json").exists():
         kit_entrypoints["agent_id_card_payload"] = "agent_id_card_payload.json"
     if (output_dir / "agent_identity_envelope.json").exists():
@@ -827,6 +1094,71 @@ def doctor_agent_program(program_path: Path, *, output_path: Path | None = None)
             or onboarding_flow.get("selected_llm_service", {}).get("id"),
             "selected_chat_surface": onboarding_flow.get("selected_chat_surface", {}).get("id"),
             "order": onboarding_flow.get("order", []),
+        },
+    }
+    llm_profile_name = program.get("entrypoints", {}).get("llm_connection_profile")
+    llm_profile_path = root / str(llm_profile_name) if llm_profile_name else None
+    llm_profile = _read_json(llm_profile_path) if llm_profile_path and llm_profile_path.exists() else {}
+    llm_public_safe = llm_profile.get("public_safe", {}) if isinstance(llm_profile, dict) else {}
+    checks["llm_connection_profile"] = {
+        "passed": (
+            not llm_profile_name
+            or (
+                llm_profile_path is not None
+                and llm_profile_path.exists()
+                and llm_profile.get("schema") == "paideia-llm-connection-profile/v1"
+                and llm_public_safe.get("network_call_performed") is False
+                and llm_public_safe.get("secret_values_exported") is False
+                and llm_public_safe.get("raw_provider_payload_saved") is False
+            )
+        ),
+        "details": {
+            "entrypoint": llm_profile_name,
+            "exists": bool(llm_profile_path and llm_profile_path.exists()),
+            "schema": llm_profile.get("schema") if isinstance(llm_profile, dict) else None,
+            "status": llm_profile.get("status") if isinstance(llm_profile, dict) else None,
+            "selected_engine": llm_profile.get("selected_llm_service", {}).get("engine")
+            if isinstance(llm_profile.get("selected_llm_service"), dict)
+            else None,
+            "public_safe": llm_public_safe,
+        },
+    }
+    readiness_name = program.get("entrypoints", {}).get("runtime_readiness")
+    readiness_path = root / str(readiness_name) if readiness_name else None
+    readiness = _read_json(readiness_path) if readiness_path and readiness_path.exists() else {}
+    readiness_public_safe = readiness.get("public_safe", {}) if isinstance(readiness, dict) else {}
+    readiness_checks = readiness.get("checks", []) if isinstance(readiness.get("checks"), list) else []
+    readiness_check_ids = {str(item.get("id")) for item in readiness_checks if isinstance(item, dict)}
+    checks["runtime_readiness"] = {
+        "passed": (
+            not readiness_name
+            or (
+                readiness_path is not None
+                and readiness_path.exists()
+                and readiness.get("schema") == "ai22b-paideia-kit-runtime-readiness/v1"
+                and readiness.get("passed") is True
+                and readiness_public_safe.get("network_call_performed") is False
+                and readiness_public_safe.get("live_provider_called") is False
+                and readiness_public_safe.get("secret_values_exported") is False
+                and {
+                    "llm_connection_profile_present",
+                    "offline_preflight_no_network",
+                    "live_preflight_fail_closed_no_network",
+                    "verification_sequence_covers_runtime",
+                }
+                <= readiness_check_ids
+            )
+        ),
+        "details": {
+            "entrypoint": readiness_name,
+            "exists": bool(readiness_path and readiness_path.exists()),
+            "schema": readiness.get("schema") if isinstance(readiness, dict) else None,
+            "status": readiness.get("status") if isinstance(readiness, dict) else None,
+            "selected_engine": readiness.get("runtime_config", {}).get("engine")
+            if isinstance(readiness.get("runtime_config"), dict)
+            else None,
+            "check_ids": sorted(readiness_check_ids),
+            "public_safe": readiness_public_safe,
         },
     }
     imported_skill_manifests = sorted((root / "skills" / "imported").glob("**/paideia_skill_manifest.json"))
