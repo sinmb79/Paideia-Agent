@@ -9,8 +9,10 @@ if (-not $git) {
 }
 
 $candidateFiles = @(
-    git ls-files --cached --others --exclude-standard
-) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Sort-Object -Unique
+    git -c core.quotePath=false ls-files --cached --others --exclude-standard
+) | ForEach-Object {
+    ([string]$_).Trim('"')
+} | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Sort-Object -Unique
 
 $pathBlocklist = @(
     '^AGENTS\.md$',
@@ -27,8 +29,8 @@ $pathBlocklist = @(
 
 $privateUser = "sin" + "mb"
 $contentPatterns = @(
-    @{ Name = "local_username"; Pattern = [regex]::Escape($privateUser) },
     @{ Name = "local_windows_user_path"; Pattern = "C:[\\/]+Users[\\/]+" + [regex]::Escape($privateUser) },
+    @{ Name = "local_posix_user_path"; Pattern = "[\\/]Users[\\/]+" + [regex]::Escape($privateUser) },
     @{ Name = "openai_key_assignment"; Pattern = 'OPENAI_API_KEY\s*=\s*[''"]?[^''",\s]{8,}' },
     @{ Name = "generic_openai_secret"; Pattern = "sk-[A-Za-z0-9_-]{32,}" },
     @{ Name = "github_pat"; Pattern = "gh[pousr]_[A-Za-z0-9_]{20,}" },
@@ -39,9 +41,44 @@ $contentPatterns = @(
 
 $issues = New-Object System.Collections.Generic.List[object]
 
+$requiredReleaseFiles = @(
+    "README.md",
+    "README.ko.md",
+    "SECURITY.md",
+    "LICENSE",
+    "pyproject.toml"
+)
+
+foreach ($requiredFile in $requiredReleaseFiles) {
+    $requiredPath = Join-Path $Root $requiredFile
+    if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf)) {
+        $issues.Add([pscustomobject]@{
+            type = "missing_required_release_file"
+            file = $requiredFile
+            rule = "public_release_required_file"
+        })
+    }
+}
+
+$pyprojectPath = Join-Path $Root "pyproject.toml"
+if (Test-Path -LiteralPath $pyprojectPath -PathType Leaf) {
+    $pyprojectText = Get-Content -LiteralPath $pyprojectPath -Raw -Encoding UTF8
+    if ($pyprojectText -notmatch 'license\s*=\s*\{\s*file\s*=\s*"LICENSE"\s*\}') {
+        $issues.Add([pscustomobject]@{
+            type = "missing_package_license_metadata"
+            file = "pyproject.toml"
+            rule = "project_license_file_must_reference_LICENSE"
+        })
+    }
+}
+
 foreach ($file in $candidateFiles) {
     $normalized = $file -replace '\\', '/'
-    if ($normalized -match '/\.gitkeep$' -or $normalized -eq 'runs/.gitkeep') {
+    if (
+        $normalized -match '/\.gitkeep$' `
+        -or $normalized -eq 'runs/.gitkeep' `
+        -or $normalized -eq 'runs/public_repo_hygiene_report.json'
+    ) {
         continue
     }
     foreach ($pattern in $pathBlocklist) {
@@ -98,6 +135,8 @@ $report = [ordered]@{
             "session logs",
             "environment files"
         )
+        required_release_files = $requiredReleaseFiles
+        package_license_metadata = "pyproject.toml must reference LICENSE"
     }
 }
 

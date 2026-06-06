@@ -6,12 +6,12 @@
 
 | 출처 | 확인한 점 | Paideia Agent 반영 |
 | --- | --- | --- |
-| OpenClaw 온보딩 | 첫 실행에서 provider/model, gateway, 채팅/채널, 스킬, 다음 단계를 선택하게 해야 합니다. | `start-console`이 LLM 서비스와 채팅 표면을 먼저 묻고, `paideia_onboarding.template.json`에 선택값과 카탈로그를 기록합니다. |
+| OpenClaw 온보딩 | 첫 실행에서 provider/model, gateway, 채팅/채널, 스킬, 다음 단계를 선택하게 해야 합니다. | `start-console`이 LLM 서비스와 채팅 표면을 먼저 묻고, 생성된 onboarding session에 선택값, 카탈로그, provider checklist, connection profile, 첫 실행 흐름을 기록합니다. |
 | OpenClaw 모델 provider 문서 | 에이전트는 provider/model 선택과 fallback 정책이 명확해야 합니다. | `llm_service_catalog`에 OpenAI/Codex, deterministic local, bigram, Transformers, llama.cpp/GGUF 경로를 분리했습니다. |
 | OpenClaw agent runtime 문서 | OpenAI/Codex는 런타임 표면일 수 있지만, 그 자체가 에이전트 정체성은 아닙니다. | `llm_identity_policy: application_engine_not_identity`를 기록하고, 정체성은 로컬 교육 산출물에서 오도록 했습니다. |
 | Hermes Agent | 설치, 모델 전환, CLI 채팅, 도구, 스킬, 메모리, 게이트웨이, OpenClaw 마이그레이션을 강조합니다. | 설치 키트, doctor 검사, 스킬 마이그레이션 wrapper, adapter manifest, Reasoning Ledger를 추가했습니다. |
 | OpenHands | 워크스페이스 에이전트는 계획, 결과, trace 같은 검증 가능한 파일을 남겨야 합니다. | 고용 에이전트의 workspace/dataflow 실행이 계획, 결과, trace, 학습 승격 기록을 남깁니다. |
-| Agent ID Card | 에이전트 신원은 display name, owner, role, scope, credential, verification status와 연결되어야 합니다. | 계획 반영: hiring dossier와 설치 매니페스트에서 Agent ID Card payload를 export하되, 등록은 사용자가 명시적으로 실행할 때만 수행합니다. |
+| Agent ID Card | 에이전트 신원은 display name, owner, role, scope, credential, verification status와 연결되어야 합니다. | 로컬 hiring 산출물에서 Agent ID Card payload와 Agent_warrent `ail.v1` envelope를 export하고, 외부 등록 전 필수 필드, 개인정보 누출, 수동 등록 정책을 검증합니다. 이후 보스가 제공한 등록 receipt를 로컬 envelope에 import하되 credential token 원문은 기본 저장하지 않습니다. |
 
 ## 하드웨어와 데이터플로우 벤치마크
 
@@ -41,7 +41,7 @@
 
 | 출처 | 확인한 점 | Paideia Agent 반영 |
 | --- | --- | --- |
-| NVIDIA Isaac Gym / Isaac Lab | 대량 병렬 시뮬레이션은 embodied policy 학습을 빠르게 합니다. | 같은 나이/학년 체크포인트에서 여러 episode rollout을 병렬로 돌리는 구조를 계획했습니다. |
+| NVIDIA Isaac Gym / Isaac Lab | 대량 병렬 시뮬레이션은 embodied policy 학습을 빠르게 합니다. | 같은 체크포인트에서 본체 제어 병렬 episode rollout을 만들고, winner, 승격 후보, 격리 후보를 평가하되 자동 메모리 승격은 하지 않습니다. |
 | MuJoCo MJX / Playground | 벡터화된 환경은 다양한 변형을 빠르게 시험할 수 있습니다. | 대화, 학교생활, 스트레스, 친구 갈등, 리서치 상황을 다양화하되 성장 시간축은 유지합니다. |
 | OpenAI dexterous manipulation / domain randomization | 시뮬레이션 변형은 실제 배포 전 reality gap을 줄입니다. | 질문 표현, API 실패, 파일 누락, 상충 자료, 사회적 스트레스를 승격 전 평가합니다. |
 | GR00T 계열 로봇 보고서 | 시연, 합성 데이터, 시뮬레이션, 실제 피드백이 함께 필요합니다. | 생성 에피소드, 시험, 실제 대화, 실제 업무를 다른 evidence class로 구분하고 promotion/quarantine을 적용합니다. |

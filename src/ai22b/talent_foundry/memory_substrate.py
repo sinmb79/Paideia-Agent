@@ -11,13 +11,22 @@ from typing import Any
 from ai22b.talent_foundry.language_development import (
     build_language_development_program,
 )
+from ai22b.talent_foundry.growth_profile import read_growth_profile
 from ai22b.talent_foundry.learning_loop import build_reasoning_kernel, record_learning_experience
-from ai22b.talent_foundry.llm_runtime import invoke_llm_application_engine
+from ai22b.talent_foundry.life_trace import read_life_trace_jsonl
+from ai22b.talent_foundry.llm_clients import (
+    build_llm_client,
+    count_private_reasoning_fields,
+    sanitize_llm_result_packet,
+)
+from ai22b.talent_foundry.llm_runtime import build_llm_provider_preflight, invoke_llm_application_engine
+from ai22b.talent_foundry.memory_lifecycle import build_memory_lifecycle_status_card
 
 
 MEMORY_SUBSTRATE_SCHEMA = "ai-talent-memory-substrate/v1"
 CHAT_CONTEXT_SCHEMA = "ai-talent-chat-context/v1"
 CHAT_RUN_SCHEMA = "ai-talent-chat-run/v1"
+CHAT_RUNTIME_STATUS_CARD_SCHEMA = "paideia-chat-runtime-status-card/v1"
 DEFAULT_OPENAI_CHAT_MODEL = "gpt-5.2"
 
 RESEARCH_BASIS = [
@@ -130,6 +139,14 @@ CASUAL_GREETINGS = {
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _chat_trace_entry(action: str, **fields: Any) -> dict[str, Any]:
+    return {
+        "recorded_at_utc": _now(),
+        "action": action,
+        **fields,
+    }
 
 
 def _stable_id(prefix: str, *parts: Any) -> str:
@@ -372,6 +389,18 @@ def _base_boards(objective: str | None) -> dict[str, Any]:
             "purpose": "Keep staged language growth from voice rhythm and joint attention to adult repair.",
             "human_reference": "developmental milestones, social communication, joint attention, dialogic reading",
         },
+        "developmental_ecology": {
+            "purpose": "Store family, peer, environment, culture, stress, and recovery conditions as training context.",
+            "human_reference": "developmental ecology and bounded social-emotional learning context",
+        },
+        "life_trace": {
+            "purpose": "Store synthetic age-appropriate experiences across childhood, school, university, and work identity.",
+            "human_reference": "episodic development records with stress, support, recovery, and learning deltas",
+        },
+        "growth_profile": {
+            "purpose": "Consolidate life-trace events into relationship, emotion, culture, aesthetic, and asymmetry memory.",
+            "human_reference": "developmental ecology summarized into reviewable memory-pack scaffolds",
+        },
         "episodic_fast_store": {
             "purpose": "Keep yearly learning, tests, mistakes, feedback, and job episodes as reviewable records.",
             "human_reference": "hippocampus-like fast capture and Soar-style episodic retrieval",
@@ -447,6 +476,185 @@ def _nodes_from_language_development(program: dict[str, Any] | None) -> list[dic
     return nodes
 
 
+def _nodes_from_developmental_ecology(ecology: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not ecology:
+        return []
+    layer_keys = [
+        "residential_environment",
+        "family_climate",
+        "peer_world",
+        "meaning_system",
+        "aesthetic_profile",
+        "emotional_development",
+        "asymmetry_budget",
+    ]
+    nodes: list[dict[str, Any]] = []
+    for key in layer_keys:
+        layer = ecology.get(key)
+        if not isinstance(layer, dict):
+            continue
+        nodes.append(
+            _node(
+                node_id=_stable_id("ecology", ecology.get("seed", {}).get("seed_id"), key),
+                layer="semantic_slow_store",
+                source="developmental_ecology",
+                title=key.replace("_", " "),
+                summary=_compact(layer, limit=360),
+                tags=_tokens(layer) | {key, "developmental_ecology", "growth_context"},
+                stage="developmental_ecology",
+                strength=0.7,
+                metadata={
+                    "ecology_schema": ecology.get("schema"),
+                    "seed_id": ecology.get("seed", {}).get("seed_id"),
+                    "review_status": ecology.get("review_status"),
+                },
+            )
+        )
+    return nodes
+
+
+def _select_life_trace_events(events: list[dict[str, Any]], *, limit: int = 72) -> list[dict[str, Any]]:
+    if not events:
+        return []
+    selected: list[dict[str, Any]] = []
+    stride = max(1, len(events) // max(1, limit))
+    for index, event in enumerate(events):
+        if index % stride == 0 or int(event.get("stress_level") or 0) >= 4:
+            selected.append(event)
+        if len(selected) >= limit:
+            break
+    return selected
+
+
+def _nodes_from_life_trace(events: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    if not events:
+        return []
+    nodes: list[dict[str, Any]] = []
+    for event in _select_life_trace_events(events):
+        domain = str(event.get("domain") or "life_event")
+        stage = str(event.get("stage_id") or "growth_stage")
+        summary = _compact(
+            {
+                "age_year": event.get("age_year"),
+                "period": f"{event.get('period_type')} {event.get('period_index')}",
+                "stimulus": event.get("stimulus"),
+                "challenge": event.get("challenge"),
+                "choice": event.get("choice"),
+                "outcome": event.get("outcome"),
+                "recovery": event.get("recovery"),
+                "learning_delta": event.get("learning_delta"),
+            },
+            limit=420,
+        )
+        nodes.append(
+            _node(
+                node_id=str(event.get("event_id") or _stable_id("life-event", event.get("sequence"))),
+                layer="episodic_fast_store",
+                source="life_trace",
+                title=f"{stage} {domain}",
+                summary=summary,
+                tags=_tokens(event) | {"life_trace", "growth_experience", domain, stage},
+                stage=stage,
+                strength=0.52 + min(int(event.get("stress_level") or 0), 5) * 0.05,
+                metadata={
+                    "sequence": event.get("sequence"),
+                    "age_year": event.get("age_year"),
+                    "domain": domain,
+                    "stress_level": event.get("stress_level"),
+                    "memory_targets": event.get("memory_targets", []),
+                },
+            )
+        )
+    domains = sorted({str(event.get("domain")) for event in events if event.get("domain")})
+    nodes.append(
+        _node(
+            node_id=_stable_id("life-trace-operator", len(events), ",".join(domains)),
+            layer="procedural_operator_store",
+            source="life_trace",
+            title="developmental experience retrieval operator",
+            summary=(
+                "For identity, social, and growth questions, retrieve age, setting, stress, support, "
+                "choice, recovery, and learning_delta before answering."
+            ),
+            tags={"life_trace", "growth_story", "social_repair", "experience_retrieval", "operator"},
+            stage="post_hire_growth",
+            strength=0.78,
+            metadata={
+                "event_count": len(events),
+                "domain_count": len(domains),
+                "private_reasoning_trace": "not_stored",
+            },
+        )
+    )
+    return nodes
+
+
+def _nodes_from_growth_profile(profile: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not profile:
+        return []
+    sections = [
+        (
+            "relationship_memory",
+            "semantic_slow_store",
+            "growth_profile.relationship_memory",
+            0.76,
+            {"relationship", "conflict_repair", "social_recovery"},
+        ),
+        (
+            "emotional_memory",
+            "metacognitive_monitor",
+            "growth_profile.emotional_memory",
+            0.74,
+            {"emotion", "stress", "recovery", "regulation"},
+        ),
+        (
+            "meaning_memory",
+            "semantic_slow_store",
+            "growth_profile.meaning_memory",
+            0.68,
+            {"culture", "meaning", "values"},
+        ),
+        (
+            "aesthetic_memory",
+            "semantic_slow_store",
+            "growth_profile.aesthetic_memory",
+            0.64,
+            {"aesthetic", "tone", "ordinary_conversation"},
+        ),
+        (
+            "asymmetry_profile",
+            "procedural_operator_store",
+            "growth_profile.asymmetry_profile",
+            0.72,
+            {"asymmetry", "learning_bias", "growth_cost", "operator"},
+        ),
+    ]
+    nodes: list[dict[str, Any]] = []
+    talent_name = profile.get("talent", {}).get("name")
+    for key, layer, title, strength, tags in sections:
+        section = profile.get(key)
+        if not isinstance(section, dict):
+            continue
+        nodes.append(
+            _node(
+                node_id=_stable_id("growth-profile", profile.get("schema"), talent_name, key),
+                layer=layer,
+                source="growth_profile",
+                title=title,
+                summary=_compact(section, limit=420),
+                tags=_tokens(section) | tags | {"growth_profile", key},
+                stage="growth_profile",
+                strength=strength,
+                metadata={
+                    "schema": profile.get("schema"),
+                    "review_status": profile.get("review_status"),
+                    "private_reasoning_trace": "not_stored",
+                },
+            )
+        )
+    return nodes
+
+
 def _ensure_conversation_training(substrate: dict[str, Any]) -> dict[str, Any]:
     boards = substrate.setdefault("boards", {})
     boards.setdefault(
@@ -461,6 +669,27 @@ def _ensure_conversation_training(substrate: dict[str, Any]) -> dict[str, Any]:
         {
             "purpose": "Model language and dialogue as staged development from prosody and joint attention to adult repair.",
             "human_reference": "developmental language milestones, social communication, joint attention, and dialogic reading",
+        },
+    )
+    boards.setdefault(
+        "developmental_ecology",
+        {
+            "purpose": "Store family, peer, environment, culture, stress, and recovery conditions as training context.",
+            "human_reference": "developmental ecology and bounded social-emotional learning context",
+        },
+    )
+    boards.setdefault(
+        "life_trace",
+        {
+            "purpose": "Store synthetic age-appropriate experiences across childhood, school, university, and work identity.",
+            "human_reference": "episodic development records with stress, support, recovery, and learning deltas",
+        },
+    )
+    boards.setdefault(
+        "growth_profile",
+        {
+            "purpose": "Consolidate life-trace events into relationship, emotion, culture, aesthetic, and asymmetry memory.",
+            "human_reference": "developmental ecology summarized into reviewable memory-pack scaffolds",
         },
     )
     substrate["conversation_method_training"] = CONVERSATION_METHOD_TRAINING
@@ -590,6 +819,9 @@ def build_memory_substrate(
     process_plan: dict[str, Any] | None = None,
     curriculum_manifest: dict[str, Any] | None = None,
     language_development_program: dict[str, Any] | None = None,
+    developmental_ecology: dict[str, Any] | None = None,
+    life_trace_events: list[dict[str, Any]] | None = None,
+    growth_profile: dict[str, Any] | None = None,
     objective: str | None = None,
 ) -> dict[str, Any]:
     agent = agent_manifest.get("agent", {})
@@ -603,6 +835,12 @@ def build_memory_substrate(
     nodes.extend(_nodes_from_learning_ledger(learning_ledger))
     nodes.extend(_nodes_from_curriculum(curriculum_manifest))
     nodes.extend(_nodes_from_language_development(language_development_program))
+    ecology_nodes = _nodes_from_developmental_ecology(developmental_ecology)
+    life_trace_nodes = _nodes_from_life_trace(life_trace_events)
+    growth_profile_nodes = _nodes_from_growth_profile(growth_profile)
+    nodes.extend(ecology_nodes)
+    nodes.extend(life_trace_nodes)
+    nodes.extend(growth_profile_nodes)
     nodes.extend(_conversation_nodes(agent.get("name")))
     if process_plan:
         nodes.append(
@@ -644,10 +882,31 @@ def build_memory_substrate(
             "growth_policy": language_development_program.get("growth_policy", {}),
             "research_basis": language_development_program.get("research_basis", []),
         },
+        "developmental_ecology": {
+            "schema": developmental_ecology.get("schema") if developmental_ecology else None,
+            "seed_id": developmental_ecology.get("seed", {}).get("seed_id") if developmental_ecology else None,
+            "review_status": developmental_ecology.get("review_status") if developmental_ecology else None,
+            "policy": developmental_ecology.get("generation_policy", {}) if developmental_ecology else {},
+        },
+        "life_trace": {
+            "event_count": len(life_trace_events or []),
+            "node_count": len(life_trace_nodes),
+            "policy": "reviewable_synthetic_experiences_only_no_private_reasoning_trace",
+        },
+        "growth_profile": {
+            "schema": growth_profile.get("schema") if growth_profile else None,
+            "node_count": len(growth_profile_nodes),
+            "review_status": growth_profile.get("review_status") if growth_profile else None,
+            "policy": growth_profile.get("policy", {}) if growth_profile else {},
+        },
         "source_counts": {
             "reasoning_kibo_entries": len(rows),
             "learning_ledger_promoted_experiences": len(learning_ledger.get("promoted_experiences", [])),
             "language_development_stages": len(language_development_program.get("stages", [])),
+            "developmental_ecology_layers": len(ecology_nodes),
+            "life_trace_events": len(life_trace_events or []),
+            "life_trace_nodes": len(life_trace_nodes),
+            "growth_profile_nodes": len(growth_profile_nodes),
             "conversation_method_skills": len(CONVERSATION_METHOD_TRAINING["skills"]),
             "nodes": len(nodes),
             "edges": len(edges),
@@ -710,6 +969,9 @@ def _load_or_build_substrate(
     process_plan_path: Path | None = None,
     curriculum_manifest_path: Path | None = None,
     language_development_program_path: Path | None = None,
+    developmental_ecology_path: Path | None = None,
+    life_trace_path: Path | None = None,
+    growth_profile_path: Path | None = None,
 ) -> tuple[dict[str, Any], Path]:
     entrypoints = employment_record.get("entrypoints", {})
     candidate = memory_substrate_path
@@ -733,6 +995,24 @@ def _load_or_build_substrate(
         process_plan_path = _find_run_sidecar(target_root, "*_process_emulation_plan.json")
     if curriculum_manifest_path is None:
         curriculum_manifest_path = _find_run_sidecar(target_root, "*_curriculum_manifest.json")
+    if developmental_ecology_path is None:
+        entrypoint_name = employment_record.get("entrypoints", {}).get("developmental_ecology")
+        if entrypoint_name:
+            developmental_ecology_path = target_root / entrypoint_name
+        if developmental_ecology_path is None or not developmental_ecology_path.exists():
+            developmental_ecology_path = _find_run_sidecar(target_root, "*_developmental_ecology.json")
+    if life_trace_path is None:
+        entrypoint_name = employment_record.get("entrypoints", {}).get("life_trace")
+        if entrypoint_name:
+            life_trace_path = target_root / entrypoint_name
+        if life_trace_path is None or not life_trace_path.exists():
+            life_trace_path = _find_run_sidecar(target_root, "*_life_trace.jsonl")
+    if growth_profile_path is None:
+        entrypoint_name = employment_record.get("entrypoints", {}).get("growth_profile")
+        if entrypoint_name:
+            growth_profile_path = target_root / entrypoint_name
+        if growth_profile_path is None or not growth_profile_path.exists():
+            growth_profile_path = _find_run_sidecar(target_root, "*_growth_profile.json")
     if language_development_program_path is None:
         entrypoint_name = employment_record.get("entrypoints", {}).get("language_development_program")
         if entrypoint_name:
@@ -747,6 +1027,9 @@ def _load_or_build_substrate(
         process_plan=_maybe_read_json(process_plan_path),
         curriculum_manifest=_maybe_read_json(curriculum_manifest_path),
         language_development_program=_maybe_read_json(language_development_program_path),
+        developmental_ecology=_maybe_read_json(developmental_ecology_path),
+        life_trace_events=read_life_trace_jsonl(life_trace_path)["events"] if life_trace_path else [],
+        growth_profile=read_growth_profile(growth_profile_path) if growth_profile_path else None,
         objective=objective,
     )
     write_memory_substrate(candidate, substrate)
@@ -788,6 +1071,7 @@ def build_chat_context(
                 "agent_manifest",
                 "learning_ledger",
                 substrate_path_name,
+                "growth_profile",
             ],
             "private_reasoning_trace": "do_not_store",
             "hidden_chain_of_thought": "forbidden",
@@ -928,6 +1212,34 @@ def _parse_json_object(text: str) -> dict[str, Any] | None:
         return None
 
 
+def _normalize_live_chat_output(output_text: str) -> dict[str, Any]:
+    parsed = _parse_json_object(output_text)
+    if not parsed:
+        parsed = {
+            "assistant_reply": output_text.strip(),
+            "reviewable_reasoning_summary": [
+                {
+                    "step": "LLM output",
+                    "summary": "The model did not return strict JSON, so the raw text was used as the answer.",
+                }
+            ],
+            "learning_candidate": {
+                "lesson": "Live LLM chat output must be schema-checked before learning promotion.",
+                "reusable_principle": "Validate response shape before writing chat learning candidates.",
+                "memory_tags": ["live_llm_format_repair"],
+                "confidence": 0.5,
+            },
+        }
+    private_reasoning_fields_omitted = count_private_reasoning_fields(parsed)
+    parsed = sanitize_llm_result_packet(parsed)
+    return {
+        "assistant_reply": str(parsed.get("assistant_reply", "")).strip(),
+        "reviewable_reasoning_summary": parsed.get("reviewable_reasoning_summary") or [],
+        "learning_candidate": parsed.get("learning_candidate") or {},
+        "private_reasoning_fields_omitted": private_reasoning_fields_omitted,
+    }
+
+
 def _call_openai_responses_chat(
     *,
     chat_context: dict[str, Any],
@@ -979,23 +1291,7 @@ def _call_openai_responses_chat(
         }
 
     output_text = str(getattr(response, "output_text", "") or "")
-    parsed = _parse_json_object(output_text)
-    if not parsed:
-        parsed = {
-            "assistant_reply": output_text.strip(),
-            "reviewable_reasoning_summary": [
-                {
-                    "step": "LLM 응답",
-                    "summary": "모델이 JSON 형식을 완전히 지키지 않아 원문을 답변으로 사용했습니다.",
-                }
-            ],
-            "learning_candidate": {
-                "lesson": "실시간 LLM 응답 형식 검증이 필요하다.",
-                "reusable_principle": "응답은 저장 전에 스키마를 확인한다.",
-                "memory_tags": ["live_llm_format_repair"],
-                "confidence": 0.5,
-            },
-        }
+    parsed = _normalize_live_chat_output(output_text)
 
     return {
         "schema": "ai-talent-live-llm-result/v1",
@@ -1004,9 +1300,10 @@ def _call_openai_responses_chat(
         "model": model,
         "response_id": getattr(response, "id", None),
         "usage": _jsonable(getattr(response, "usage", None)),
-        "assistant_reply": str(parsed.get("assistant_reply", "")).strip(),
-        "reviewable_reasoning_summary": parsed.get("reviewable_reasoning_summary") or [],
-        "learning_candidate": parsed.get("learning_candidate") or {},
+        "assistant_reply": parsed["assistant_reply"],
+        "reviewable_reasoning_summary": parsed["reviewable_reasoning_summary"],
+        "learning_candidate": parsed["learning_candidate"],
+        "private_reasoning_fields_omitted": parsed["private_reasoning_fields_omitted"],
         "raw_output_saved": False,
         "identity_policy": "application_engine_not_identity",
         "network_access": "openai_api_data_minimized",
@@ -1014,6 +1311,91 @@ def _call_openai_responses_chat(
             "send_private_training_files": False,
             "send_selected_memory_and_recent_chat_summaries": True,
             "store_hidden_chain_of_thought": False,
+            "private_reasoning_field_values_stored": False,
+        },
+    }
+
+
+def _invoke_generic_live_chat_llm(
+    *,
+    chat_context: dict[str, Any],
+    runtime_config: dict[str, Any],
+    model: str | None,
+) -> dict[str, Any]:
+    effective_config = {**runtime_config}
+    if model:
+        effective_config["model"] = model
+    selected_model = model or runtime_config.get("model")
+    client = build_llm_client(effective_config, model_override=selected_model)
+    messages = [
+        {
+            "role": "system",
+            "content": _live_chat_instructions(chat_context["agent"]["name"]),
+        },
+        {
+            "role": "user",
+            "content": json.dumps(
+                {
+                    "task": "Generate one live chat turn for the hired local AI talent.",
+                    "local_talent_context": _compact_chat_context_for_live_llm(chat_context),
+                },
+                ensure_ascii=False,
+            ),
+        },
+    ]
+    client_result = client.generate(
+        messages,
+        tools=[],
+        policy={
+            "response_format": "json_object",
+            "store_hidden_chain_of_thought": False,
+            "identity_policy": runtime_config.get("identity_policy", "application_engine_not_identity"),
+        },
+    )
+    if client_result.get("status") != "completed":
+        return {
+            "schema": "ai-talent-live-llm-result/v1",
+            "engine": client_result.get("engine") or runtime_config.get("engine"),
+            "status": "unavailable",
+            "reason": client_result.get("reason", "llm_client_unavailable"),
+            "model": client_result.get("model") or selected_model,
+            "identity_policy": runtime_config.get("identity_policy"),
+            "network_access": client_result.get("network_access", runtime_config.get("network_access")),
+            "provider_adapter": "generic_llm_client",
+            "client_result": {
+                key: value
+                for key, value in client_result.items()
+                if key not in {"text"}
+            },
+        }
+
+    parsed = _normalize_live_chat_output(str(client_result.get("text", "")))
+    return {
+        "schema": "ai-talent-live-llm-result/v1",
+        "engine": client_result.get("engine") or runtime_config.get("engine"),
+        "status": "completed",
+        "model": client_result.get("model") or selected_model,
+        "assistant_reply": parsed["assistant_reply"],
+        "reviewable_reasoning_summary": parsed["reviewable_reasoning_summary"],
+        "learning_candidate": parsed["learning_candidate"],
+        "private_reasoning_fields_omitted": parsed["private_reasoning_fields_omitted"],
+        "raw_output_saved": False,
+        "identity_policy": "application_engine_not_identity",
+        "network_access": client_result.get("network_access", runtime_config.get("network_access")),
+        "provider_adapter": "generic_llm_client",
+        "client_result_summary": {
+            "schema": client_result.get("schema"),
+            "engine": client_result.get("engine"),
+            "status": client_result.get("status"),
+            "model": client_result.get("model"),
+            "identity_policy": client_result.get("identity_policy"),
+            "raw_output_saved": client_result.get("raw_output_saved", False),
+        },
+        "data_policy": {
+            "send_private_training_files": False,
+            "send_selected_memory_and_recent_chat_summaries": True,
+            "store_hidden_chain_of_thought": False,
+            "private_reasoning_field_values_stored": False,
         },
     }
 
@@ -1025,13 +1407,11 @@ def _invoke_live_chat_llm(
     model: str | None,
 ) -> dict[str, Any]:
     if runtime_config.get("engine") != "openai_chatgpt_codex":
-        return {
-            "schema": "ai-talent-live-llm-result/v1",
-            "engine": runtime_config.get("engine"),
-            "status": "unavailable",
-            "reason": "live_chat_requires_openai_chatgpt_codex_engine",
-            "identity_policy": runtime_config.get("identity_policy"),
-        }
+        return _invoke_generic_live_chat_llm(
+            chat_context=chat_context,
+            runtime_config=runtime_config,
+            model=model,
+        )
     selected_model = (
         model
         or runtime_config.get("model")
@@ -1105,6 +1485,73 @@ def _wrap_live_llm_failure_reply(
     }
 
 
+def _provider_configuration_required_reply(
+    *,
+    message: str,
+    preflight: dict[str, Any],
+) -> dict[str, Any]:
+    reason = "live_provider_needs_configuration_before_chat"
+    missing_checks = [
+        item.get("id")
+        for item in preflight.get("blocking_checks", [])
+        if isinstance(item, dict) and item.get("id")
+    ]
+    missing_text = f" 필요한 설정 확인: {', '.join(missing_checks)}." if missing_checks else ""
+    answer = (
+        "보스, 선택한 live LLM provider가 아직 설정되지 않아 이번 채팅 턴을 시작하지 않았습니다. "
+        "이 상태에서는 로컬 fallback 답변을 실제 live 대화처럼 만들지 않고, provider doctor로 설정을 먼저 확인해야 합니다."
+        f"{missing_text}"
+    )
+    return {
+        "intent": "provider_configuration_required",
+        "answer": answer,
+        "reply": answer,
+        "active_operator": "llm.provider_configuration_required",
+        "source_text": _trim_text(message, 240),
+        "reviewable_reasoning_summary": [
+            {
+                "step": "provider preflight",
+                "summary": f"Live chat was not started because provider preflight returned {preflight.get('status')}.",
+            },
+            {
+                "step": "fallback policy",
+                "summary": "Explicit live mode does not use deterministic fallback when the provider is not configured.",
+            },
+        ],
+        "learning_candidate": {},
+        "configuration_required": {
+            "reason": reason,
+            "provider_preflight_status": preflight.get("status"),
+            "next_actions": preflight.get("next_actions", []),
+        },
+    }
+
+
+def _skipped_chat_learning_update(
+    *,
+    target_root: Path,
+    entrypoints: dict[str, Any],
+    reason: str,
+) -> dict[str, Any]:
+    return {
+        "schema": "ai-talent-chat-learning-update/v1",
+        "created_at_utc": _now(),
+        "decision": "skipped_provider_not_ready",
+        "learning_ledger": entrypoints.get("learning_ledger", "learning_ledger.json"),
+        "memory_substrate": entrypoints.get("memory_substrate", "memory_substrate.json"),
+        "latest_experience_id": None,
+        "promoted_count_before": None,
+        "promoted_count_after": None,
+        "quarantined_count_before": None,
+        "quarantined_count_after": None,
+        "latest_promoted_skills": [],
+        "policy": "no_chat_learning_without_configured_live_provider",
+        "reason": reason,
+        "automatic_promotion_performed": False,
+        "ledger_write_performed": False,
+    }
+
+
 def _record_chat_learning(
     *,
     target_root: Path,
@@ -1132,9 +1579,9 @@ def _record_chat_learning(
         "stored_private_reasoning_trace": False,
     }
     runtime_result = run.get("llm_runtime_result", {})
-    live_failure_fallback = run.get("llm_mode") == "live" and bool(runtime_result.get("fallback_used"))
-    score = 60 if live_failure_fallback else 86 if runtime_result.get("status") == "completed" else 80
-    status = "needs_review" if live_failure_fallback else "verified"
+    provider_fallback_used = bool(runtime_result.get("fallback_used"))
+    score = 60 if provider_fallback_used else 86 if runtime_result.get("status") == "completed" else 80
+    status = "needs_review" if provider_fallback_used else "verified"
     ledger_before = len(ledger.get("promoted_experiences", []))
     quarantined_before = len(ledger.get("quarantined_experiences", []))
     ledger = record_learning_experience(
@@ -1146,8 +1593,8 @@ def _record_chat_learning(
             "status": status,
             "reviewer": "local_chat_learning_policy",
             "notes": (
-                "실시간 LLM 실패 후 fallback 답변이므로 보스 검토 전 승격하지 않는다."
-                if live_failure_fallback
+                "LLM provider fallback 답변이므로 보스 검토 전 승격하지 않는다."
+                if provider_fallback_used
                 else "실시간 대화 후 검토 가능한 요약만 승격하고 숨은 사고과정은 저장하지 않는다."
             ),
         },
@@ -1218,6 +1665,8 @@ def _record_chat_learning(
         "quarantined_count_after": quarantined_after,
         "latest_promoted_skills": latest_entry.get("promoted_skills", []),
         "policy": "reviewable_chat_summary_only_no_hidden_chain_of_thought",
+        "automatic_promotion_performed": False,
+        "ledger_write_performed": True,
     }
     update_path = target_root / "chat_learning_update.json"
     _write_json(update_path, update)
@@ -1679,6 +2128,159 @@ def _draft_chat_reply(
     }
 
 
+def _chat_learning_decision(run: dict[str, Any]) -> dict[str, Any]:
+    update = run.get("chat_learning_update", {})
+    if not isinstance(update, dict) or not update.get("decision"):
+        return {
+            "decision": "not_requested",
+            "ledger_write_performed": False,
+            "automatic_promotion_performed": False,
+            "review_required": False,
+        }
+    return {
+        "decision": update.get("decision"),
+        "ledger_write_performed": bool(update.get("ledger_write_performed", False)),
+        "automatic_promotion_performed": bool(update.get("automatic_promotion_performed", False)),
+        "latest_experience_id": update.get("latest_experience_id"),
+        "review_required": update.get("decision") in {"quarantined", "candidate_pending_boss_review"},
+    }
+
+
+def _chat_status_card_status(
+    *,
+    chat_status: str,
+    reply_generation_mode: str,
+    fallback_used: bool,
+    live_attempt_status: str | None,
+) -> str:
+    if chat_status == "needs_configuration":
+        return "needs_configuration"
+    if fallback_used:
+        return "completed_with_fallback"
+    if reply_generation_mode in {"live_openai_responses", "live_generic_llm_client"} and live_attempt_status == "completed":
+        return "completed_live"
+    return "completed_offline"
+
+
+def _chat_status_card_next_actions(
+    *,
+    status: str,
+    llm_mode: str,
+    preflight: dict[str, Any],
+    learning_decision: dict[str, Any],
+) -> list[str]:
+    actions: list[str] = []
+    preflight_next_actions = preflight.get("next_actions", [])
+    if not isinstance(preflight_next_actions, list):
+        preflight_next_actions = []
+    if status == "needs_configuration":
+        actions.extend(preflight_next_actions)
+        actions.append("Retry live chat only after the provider doctor passes with an explicit live check.")
+    elif status == "completed_with_fallback":
+        actions.append("Treat this answer as deterministic fallback, not a live-provider answer.")
+        actions.append("Review the quarantined chat learning entry before promoting any lesson.")
+        actions.extend(preflight_next_actions[:2])
+    elif status == "completed_live":
+        actions.append("Review the live answer and learning candidate before promotion.")
+    else:
+        actions.append("Use offline chat for local deterministic checks, or switch to auto/live after provider readiness is explicit.")
+    if learning_decision.get("decision") == "quarantined":
+        actions.append("Inspect the quarantined experience before using it as future memory.")
+    if llm_mode == "live" and status != "completed_live":
+        actions.append("Do not present this turn as a successful live provider conversation.")
+    return list(dict.fromkeys(str(action) for action in actions if action))
+
+
+def _build_chat_runtime_status_card(
+    *,
+    run: dict[str, Any],
+    llm_provider_preflight: dict[str, Any],
+    live_llm_attempt: dict[str, Any] | None,
+    learn_from_chat: bool,
+) -> dict[str, Any]:
+    llm_result = run.get("llm_runtime_result", {}) if isinstance(run.get("llm_runtime_result"), dict) else {}
+    fallback_used = bool(llm_result.get("fallback_used"))
+    live_attempt_status = (live_llm_attempt or {}).get("status")
+    card_status = _chat_status_card_status(
+        chat_status=str(run.get("chat_status")),
+        reply_generation_mode=str(run.get("reply_generation_mode")),
+        fallback_used=fallback_used,
+        live_attempt_status=live_attempt_status,
+    )
+    learning_decision = _chat_learning_decision(run)
+    preflight_data_policy = (
+        llm_provider_preflight.get("data_policy", {})
+        if isinstance(llm_provider_preflight.get("data_policy"), dict)
+        else {}
+    )
+    return {
+        "schema": CHAT_RUNTIME_STATUS_CARD_SCHEMA,
+        "status": card_status,
+        "chat_status": run.get("chat_status"),
+        "llm_mode": run.get("llm_mode"),
+        "reply_generation_mode": run.get("reply_generation_mode"),
+        "selected_engine": llm_provider_preflight.get("engine") or llm_result.get("engine"),
+        "model": llm_provider_preflight.get("model") or llm_result.get("model"),
+        "provider_preflight": {
+            "schema": llm_provider_preflight.get("schema"),
+            "status": llm_provider_preflight.get("status"),
+            "provider_doctor_status": llm_provider_preflight.get("provider_doctor_status"),
+            "live_path_selected": llm_provider_preflight.get("live_path_selected"),
+            "live_check_performed": llm_provider_preflight.get("live_check_performed"),
+            "network_call_made_by_preflight": llm_provider_preflight.get("network_call_made_by_preflight"),
+            "blocking_checks": llm_provider_preflight.get("blocking_checks", []),
+        },
+        "live_attempt": {
+            "requested": run.get("llm_mode") in {"auto", "live"},
+            "status": live_attempt_status or "skipped",
+            "engine": (live_llm_attempt or {}).get("engine"),
+            "provider_adapter": (live_llm_attempt or {}).get("provider_adapter"),
+            "reason": (live_llm_attempt or {}).get("reason"),
+        },
+        "fallback": {
+            "used": fallback_used,
+            "presented_as_live": False,
+            "reason": (live_llm_attempt or {}).get("reason") if fallback_used else None,
+        },
+        "learning": {
+            "learn_from_chat_requested": bool(learn_from_chat),
+            **learning_decision,
+        },
+        "public_safe": {
+            "secret_values_exported": False,
+            "raw_provider_payload_saved": False,
+            "private_reasoning_trace": "do_not_store",
+            "send_private_training_files": preflight_data_policy.get("send_private_training_files", False),
+        },
+        "user_visible_summary": {
+            "ko": (
+                "live provider 설정이 필요해서 실행을 시작하지 않았습니다."
+                if card_status == "needs_configuration"
+                else "live provider 실패 후 로컬 deterministic fallback으로 답했으며 학습은 검토 대기입니다."
+                if card_status == "completed_with_fallback"
+                else "live provider로 답했지만 학습은 검토 후에만 반영됩니다."
+                if card_status == "completed_live"
+                else "로컬 offline 엔진으로 답했으며 live provider 호출은 없었습니다."
+            ),
+            "en": (
+                "Live provider configuration is required before this chat can run."
+                if card_status == "needs_configuration"
+                else "The live provider failed or was unavailable; the reply used deterministic fallback and learning needs review."
+                if card_status == "completed_with_fallback"
+                else "The reply came from the live provider; learning still requires review."
+                if card_status == "completed_live"
+                else "The reply used the local offline engine; no live provider call was made."
+            ),
+        },
+        "next_actions": _chat_status_card_next_actions(
+            status=card_status,
+            llm_mode=str(run.get("llm_mode")),
+            preflight=llm_provider_preflight,
+            learning_decision=learning_decision,
+        ),
+    }
+
+
 def run_chat_turn_from_employment(
     employment_record_path: Path,
     *,
@@ -1689,6 +2291,9 @@ def run_chat_turn_from_employment(
     process_plan_path: Path | None = None,
     curriculum_manifest_path: Path | None = None,
     language_development_program_path: Path | None = None,
+    developmental_ecology_path: Path | None = None,
+    life_trace_path: Path | None = None,
+    growth_profile_path: Path | None = None,
     llm_mode: str = "offline",
     llm_model: str | None = None,
     learn_from_chat: bool = False,
@@ -1717,6 +2322,9 @@ def run_chat_turn_from_employment(
         process_plan_path=process_plan_path,
         curriculum_manifest_path=curriculum_manifest_path,
         language_development_program_path=language_development_program_path,
+        developmental_ecology_path=developmental_ecology_path,
+        life_trace_path=life_trace_path,
+        growth_profile_path=growth_profile_path,
     )
     if language_development_program_path is None:
         language_entrypoint = entrypoints.get("language_development_program")
@@ -1740,26 +2348,93 @@ def run_chat_turn_from_employment(
         intent=conversation_intent,
         active_route=chat_context["active_memory_route"],
     )
-    base_runtime_result = invoke_llm_application_engine(
+    llm_provider_preflight = build_llm_provider_preflight(
         employment_record["llm_runtime"],
-        manifest=agent_manifest,
-        task=message,
+        llm_mode=llm_mode,
+        llm_model=llm_model,
     )
-    live_llm_attempt: dict[str, Any] | None = None
-    if llm_mode in {"auto", "live"}:
-        live_llm_attempt = _invoke_live_chat_llm(
-            chat_context=chat_context,
-            runtime_config=employment_record["llm_runtime"],
-            model=llm_model,
+    provider_not_ready = llm_mode == "live" and llm_provider_preflight.get("status") == "needs_configuration"
+    base_runtime_result: dict[str, Any]
+    if provider_not_ready:
+        base_runtime_result = {
+            "schema": "ai-talent-llm-runtime-result/v1",
+            "engine": employment_record["llm_runtime"].get("engine", "deterministic_local"),
+            "status": "skipped_provider_not_ready",
+            "reason": "live_provider_needs_configuration_before_chat",
+            "model": llm_model or employment_record["llm_runtime"].get("model"),
+            "identity_policy": employment_record["llm_runtime"].get(
+                "identity_policy",
+                "application_engine_not_identity",
+            ),
+            "network_access": employment_record["llm_runtime"].get("network_access", "blocked"),
+            "llm_mode": llm_mode,
+            "llm_provider_preflight": llm_provider_preflight,
+        }
+    else:
+        base_runtime_result = invoke_llm_application_engine(
+            employment_record["llm_runtime"],
+            manifest=agent_manifest,
+            task=message,
+            llm_mode="offline" if llm_mode in {"auto", "live"} else llm_mode,
+            llm_model=llm_model,
         )
+    live_llm_attempt: dict[str, Any] | None = None
+    if provider_not_ready:
+        live_llm_attempt = {
+            "schema": "ai-talent-live-llm-result/v1",
+            "engine": employment_record["llm_runtime"].get("engine"),
+            "status": "skipped_provider_not_ready",
+            "reason": "live_provider_needs_configuration_before_chat",
+            "model": llm_model or employment_record["llm_runtime"].get("model"),
+            "identity_policy": employment_record["llm_runtime"].get(
+                "identity_policy",
+                "application_engine_not_identity",
+            ),
+            "network_access": employment_record["llm_runtime"].get("network_access"),
+            "llm_provider_preflight": llm_provider_preflight,
+        }
+    elif llm_mode in {"auto", "live"}:
+        auto_provider_not_ready = llm_mode == "auto" and llm_provider_preflight.get("status") == "needs_configuration"
+        if auto_provider_not_ready:
+            live_llm_attempt = {
+                "schema": "ai-talent-live-llm-result/v1",
+                "engine": employment_record["llm_runtime"].get("engine"),
+                "status": "skipped_provider_not_ready",
+                "reason": "live_provider_needs_configuration_auto_fallback",
+                "model": llm_model or employment_record["llm_runtime"].get("model"),
+                "identity_policy": employment_record["llm_runtime"].get(
+                    "identity_policy",
+                    "application_engine_not_identity",
+                ),
+                "network_access": employment_record["llm_runtime"].get("network_access"),
+                "llm_provider_preflight": llm_provider_preflight,
+            }
+        else:
+            live_llm_attempt = _invoke_live_chat_llm(
+                chat_context=chat_context,
+                runtime_config=employment_record["llm_runtime"],
+                model=llm_model,
+            )
+            live_llm_attempt = sanitize_llm_result_packet(live_llm_attempt)
 
-    if live_llm_attempt and live_llm_attempt.get("status") == "completed":
+    if provider_not_ready:
+        llm_runtime_result = base_runtime_result
+        reply_packet = _provider_configuration_required_reply(
+            message=message,
+            preflight=llm_provider_preflight,
+        )
+        reply_generation_mode = "skipped_provider_not_ready"
+    elif live_llm_attempt and live_llm_attempt.get("status") == "completed":
         llm_runtime_result = live_llm_attempt
         reply_packet = _draft_chat_reply_from_live_llm(
             llm_result=live_llm_attempt,
             fallback_reasoning_summary=fallback_reasoning_summary,
         )
-        reply_generation_mode = "live_openai_responses"
+        reply_generation_mode = (
+            "live_generic_llm_client"
+            if live_llm_attempt.get("provider_adapter") == "generic_llm_client"
+            else "live_openai_responses"
+        )
     else:
         llm_runtime_result = base_runtime_result
         if live_llm_attempt:
@@ -1767,6 +2442,7 @@ def run_chat_turn_from_employment(
                 **base_runtime_result,
                 "fallback_used": True,
                 "live_llm_attempt": live_llm_attempt,
+                "llm_provider_preflight": llm_provider_preflight,
             }
         reply_packet = _draft_chat_reply(
             employment_record["agent"]["name"],
@@ -1783,6 +2459,44 @@ def run_chat_turn_from_employment(
                 live_llm_attempt=live_llm_attempt,
             )
         reply_generation_mode = "deterministic_local_fallback"
+    selected_memory_count = len(chat_context.get("active_memory_route", {}).get("selected_nodes", []))
+    chat_execution_trace = [
+        _chat_trace_entry(
+            "employment_loaded",
+            employment_id=employment_record["employment_id"],
+            agent_name=employment_record["agent"]["name"],
+        ),
+        _chat_trace_entry(
+            "memory_route_built",
+            substrate=substrate_path.name,
+            selected_memory_count=selected_memory_count,
+            private_reasoning_trace=False,
+        ),
+        _chat_trace_entry(
+            "base_runtime_checked",
+            engine=base_runtime_result.get("engine"),
+            status=base_runtime_result.get("status"),
+        ),
+        _chat_trace_entry(
+            "llm_provider_preflight",
+            status=llm_provider_preflight.get("status"),
+            live_path_selected=llm_provider_preflight.get("live_path_selected"),
+            network_call_made=llm_provider_preflight.get("network_call_made_by_preflight"),
+        ),
+        _chat_trace_entry(
+            "live_llm_attempt",
+            requested=llm_mode in {"auto", "live"},
+            engine=(live_llm_attempt or {}).get("engine"),
+            status=(live_llm_attempt or {}).get("status", "skipped"),
+            provider_adapter=(live_llm_attempt or {}).get("provider_adapter"),
+        ),
+        _chat_trace_entry(
+            "reply_generated",
+            mode=reply_generation_mode,
+            active_operator=reply_packet["active_operator"],
+            conversation_intent=conversation_intent,
+        ),
+    ]
     run = {
         "schema": CHAT_RUN_SCHEMA,
         "created_at_utc": _now(),
@@ -1795,16 +2509,32 @@ def run_chat_turn_from_employment(
         "message": message,
         "chat_context": chat_context,
         "llm_runtime_result": llm_runtime_result,
+        "llm_provider_preflight": llm_provider_preflight,
         "llm_mode": llm_mode,
+        "chat_status": "needs_configuration" if provider_not_ready else "completed",
         "reply_generation_mode": reply_generation_mode,
         "conversation_intent": conversation_intent,
         "assistant_answer": reply_packet["answer"],
         "assistant_reply": reply_packet["reply"],
         "active_operator": reply_packet["active_operator"],
         "reviewable_reasoning_summary": reply_packet["reviewable_reasoning_summary"],
+        "chat_execution_trace": chat_execution_trace,
         "stored_private_reasoning_trace": False,
     }
-    if learn_from_chat:
+    if learn_from_chat and provider_not_ready:
+        run["chat_learning_update"] = _skipped_chat_learning_update(
+            target_root=target_root,
+            entrypoints=entrypoints,
+            reason="live_provider_needs_configuration_before_chat",
+        )
+        run["chat_execution_trace"].append(
+            _chat_trace_entry(
+                "chat_learning_update",
+                decision=run["chat_learning_update"]["decision"],
+                latest_experience_id=None,
+            )
+        )
+    elif learn_from_chat:
         run["chat_learning_update"] = _record_chat_learning(
             target_root=target_root,
             entrypoints=entrypoints,
@@ -1815,6 +2545,43 @@ def run_chat_turn_from_employment(
             run=run,
             reply_packet=reply_packet,
         )
+        run["chat_execution_trace"].append(
+            _chat_trace_entry(
+                "chat_learning_update",
+                decision=run["chat_learning_update"]["decision"],
+                latest_experience_id=run["chat_learning_update"].get("latest_experience_id"),
+            )
+        )
+
+    latest_learning_ledger = _read_json(ledger_path) if ledger_path.exists() else learning_ledger
+    run["memory_lifecycle_status_card"] = build_memory_lifecycle_status_card(
+        latest_learning_ledger,
+        active_memory_route=chat_context["active_memory_route"],
+        objective=message,
+        learning_update=run.get("chat_learning_update"),
+        source="chat_turn",
+    )
+    run["chat_runtime_status_card"] = _build_chat_runtime_status_card(
+        run=run,
+        llm_provider_preflight=llm_provider_preflight,
+        live_llm_attempt=live_llm_attempt,
+        learn_from_chat=learn_from_chat,
+    )
+    run["chat_runtime_status_card"]["memory_lifecycle"] = {
+        "schema": run["memory_lifecycle_status_card"]["schema"],
+        "status": run["memory_lifecycle_status_card"]["status"],
+        "selected_count": run["memory_lifecycle_status_card"]["active_context"]["selected_count"],
+        "quarantined_excluded": run["memory_lifecycle_status_card"]["active_context"]["quarantined_excluded"],
+        "learning_decision": run["memory_lifecycle_status_card"]["learning"]["decision"],
+    }
+    run["chat_execution_trace"].append(
+        _chat_trace_entry(
+            "chat_runtime_status_card_recorded",
+            status=run["chat_runtime_status_card"]["status"],
+            fallback_used=run["chat_runtime_status_card"]["fallback"]["used"],
+            learning_decision=run["chat_runtime_status_card"]["learning"]["decision"],
+        )
+    )
 
     run_output_path = output_path or target_root / entrypoints.get("last_chat", "last_hired_agent_chat.json")
     _write_json(run_output_path, run)

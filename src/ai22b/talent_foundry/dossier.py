@@ -101,6 +101,9 @@ def build_hiring_dossier(
     curriculum = hiring_packet.get("curriculum_manifest") or agent_manifest.get("identity_source", {}).get(
         "curriculum_summary"
     )
+    growth_profile = hiring_packet.get("growth_profile") or agent_manifest.get("identity_source", {}).get(
+        "growth_profile"
+    )
 
     return {
         "schema": SCHEMA,
@@ -137,6 +140,19 @@ def build_hiring_dossier(
             "private_reasoning_trace": learning_ledger.get("policy", {}).get("private_reasoning_trace")
             or llm_policy.get("private_reasoning_trace"),
             "experience_counts": reasoning_kernel.get("experience_counts", {}),
+        },
+        "growth_profile_summary": {
+            "schema": growth_profile.get("schema") if isinstance(growth_profile, dict) else None,
+            "episodic_memory_events": growth_profile.get("episodic_memory_events")
+            if isinstance(growth_profile, dict)
+            else None,
+            "relationship_memory_refs": growth_profile.get("relationship_memory_refs")
+            if isinstance(growth_profile, dict)
+            else None,
+            "emotional_memory_refs": growth_profile.get("emotional_memory_refs")
+            if isinstance(growth_profile, dict)
+            else None,
+            "policy": growth_profile.get("policy", {}) if isinstance(growth_profile, dict) else {},
         },
         "llm_contract": {
             "role": llm_policy.get("role"),
@@ -189,6 +205,7 @@ def render_hiring_dossier_markdown(dossier: dict[str, Any]) -> str:
     assessment = dossier.get("assessment_summary", {})
     doctoral = dossier.get("doctoral_defense", {})
     reasoning = dossier.get("reasoning_profile", {})
+    growth = dossier.get("growth_profile_summary", {})
     recommendation = dossier.get("employment_recommendation", {})
     llm_contract = dossier.get("llm_contract", {})
     gate_lines = [
@@ -227,6 +244,13 @@ def render_hiring_dossier_markdown(dossier: dict[str, Any]) -> str:
             f"- 기풍: {reasoning.get('style_signature')}",
             f"- 비공개 추론 원문: {reasoning.get('private_reasoning_trace')}",
             *(skill_lines or ["- 절차 스킬 기록 없음"]),
+            "",
+            "## 성장 프로필",
+            f"- 스키마: {growth.get('schema')}",
+            f"- 에피소드 메모리 사건 수: {growth.get('episodic_memory_events')}",
+            f"- 관계 메모리 근거 수: {growth.get('relationship_memory_refs')}",
+            f"- 감정 메모리 근거 수: {growth.get('emotional_memory_refs')}",
+            "- 숨은 chain-of-thought: 저장하지 않음",
             "",
             "## LLM 계약",
             f"- LLM 역할: {llm_contract.get('role')}",

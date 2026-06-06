@@ -6,12 +6,12 @@ This document maps reference programs, papers, and reports to concrete Paideia A
 
 | Source | What It Shows | Reflected In Paideia Agent |
 | --- | --- | --- |
-| OpenClaw onboarding wizard | First-run setup should choose provider/model, gateway mode, chat/channel path, skills, and next steps. | `start-console` now asks for LLM service and chat surface before the owner request. `paideia_onboarding.template.json` records the selected service, selected surface, catalogs, and first-run flow. |
+| OpenClaw onboarding wizard | First-run setup should choose provider/model, gateway mode, chat/channel path, skills, and next steps. | `start-console` now asks for LLM service and chat surface before the owner request. The generated onboarding session records the selected service, selected surface, catalogs, provider checklist, connection profile, and first-run flow. |
 | OpenClaw model provider docs | Agent programs need explicit provider/model selection and fallback semantics. | `llm_service_catalog` separates OpenAI/Codex, Claude, Gemini, Mistral, OpenRouter, Ollama, LM Studio, deterministic local, bigram, Transformers, and llama.cpp/GGUF paths. |
 | OpenClaw agent runtime docs | OpenAI/Codex can be a runtime surface without making the model provider equal to the agent identity. | Paideia records `llm_identity_policy: application_engine_not_identity` and stores talent identity in local education artifacts. |
 | Hermes Agent repository | Modern agents expose setup, model switching, CLI chat, tools, skills, memory, gateways, and migration. | Paideia adds install kits, doctor checks, skill migration wrappers, adapter manifests, and the `Reasoning Ledger` as a growth record. |
 | OpenHands | Workspace agents should leave inspectable files, plans, traces, and runnable evidence. | Hired-agent workspace/dataflow runs write local plans, results, traces, and learning promotion records. |
-| Agent ID Card | Agent identity should bind display name, owner, role, scope, credentials, and verification status. | Planned integration: export an Agent ID Card payload from the hiring dossier and installed manifest, with registration disabled unless the owner explicitly runs it. |
+| Agent ID Card | Agent identity should bind display name, owner, role, scope, credentials, and verification status. | Paideia exports an Agent ID Card payload and Agent_warrent `ail.v1` envelope from local hiring artifacts, verifies required fields, privacy leaks, and manual-registration policy before owner-run external registration, then imports owner-provided registration receipts back into a local envelope with credential tokens omitted by default. |
 
 ## Hardware And Dataflow Benchmarks
 
@@ -41,7 +41,7 @@ Detailed note: [Tesla-style dataflow board benchmark](tesla_board_benchmark.md).
 
 | Source | What It Shows | Reflected In Paideia Agent |
 | --- | --- | --- |
-| NVIDIA Isaac Gym / Isaac Lab | Massive parallel simulation can accelerate embodied-policy learning. | Paideia's planned life-simulation loop uses parallel episode rollouts from the same age/stage checkpoint. |
+| NVIDIA Isaac Gym / Isaac Lab | Massive parallel simulation can accelerate embodied-policy learning. | Paideia uses parent-controlled parallel episode rollouts from the same checkpoint, then ranks winner, promotion candidates, and quarantine candidates without automatic memory promotion. |
 | MuJoCo MJX / MuJoCo Playground | Vectorized environments can test many variations quickly. | Conversation, school, stress, social conflict, and research scenarios can be varied without breaking the growth timeline. |
 | OpenAI dexterous manipulation / domain randomization | Simulated variation helps reduce the reality gap before deployment. | Paideia uses domain-randomized questions, API failures, missing files, conflicting sources, and social stress cases before promotion. |
 | GR00T / robot foundation-model reports | Robot learning combines demonstrations, synthetic data, simulation, and deployment feedback. | Paideia treats generated episodes, exams, real chats, and real work as separate evidence classes with promotion/quarantine rules. |

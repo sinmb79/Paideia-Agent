@@ -5,14 +5,19 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
-from ai22b.talent_foundry.agent_identity_card import build_agent_id_card_payload
+from ai22b.talent_foundry.agent_identity_card import (
+    build_agent_id_card_payload,
+    build_agent_identity_layer_envelope,
+)
 from ai22b.talent_foundry.onboarding import run_agent_onboarding
+from ai22b.talent_foundry.llm_onboarding import build_llm_provider_matrix
 from ai22b.talent_foundry.onboarding_choices import (
     CHAT_SURFACE_CATALOG,
     DEFAULT_CHAT_SURFACE_ID,
     DEFAULT_LLM_SERVICE_ID,
     LLM_SERVICE_CATALOG,
 )
+from ai22b.talent_foundry.owner_self_extension import build_owner_self_extension_intake
 from ai22b.talent_foundry.role_models import list_role_models, summarize_role_model
 from ai22b.talent_foundry.registry import (
     assemble_hired_agent_team,
@@ -21,7 +26,7 @@ from ai22b.talent_foundry.registry import (
     run_hired_projection_swarm_cycle,
     run_hired_team_cycle,
 )
-from ai22b.talent_foundry.simulation_rollouts import build_simulation_rollouts
+from ai22b.talent_foundry.simulation_rollouts import build_simulation_rollouts, evaluate_simulation_rollouts
 
 
 CONSOLE_SESSION_SCHEMA = "ai-talent-guided-console-session/v1"
@@ -150,8 +155,24 @@ CONSOLE_QUESTIONS = [
     {
         "id": "private_curriculum_dir",
         "label": "비공개 교재 폴더",
-        "prompt": "보스가 제공할 비공개 교재 폴더는 어디로 둘까요?",
+        "prompt": "보스가 제공할 비공개 교재/자기확장 자료 폴더는 어디로 둘까요?",
         "default": "",
+        "step": "education_path",
+        "advanced_only": True,
+    },
+    {
+        "id": "owner_materials_consent",
+        "label": "자기확장 자료 동의",
+        "prompt": "자기확장 자료를 metadata-only로 로컬 접수하는 데 동의하나요?",
+        "default": "no",
+        "step": "education_path",
+        "advanced_only": True,
+    },
+    {
+        "id": "copyright_attestation",
+        "label": "저작권/사용권 확인",
+        "prompt": "비공개 자료의 사용권 확인 상태는 무엇인가요?",
+        "default": "metadata_only_pending_review",
         "step": "education_path",
         "advanced_only": True,
     },
@@ -361,6 +382,17 @@ def _question_choices(question_id: str) -> list[dict[str, str]]:
             {"id": "payload_only", "label": "Create local payload only"},
             {"id": "skip", "label": "Skip for now"},
         ]
+    if question_id == "owner_materials_consent":
+        return [
+            {"id": "no", "label": "No private intake"},
+            {"id": "yes", "label": "Yes, metadata-only local intake"},
+        ]
+    if question_id == "copyright_attestation":
+        return [
+            {"id": "metadata_only_pending_review", "label": "Metadata only, pending review"},
+            {"id": "owner_provided_or_authorized_for_local_use", "label": "Owner provided or authorized"},
+            {"id": "public_or_open_license_metadata_only", "label": "Public/open metadata only"},
+        ]
     if question_id == "finish_action":
         return [
             {"id": "chat", "label": "Open first chat next"},
@@ -418,6 +450,10 @@ def _choice_id_from_raw(raw: str, choices: list[dict[str, str]]) -> str:
         if lowered == item.get("label", "").casefold():
             return item["id"]
     return value
+
+
+def _truthy_answer(value: str | None) -> bool:
+    return str(value or "").strip().casefold() in {"1", "true", "yes", "y", "동의", "예"}
 
 
 def _format_choice_block(choices: list[dict[str, str]]) -> str:
@@ -525,7 +561,11 @@ def write_openclaw_style_config(
         "model_auth": {
             "llm_service": normalized.get("llm_service"),
             "llm_model": normalized.get("llm_model"),
+            "llm_provider_matrix": artifacts.get("llm_provider_matrix"),
+            "llm_onboarding_checklist": artifacts.get("llm_onboarding_checklist"),
+            "llm_connection_profile": artifacts.get("llm_connection_profile"),
             "secret_storage": "env_or_user_managed_no_plaintext_saved",
+            "default_provider_call": "none_without_explicit_live_check",
         },
         "workspace": {
             "owner": normalized.get("owner"),
@@ -549,6 +589,8 @@ def write_openclaw_style_config(
             "domain": normalized.get("domain"),
             "role_model_id": normalized.get("role_model_id"),
             "private_curriculum_dir": normalized.get("private_curriculum_dir"),
+            "owner_materials_consent": normalized.get("owner_materials_consent"),
+            "copyright_attestation": normalized.get("copyright_attestation"),
         },
         "runtime": {
             "post_hire_mode": normalized.get("post_hire_mode"),
@@ -576,6 +618,11 @@ def run_console_session(
 
     onboarding_dir = output_dir / "onboarding"
     onboarding_output = onboarding_dir / "onboarding_session.json"
+    llm_provider_matrix_path = output_dir / "llm_provider_matrix.json"
+    llm_provider_matrix = build_llm_provider_matrix(
+        chat_surface=normalized.get("chat_surface") or DEFAULT_CHAT_SURFACE_ID,
+        output_path=llm_provider_matrix_path,
+    )
     onboarding = run_agent_onboarding(
         owner=normalized["owner"],
         request=normalized["request"],
@@ -599,28 +646,64 @@ def run_console_session(
     artifacts = {
         "console_session": str(output_path),
         "answers": str(answers_path),
+        "llm_provider_matrix": str(llm_provider_matrix_path),
         "onboarding_session": onboarding["artifacts"]["onboarding_session"],
+        "llm_onboarding_checklist": onboarding["artifacts"]["llm_onboarding_checklist"],
+        "llm_connection_profile": onboarding["artifacts"]["llm_connection_profile"],
         "employment_record": onboarding["artifacts"]["employment_record"],
         "employment_goal": onboarding["artifacts"]["employment_goal"],
         "first_goal_cycle": onboarding["artifacts"]["first_goal_cycle"],
     }
     status = onboarding["status"]
+    if normalized.get("talent_source") == "owner_self_extension" and normalized.get("private_curriculum_dir"):
+        owner_intake_path = output_dir / "owner_self_extension_intake.json"
+        owner_intake = build_owner_self_extension_intake(
+            source_dir=Path(normalized["private_curriculum_dir"]),
+            owner=normalized["owner"],
+            output_path=owner_intake_path,
+            owner_consent=_truthy_answer(normalized.get("owner_materials_consent")),
+            copyright_attestation=normalized.get("copyright_attestation") or "metadata_only_pending_review",
+            repo_root=Path.cwd(),
+        )
+        artifacts["owner_self_extension_intake"] = str(owner_intake_path)
+        post_hire_extensions["owner_self_extension_intake"] = {
+            "schema": owner_intake["schema"],
+            "status": owner_intake["status"],
+            "valid": owner_intake["valid"],
+            "content_ingestion_performed": owner_intake["content_ingestion_performed"],
+            "raw_paths_exported": owner_intake["privacy"]["raw_absolute_paths_exported"],
+            "scanned_file_count": owner_intake["scan_summary"]["scanned_file_count"],
+        }
+        if not owner_intake["valid"]:
+            status = "needs_owner_self_extension_intake_review"
     if normalized.get("agent_id_card_mode") != "skip":
         agent_id_card_path = output_dir / "agent_id_card_payload.json"
+        agent_identity_envelope_path = output_dir / "agent_identity_envelope.json"
         payload = build_agent_id_card_payload(
             installed_manifest_path=Path(onboarding["artifacts"]["installed_agent_manifest"]),
             employment_record_path=Path(onboarding["artifacts"]["employment_record"]),
             output_path=agent_id_card_path,
         )
+        envelope = build_agent_identity_layer_envelope(
+            installed_manifest_path=Path(onboarding["artifacts"]["installed_agent_manifest"]),
+            employment_record_path=Path(onboarding["artifacts"]["employment_record"]),
+            output_path=agent_identity_envelope_path,
+            surface="paideia_onboarding_console",
+            task_ref="onboarding-agent-identity",
+        )
         artifacts["agent_id_card_payload"] = str(agent_id_card_path)
+        artifacts["agent_identity_envelope"] = str(agent_identity_envelope_path)
         post_hire_extensions["agent_id_card"] = {
             "schema": payload["schema"],
             "status": payload["status"],
             "network_action_performed": payload["network_action_performed"],
             "payload_fingerprint_sha256": payload["payload_fingerprint_sha256"],
+            "agent_identity_layer_version": envelope["version"],
+            "agent_warrent_repo": envelope["extensions"]["agent_warrent"]["repo_url"],
         }
     if normalized.get("simulation_rollouts_enabled", "yes") == "yes":
         simulation_path = output_dir / "simulation_rollouts.json"
+        simulation_evaluation_path = output_dir / "simulation_rollout_evaluation.json"
         simulation = build_simulation_rollouts(
             Path(onboarding["artifacts"]["employment_record"]),
             objective=normalized.get("cycle_note")
@@ -628,11 +711,18 @@ def run_console_session(
             or f"{normalized['talent_name']} first simulation rollout",
             output_path=simulation_path,
         )
+        simulation_evaluation = evaluate_simulation_rollouts(
+            simulation_path,
+            output_path=simulation_evaluation_path,
+        )
         artifacts["simulation_rollouts"] = str(simulation_path)
+        artifacts["simulation_rollout_evaluation"] = str(simulation_evaluation_path)
         post_hire_extensions["simulation_rollouts"] = {
             "schema": simulation["schema"],
+            "evaluation_schema": simulation_evaluation["schema"],
             "episode_count": simulation["summary"]["episode_count"],
             "promotion_candidate_count": simulation["summary"]["promotion_candidate_count"],
+            "winner_episode_id": simulation_evaluation["summary"]["winner_episode_id"],
             "not_separate_consciousnesses": simulation["control_model"]["not_separate_consciousnesses"],
         }
     if normalized.get("post_hire_mode") == "projection_swarm":
@@ -746,6 +836,14 @@ def run_console_session(
             "status": onboarding["status"],
             "track": onboarding["track"],
             "employment": onboarding["employment"],
+            "llm_provider_matrix": {
+                "schema": llm_provider_matrix["schema"],
+                "service_count": llm_provider_matrix["summary"]["service_count"],
+                "live_required_count": llm_provider_matrix["summary"]["live_required_count"],
+                "network_call_performed": llm_provider_matrix["public_safe"]["network_call_performed"],
+            },
+            "llm_onboarding_checklist": onboarding["llm_onboarding_checklist"],
+            "llm_connection_profile": onboarding["llm_connection_profile"],
         },
         "local_policy": onboarding["local_policy"],
         "post_hire_extensions": post_hire_extensions,

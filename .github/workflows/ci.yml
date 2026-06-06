@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - "codex/**"
+
+jobs:
+  python:
+    name: Python checks
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install test dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Compile package
+        shell: pwsh
+        run: |
+          python -m compileall src\ai22b\talent_foundry
+
+      - name: Run regression tests
+        shell: pwsh
+        run: |
+          $env:PYTHONPATH = "src"
+          python -B -m pytest tests\test_talent_foundry.py -k "agent_runner_executes_manifest_with_tool_policy_and_memory or agent_execution_uses_registered_tool_executor or policy_engine_blocks_prompt_injection_sensitive_actions_but_allows_policy_discussion or policy_bypass_attempt_is_blocked_even_without_manifest_blocklist or agent_runner_pauses_approval_required_sensitive_action_without_llm_or_tools or llm_runtime_live_mode_uses_client_interface_and_auto_fallback or llm_provider_preflight_explains_missing_live_configuration or external_live_clients_fail_closed_without_required_keys_or_models or live_client_errors_redact_secret_values_from_result_packets or llm_provider_doctor_live_check_uses_client_interface or cli_llm_live_readiness_strict_fails_closed_when_live_provider_not_ready or cli_chat_runtime_smoke_strict_fails_closed_when_live_provider_not_ready or workspace_agent_writes_plan_summary_and_trace_inside_workspace or cli_run_workspace_agent_command_writes_workspace_result or workspace_sandbox_enforces_path_size_trace_and_network_limits or run_hired_agent_job_writes_deliverables_and_acceptance_checklist or hired_job_dataflow_and_cycle_propagate_live_llm_runtime or dataflow_runtime_writes_workspace_artifacts_for_hired_manifest or record_hired_learning_experience_updates_installed_reasoning_kernel or memory_lifecycle_audits_pii_secrets_paths_and_retrieval_quality or maintain_hired_memory_deletes_experience_with_tombstone_and_backup or cli_maintain_hired_memory_recovers_corrupted_ledger_from_backup or cli_doctor_paideia_kit_first_run_runs_offline_chat_smoke" -q
+          python -B -m pytest tests\test_cli_smoke.py tests\test_package_smoke.py tests\test_talent_foundry_policy_eval.py tests\test_talent_foundry_action_approval.py tests\test_talent_foundry_llm_clients.py tests\test_talent_foundry_llm_plan.py tests\test_talent_foundry_memory_substrate_chat.py tests\test_talent_foundry_graham.py tests\test_talent_foundry_graham_kibo_lifecycle.py tests\test_talent_foundry_growth_package.py tests\test_talent_foundry_execution_proof.py -q
+          ai22b-talent-foundry build-llm-connection-profile --llm-engine deterministic_local --output runs\llm_connection_profile.json
+          ai22b-talent-foundry doctor-llm-adapters --strict --output runs\llm_adapter_contracts.json
+          ai22b-talent-foundry run-chat-runtime-smoke --llm-engine deterministic_local --strict --output runs\chat_runtime_smoke.json
+          ai22b-talent-foundry doctor-llm-live-readiness --llm-engine deterministic_local --strict --output-dir runs\llm_live_readiness
+          ai22b-talent-foundry audit-public-release-readiness --repo-root . --strict --output runs\public_release_readiness.json
+          ai22b-talent-foundry build-source-sbom --repo-root . --output runs\source_sbom.json
+          ai22b-talent-foundry doctor-package-install --repo-root . --strict --output runs\package_install_doctor.json
+          ai22b-talent-foundry doctor-runtime-contract --repo-root . --strict --output runs\runtime_contract_doctor.json
+          ai22b-talent-foundry doctor-first-run --repo-root . --strict --output runs\first_run_doctor.json
+
+      - name: Public repository hygiene
+        shell: pwsh
+        run: |
+          .\scripts\check_public_repo_hygiene.ps1

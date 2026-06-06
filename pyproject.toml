@@ -9,7 +9,40 @@ description = "Local-first AI talent foundry and Paideia Agent runtime"
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [{ name = "22B" }]
+license = { file = "LICENSE" }
 dependencies = []
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[project.urls]
+Homepage = "https://github.com/sinmb79/Paideia-Agent"
+Repository = "https://github.com/sinmb79/Paideia-Agent"
+Issues = "https://github.com/sinmb79/Paideia-Agent/issues"
+
+[project.optional-dependencies]
+dev = ["pytest"]
+live-llm = ["openai>=1.0.0"]
+local-llm = ["accelerate", "sentence-transformers", "transformers"]
+rag = ["chromadb", "ragas"]
+fine-tune = ["datasets", "peft"]
+all = [
+  "openai>=1.0.0",
+  "accelerate",
+  "chromadb",
+  "datasets",
+  "peft",
+  "pytest",
+  "ragas",
+  "sentence-transformers",
+  "transformers",
+]
 
 [project.scripts]
 ai22b-doctor = "ai22b.doctor:main"

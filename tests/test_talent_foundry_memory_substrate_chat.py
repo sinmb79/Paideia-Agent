@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -31,22 +32,71 @@ class TalentFoundryMemorySubstrateChatTests(unittest.TestCase):
             )
             installed_manifest = json.loads(artifacts["installed_agent_manifest"].read_text(encoding="utf-8"))
             employment_record = json.loads(artifacts["employment_record"].read_text(encoding="utf-8"))
+            hired_llm_profile = json.loads(
+                artifacts["hired_llm_connection_profile"].read_text(encoding="utf-8")
+            )
+            agent_id_payload = json.loads(artifacts["agent_id_card_payload"].read_text(encoding="utf-8"))
+            agent_identity_envelope = json.loads(artifacts["agent_identity_envelope"].read_text(encoding="utf-8"))
+            agent_identity_verification = json.loads(
+                artifacts["agent_identity_verification"].read_text(encoding="utf-8")
+            )
 
         self.assertEqual(substrate["schema"], "ai-talent-memory-substrate/v1")
         self.assertEqual(substrate["agent"]["name"], "grham-쥬니어")
         self.assertGreater(substrate["source_counts"]["reasoning_kibo_entries"], 20)
         self.assertGreaterEqual(substrate["source_counts"]["language_development_stages"], 8)
+        self.assertEqual(substrate["source_counts"]["life_trace_events"], 252)
+        self.assertGreaterEqual(substrate["source_counts"]["developmental_ecology_layers"], 7)
+        self.assertGreaterEqual(substrate["source_counts"]["growth_profile_nodes"], 5)
         self.assertIn("procedural_operator_store", substrate["boards"])
         self.assertIn("conversation_development", substrate["boards"])
+        self.assertIn("developmental_ecology", substrate["boards"])
+        self.assertIn("life_trace", substrate["boards"])
+        self.assertIn("growth_profile", substrate["boards"])
         self.assertEqual(bundle_manifest["included_artifacts"]["memory_substrate"], "memory_substrate.json")
         self.assertEqual(
             bundle_manifest["included_artifacts"]["language_development_program"],
             "language_development_program.json",
         )
+        self.assertEqual(bundle_manifest["included_artifacts"]["developmental_ecology"], "developmental_ecology.json")
+        self.assertEqual(bundle_manifest["included_artifacts"]["life_trace"], "life_trace.jsonl")
+        self.assertEqual(bundle_manifest["included_artifacts"]["growth_profile"], "growth_profile.json")
         self.assertIn("memory_substrate", installed_manifest["entrypoints"])
         self.assertIn("language_development_program", installed_manifest["entrypoints"])
+        self.assertIn("developmental_ecology", installed_manifest["entrypoints"])
+        self.assertIn("life_trace", installed_manifest["entrypoints"])
+        self.assertIn("growth_profile", installed_manifest["entrypoints"])
         self.assertEqual(employment_record["agent"]["name"], "grham-쥬니어")
         self.assertIn("last_chat", employment_record["entrypoints"])
+        self.assertIn("developmental_ecology", employment_record["entrypoints"])
+        self.assertIn("life_trace", employment_record["entrypoints"])
+        self.assertIn("growth_profile", employment_record["entrypoints"])
+        self.assertIn("llm_connection_profile", employment_record["entrypoints"])
+        self.assertEqual(hired_llm_profile["schema"], "paideia-llm-connection-profile/v1")
+        self.assertEqual(
+            employment_record["llm_connection_profile"]["entrypoint"],
+            employment_record["entrypoints"]["llm_connection_profile"],
+        )
+        self.assertEqual(
+            employment_record["llm_connection_profile"]["selected_engine"],
+            hired_llm_profile["selected_llm_service"]["engine"],
+        )
+        self.assertFalse(hired_llm_profile["public_safe"]["network_call_performed"])
+        self.assertIn("agent_id_card_payload", employment_record["entrypoints"])
+        self.assertIn("agent_identity_envelope", employment_record["entrypoints"])
+        self.assertIn("agent_identity_verification", employment_record["entrypoints"])
+        self.assertEqual(agent_id_payload["schema"], "ai-talent-agent-id-card-payload/v1")
+        self.assertEqual(agent_identity_envelope["version"], "ail.v1")
+        self.assertEqual(
+            agent_identity_envelope["delegation"]["task_ref"],
+            "employment:" + employment_record["employment_id"],
+        )
+        self.assertEqual(agent_identity_verification["status"], "passed")
+        self.assertFalse(agent_identity_verification["network_action_performed"])
+        self.assertEqual(
+            employment_record["agent_identity"]["agent_identity_layer"]["registration_state"],
+            "local_unregistered",
+        )
 
     def test_chat_turn_uses_codex_as_engine_and_local_kibo_as_identity(self) -> None:
         from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
@@ -376,7 +426,7 @@ class TalentFoundryMemorySubstrateChatTests(unittest.TestCase):
                 llm_engine="openai_chatgpt_codex",
                 record_name="employment_record_codex.json",
             )
-            with patch(
+            with patch.dict(os.environ, {"OPENAI_API_KEY": "fixture-openai-key-12345"}, clear=False), patch(
                 "ai22b.talent_foundry.memory_substrate._call_openai_responses_chat",
                 side_effect=fake_live_chat,
             ):
@@ -400,11 +450,123 @@ class TalentFoundryMemorySubstrateChatTests(unittest.TestCase):
         self.assertEqual(chat["reply_generation_mode"], "live_openai_responses")
         self.assertEqual(chat["active_operator"], "llm.dynamic_context_conversation")
         self.assertIn("그때그때 맥락을 해석", chat["assistant_answer"])
+        self.assertTrue(any(item["action"] == "live_llm_attempt" for item in chat["chat_execution_trace"]))
         self.assertEqual(chat["chat_learning_update"]["decision"], "promoted")
+        self.assertEqual(chat["chat_execution_trace"][-2]["action"], "chat_learning_update")
+        self.assertEqual(chat["chat_execution_trace"][-1]["action"], "chat_runtime_status_card_recorded")
+        self.assertEqual(chat["chat_runtime_status_card"]["status"], "completed_live")
+        self.assertEqual(chat["chat_runtime_status_card"]["learning"]["decision"], "promoted")
+        self.assertEqual(
+            chat["memory_lifecycle_status_card"]["schema"],
+            "paideia-memory-lifecycle-status-card/v1",
+        )
+        self.assertEqual(chat["memory_lifecycle_status_card"]["source"], "chat_turn")
+        self.assertEqual(chat["memory_lifecycle_status_card"]["learning"]["decision"], "promoted")
+        self.assertTrue(chat["memory_lifecycle_status_card"]["active_context"]["quarantined_excluded"])
+        self.assertEqual(
+            chat["chat_runtime_status_card"]["memory_lifecycle"]["status"],
+            chat["memory_lifecycle_status_card"]["status"],
+        )
         self.assertEqual(ledger["promoted_experiences"][-1]["source"], "chat_turn")
         self.assertIn("conversation_context_learning", ledger["promoted_experiences"][-1]["promoted_skills"])
         self.assertTrue(
             any(node.get("source") == "learning_ledger_chat_turn" for node in substrate.get("nodes", []))
+        )
+
+    def test_live_chat_uses_generic_llm_client_for_non_openai_providers(self) -> None:
+        from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
+        from ai22b.talent_foundry.memory_substrate import run_chat_turn_from_employment
+        from ai22b.talent_foundry.registry import hire_installed_agent
+        from ai22b.talent_foundry.training_run import materialize_training_blueprint
+
+        captured: dict[str, object] = {}
+
+        class FakeGenericClient:
+            def generate(self, messages, *, tools=None, policy=None):
+                captured["messages"] = messages
+                captured["policy"] = policy
+                return {
+                    "schema": "paideia-llm-client-result/v1",
+                    "engine": "openrouter_api",
+                    "status": "completed",
+                    "model": "openai/gpt-test",
+                    "text": json.dumps(
+                        {
+                            "assistant_reply": "보스, 선택한 범용 LLM provider를 통해 로컬 기억 맥락으로 답했습니다.",
+                            "reviewable_reasoning_summary": [
+                                {
+                                    "step": "context",
+                                    "summary": "active memory route was supplied to the provider.",
+                                    "hidden_chain_of_thought": "do not store this hidden chat trace",
+                                }
+                            ],
+                            "learning_candidate": {
+                                "lesson": "chat live providers must share the same local identity context.",
+                                "reusable_principle": "route non-OpenAI providers through the common LLMClient interface.",
+                                "memory_tags": ["generic_live_chat_provider"],
+                                "confidence": 0.88,
+                                "private_reasoning_trace": "do not promote this private chat trace",
+                            },
+                            "chain_of_thought": "do not persist top-level private chat reasoning",
+                        },
+                        ensure_ascii=False,
+                    ),
+                    "identity_policy": "application_engine_not_identity",
+                    "raw_output_saved": False,
+                    "network_access": "external_api_selected_data_minimized",
+                }
+
+        blueprint = create_agent_training_blueprint(
+            owner="보스",
+            request="Graham 학습 경로를 재현하는 별도 샘플 AI를 만든다.",
+            talent_name="grham-주니어",
+            gender="남자",
+            domain="securities_research",
+            role_model_id="graham_value_investing",
+            agent_surface="cli-console",
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            run = materialize_training_blueprint(blueprint, output_dir=Path(tmp) / "grham_junior")
+            artifacts = {key: Path(value) for key, value in run["artifacts"].items()}
+            hiring = hire_installed_agent(
+                artifacts["installed_agent_manifest"],
+                employer="보스",
+                role="증권 리서치 AI 박사",
+                llm_engine="openrouter_api",
+                llm_model="openai/gpt-test",
+                record_name="employment_record_openrouter.json",
+            )
+            with patch.dict(os.environ, {"OPENROUTER_API_KEY": "fixture-openrouter-key"}, clear=False), patch(
+                "ai22b.talent_foundry.memory_substrate.build_llm_client",
+                return_value=FakeGenericClient(),
+            ):
+                chat = run_chat_turn_from_employment(
+                    hiring["employment_record"],
+                    message="오늘은 가볍게 대화하되 네가 배운 맥락을 사용해줘.",
+                    output_path=Path(tmp) / "generic_live_chat.json",
+                    llm_mode="live",
+                    llm_model="openai/gpt-test",
+                )
+
+        self.assertEqual(chat["reply_generation_mode"], "live_generic_llm_client")
+        self.assertEqual(chat["llm_runtime_result"]["provider_adapter"], "generic_llm_client")
+        self.assertEqual(chat["llm_runtime_result"]["engine"], "openrouter_api")
+        self.assertEqual(chat["llm_runtime_result"]["private_reasoning_fields_omitted"], 3)
+        self.assertFalse(chat["llm_runtime_result"]["data_policy"]["private_reasoning_field_values_stored"])
+        self.assertEqual(chat["assistant_answer"], "보스, 선택한 범용 LLM provider를 통해 로컬 기억 맥락으로 답했습니다.")
+        serialized = json.dumps(chat, ensure_ascii=False)
+        self.assertNotIn("do not store this hidden chat trace", serialized)
+        self.assertNotIn("do not promote this private chat trace", serialized)
+        self.assertNotIn("do not persist top-level private chat reasoning", serialized)
+        self.assertTrue(captured["messages"])
+        self.assertEqual(captured["policy"]["response_format"], "json_object")
+        self.assertTrue(
+            any(
+                item["action"] == "live_llm_attempt"
+                and item.get("provider_adapter") == "generic_llm_client"
+                for item in chat["chat_execution_trace"]
+            )
         )
 
     def test_live_llm_failure_fallback_does_not_promote_bad_chat_learning(self) -> None:
@@ -413,6 +575,8 @@ class TalentFoundryMemorySubstrateChatTests(unittest.TestCase):
         from ai22b.talent_foundry.registry import hire_installed_agent
         from ai22b.talent_foundry.training_run import materialize_training_blueprint
 
+        secret = "fixture_openai_live_chat_secret_12345"
+
         def fake_failed_live_chat(*, chat_context: dict, model: str, max_output_tokens: int = 900) -> dict:
             return {
                 "schema": "ai-talent-live-llm-result/v1",
@@ -420,6 +584,10 @@ class TalentFoundryMemorySubstrateChatTests(unittest.TestCase):
                 "status": "unavailable",
                 "reason": "test_quota_failure",
                 "model": model,
+                "error": (
+                    f"request failed with Authorization: Bearer {secret}; "
+                    f"https://api.openai.com/v1/responses?key={secret}"
+                ),
             }
 
         blueprint = create_agent_training_blueprint(
@@ -442,23 +610,175 @@ class TalentFoundryMemorySubstrateChatTests(unittest.TestCase):
                 llm_engine="openai_chatgpt_codex",
                 record_name="employment_record_codex.json",
             )
-            with patch(
+            output_path = Path(tmp) / "live_failed_chat.json"
+            with patch.dict(os.environ, {"OPENAI_API_KEY": secret}, clear=False), patch(
                 "ai22b.talent_foundry.memory_substrate._call_openai_responses_chat",
                 side_effect=fake_failed_live_chat,
             ):
                 chat = run_chat_turn_from_employment(
                     hiring["employment_record"],
                     message="케이스별 답변 말고 자연스럽게 대화해줘. 오늘 기분은 어때?",
-                    output_path=Path(tmp) / "live_failed_chat.json",
+                    output_path=output_path,
                     llm_mode="live",
                     llm_model="gpt-test",
                     learn_from_chat=True,
                 )
+            saved_chat = output_path.read_text(encoding="utf-8")
             target_root = Path(hiring["employment_record"]).parent
             ledger = json.loads((target_root / "learning_ledger.json").read_text(encoding="utf-8"))
 
         self.assertEqual(chat["reply_generation_mode"], "deterministic_local_fallback")
         self.assertEqual(chat["conversation_intent"], "casual_conversation")
+        self.assertEqual(chat["chat_runtime_status_card"]["schema"], "paideia-chat-runtime-status-card/v1")
+        self.assertEqual(chat["chat_runtime_status_card"]["status"], "completed_with_fallback")
+        self.assertTrue(chat["chat_runtime_status_card"]["fallback"]["used"])
+        self.assertFalse(chat["chat_runtime_status_card"]["fallback"]["presented_as_live"])
+        self.assertEqual(chat["chat_runtime_status_card"]["live_attempt"]["status"], "unavailable")
+        self.assertEqual(chat["chat_runtime_status_card"]["learning"]["decision"], "quarantined")
+        self.assertEqual(chat["chat_learning_update"]["decision"], "quarantined")
+        self.assertEqual(ledger["quarantined_experiences"][-1]["source"], "chat_turn")
+        serialized_chat = json.dumps(chat, ensure_ascii=False)
+        self.assertNotIn(secret, serialized_chat)
+        self.assertNotIn(secret, saved_chat)
+        self.assertIn("[REDACTED_SECRET]", serialized_chat)
+        self.assertIn("[REDACTED_SECRET]", saved_chat)
+
+    def test_live_chat_provider_not_configured_fails_closed_without_fallback_learning(self) -> None:
+        import os
+
+        from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
+        from ai22b.talent_foundry.memory_substrate import run_chat_turn_from_employment
+        from ai22b.talent_foundry.registry import hire_installed_agent
+        from ai22b.talent_foundry.training_run import materialize_training_blueprint
+
+        old_key = os.environ.pop("OPENROUTER_API_KEY", None)
+        try:
+            blueprint = create_agent_training_blueprint(
+                owner="보스",
+                request="Graham 학습 경로를 재현하는 별도 샘플 AI를 만든다.",
+                talent_name="grham-주니어",
+                gender="남자",
+                domain="securities_research",
+                role_model_id="graham_value_investing",
+                agent_surface="cli-console",
+            )
+            with tempfile.TemporaryDirectory() as tmp:
+                run = materialize_training_blueprint(blueprint, output_dir=Path(tmp) / "grham_junior")
+                artifacts = {key: Path(value) for key, value in run["artifacts"].items()}
+                hiring = hire_installed_agent(
+                    artifacts["installed_agent_manifest"],
+                    employer="보스",
+                    role="증권 리서치 AI 박사",
+                    llm_engine="openrouter_api",
+                    llm_model="openai/gpt-test",
+                    record_name="employment_record_openrouter.json",
+                )
+                target_root = Path(hiring["employment_record"]).parent
+                ledger_before = json.loads((target_root / "learning_ledger.json").read_text(encoding="utf-8"))
+                chat = run_chat_turn_from_employment(
+                    hiring["employment_record"],
+                    message="지금 live provider로 자연스럽게 대화해줘.",
+                    output_path=Path(tmp) / "live_missing_chat.json",
+                    llm_mode="live",
+                    llm_model="openai/gpt-test",
+                    learn_from_chat=True,
+                )
+                ledger_after = json.loads((target_root / "learning_ledger.json").read_text(encoding="utf-8"))
+        finally:
+            if old_key is not None:
+                os.environ["OPENROUTER_API_KEY"] = old_key
+
+        self.assertEqual(chat["chat_status"], "needs_configuration")
+        self.assertEqual(chat["reply_generation_mode"], "skipped_provider_not_ready")
+        self.assertEqual(chat["llm_runtime_result"]["status"], "skipped_provider_not_ready")
+        self.assertEqual(chat["llm_provider_preflight"]["status"], "needs_configuration")
+        self.assertEqual(chat["chat_runtime_status_card"]["schema"], "paideia-chat-runtime-status-card/v1")
+        self.assertEqual(chat["chat_runtime_status_card"]["status"], "needs_configuration")
+        self.assertFalse(chat["chat_runtime_status_card"]["fallback"]["used"])
+        self.assertFalse(chat["chat_runtime_status_card"]["fallback"]["presented_as_live"])
+        self.assertEqual(chat["chat_runtime_status_card"]["learning"]["decision"], "skipped_provider_not_ready")
+        self.assertIn("live provider 설정이 필요", chat["chat_runtime_status_card"]["user_visible_summary"]["ko"])
+        self.assertEqual(
+            chat["memory_lifecycle_status_card"]["schema"],
+            "paideia-memory-lifecycle-status-card/v1",
+        )
+        self.assertEqual(chat["memory_lifecycle_status_card"]["learning"]["decision"], "skipped_provider_not_ready")
+        self.assertFalse(chat["memory_lifecycle_status_card"]["learning"]["ledger_write_performed"])
+        self.assertTrue(chat["memory_lifecycle_status_card"]["active_context"]["quarantined_excluded"])
+        self.assertNotIn("fallback_used", chat["llm_runtime_result"])
+        self.assertEqual(chat["chat_learning_update"]["decision"], "skipped_provider_not_ready")
+        self.assertFalse(chat["chat_learning_update"]["ledger_write_performed"])
+        self.assertEqual(
+            len(ledger_after.get("promoted_experiences", [])),
+            len(ledger_before.get("promoted_experiences", [])),
+        )
+        self.assertEqual(
+            len(ledger_after.get("quarantined_experiences", [])),
+            len(ledger_before.get("quarantined_experiences", [])),
+        )
+
+    def test_auto_chat_provider_not_configured_fallback_quarantines_learning(self) -> None:
+        import os
+
+        from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
+        from ai22b.talent_foundry.memory_substrate import run_chat_turn_from_employment
+        from ai22b.talent_foundry.registry import hire_installed_agent
+        from ai22b.talent_foundry.training_run import materialize_training_blueprint
+
+        old_key = os.environ.pop("OPENROUTER_API_KEY", None)
+        try:
+            blueprint = create_agent_training_blueprint(
+                owner="보스",
+                request="Graham 학습 경로를 재현하는 별도 샘플 AI를 만든다.",
+                talent_name="grham-주니어",
+                gender="남자",
+                domain="securities_research",
+                role_model_id="graham_value_investing",
+                agent_surface="cli-console",
+            )
+            with tempfile.TemporaryDirectory() as tmp:
+                run = materialize_training_blueprint(blueprint, output_dir=Path(tmp) / "grham_junior")
+                artifacts = {key: Path(value) for key, value in run["artifacts"].items()}
+                hiring = hire_installed_agent(
+                    artifacts["installed_agent_manifest"],
+                    employer="보스",
+                    role="증권 리서치 AI 박사",
+                    llm_engine="openrouter_api",
+                    llm_model="openai/gpt-test",
+                    record_name="employment_record_openrouter.json",
+                )
+                target_root = Path(hiring["employment_record"]).parent
+                chat = run_chat_turn_from_employment(
+                    hiring["employment_record"],
+                    message="auto mode로 자연스럽게 대화해줘.",
+                    output_path=Path(tmp) / "auto_missing_chat.json",
+                    llm_mode="auto",
+                    llm_model="openai/gpt-test",
+                    learn_from_chat=True,
+                )
+                ledger = json.loads((target_root / "learning_ledger.json").read_text(encoding="utf-8"))
+        finally:
+            if old_key is not None:
+                os.environ["OPENROUTER_API_KEY"] = old_key
+
+        self.assertEqual(chat["chat_status"], "completed")
+        self.assertEqual(chat["reply_generation_mode"], "deterministic_local_fallback")
+        self.assertTrue(chat["llm_runtime_result"]["fallback_used"])
+        self.assertEqual(chat["llm_provider_preflight"]["status"], "needs_configuration")
+        self.assertEqual(chat["chat_runtime_status_card"]["schema"], "paideia-chat-runtime-status-card/v1")
+        self.assertEqual(chat["chat_runtime_status_card"]["status"], "completed_with_fallback")
+        self.assertTrue(chat["chat_runtime_status_card"]["fallback"]["used"])
+        self.assertFalse(chat["chat_runtime_status_card"]["fallback"]["presented_as_live"])
+        self.assertEqual(chat["chat_runtime_status_card"]["provider_preflight"]["status"], "needs_configuration")
+        self.assertEqual(chat["chat_runtime_status_card"]["learning"]["decision"], "quarantined")
+        self.assertIn("deterministic fallback", chat["chat_runtime_status_card"]["user_visible_summary"]["en"])
+        self.assertEqual(
+            chat["memory_lifecycle_status_card"]["schema"],
+            "paideia-memory-lifecycle-status-card/v1",
+        )
+        self.assertEqual(chat["memory_lifecycle_status_card"]["learning"]["decision"], "quarantined")
+        self.assertTrue(chat["memory_lifecycle_status_card"]["learning"]["ledger_write_performed"])
+        self.assertTrue(chat["memory_lifecycle_status_card"]["active_context"]["quarantined_excluded"])
         self.assertEqual(chat["chat_learning_update"]["decision"], "quarantined")
         self.assertEqual(ledger["quarantined_experiences"][-1]["source"], "chat_turn")
 
@@ -542,6 +862,63 @@ class TalentFoundryMemorySubstrateChatTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertEqual(chat["chat_context"]["llm_contract"]["role"], "application_language_engine_only")
         self.assertTrue(chat["chat_context"]["active_memory_route"]["operator_candidates"])
+
+    def test_cli_chat_hired_agent_live_provider_not_configured_writes_needs_configuration(self) -> None:
+        import os
+
+        from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
+        from ai22b.talent_foundry.cli import main as cli_main
+        from ai22b.talent_foundry.registry import hire_installed_agent
+        from ai22b.talent_foundry.training_run import materialize_training_blueprint
+
+        old_key = os.environ.pop("OPENROUTER_API_KEY", None)
+        try:
+            blueprint = create_agent_training_blueprint(
+                owner="보스",
+                request="Graham 학습 경로를 재현하는 별도 샘플 AI를 만든다.",
+                talent_name="grham-주니어",
+                gender="남자",
+                domain="securities_research",
+                role_model_id="graham_value_investing",
+                agent_surface="cli-console",
+            )
+            with tempfile.TemporaryDirectory() as tmp:
+                run = materialize_training_blueprint(blueprint, output_dir=Path(tmp) / "grham_junior")
+                artifacts = {key: Path(value) for key, value in run["artifacts"].items()}
+                hiring = hire_installed_agent(
+                    artifacts["installed_agent_manifest"],
+                    employer="보스",
+                    role="증권 리서치 AI 박사",
+                    llm_engine="openrouter_api",
+                    llm_model="openai/gpt-test",
+                    record_name="employment_record_openrouter.json",
+                )
+                output = Path(tmp) / "cli_live_missing_chat.json"
+                exit_code = cli_main(
+                    [
+                        "chat-hired-agent",
+                        "--employment-record",
+                        str(hiring["employment_record"]),
+                        "--message",
+                        "live provider로 자연스럽게 대화해줘.",
+                        "--output",
+                        str(output),
+                        "--live-llm",
+                        "--llm-model",
+                        "openai/gpt-test",
+                        "--learn-from-chat",
+                    ]
+                )
+                chat = json.loads(output.read_text(encoding="utf-8"))
+        finally:
+            if old_key is not None:
+                os.environ["OPENROUTER_API_KEY"] = old_key
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(chat["chat_status"], "needs_configuration")
+        self.assertEqual(chat["reply_generation_mode"], "skipped_provider_not_ready")
+        self.assertEqual(chat["llm_provider_preflight"]["status"], "needs_configuration")
+        self.assertEqual(chat["chat_learning_update"]["decision"], "skipped_provider_not_ready")
 
 
 if __name__ == "__main__":

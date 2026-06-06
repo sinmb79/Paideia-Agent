@@ -46,6 +46,9 @@ GENERATED_FILES = set(REQUIRED_FILES) | {
     "specialist_cohort.json",
     "memory_substrate.json",
     "language_development_program.json",
+    "developmental_ecology.json",
+    "life_trace.jsonl",
+    "growth_profile.json",
     "last_agent_run.json",
     "last_agent_job_run.json",
     "last_agent_job_cycle.json",
@@ -133,6 +136,9 @@ def _bundle_manifest(files: list[str], *, include_cohort: bool) -> dict[str, Any
             "agent_manifest": "agent_manifest.json",
             "learning_ledger": "learning_ledger.json",
             "language_development_program": "language_development_program.json",
+            "developmental_ecology": "developmental_ecology.json" if "developmental_ecology.json" in files else None,
+            "life_trace": "life_trace.jsonl" if "life_trace.jsonl" in files else None,
+            "growth_profile": "growth_profile.json" if "growth_profile.json" in files else None,
             "memory_substrate": "memory_substrate.json" if "memory_substrate.json" in files else None,
             "hiring_dossier": "hiring_dossier.json",
             "hiring_dossier_markdown": "HIRING_DOSSIER.ko.md",
@@ -156,6 +162,9 @@ def _bundle_manifest(files: list[str], *, include_cohort: bool) -> dict[str, Any
             "run_specialist_team_cycle": "run_specialist_team_cycle.ps1",
             "hiring_dossier": "hiring_dossier.json",
             "hiring_dossier_markdown": "HIRING_DOSSIER.ko.md",
+            "developmental_ecology": "developmental_ecology.json" if "developmental_ecology.json" in files else None,
+            "life_trace": "life_trace.jsonl" if "life_trace.jsonl" in files else None,
+            "growth_profile": "growth_profile.json" if "growth_profile.json" in files else None,
         },
         "exclusion_policy": [
             ".env",
@@ -197,6 +206,7 @@ powershell -ExecutionPolicy Bypass -File .\\doctor.ps1
 powershell -ExecutionPolicy Bypass -File .\\start_console.ps1 -Answers .\\console_answers.template.json
 powershell -ExecutionPolicy Bypass -File .\\run_agent.ps1 -Task "거시경제 질문을 정리해줘"
 powershell -ExecutionPolicy Bypass -File .\\run_job.ps1 -JobSpec .\\job_spec.template.json
+powershell -ExecutionPolicy Bypass -File .\\run_job.ps1 -JobSpec .\\job_spec.template.json -LlmMode auto -LlmModel "openai/gpt-4.1-mini"
 powershell -ExecutionPolicy Bypass -File .\\run_job_cycle.ps1 -JobSpec .\\job_spec.template.json -Score 94 -ReviewedBy "보스"
 powershell -ExecutionPolicy Bypass -File .\\run_dataflow_job.ps1 -JobSpec .\\dataflow_job.template.json -Score 94 -ReviewedBy "보스"
 powershell -ExecutionPolicy Bypass -File .\\assemble_projection_swarm.ps1 -SwarmName "신용 본체 제어 분신 군체" -Domain "증권 리서치"
@@ -237,6 +247,7 @@ powershell -ExecutionPolicy Bypass -File .\\doctor.ps1
 powershell -ExecutionPolicy Bypass -File .\\start_console.ps1 -Answers .\\console_answers.template.json
 powershell -ExecutionPolicy Bypass -File .\\run_agent.ps1 -Task "Summarize macroeconomic research questions"
 powershell -ExecutionPolicy Bypass -File .\\run_job.ps1 -JobSpec .\\job_spec.template.json
+powershell -ExecutionPolicy Bypass -File .\\run_job.ps1 -JobSpec .\\job_spec.template.json -LlmMode auto -LlmModel "openai/gpt-4.1-mini"
 powershell -ExecutionPolicy Bypass -File .\\run_job_cycle.ps1 -JobSpec .\\job_spec.template.json -Score 94 -ReviewedBy "Boss"
 powershell -ExecutionPolicy Bypass -File .\\run_dataflow_job.ps1 -JobSpec .\\dataflow_job.template.json -Score 94 -ReviewedBy "Boss"
 powershell -ExecutionPolicy Bypass -File .\\assemble_projection_swarm.ps1 -SwarmName "Shinyong parent projection swarm" -Domain "securities research"
@@ -248,6 +259,10 @@ powershell -ExecutionPolicy Bypass -File .\\run_specialist_team_cycle.ps1 -Objec
 The LLM is treated as an application engine, not the identity. Identity comes from the academic record, employment contract, memory profile, and learning ledger.
 
 `hiring_dossier.json` and `HIRING_DOSSIER.ko.md` summarize the academic record, resume, assessment gates, doctoral defense, reasoning profile, LLM contract, and hire-ready recommendation.
+
+`growth_profile.json` condenses developmental ecology and life trace events into relationship, emotion, meaning, aesthetic, and asymmetry memory for chat and work routing.
+
+Use `ai22b-talent-foundry build-graduate-package --training-run <training_run.json> --output-dir <graduate_package>` to export a resume, transcript, memory pack, runtime manifest, and onboarding prompt.
 
 `dataflow_job.template.json` and `run_dataflow_job.ps1` run the Agent Dataflow Runtime: job formatting, active memory cache, task tiles, shadow buffers, synthesis, reverse verification, and reviewed growth-candidate creation.
 """
@@ -469,7 +484,11 @@ param(
     [string]$EmploymentRecord = "",
     [string]$JobSpec = "",
     [string]$Workspace = "",
-    [string]$Output = ""
+    [string]$Output = "",
+    [ValidateSet("offline", "auto", "live")]
+    [string]$LlmMode = "offline",
+    [string]$LlmModel = "",
+    [switch]$LiveLlm
 )
 
 $ErrorActionPreference = "Stop"
@@ -492,7 +511,22 @@ if (-not (Test-Path $EmploymentRecord)) {
     throw "employment_record.json not found. Install this bundle and create a hire record first, or pass -EmploymentRecord."
 }
 
-python -m ai22b.talent_foundry.cli run-hired-agent-job --employment-record $EmploymentRecord --job-spec $JobSpec --workspace $Workspace --output $Output
+$ArgsList = @(
+    "-m", "ai22b.talent_foundry.cli",
+    "run-hired-agent-job",
+    "--employment-record", $EmploymentRecord,
+    "--job-spec", $JobSpec,
+    "--workspace", $Workspace,
+    "--output", $Output,
+    "--llm-mode", $LlmMode
+)
+if ($LiveLlm) {
+    $ArgsList += "--live-llm"
+}
+if (-not [string]::IsNullOrWhiteSpace($LlmModel)) {
+    $ArgsList += @("--llm-model", $LlmModel)
+}
+python @ArgsList
 Write-Host $Output
 """
 
@@ -506,7 +540,11 @@ param(
     [int]$Score = 94,
     [string]$ReviewedBy = "보스",
     [string]$Status = "verified",
-    [string]$Output = ""
+    [string]$Output = "",
+    [ValidateSet("offline", "auto", "live")]
+    [string]$LlmMode = "offline",
+    [string]$LlmModel = "",
+    [switch]$LiveLlm
 )
 
 $ErrorActionPreference = "Stop"
@@ -529,7 +567,25 @@ if (-not (Test-Path $EmploymentRecord)) {
     throw "employment_record.json not found. Install this bundle and create a hire record first, or pass -EmploymentRecord."
 }
 
-python -m ai22b.talent_foundry.cli run-hired-agent-job-cycle --employment-record $EmploymentRecord --job-spec $JobSpec --workspace $Workspace --score $Score --reviewed-by $ReviewedBy --status $Status --output $Output
+$ArgsList = @(
+    "-m", "ai22b.talent_foundry.cli",
+    "run-hired-agent-job-cycle",
+    "--employment-record", $EmploymentRecord,
+    "--job-spec", $JobSpec,
+    "--workspace", $Workspace,
+    "--score", $Score,
+    "--reviewed-by", $ReviewedBy,
+    "--status", $Status,
+    "--output", $Output,
+    "--llm-mode", $LlmMode
+)
+if ($LiveLlm) {
+    $ArgsList += "--live-llm"
+}
+if (-not [string]::IsNullOrWhiteSpace($LlmModel)) {
+    $ArgsList += @("--llm-model", $LlmModel)
+}
+python @ArgsList
 Write-Host $Output
 """
 
@@ -543,7 +599,11 @@ param(
     [int]$Score = 94,
     [string]$ReviewedBy = "Boss",
     [string]$Status = "verified",
-    [string]$Output = ""
+    [string]$Output = "",
+    [ValidateSet("offline", "auto", "live")]
+    [string]$LlmMode = "offline",
+    [string]$LlmModel = "",
+    [switch]$LiveLlm
 )
 
 $ErrorActionPreference = "Stop"
@@ -566,7 +626,25 @@ if (-not (Test-Path $EmploymentRecord)) {
     throw "employment_record.json not found. Install this bundle and create a hire record first, or pass -EmploymentRecord."
 }
 
-python -m ai22b.talent_foundry.cli run-hired-dataflow-job --employment-record $EmploymentRecord --job-spec $JobSpec --workspace $Workspace --score $Score --reviewed-by $ReviewedBy --status $Status --output $Output
+$ArgsList = @(
+    "-m", "ai22b.talent_foundry.cli",
+    "run-hired-dataflow-job",
+    "--employment-record", $EmploymentRecord,
+    "--job-spec", $JobSpec,
+    "--workspace", $Workspace,
+    "--score", $Score,
+    "--reviewed-by", $ReviewedBy,
+    "--status", $Status,
+    "--output", $Output,
+    "--llm-mode", $LlmMode
+)
+if ($LiveLlm) {
+    $ArgsList += "--live-llm"
+}
+if (-not [string]::IsNullOrWhiteSpace($LlmModel)) {
+    $ArgsList += @("--llm-model", $LlmModel)
+}
+python @ArgsList
 Write-Host $Output
 """
 
@@ -743,6 +821,9 @@ def create_agent_release_bundle(
     learning_ledger_path: Path,
     memory_substrate_path: Path | None = None,
     language_development_program_path: Path | None = None,
+    developmental_ecology_path: Path | None = None,
+    life_trace_path: Path | None = None,
+    growth_profile_path: Path | None = None,
     specialist_cohort_path: Path | None = None,
     hiring_dossier_path: Path | None = None,
     hiring_dossier_markdown_path: Path | None = None,
@@ -756,6 +837,9 @@ def create_agent_release_bundle(
         "agent_manifest": output_dir / "agent_manifest.json",
         "learning_ledger": output_dir / "learning_ledger.json",
         "language_development_program": output_dir / "language_development_program.json",
+        "developmental_ecology": output_dir / "developmental_ecology.json",
+        "life_trace": output_dir / "life_trace.jsonl",
+        "growth_profile": output_dir / "growth_profile.json",
         "hiring_dossier": output_dir / "hiring_dossier.json",
         "hiring_dossier_markdown": output_dir / "HIRING_DOSSIER.ko.md",
         "readme_ko": output_dir / "README.ko.md",
@@ -798,6 +882,18 @@ def create_agent_release_bundle(
     if memory_substrate_path is not None:
         paths["memory_substrate"] = output_dir / "memory_substrate.json"
         _copy_json(memory_substrate_path, paths["memory_substrate"])
+    if developmental_ecology_path is not None:
+        _copy_json(developmental_ecology_path, paths["developmental_ecology"])
+    else:
+        paths.pop("developmental_ecology")
+    if life_trace_path is not None:
+        paths["life_trace"].write_text(life_trace_path.read_text(encoding="utf-8"), encoding="utf-8")
+    else:
+        paths.pop("life_trace")
+    if growth_profile_path is not None:
+        _copy_json(growth_profile_path, paths["growth_profile"])
+    else:
+        paths.pop("growth_profile")
     if hiring_dossier_path is not None:
         _copy_json(hiring_dossier_path, paths["hiring_dossier"])
         if hiring_dossier_markdown_path is not None:
@@ -1134,6 +1230,12 @@ def install_agent_release_package(
     }
     if "memory_substrate.json" in installed_files:
         entrypoints["memory_substrate"] = "memory_substrate.json"
+    if "developmental_ecology.json" in installed_files:
+        entrypoints["developmental_ecology"] = "developmental_ecology.json"
+    if "life_trace.jsonl" in installed_files:
+        entrypoints["life_trace"] = "life_trace.jsonl"
+    if "growth_profile.json" in installed_files:
+        entrypoints["growth_profile"] = "growth_profile.json"
     manifest = {
         "schema": INSTALLED_SCHEMA,
         "installed_at_utc": datetime.now(timezone.utc).isoformat(),

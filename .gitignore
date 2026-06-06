@@ -1,6 +1,7 @@
 # Python
 __pycache__/
 *.py[cod]
+*.egg-info/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
@@ -15,6 +16,8 @@ venv/
 AGENTS.md
 docs/log.md
 docs/superpowers/
+연구내용/
+추가 검토/
 docs/00_*.md
 docs/01_*.md
 docs/02_*.md

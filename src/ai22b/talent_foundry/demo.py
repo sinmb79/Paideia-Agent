@@ -46,6 +46,7 @@ from ai22b.talent_foundry.registry import (
     run_hired_workspace_agent,
 )
 from ai22b.talent_foundry.runtime import run_work_session
+from ai22b.talent_foundry.runtime_benchmark import build_runtime_observability_comparison
 from ai22b.talent_foundry.team import run_clone_team_session
 from ai22b.talent_foundry.training_run import materialize_training_blueprint
 from ai22b.talent_foundry.workspace_agent import run_workspace_agent_from_manifest
@@ -105,6 +106,7 @@ def run_demo(output_dir: Path = DEFAULT_RUN_DIR) -> dict[str, Path]:
         "release_doctor_report": output_dir / "shinyong_agent_release_bundle.doctor.json",
         "release_audit": output_dir / "foundry_release_audit.json",
         "public_program_manifest": output_dir / "ai_talent_foundry_public_manifest.json",
+        "runtime_observability_comparison": output_dir / "runtime_observability_comparison.json",
         "installed_agent_root": output_dir / "installed_agents",
         "installed_agent_manifest": output_dir
         / "installed_agents"
@@ -624,6 +626,10 @@ def run_demo(output_dir: Path = DEFAULT_RUN_DIR) -> dict[str, Path]:
         paths["bigram_employment_record"],
         task="거시경제 질문을 정리하고 투자 실행 없이 리서치 보조 결과를 남겨줘.",
         output_path=paths["bigram_hired_agent_run"],
+    )
+    build_runtime_observability_comparison(
+        [paths["hired_agent_run"], paths["hired_dataflow_run"]],
+        output_path=paths["runtime_observability_comparison"],
     )
     build_public_program_manifest(output_dir, output_path=paths["public_program_manifest"])
     audit_foundry_release(output_dir, output_path=paths["release_audit"])

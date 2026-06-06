@@ -18,6 +18,9 @@ def build_agent_manifest(
     curriculum = hiring_packet.get("curriculum_manifest")
     reasoning_kibo = hiring_packet.get("reasoning_kibo")
     language_development = hiring_packet.get("language_development_program")
+    developmental_ecology = hiring_packet.get("developmental_ecology")
+    life_trace = hiring_packet.get("life_trace")
+    growth_profile = hiring_packet.get("growth_profile")
 
     return {
         "schema": SCHEMA,
@@ -48,6 +51,9 @@ def build_agent_manifest(
             else None,
             "reasoning_kibo": reasoning_kibo,
             "language_development_program": language_development,
+            "developmental_ecology": developmental_ecology,
+            "life_trace": life_trace,
+            "growth_profile": growth_profile,
             "reasoning_kibo_growth_model": {
                 "starts_at": "elementary_grade_1",
                 "continues_after_hire": True,
@@ -80,6 +86,7 @@ def build_agent_manifest(
                 "local_file_read",
                 "local_file_write",
                 "work_session",
+                "evidence_packet",
                 "assessment",
                 "parent_controlled_projection_team",
                 "memory_consolidation",
@@ -88,11 +95,17 @@ def build_agent_manifest(
                 "투자 실행",
                 "보스 승인 없는 외부 업로드",
                 "개인/가족 데이터 외부 전송",
+                "파괴적 파일 작업",
+                "승인 없는 서브프로세스 실행",
+                "승인 없는 네트워크 호출",
             ],
             "requires_boss_approval": [
                 "external_upload",
                 "public_release",
                 "financial_action",
+                "destructive_file_operation",
+                "subprocess_execution",
+                "network_request",
             ],
         },
         "guardrails": contract.get("guardrails", []),

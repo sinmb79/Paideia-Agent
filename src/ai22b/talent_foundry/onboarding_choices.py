@@ -173,6 +173,108 @@ EXTERNAL_API_ENGINES = {
     "openrouter_api",
 }
 LOCAL_HTTP_ENGINES = {"ollama_local_http", "lm_studio_local_http"}
+LOCAL_MODEL_ENGINES = {"bigram_local", "transformers_local", "llama_cpp_local"}
+
+
+def _network_access_for_engine(engine: str) -> str:
+    if engine == "openai_chatgpt_codex":
+        return "codex_or_openai_data_minimized"
+    if engine in EXTERNAL_API_ENGINES:
+        return "external_api_selected_data_minimized"
+    if engine in LOCAL_HTTP_ENGINES:
+        return "localhost_only"
+    return "blocked"
+
+
+def _runtime_readiness_for_engine(engine: str, status: str) -> str:
+    if engine == "deterministic_local":
+        return "offline_ready"
+    if engine in EXTERNAL_API_ENGINES or engine in LOCAL_HTTP_ENGINES:
+        return "live_client_ready_when_configured"
+    if engine in LOCAL_MODEL_ENGINES:
+        return "ready_when_local_model_files_exist"
+    return status
+
+
+def _doctor_command_for(item: dict[str, Any], *, live_check: bool = False) -> str:
+    engine = item["engine"]
+    command = f"ai22b-talent-foundry doctor-llm-provider --llm-engine {engine}"
+    if engine in EXTERNAL_API_ENGINES or engine in LOCAL_HTTP_ENGINES:
+        command += " --llm-model <model>"
+    if engine in LOCAL_HTTP_ENGINES:
+        command += " --llm-model-path <localhost-url>"
+    if engine in LOCAL_MODEL_ENGINES:
+        command += " --llm-model-path <local-model-path>"
+    if live_check:
+        command += " --live-check"
+    return command
+
+
+def _enrich_llm_service_catalog() -> None:
+    for item in LLM_SERVICE_CATALOG:
+        engine = item["engine"]
+        external_api = engine in EXTERNAL_API_ENGINES
+        local_http = engine in LOCAL_HTTP_ENGINES
+        local_model = engine in LOCAL_MODEL_ENGINES
+        network_access = _network_access_for_engine(engine)
+        item.setdefault("runtime_readiness", _runtime_readiness_for_engine(engine, item.get("status", "unknown")))
+        item.setdefault(
+            "doctor",
+            {
+                "required_before_live": external_api or local_http or local_model,
+                "command": _doctor_command_for(item),
+                "live_check_command": _doctor_command_for(item, live_check=True),
+                "live_check_default": False,
+                "secret_values_exported": False,
+            },
+        )
+        item.setdefault(
+            "live_check_policy",
+            {
+                "default": False,
+                "requires_explicit_flag": True,
+                "network_call_made_by_default": False,
+            },
+        )
+        item.setdefault(
+            "data_transfer_policy",
+            {
+                "network_access": network_access,
+                "external_api": external_api,
+                "codex_bridge": engine == "openai_chatgpt_codex",
+                "localhost_only": local_http,
+                "local_files_only": local_model,
+                "payload": (
+                    "selected_memory_summaries_only_when_live_mode_is_explicit"
+                    if external_api or local_http
+                    else "local_runtime_context_only"
+                ),
+            },
+        )
+        item.setdefault(
+            "failure_policy",
+            {
+                "live_mode": "fail_closed_with_public_safe_error_packet",
+                "auto_mode": (
+                    "attempt_live_then_fallback_to_local_bridge_or_adapter_manifest"
+                    if external_api or local_http
+                    else "run_offline_or_report_missing_local_model"
+                ),
+            },
+        )
+        item.setdefault(
+            "cost_warning",
+            (
+                "External API or hosted model costs may apply; Paideia never calls it unless live mode/live-check is explicitly selected."
+                if external_api
+                else "Local server or local model resource usage may apply."
+                if local_http or local_model
+                else "No provider billing in the deterministic offline engine."
+            ),
+        )
+
+
+_enrich_llm_service_catalog()
 
 
 def _catalog_by_id(catalog: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
@@ -207,15 +309,7 @@ def resolve_llm_service(
     resolved["selected_model"] = llm_model or None
     resolved["selected_model_path"] = llm_model_path or None
     engine = resolved["engine"]
-    if engine == "openai_chatgpt_codex":
-        network_access = "codex_or_openai_data_minimized"
-    elif engine in EXTERNAL_API_ENGINES:
-        network_access = "external_api_selected_data_minimized"
-    elif engine in LOCAL_HTTP_ENGINES:
-        network_access = "localhost_only"
-    else:
-        network_access = "blocked"
-    resolved["network_access"] = network_access
+    resolved["network_access"] = _network_access_for_engine(engine)
     return resolved
 
 

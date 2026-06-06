@@ -22,9 +22,10 @@ flowchart TD
 ## Paideia에 추가된 단계
 
 - `Education Path`: 공개 롤모델, 자기 확장, 커스텀 롤모델 중 선택합니다.
+- `Owner Self-Extension Intake`: 자기 확장 자료는 본문을 읽지 않는 metadata-only manifest로 먼저 접수하며, 원본 파일명과 절대경로를 내보내지 않습니다.
 - `Runtime`: 단일 에이전트, 본체 제어 분신 군체, 별도 전문팀, simulation rollout을 선택합니다.
-- `Agent Identity`: Agent ID Card 등록용 payload를 로컬 파일로만 생성합니다. 외부 등록은 자동으로 하지 않습니다.
-- `Health Check`: 산출물, 로컬 전용 정책, 외부 채널 비활성화, 다음 명령을 점검합니다.
+- `Agent Identity`: Agent ID Card 등록용 payload와 Agent_warrent/Agent Identity Layer `ail.v1` envelope를 로컬 파일로만 생성합니다. 외부 등록은 자동으로 하지 않습니다.
+- `Health Check`: 산출물, 로컬 전용 정책, 외부 채널 비활성화, LLM provider matrix, 선택 provider checklist, 다음 명령을 점검합니다.
 
 ## 실행
 
@@ -44,12 +45,29 @@ ai22b-talent-foundry start-console
 ai22b-talent-foundry onboard --answers examples\graham_junior_onboarding.answers.json
 ```
 
+생성된 세션은 다시 doctor로 검증할 수 있습니다.
+
+```powershell
+ai22b-talent-foundry doctor-onboarding-session `
+  --session console_session.json `
+  --strict `
+  --output onboarding_doctor.json
+```
+
 ## 산출물
 
 - `console_session.json`: 전체 온보딩 세션과 health 요약
 - `paideia_onboarding_config.json`: OpenClaw식 설정 요약
+- `llm_provider_matrix.json`: 선택 가능한 LLM/provider 전체의 no-network readiness matrix
+- `onboarding/llm_onboarding_checklist.json`: 선택 provider의 doctor/live-check/runtime/chat 명령 체크리스트
+- `onboarding/llm_connection_profile.json`: 선택 provider의 환경변수, 모델명, localhost endpoint, 검증 순서, live chat 템플릿
+- `onboarding_doctor.json`: `doctor-onboarding-session`으로 생성하는 health 검증 보고서
 - `agent_id_card_payload.json`: 외부 등록 전 검토할 Agent ID Card payload
+- `agent_identity_envelope.json`: Agent_warrent `ail.v1` 로컬 미등록 envelope
+- `agent_identity_verification.json`: Agent ID Card payload와 Agent_warrent envelope의 로컬 사전 검증 보고서
+- `agent_identity_registration_receipt.json`: 보스가 외부에서 등록한 결과를 로컬 envelope에 연결한 receipt
 - `simulation_rollouts.json`: 병렬 episode rollout 계획
+- `simulation_rollout_evaluation.json`: episode 순위, winner, 승격 후보, 격리 후보, 보스 검토 gate
 - `onboarding/onboarding_session.json`: 실제 육성, 설치, 고용, 첫 목표 사이클 기록
 
 Agent ID Card payload만 별도로 만들 수도 있습니다.
@@ -59,6 +77,44 @@ ai22b-talent-foundry export-agent-id-card-payload `
   --installed-manifest <installed_agent_manifest.json> `
   --employment-record <employment_record.json> `
   --output agent_id_card_payload.json
+```
+
+Agent_warrent 호환 envelope만 별도로 만들 수도 있습니다.
+
+```powershell
+ai22b-talent-foundry export-agent-identity-envelope `
+  --installed-manifest <installed_agent_manifest.json> `
+  --employment-record <employment_record.json> `
+  --output agent_identity_envelope.json
+```
+
+Agent_warrent 서버의 `POST /agents/register` 입력 형태에 맞춘 등록 요청 초안도 만들 수 있습니다. 이 명령은 canonical payload와 서명 안내만 만들고, 실제 owner signature 생성이나 외부 등록은 보스가 직접 수행해야 합니다.
+
+```powershell
+ai22b-talent-foundry export-agent-warrent-registration-request `
+  --installed-manifest <installed_agent_manifest.json> `
+  --employment-record <employment_record.json> `
+  --owner-key-id <owk_...> `
+  --output agent_warrent_registration_request.json
+```
+
+외부 등록 전에는 두 산출물을 함께 검증합니다. 이 명령은 네트워크를 사용하지 않고, 필수 필드, credential-like 값, 원문 이메일, 로컬 절대경로, 수동 등록 정책을 검사합니다.
+
+```powershell
+ai22b-talent-foundry verify-agent-id-card `
+  --payload agent_id_card_payload.json `
+  --envelope agent_identity_envelope.json `
+  --output agent_identity_verification.json
+```
+
+보스가 외부 사이트에서 수동 등록을 완료한 뒤에는 결과 파일을 로컬 envelope에 연결할 수 있습니다. 이 명령도 네트워크를 호출하지 않으며, credential token 원문은 기본적으로 저장하지 않습니다.
+
+```powershell
+ai22b-talent-foundry import-agent-id-card-registration `
+  --envelope agent_identity_envelope.json `
+  --registration-result agent_id_card_registration_result.json `
+  --output agent_identity_registration_receipt.json `
+  --updated-envelope agent_identity_envelope.registered.json
 ```
 
 ## 중요한 차이

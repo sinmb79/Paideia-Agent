@@ -1,20 +1,40 @@
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from ai22b.talent_foundry.agent_identity_card import (
+    build_agent_id_card_payload,
+    build_agent_identity_layer_envelope,
+    verify_agent_identity_artifacts,
+)
 from ai22b.talent_foundry.agent_runner import run_agent_from_manifest
-from ai22b.talent_foundry.dataflow_runtime import run_dataflow_job_from_manifest
+from ai22b.talent_foundry.dataflow_runtime import (
+    DATAFLOW_RUN_SCHEMA,
+    GROWTH_COMMIT_CANDIDATE_SCHEMA,
+    format_dataflow_job,
+    run_dataflow_job_from_manifest,
+)
 from ai22b.talent_foundry.learning_loop import (
     build_reasoning_kernel,
     create_learning_ledger,
+    delete_learning_experience,
+    refresh_learning_ledger,
     record_learning_experience,
     route_active_memory,
 )
-from ai22b.talent_foundry.llm_runtime import build_llm_runtime_config, invoke_llm_application_engine
+from ai22b.talent_foundry.memory_lifecycle import audit_learning_ledger
+from ai22b.talent_foundry.llm_clients import LLMClient
+from ai22b.talent_foundry.llm_runtime import (
+    build_llm_provider_preflight,
+    build_llm_runtime_config,
+    invoke_llm_application_engine,
+)
+from ai22b.talent_foundry.llm_onboarding import build_llm_connection_profile
 from ai22b.talent_foundry.onboarding_choices import resolve_chat_surface, resolve_llm_service
 from ai22b.talent_foundry.team import DEFAULT_TEAM_ROLES
 from ai22b.talent_foundry.workspace_agent import run_workspace_agent_from_manifest, run_workspace_agent_job_from_manifest
@@ -30,6 +50,10 @@ HIRED_AGENT_TEAM_SCHEMA = "ai-talent-hired-agent-team/v1"
 HIRED_TEAM_CYCLE_SCHEMA = "ai-talent-hired-team-cycle/v1"
 HIRED_PROJECTION_SWARM_SCHEMA = "ai-talent-hired-projection-swarm/v1"
 HIRED_PROJECTION_SWARM_CYCLE_SCHEMA = "ai-talent-hired-projection-swarm-cycle/v1"
+MEMORY_LIFECYCLE_MAINTENANCE_SCHEMA = "paideia-memory-lifecycle-maintenance/v1"
+SIMULATION_ROLLOUT_EVALUATION_SCHEMA = "ai-talent-simulation-rollout-evaluation/v1"
+REVIEWED_ROLLOUT_LEARNING_EVENT_SCHEMA = "paideia-reviewed-rollout-learning-event/v1"
+REASONING_LEDGER_CANDIDATE_SCHEMA = "paideia-reasoning-ledger-candidate/v1"
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -39,6 +63,20 @@ def _read_json(path: Path) -> dict[str, Any]:
 def _write_json(path: Path, data: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _manifest_with_runtime_boss_approvals(
+    agent_manifest: dict[str, Any],
+    boss_approvals: list[dict[str, Any]] | None,
+) -> dict[str, Any]:
+    if not boss_approvals:
+        return agent_manifest
+    merged = copy.deepcopy(agent_manifest)
+    tool_policy = merged.setdefault("tool_policy", {})
+    approvals = list(tool_policy.get("boss_approvals", []))
+    approvals.extend(copy.deepcopy(boss_approvals))
+    tool_policy["boss_approvals"] = approvals
+    return merged
 
 
 def _employment_id(
@@ -71,6 +109,86 @@ def _load_registry_index(registry_index_path: Path) -> dict[str, Any]:
     }
 
 
+def _llm_connection_profile_entrypoint(record_name: str) -> str:
+    stem = Path(record_name).stem or "employment_record"
+    if stem == "employment_record":
+        return "llm_connection_profile.json"
+    return f"{stem}.llm_connection_profile.json"
+
+
+def _summarize_llm_connection_profile(profile: dict[str, Any], *, entrypoint: str) -> dict[str, Any]:
+    setup = profile.get("setup_requirements", {})
+    public_safe = profile.get("public_safe", {})
+    selected = profile.get("selected_llm_service", {})
+    return {
+        "schema": profile.get("schema"),
+        "entrypoint": entrypoint,
+        "status": profile.get("status"),
+        "selected_engine": selected.get("engine") if isinstance(selected, dict) else None,
+        "selected_service_id": selected.get("service_id") if isinstance(selected, dict) else None,
+        "requires_live_check_before_agent_work": bool(
+            setup.get("requires_live_check_before_agent_work")
+        )
+        if isinstance(setup, dict)
+        else False,
+        "public_safe": {
+            "network_call_performed": bool(public_safe.get("network_call_performed"))
+            if isinstance(public_safe, dict)
+            else False,
+            "secret_values_exported": bool(public_safe.get("secret_values_exported"))
+            if isinstance(public_safe, dict)
+            else False,
+            "raw_provider_payload_saved": bool(public_safe.get("raw_provider_payload_saved"))
+            if isinstance(public_safe, dict)
+            else False,
+            "private_reasoning_trace": public_safe.get("private_reasoning_trace")
+            if isinstance(public_safe, dict)
+            else "do_not_store",
+        },
+    }
+
+
+def _summarize_agent_identity_artifacts(
+    *,
+    payload: dict[str, Any],
+    envelope: dict[str, Any],
+    verification: dict[str, Any],
+) -> dict[str, Any]:
+    agent_warrent = envelope.get("extensions", {}).get("agent_warrent", {})
+    return {
+        "schema": "paideia-hired-agent-identity-summary/v1",
+        "agent_id_card_payload": {
+            "schema": payload.get("schema"),
+            "status": payload.get("status"),
+            "network_action_performed": bool(payload.get("network_action_performed")),
+            "payload_fingerprint_sha256": payload.get("payload_fingerprint_sha256"),
+        },
+        "agent_identity_layer": {
+            "version": envelope.get("version"),
+            "ail_id": envelope.get("ail_id"),
+            "agent_id": envelope.get("agent", {}).get("id"),
+            "registration_state": agent_warrent.get("registration_state"),
+            "external_registration": agent_warrent.get("external_registration"),
+            "repo_url": agent_warrent.get("repo_url"),
+            "verification_strength": envelope.get("verification", {}).get("strength"),
+            "signed": bool(envelope.get("verification", {}).get("signed")),
+        },
+        "local_verification": {
+            "schema": verification.get("schema"),
+            "status": verification.get("status"),
+            "valid": bool(verification.get("valid")),
+            "network_action_performed": bool(verification.get("network_action_performed")),
+            "external_registration": verification.get("external_registration"),
+        },
+        "policy": {
+            "external_registration": "manual_owner_action_only",
+            "credential_token_stored_by_default": False,
+            "raw_owner_email_exported": False,
+            "local_absolute_paths_exported": False,
+        },
+    }
+
+
 def hire_installed_agent(
     installed_manifest_path: Path,
     *,
@@ -100,6 +218,16 @@ def hire_installed_agent(
         llm_model_path=llm_model_path,
     )
     selected_chat_surface = resolve_chat_surface(chat_surface)
+    llm_connection_profile_entrypoint = _llm_connection_profile_entrypoint(record_name)
+    llm_connection_profile_path = target_root / llm_connection_profile_entrypoint
+    llm_connection_profile = build_llm_connection_profile(
+        llm_service=selected_llm_service["service_id"],
+        llm_engine=selected_llm_service["engine"],
+        llm_model=selected_llm_service.get("selected_model"),
+        llm_model_path=selected_llm_service.get("selected_model_path"),
+        chat_surface=selected_chat_surface["id"],
+        output_path=llm_connection_profile_path,
+    )
     employment_id = _employment_id(
         install_id=installed_manifest["install_id"],
         employer=employer,
@@ -135,6 +263,16 @@ def hire_installed_agent(
                 "language_development_program",
                 "language_development_program.json",
             ),
+            "developmental_ecology": installed_manifest["entrypoints"].get(
+                "developmental_ecology",
+                "developmental_ecology.json",
+            ),
+            "life_trace": installed_manifest["entrypoints"].get("life_trace", "life_trace.jsonl"),
+            "growth_profile": installed_manifest["entrypoints"].get("growth_profile", "growth_profile.json"),
+            "llm_connection_profile": llm_connection_profile_entrypoint,
+            "agent_id_card_payload": "agent_id_card_payload.json",
+            "agent_identity_envelope": "agent_identity_envelope.json",
+            "agent_identity_verification": "agent_identity_verification.json",
             "chat_log": "employment_chat_log.jsonl",
             "last_chat": "last_hired_agent_chat.json",
             "run_log": "employment_run_log.jsonl",
@@ -150,6 +288,9 @@ def hire_installed_agent(
             "learning_ledger": installed_manifest["entrypoints"].get("learning_ledger", "learning_ledger.json"),
             "post_hire_learning_update": "post_hire_learning_update.json",
             "post_hire_learning_log": "post_hire_learning_log.jsonl",
+            "memory_lifecycle_maintenance": "memory_lifecycle_maintenance.json",
+            "memory_lifecycle_maintenance_log": "memory_lifecycle_maintenance_log.jsonl",
+            "learning_ledger_backup": "learning_ledger.backup.json",
             "employment_goal": "employment_goal.json",
             "employment_goal_log": "employment_goal_log.jsonl",
             "last_goal_cycle": "last_employment_goal_cycle.json",
@@ -158,6 +299,10 @@ def hire_installed_agent(
         "guardrails": agent_manifest.get("tool_policy", {}).get("blocked_tools", []),
         "llm_service": selected_llm_service,
         "chat_surface": selected_chat_surface,
+        "llm_connection_profile": _summarize_llm_connection_profile(
+            llm_connection_profile,
+            entrypoint=llm_connection_profile_entrypoint,
+        ),
         "llm_runtime": build_llm_runtime_config(
             engine=selected_llm_service["engine"],
             model_path=selected_llm_service.get("selected_model_path"),
@@ -173,6 +318,32 @@ def hire_installed_agent(
         "status": "active",
     }
     employment_record_path = target_root / record_name
+    _write_json(employment_record_path, employment_record)
+    agent_id_card_payload_path = target_root / employment_record["entrypoints"]["agent_id_card_payload"]
+    agent_identity_envelope_path = target_root / employment_record["entrypoints"]["agent_identity_envelope"]
+    agent_identity_verification_path = target_root / employment_record["entrypoints"]["agent_identity_verification"]
+    agent_id_card_payload = build_agent_id_card_payload(
+        installed_manifest_path=installed_manifest_path,
+        employment_record_path=employment_record_path,
+        output_path=agent_id_card_payload_path,
+    )
+    agent_identity_envelope = build_agent_identity_layer_envelope(
+        installed_manifest_path=installed_manifest_path,
+        employment_record_path=employment_record_path,
+        output_path=agent_identity_envelope_path,
+        surface=selected_chat_surface.get("entrypoint") or selected_chat_surface["id"],
+        task_ref=f"employment:{employment_id}",
+    )
+    agent_identity_verification = verify_agent_identity_artifacts(
+        payload_path=agent_id_card_payload_path,
+        envelope_path=agent_identity_envelope_path,
+        output_path=agent_identity_verification_path,
+    )
+    employment_record["agent_identity"] = _summarize_agent_identity_artifacts(
+        payload=agent_id_card_payload,
+        envelope=agent_identity_envelope,
+        verification=agent_identity_verification,
+    )
     _write_json(employment_record_path, employment_record)
 
     registry_root = _registry_root_from_installed_manifest(installed_manifest_path)
@@ -200,6 +371,10 @@ def hire_installed_agent(
     return {
         "employment_record": employment_record_path,
         "registry_index": registry_index_path,
+        "llm_connection_profile": llm_connection_profile_path,
+        "agent_id_card_payload": agent_id_card_payload_path,
+        "agent_identity_envelope": agent_identity_envelope_path,
+        "agent_identity_verification": agent_identity_verification_path,
     }
 
 
@@ -490,13 +665,18 @@ def run_hired_agent(
     *,
     task: str,
     output_path: Path | None = None,
+    llm_mode: str = "offline",
+    llm_model: str | None = None,
+    boss_approvals: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     employment_record, agent_manifest, target_root = _load_active_employment(employment_record_path)
-    result = run_agent_from_manifest(agent_manifest, task=task)
-    result["llm_runtime_result"] = invoke_llm_application_engine(
-        employment_record["llm_runtime"],
-        manifest=agent_manifest,
+    agent_manifest = _manifest_with_runtime_boss_approvals(agent_manifest, boss_approvals)
+    result = run_agent_from_manifest(
+        agent_manifest,
         task=task,
+        runtime_config=employment_record["llm_runtime"],
+        llm_mode=llm_mode,
+        llm_model=llm_model,
     )
     result["employment_context"] = _employment_context(employment_record)
     result["active_memory_route"] = _route_active_memory_for_employment(
@@ -572,6 +752,7 @@ def record_hired_learning_experience(
             "quarantined": quarantined_after,
         },
         "reasoning_kernel": ledger["reasoning_kernel"],
+        "memory_lifecycle": ledger.get("memory_lifecycle", {}),
     }
 
     update_path = output_path or target_root / entrypoints.get("post_hire_learning_update", "post_hire_learning_update.json")
@@ -583,6 +764,339 @@ def record_hired_learning_experience(
         file.write(json.dumps(update, ensure_ascii=False) + "\n")
 
     return update
+
+
+def _rollout_episode_for_promotion(evaluation: dict[str, Any], episode_id: str | None) -> dict[str, Any]:
+    winner = evaluation.get("winner") if isinstance(evaluation.get("winner"), dict) else {}
+    if episode_id is None:
+        selected = winner
+    else:
+        selected = next(
+            (
+                item
+                for item in evaluation.get("ranked_episodes", [])
+                if isinstance(item, dict) and item.get("episode_id") == episode_id
+            ),
+            {},
+        )
+    if not selected:
+        raise ValueError("No rollout episode selected for promotion")
+    eligible = set(evaluation.get("memory_update_gate", {}).get("eligible_episode_ids", []))
+    if selected.get("episode_id") not in eligible or selected.get("decision") != "promotion_candidate":
+        raise ValueError("Selected rollout episode is not eligible for reviewed promotion")
+    return selected
+
+
+def _reasoning_ledger_candidate_from_rollout(
+    *,
+    employment_record: dict[str, Any],
+    evaluation: dict[str, Any],
+    selected: dict[str, Any],
+    latest_experience_id: str | None,
+    quality_label: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "schema": REASONING_LEDGER_CANDIDATE_SCHEMA,
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "candidate_type": "reviewed_parallel_simulation_rollout",
+        "source_experience_id": latest_experience_id,
+        "employment_id": employment_record["employment_id"],
+        "agent_name": employment_record["agent"]["name"],
+        "objective": evaluation.get("objective"),
+        "episode_id": selected.get("episode_id"),
+        "scenario_id": selected.get("scenario_id"),
+        "review_summary": selected.get("review_summary"),
+        "learning_signal": selected.get("expected_learning_signal"),
+        "score": selected.get("score"),
+        "quality_label": quality_label,
+        "candidate_principles": [
+            "Compare parallel rollout outcomes before updating durable habits.",
+            "Promote only owner-reviewed winner summaries, not full private traces.",
+            "Keep failed rollout episodes as quarantine/recovery material unless reviewed later.",
+        ],
+        "policy": {
+            "automatic_promotion_performed": False,
+            "boss_review_required": True,
+            "boss_review_applied": True,
+            "private_reasoning_trace": "do_not_store",
+            "full_rollout_replay_stored": False,
+            "separate_consciousness_created": False,
+        },
+    }
+
+
+def promote_simulation_rollout_winner(
+    employment_record_path: Path,
+    *,
+    evaluation_path: Path,
+    quality_label: dict[str, Any],
+    output_path: Path | None = None,
+    episode_id: str | None = None,
+) -> dict[str, Any]:
+    employment_record, _agent_manifest, target_root = _load_active_employment(employment_record_path)
+    evaluation = _read_json(evaluation_path)
+    if evaluation.get("schema") != SIMULATION_ROLLOUT_EVALUATION_SCHEMA:
+        raise ValueError("Unsupported simulation rollout evaluation schema")
+    selected = _rollout_episode_for_promotion(evaluation, episode_id)
+    entrypoints = employment_record.get("entrypoints", {})
+    ledger_path = target_root / entrypoints.get("learning_ledger", "learning_ledger.json")
+    backup_path = target_root / entrypoints.get("learning_ledger_backup", "learning_ledger.backup.json")
+    ledger = _read_json(ledger_path) if ledger_path.exists() else create_learning_ledger(owner=employment_record["agent"]["name"])
+    if ledger_path.exists():
+        _write_json(backup_path, ledger)
+
+    event = {
+        "schema": REVIEWED_ROLLOUT_LEARNING_EVENT_SCHEMA,
+        "source_evaluation": evaluation_path.name,
+        "objective": evaluation.get("objective"),
+        "selected_episode": {
+            "episode_id": selected.get("episode_id"),
+            "scenario_id": selected.get("scenario_id"),
+            "label": selected.get("label"),
+            "score": selected.get("score"),
+            "decision": selected.get("decision"),
+            "stressors": selected.get("stressors", []),
+            "expected_learning_signal": selected.get("expected_learning_signal"),
+            "review_summary": selected.get("review_summary"),
+            "private_reasoning_trace_stored": False,
+            "merge_policy": "reviewed_summary_only_no_private_chain_of_thought",
+        },
+        "rollout_gate": {
+            "automatic_promotion_performed": False,
+            "boss_review_required": True,
+            "boss_review_applied": True,
+            "reasoning_ledger_write_policy": evaluation.get("memory_update_gate", {}).get(
+                "reasoning_ledger_write_policy",
+            ),
+            "separate_consciousness_created": False,
+        },
+    }
+
+    promoted_before = len(ledger.get("promoted_experiences", []))
+    quarantined_before = len(ledger.get("quarantined_experiences", []))
+    ledger = record_learning_experience(
+        ledger,
+        source="simulation_rollout_winner",
+        event=event,
+        quality_label=quality_label,
+    )
+    promoted_after = len(ledger.get("promoted_experiences", []))
+    quarantined_after = len(ledger.get("quarantined_experiences", []))
+    if promoted_after > promoted_before:
+        latest_entry = ledger["promoted_experiences"][-1]
+        decision = "promoted"
+    elif quarantined_after > quarantined_before:
+        latest_entry = ledger["quarantined_experiences"][-1]
+        decision = "quarantined"
+    else:
+        latest_entry = {}
+        decision = "unchanged"
+
+    reasoning_candidate = None
+    if decision == "promoted":
+        reasoning_candidate = _reasoning_ledger_candidate_from_rollout(
+            employment_record=employment_record,
+            evaluation=evaluation,
+            selected=selected,
+            latest_experience_id=latest_entry.get("id"),
+            quality_label=quality_label,
+        )
+        ledger.setdefault("reasoning_ledger_candidates", []).append(reasoning_candidate)
+    ledger["reasoning_kernel"] = build_reasoning_kernel(ledger)
+    ledger["memory_lifecycle"] = audit_learning_ledger(ledger)
+    _write_json(ledger_path, ledger)
+
+    update = {
+        "schema": POST_HIRE_LEARNING_UPDATE_SCHEMA,
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "source": "simulation_rollout_winner",
+        "source_run": evaluation_path.name,
+        "learning_ledger": ledger_path.name,
+        "employment_context": _employment_context(employment_record),
+        "quality_label": quality_label,
+        "decision": decision,
+        "latest_experience_id": latest_entry.get("id"),
+        "latest_promoted_skills": latest_entry.get("promoted_skills", []),
+        "reasoning_ledger_candidate": reasoning_candidate,
+        "reviewed_rollout_event": event,
+        "experience_counts": {
+            "promoted": promoted_after,
+            "quarantined": quarantined_after,
+        },
+        "reasoning_kernel": ledger["reasoning_kernel"],
+        "memory_lifecycle": ledger.get("memory_lifecycle", {}),
+        "policy": {
+            "stored_summary_only": True,
+            "private_reasoning_trace": "do_not_store",
+            "full_evaluation_replay_stored": False,
+            "automatic_promotion_performed": False,
+        },
+    }
+
+    update_path = output_path or target_root / "simulation_rollout_learning_update.json"
+    _write_json(update_path, update)
+    log_path = target_root / entrypoints.get("post_hire_learning_log", "post_hire_learning_log.jsonl")
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with log_path.open("a", encoding="utf-8") as file:
+        file.write(json.dumps(update, ensure_ascii=False) + "\n")
+    return update
+
+
+def _read_json_or_none(path: Path) -> dict[str, Any] | None:
+    try:
+        return _read_json(path)
+    except Exception:
+        return None
+
+
+def _json_digest(value: dict[str, Any] | None) -> str | None:
+    if value is None:
+        return None
+    return hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
+
+
+def maintain_hired_memory_lifecycle(
+    employment_record_path: Path,
+    *,
+    action: str,
+    experience_id: str | None = None,
+    requested_by: str = "보스",
+    reason: str = "manual_memory_lifecycle_maintenance",
+    output_path: Path | None = None,
+) -> dict[str, Any]:
+    if action not in {"audit", "delete-experience", "migrate", "recover"}:
+        raise ValueError("action must be audit, delete-experience, migrate, or recover")
+    if action == "delete-experience" and not experience_id:
+        raise ValueError("experience_id is required for delete-experience")
+
+    employment_record, _agent_manifest, target_root = _load_active_employment(employment_record_path)
+    entrypoints = employment_record.get("entrypoints", {})
+    ledger_path = target_root / entrypoints.get("learning_ledger", "learning_ledger.json")
+    backup_path = target_root / entrypoints.get("learning_ledger_backup", "learning_ledger.backup.json")
+    maintenance_path = output_path or target_root / entrypoints.get(
+        "memory_lifecycle_maintenance",
+        "memory_lifecycle_maintenance.json",
+    )
+    log_path = target_root / entrypoints.get(
+        "memory_lifecycle_maintenance_log",
+        "memory_lifecycle_maintenance_log.jsonl",
+    )
+
+    loaded_from = "learning_ledger"
+    ledger_existed_before = ledger_path.exists()
+    current_ledger = _read_json_or_none(ledger_path) if ledger_existed_before else None
+    backup_ledger = _read_json_or_none(backup_path) if backup_path.exists() else None
+    current_unreadable = ledger_existed_before and current_ledger is None
+    current_digest_before = _json_digest(current_ledger)
+    backup_digest_before = _json_digest(backup_ledger)
+    if action == "recover":
+        if current_ledger is not None:
+            ledger = current_ledger
+            status = "recovery_not_needed"
+        elif backup_ledger is not None:
+            ledger = backup_ledger
+            loaded_from = "learning_ledger_backup"
+            status = "recovered_from_backup"
+        else:
+            ledger = create_learning_ledger(owner=employment_record["agent"]["name"])
+            loaded_from = "new_empty_ledger"
+            status = "recovered_as_empty_ledger"
+    else:
+        if ledger_path.exists() and current_ledger is None:
+            raise ValueError("learning ledger is unreadable; run recover before audit, migrate, or delete-experience")
+        ledger = current_ledger or create_learning_ledger(owner=employment_record["agent"]["name"])
+        status = "completed"
+        if current_ledger is not None:
+            _write_json(backup_path, current_ledger)
+
+    tombstone: dict[str, Any] | None = None
+    migration: dict[str, Any] | None = None
+    if action == "delete-experience":
+        ledger, tombstone = delete_learning_experience(
+            ledger,
+            experience_id=str(experience_id),
+            requested_by=requested_by,
+            reason=reason,
+        )
+    elif action == "migrate":
+        migration = {
+            "schema": "paideia-memory-ledger-migration/v1",
+            "migrated_at_utc": datetime.now(timezone.utc).isoformat(),
+            "from_schema": ledger.get("schema"),
+            "to_policy_version": "memory_lifecycle_p0_v1",
+            "summary_only": True,
+        }
+        ledger.setdefault("schema_migrations", []).append(migration)
+        ledger = refresh_learning_ledger(ledger)
+    else:
+        ledger = refresh_learning_ledger(ledger)
+        ledger["memory_lifecycle"] = audit_learning_ledger(ledger)
+
+    _write_json(ledger_path, ledger)
+    if action == "recover":
+        _write_json(backup_path, ledger)
+    ledger_digest_after = _json_digest(ledger)
+    backup_digest_after = _json_digest(_read_json_or_none(backup_path) if backup_path.exists() else None)
+
+    record = {
+        "schema": MEMORY_LIFECYCLE_MAINTENANCE_SCHEMA,
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "action": action,
+        "status": status,
+        "requested_by": requested_by,
+        "reason": reason,
+        "employment_context": _employment_context(employment_record),
+        "learning_ledger": ledger_path.name,
+        "backup": backup_path.name,
+        "loaded_from": loaded_from,
+        "experience_id": experience_id,
+        "deleted_experience": tombstone,
+        "migration": migration,
+        "integrity": {
+            "current_ledger_existed_before": ledger_existed_before,
+            "current_ledger_readable_before": current_ledger is not None,
+            "current_ledger_unreadable_before": current_unreadable,
+            "backup_available_before": backup_ledger is not None,
+            "ledger_digest_before_sha256": current_digest_before,
+            "backup_digest_before_sha256": backup_digest_before,
+            "restored_source_digest_sha256": (
+                backup_digest_before
+                if action == "recover" and loaded_from == "learning_ledger_backup"
+                else current_digest_before
+            ),
+            "ledger_digest_after_sha256": ledger_digest_after,
+            "backup_digest_after_sha256": backup_digest_after,
+            "backup_written_for_mutation": (
+                action != "recover"
+                and current_digest_before is not None
+                and backup_digest_after == current_digest_before
+            ),
+            "recovered_from_backup": action == "recover" and loaded_from == "learning_ledger_backup",
+            "backup_rewritten_to_recovered_digest": (
+                action == "recover"
+                and loaded_from == "learning_ledger_backup"
+                and backup_digest_after == ledger_digest_after
+            ),
+        },
+        "memory_lifecycle": ledger.get("memory_lifecycle", {}),
+        "counts": {
+            "promoted": len(ledger.get("promoted_experiences", [])),
+            "quarantined": len(ledger.get("quarantined_experiences", [])),
+            "deletion_tombstones": len(ledger.get("memory_deletion_log", [])),
+        },
+        "policy": {
+            "manual_delete_audit_log": True,
+            "backup_before_mutation": action != "recover",
+            "private_reasoning_trace": "do_not_store",
+            "safe_reference_retention_after_delete": "removed",
+        },
+    }
+    _write_json(maintenance_path, record)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with log_path.open("a", encoding="utf-8") as file:
+        file.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+    return record
 
 
 def _cycle_artifact_path(base_output_path: Path | None, target_root: Path, filename: str) -> Path:
@@ -887,17 +1401,21 @@ def run_hired_workspace_agent(
     task: str,
     workspace_dir: Path,
     output_path: Path | None = None,
+    llm_mode: str = "offline",
+    llm_model: str | None = None,
+    llm_client: LLMClient | None = None,
+    boss_approvals: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     employment_record, agent_manifest, target_root = _load_active_employment(employment_record_path)
+    agent_manifest = _manifest_with_runtime_boss_approvals(agent_manifest, boss_approvals)
     result = run_workspace_agent_from_manifest(
         agent_manifest,
         task=task,
         workspace_dir=workspace_dir,
-    )
-    result["llm_runtime_result"] = invoke_llm_application_engine(
-        employment_record["llm_runtime"],
-        manifest=agent_manifest,
-        task=task,
+        runtime_config=employment_record["llm_runtime"],
+        llm_mode=llm_mode,
+        llm_model=llm_model,
+        llm_client=llm_client,
     )
     result["employment_context"] = _employment_context(employment_record)
     result["active_memory_route"] = _route_active_memory_for_employment(
@@ -924,19 +1442,25 @@ def run_hired_agent_job(
     job_spec: dict[str, Any],
     workspace_dir: Path,
     output_path: Path | None = None,
+    llm_mode: str = "offline",
+    llm_model: str | None = None,
+    llm_client: LLMClient | None = None,
+    boss_approvals: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     employment_record, agent_manifest, target_root = _load_active_employment(employment_record_path)
+    agent_manifest = _manifest_with_runtime_boss_approvals(agent_manifest, boss_approvals)
     result = run_workspace_agent_job_from_manifest(
         agent_manifest,
         job_spec=job_spec,
         workspace_dir=workspace_dir,
+        runtime_config=employment_record["llm_runtime"],
+        llm_mode=llm_mode,
+        llm_model=llm_model,
+        llm_client=llm_client,
     )
     result["schema"] = "ai-talent-hired-agent-job-run/v1"
-    result["llm_runtime_result"] = invoke_llm_application_engine(
-        employment_record["llm_runtime"],
-        manifest=agent_manifest,
-        task=result["job_spec"]["objective"],
-    )
+    result["llm_runtime_result"] = result["workspace_run"]["llm_runtime_result"]
+    result["llm_provider_preflight"] = result["llm_runtime_result"].get("llm_provider_preflight")
     result["employment_context"] = _employment_context(employment_record)
     result["active_memory_route"] = _route_active_memory_for_employment(
         employment_record,
@@ -964,8 +1488,13 @@ def run_hired_dataflow_job(
     workspace_dir: Path,
     review_label: dict[str, Any],
     output_path: Path | None = None,
+    llm_mode: str = "offline",
+    llm_model: str | None = None,
+    llm_client: LLMClient | None = None,
+    boss_approvals: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     employment_record, agent_manifest, target_root = _load_active_employment(employment_record_path)
+    agent_manifest = _manifest_with_runtime_boss_approvals(agent_manifest, boss_approvals)
     entrypoints = employment_record.get("entrypoints", {})
     ledger_path = target_root / entrypoints.get("learning_ledger", "learning_ledger.json")
     if ledger_path.exists():
@@ -974,19 +1503,90 @@ def run_hired_dataflow_job(
         ledger = create_learning_ledger(owner=employment_record["agent"]["name"])
         ledger["reasoning_kernel"] = build_reasoning_kernel(ledger)
 
-    result = run_dataflow_job_from_manifest(
-        agent_manifest,
-        ledger=ledger,
-        job_spec=job_spec,
-        workspace_dir=workspace_dir,
-        review_label=review_label,
-    )
-    result["employment_context"] = _employment_context(employment_record)
-    result["llm_runtime_result"] = invoke_llm_application_engine(
+    formatted_job = format_dataflow_job(job_spec)
+    llm_provider_preflight = build_llm_provider_preflight(
         employment_record["llm_runtime"],
-        manifest=agent_manifest,
-        task=result["objective"],
+        llm_mode=llm_mode,
+        llm_model=llm_model,
     )
+    provider_not_ready = (
+        llm_mode == "live"
+        and llm_client is None
+        and llm_provider_preflight.get("status") == "needs_configuration"
+    )
+    if provider_not_ready:
+        agent = agent_manifest.get("agent", {})
+        llm_runtime_result = {
+            "schema": "ai-talent-llm-runtime-result/v1",
+            "engine": employment_record["llm_runtime"].get("engine", "deterministic_local"),
+            "status": "skipped_provider_not_ready",
+            "reason": "live_provider_needs_configuration_before_dataflow_execution",
+            "identity_policy": employment_record["llm_runtime"].get(
+                "identity_policy",
+                "application_engine_not_identity",
+            ),
+            "network_access": employment_record["llm_runtime"].get("network_access", "blocked"),
+            "llm_mode": llm_mode,
+            "model": llm_model or employment_record["llm_runtime"].get("model"),
+            "llm_provider_preflight": llm_provider_preflight,
+        }
+        result = {
+            "schema": DATAFLOW_RUN_SCHEMA,
+            "created_at_utc": datetime.now(timezone.utc).isoformat(),
+            "runtime_model": "agent_dataflow_runtime_v1",
+            "run_status": "needs_configuration",
+            "agent": {
+                "name": agent.get("name"),
+                "role": agent.get("role"),
+                "major_goal": agent.get("major_goal"),
+            },
+            "objective": formatted_job["objective"],
+            "llm_policy": agent_manifest.get("llm_policy", {"role": "application_engine_not_identity"}),
+            "tool_policy": agent_manifest.get("tool_policy", {}),
+            "formatted_job": formatted_job,
+            "llm_runtime_result": llm_runtime_result,
+            "llm_provider_preflight": llm_provider_preflight,
+            "workspace_outputs": {},
+            "workspace_resource_usage": {
+                "status": "not_started_provider_configuration_required",
+                "workspace_root_created": False,
+            },
+            "growth_commit_candidate": {
+                "schema": GROWTH_COMMIT_CANDIDATE_SCHEMA,
+                "created_at_utc": datetime.now(timezone.utc).isoformat(),
+                "objective": formatted_job["objective"],
+                "promotion_status": "quarantine",
+                "review_label": review_label,
+                "verification_status": "skipped_provider_not_ready",
+                "verification_issues": ["live_provider_needs_configuration_before_dataflow_execution"],
+                "private_reasoning_trace_policy": "do_not_store",
+            },
+            "runtime_observability": {
+                "schema": "paideia-runtime-observability/v1",
+                "status": "skipped_provider_not_ready",
+                "provider_usage_present": False,
+                "private_reasoning_trace_stored": False,
+                "raw_provider_payload_saved": False,
+            },
+        }
+    else:
+        result = run_dataflow_job_from_manifest(
+            agent_manifest,
+            ledger=ledger,
+            job_spec=formatted_job,
+            workspace_dir=workspace_dir,
+            review_label=review_label,
+        )
+        result["llm_runtime_result"] = invoke_llm_application_engine(
+            employment_record["llm_runtime"],
+            manifest=agent_manifest,
+            task=result["objective"],
+            llm_mode=llm_mode,
+            llm_model=llm_model,
+            client=llm_client,
+        )
+        result["llm_provider_preflight"] = result["llm_runtime_result"].get("llm_provider_preflight")
+    result["employment_context"] = _employment_context(employment_record)
 
     run_output_path = output_path or target_root / entrypoints.get("last_dataflow_run", "last_hired_dataflow_run.json")
     _write_json(run_output_path, result)
@@ -1006,6 +1606,10 @@ def run_hired_agent_job_cycle(
     workspace_dir: Path,
     quality_label: dict[str, Any],
     output_path: Path | None = None,
+    llm_mode: str = "offline",
+    llm_model: str | None = None,
+    llm_client: LLMClient | None = None,
+    boss_approvals: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     employment_record, _agent_manifest, target_root = _load_active_employment(employment_record_path)
     entrypoints = employment_record.get("entrypoints", {})
@@ -1024,6 +1628,10 @@ def run_hired_agent_job_cycle(
         job_spec=job_spec,
         workspace_dir=workspace_dir,
         output_path=job_run_path,
+        llm_mode=llm_mode,
+        llm_model=llm_model,
+        llm_client=llm_client,
+        boss_approvals=boss_approvals,
     )
     learning_update = record_hired_learning_experience(
         employment_record_path,

@@ -7,12 +7,16 @@ from typing import Any
 
 from ai22b.talent_foundry.agent_manifest import build_agent_manifest
 from ai22b.talent_foundry.assessment import build_assessment_transcript
+from ai22b.talent_foundry.audit import audit_foundry_release
+from ai22b.talent_foundry.developmental_ecology import build_developmental_ecology
 from ai22b.talent_foundry.distribution import (
     create_agent_release_bundle,
     install_agent_release_package,
     package_agent_release_bundle,
 )
 from ai22b.talent_foundry.employment import create_employment_contract
+from ai22b.talent_foundry.exam_engine_v2 import augment_assessment_transcript_v2
+from ai22b.talent_foundry.growth_profile import build_growth_profile
 from ai22b.talent_foundry.institutions import run_institutional_review
 from ai22b.talent_foundry.learning_loop import (
     build_reasoning_kernel,
@@ -23,12 +27,15 @@ from ai22b.talent_foundry.language_development import (
     build_language_development_program,
     write_language_development_program,
 )
+from ai22b.talent_foundry.life_trace import build_life_trace, write_life_trace_jsonl
 from ai22b.talent_foundry.memory import consolidate_memory, create_memory_store, remember_event
 from ai22b.talent_foundry.memory_substrate import build_memory_substrate, write_memory_substrate
 from ai22b.talent_foundry.program import create_talent_plan
+from ai22b.talent_foundry.program_manifest import build_public_program_manifest
 from ai22b.talent_foundry.reasoning_kibo import build_initial_reasoning_kibo, write_reasoning_kibo_jsonl
 from ai22b.talent_foundry.records import build_career_records
-from ai22b.talent_foundry.registry import hire_installed_agent
+from ai22b.talent_foundry.registry import hire_installed_agent, run_hired_agent, run_hired_dataflow_job
+from ai22b.talent_foundry.runtime_benchmark import build_runtime_observability_comparison
 
 
 TRAINING_RUN_SCHEMA = "ai-talent-training-run/v1"
@@ -220,6 +227,9 @@ def materialize_training_blueprint(
         "assessment_transcript": output_dir / f"{name_slug}_assessment_transcript.json",
         "reasoning_kibo": output_dir / f"{name_slug}_reasoning_kibo.jsonl",
         "language_development_program": output_dir / f"{name_slug}_language_development_program.json",
+        "developmental_ecology": output_dir / f"{name_slug}_developmental_ecology.json",
+        "life_trace": output_dir / f"{name_slug}_life_trace.jsonl",
+        "growth_profile": output_dir / f"{name_slug}_growth_profile.json",
         "talent_plan": output_dir / f"{name_slug}_agent_plan.json",
         "institutional_review": output_dir / f"{name_slug}_institutional_review.json",
         "memory_profile": output_dir / f"{name_slug}_memory_profile.json",
@@ -229,6 +239,8 @@ def materialize_training_blueprint(
         "release_bundle": output_dir / f"{name_slug}_agent_release_bundle",
         "release_archive": output_dir / f"{name_slug}_agent_release_bundle.zip",
         "installed_agent_root": output_dir / "installed_agents",
+        "public_program_manifest": output_dir / "ai_talent_foundry_public_manifest.json",
+        "release_audit": output_dir / "foundry_release_audit.json",
         "training_run": output_dir / "training_run.json",
     }
     role_artifact_keys = [
@@ -238,7 +250,6 @@ def materialize_training_blueprint(
         "curriculum_manifest",
         "assessment_transcript",
         "reasoning_kibo",
-        "memory_substrate",
     ]
     if not blueprint.get("role_model"):
         for key in role_artifact_keys:
@@ -267,6 +278,42 @@ def materialize_training_blueprint(
         "continues_after_hire": language_development_program["growth_policy"]["continues_after_hire"],
         "path_hint": "[AI22B_STORAGE_ROOT]/talent-foundry/runs/<talent>_language_development_program.json",
     }
+    developmental_ecology = build_developmental_ecology(
+        blueprint,
+        output_path=artifacts["developmental_ecology"],
+    )
+    life_trace = build_life_trace(blueprint, developmental_ecology, density="monthly")
+    write_life_trace_jsonl(artifacts["life_trace"], life_trace)
+    growth_profile = build_growth_profile(
+        blueprint,
+        developmental_ecology,
+        life_trace,
+        output_path=artifacts["growth_profile"],
+    )
+    packet["developmental_ecology"] = {
+        "schema": developmental_ecology["schema"],
+        "seed_id": developmental_ecology["seed"]["seed_id"],
+        "layer_count": 7,
+        "review_status": developmental_ecology["review_status"],
+        "path_hint": "[AI22B_STORAGE_ROOT]/talent-foundry/runs/<talent>_developmental_ecology.json",
+        "policy": developmental_ecology["generation_policy"],
+    }
+    packet["life_trace"] = {
+        "schema": life_trace["manifest"]["schema"],
+        "density": life_trace["manifest"]["density"],
+        "event_count": life_trace["manifest"]["event_count"],
+        "age_span_years": life_trace["manifest"]["age_span_years"],
+        "path_hint": "[AI22B_STORAGE_ROOT]/talent-foundry/runs/<talent>_life_trace.jsonl",
+        "policy": life_trace["manifest"]["policy"],
+    }
+    packet["growth_profile"] = {
+        "schema": growth_profile["schema"],
+        "relationship_memory_refs": growth_profile["memory_pack_preview"]["relationship_memory_refs"],
+        "emotional_memory_refs": growth_profile["memory_pack_preview"]["emotional_memory_refs"],
+        "episodic_memory_events": growth_profile["memory_pack_preview"]["episodic_memory_events"],
+        "path_hint": "[AI22B_STORAGE_ROOT]/talent-foundry/runs/<talent>_growth_profile.json",
+        "policy": growth_profile["policy"],
+    }
     _write_json(artifacts["talent_plan"], packet)
 
     submissions = _submissions_for(blueprint)
@@ -277,6 +324,11 @@ def materialize_training_blueprint(
         assessment_transcript = institutional_review.get("assessment_transcript") or build_assessment_transcript(
             packet,
             submissions,
+        )
+        assessment_transcript = augment_assessment_transcript_v2(
+            assessment_transcript,
+            life_trace=life_trace,
+            growth_profile=growth_profile,
         )
         _write_json(artifacts["assessment_transcript"], assessment_transcript)
         reasoning_kibo = build_initial_reasoning_kibo(
@@ -313,16 +365,18 @@ def materialize_training_blueprint(
 
     agent_manifest = build_agent_manifest(packet, memory_profile)
     _write_json(artifacts["agent_manifest"], agent_manifest)
-    if blueprint.get("role_model"):
-        memory_substrate = build_memory_substrate(
-            agent_manifest=agent_manifest,
-            learning_ledger=learning_ledger,
-            reasoning_kibo_rows=reasoning_kibo.get("entries", []) if reasoning_kibo else [],
-            process_plan=blueprint.get("role_model_process"),
-            curriculum_manifest=blueprint.get("curriculum_manifest"),
-            language_development_program=language_development_program,
-        )
-        write_memory_substrate(artifacts["memory_substrate"], memory_substrate)
+    memory_substrate = build_memory_substrate(
+        agent_manifest=agent_manifest,
+        learning_ledger=learning_ledger,
+        reasoning_kibo_rows=reasoning_kibo.get("entries", []) if reasoning_kibo else [],
+        process_plan=blueprint.get("role_model_process"),
+        curriculum_manifest=blueprint.get("curriculum_manifest"),
+        language_development_program=language_development_program,
+        developmental_ecology=developmental_ecology,
+        life_trace_events=life_trace["events"],
+        growth_profile=growth_profile,
+    )
+    write_memory_substrate(artifacts["memory_substrate"], memory_substrate)
 
     create_agent_release_bundle(
         output_dir=artifacts["release_bundle"],
@@ -330,6 +384,9 @@ def materialize_training_blueprint(
         learning_ledger_path=artifacts["learning_ledger"],
         memory_substrate_path=artifacts.get("memory_substrate"),
         language_development_program_path=artifacts["language_development_program"],
+        developmental_ecology_path=artifacts["developmental_ecology"],
+        life_trace_path=artifacts["life_trace"],
+        growth_profile_path=artifacts["growth_profile"],
     )
     package = package_agent_release_bundle(
         artifacts["release_bundle"],
@@ -357,6 +414,48 @@ def materialize_training_blueprint(
     artifacts["installed_agent_manifest"] = install["installed_manifest"]
     artifacts["employment_record"] = hiring["employment_record"]
     artifacts["employment_registry"] = hiring["registry_index"]
+    artifacts["hired_llm_connection_profile"] = hiring["llm_connection_profile"]
+    artifacts["agent_id_card_payload"] = hiring["agent_id_card_payload"]
+    artifacts["agent_identity_envelope"] = hiring["agent_identity_envelope"]
+    artifacts["agent_identity_verification"] = hiring["agent_identity_verification"]
+    installed_root = artifacts["employment_record"].parent
+    artifacts["hired_agent_run"] = installed_root / "last_hired_agent_run.json"
+    artifacts["hired_dataflow_workspace"] = installed_root / "agent_dataflow_workspace"
+    artifacts["hired_dataflow_run"] = installed_root / "last_hired_dataflow_run.json"
+    artifacts["runtime_observability_comparison"] = output_dir / "runtime_observability_comparison.json"
+
+    run_hired_agent(
+        artifacts["employment_record"],
+        task=f"{packet['talent']['name']}의 전공 기억을 바탕으로 보스 검토용 리서치 질문을 정리한다.",
+        output_path=artifacts["hired_agent_run"],
+        llm_mode="offline",
+    )
+    run_hired_dataflow_job(
+        artifacts["employment_record"],
+        job_spec={
+            "schema": "ai-talent-dataflow-job/v1",
+            "objective": f"{packet['talent']['name']}의 학습 기록을 바탕으로 검토 가능한 리서치 dataflow를 실행한다.",
+            "deliverables": [
+                {
+                    "id": "training_runtime_synthesis",
+                    "description": "Training-to-runtime synthesis for Boss review.",
+                }
+            ],
+            "acceptance_criteria": [
+                "Every conclusion links to local memory tiles or uncertainty.",
+                "External side effects remain blocked.",
+            ],
+        },
+        workspace_dir=artifacts["hired_dataflow_workspace"],
+        review_label={"score": 91, "reviewed_by": blueprint["owner"], "status": "verified"},
+        output_path=artifacts["hired_dataflow_run"],
+        llm_mode="offline",
+    )
+    build_runtime_observability_comparison(
+        [artifacts["hired_agent_run"], artifacts["hired_dataflow_run"]],
+        output_path=artifacts["runtime_observability_comparison"],
+    )
+    build_public_program_manifest(output_dir, output_path=artifacts["public_program_manifest"])
 
     run = {
         "schema": TRAINING_RUN_SCHEMA,
@@ -374,7 +473,20 @@ def materialize_training_blueprint(
             "release_package_created": package["archive"].exists(),
             "installed_agent_manifest_created": install["installed_manifest"].exists(),
             "employment_record_created": hiring["employment_record"].exists(),
+            "developmental_ecology_created": artifacts["developmental_ecology"].exists(),
+            "life_trace_created": artifacts["life_trace"].exists(),
+            "growth_profile_created": artifacts["growth_profile"].exists(),
+            "hired_agent_run_created": artifacts["hired_agent_run"].exists(),
+            "hired_dataflow_run_created": artifacts["hired_dataflow_run"].exists(),
+            "runtime_observability_comparison_created": artifacts["runtime_observability_comparison"].exists(),
+            "public_program_manifest_created": artifacts["public_program_manifest"].exists(),
         },
     }
+    _write_json(artifacts["training_run"], run)
+    release_audit = audit_foundry_release(output_dir, output_path=artifacts["release_audit"])
+    run["verification"]["release_audit_created"] = artifacts["release_audit"].exists()
+    run["verification"]["release_audit_public_ready"] = release_audit["public_release_ready"]
+    run["artifact_count"] = len(artifacts)
+    run["artifacts"] = {key: str(path) for key, path in artifacts.items()}
     _write_json(artifacts["training_run"], run)
     return run

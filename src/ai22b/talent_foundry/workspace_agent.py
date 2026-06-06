@@ -1,36 +1,83 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from ai22b.talent_foundry.agent_runner import run_agent_from_manifest
+from ai22b.talent_foundry.llm_clients import LLMClient
+from ai22b.talent_foundry.workspace_sandbox import (
+    SandboxViolation,
+    WORKSPACE_SANDBOX_SCHEMA,
+    WorkspaceSandbox,
+    sandbox_kwargs_from_resource_limits,
+)
 
 
 WORKSPACE_RUN_SCHEMA = "ai-talent-workspace-agent-run/v1"
 WORKSPACE_JOB_RUN_SCHEMA = "ai-talent-workspace-agent-job-run/v1"
 ACCEPTANCE_CHECKLIST_SCHEMA = "ai-talent-agent-job-acceptance-checklist/v1"
+WORKSPACE_TOOL_ARTIFACTS_SCHEMA = "paideia-workspace-tool-artifacts/v1"
+WORKSPACE_INPUT_REVIEW_SCHEMA = "paideia-workspace-input-review/v1"
+RESEARCH_ANALYSIS_SCHEMA = "paideia-workspace-research-analysis/v1"
+DELIVERABLE_SYNTHESIS_SCHEMA = "paideia-workspace-deliverable-synthesis/v1"
+DELIVERABLE_MANIFEST_SCHEMA = "paideia-workspace-job-deliverables/v1"
 
-
-def _write_json(path: Path, data: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-
-
-def _write_jsonl(path: Path, entries: list[dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as file:
-        for entry in entries:
-            file.write(json.dumps(entry, ensure_ascii=False) + "\n")
-
-
-def _safe_workspace_path(workspace_dir: Path, filename: str) -> Path:
-    root = workspace_dir.resolve()
-    path = (root / filename).resolve()
-    if root not in path.parents and path != root:
-        raise ValueError("Workspace output escaped workspace directory")
-    return path
+RESEARCH_SIGNAL_KEYWORDS: dict[str, dict[str, Any]] = {
+    "cash_flow_strength": {
+        "label": "Cash flow strength",
+        "keywords": ("cash flow stayed strong", "cash flow strong", "strong cash flow", "현금흐름", "영업현금"),
+        "review_question": "현금흐름 강세가 일회성인지 반복 가능한 영업 체력인지 확인합니다.",
+    },
+    "earnings_miss": {
+        "label": "Earnings miss",
+        "keywords": ("headline earnings missed", "earnings missed", "earnings miss", "실적 부진", "어닝 쇼크", "컨센서스 하회"),
+        "review_question": "실적 하회가 가격, 물량, 비용, 환율 중 어디에서 왔는지 분리합니다.",
+    },
+    "risk_review": {
+        "label": "Risk review",
+        "keywords": ("risk", "risks", "리스크", "위험", "downside"),
+        "review_question": "핵심 리스크가 투자 실행 금지 경계 안에서 검토 가능한 정보인지 구분합니다.",
+    },
+    "macro_context": {
+        "label": "Macro context",
+        "keywords": ("macro", "rates", "inflation", "fx", "거시경제", "금리", "물가", "환율"),
+        "review_question": "금리, 환율, 경기 순환이 기업 실적 가정에 어떤 민감도를 주는지 확인합니다.",
+    },
+    "valuation_gap": {
+        "label": "Valuation gap",
+        "keywords": ("valuation", "value", "margin of safety", "가치평가", "안전마진", "밸류에이션"),
+        "review_question": "가치평가에는 안전마진과 반례를 함께 붙입니다.",
+    },
+    "debt_liquidity": {
+        "label": "Debt and liquidity",
+        "keywords": ("debt", "liquidity", "leverage", "부채", "유동성", "레버리지"),
+        "review_question": "부채 만기와 유동성 여유가 스트레스 상황에서 견딜 수 있는지 확인합니다.",
+    },
+    "growth_execution": {
+        "label": "Growth and execution",
+        "keywords": ("growth", "execution", "capacity", "성장", "실행", "증설"),
+        "review_question": "성장 서사가 숫자와 실행 이력으로 뒷받침되는지 검토합니다.",
+    },
+    "shareholder_return": {
+        "label": "Shareholder return",
+        "keywords": ("dividend", "buyback", "shareholder", "배당", "자사주", "주주환원"),
+        "review_question": "주주환원이 현금흐름, 투자 계획, 재무 안정성과 충돌하지 않는지 확인합니다.",
+    },
+    "uncertainty_marker": {
+        "label": "Uncertainty marker",
+        "keywords": ("uncertain", "uncertainty", "unknown", "불확실", "미확인", "가정"),
+        "review_question": "확정 사실과 가정을 분리하고, 추가 확인 자료를 지정합니다.",
+    },
+    "policy_boundary": {
+        "label": "Policy boundary",
+        "keywords": ("투자 실행 없이", "외부 업로드는 차단", "without trade", "no trade", "blocked", "차단"),
+        "review_question": "이 분석이 거래 실행, 외부 업로드, 승인 없는 민감 행동으로 넘어가지 않는지 확인합니다.",
+    },
+}
 
 
 def _task_plan_text(manifest: dict[str, Any], task: str, base_run: dict[str, Any]) -> str:
@@ -75,12 +122,84 @@ def _trace_entry(action: str, **fields: Any) -> dict[str, Any]:
     }
 
 
+def _digest(value: Any) -> str:
+    return hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
+
+
+def _workspace_tool_artifacts(base_run: dict[str, Any]) -> dict[str, Any]:
+    tool_execution = base_run.get("tool_execution", {})
+    tool_results = tool_execution.get("tool_results", []) if isinstance(tool_execution, dict) else []
+    artifacts = []
+    for item in tool_results:
+        if not isinstance(item, dict):
+            continue
+        output = item.get("output", {})
+        artifacts.append(
+            {
+                "tool": item.get("tool"),
+                "status": item.get("status"),
+                "capability": item.get("capability"),
+                "output_schema": output.get("schema") if isinstance(output, dict) else None,
+                "output_digest_sha256": _digest(output),
+                "output": output,
+                "workspace_side_effect": "materialized_review_artifact_only",
+                "private_reasoning_trace_stored": False,
+            }
+        )
+    return {
+        "schema": WORKSPACE_TOOL_ARTIFACTS_SCHEMA,
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "execution_model": tool_execution.get("execution_model"),
+        "selected_tools": base_run.get("selected_tools", []),
+        "capability_scope": tool_execution.get("capability_scope", {}),
+        "artifact_count": len(artifacts),
+        "artifacts": artifacts,
+        "adapter_policy": {
+            "source": "registered_capability_checked_local_tools_v1",
+            "materialized_by": "WorkspaceSandbox.write_json",
+            "network_call_performed": False,
+            "subprocess_executed": False,
+            "private_reasoning_trace": "do_not_store",
+            "learning_promotion_performed": False,
+        },
+    }
+
+
+def _normalize_input_files(job_spec: dict[str, Any]) -> list[dict[str, str]]:
+    raw_items = job_spec.get("input_files") or []
+    if not isinstance(raw_items, list):
+        return []
+    normalized: list[dict[str, str]] = []
+    for index, item in enumerate(raw_items, start=1):
+        if isinstance(item, str):
+            path = item
+            description = f"Declared workspace input {index}"
+            purpose = "job_context"
+        elif isinstance(item, dict):
+            path = str(item.get("path") or item.get("relative_path") or item.get("file") or "").strip()
+            description = str(item.get("description") or item.get("purpose") or f"Declared workspace input {index}")
+            purpose = str(item.get("purpose") or "job_context")
+        else:
+            continue
+        if not path:
+            continue
+        normalized.append(
+            {
+                "path": path,
+                "description": description,
+                "purpose": purpose,
+            }
+        )
+    return normalized
+
+
 def _normalize_job_spec(job_spec: dict[str, Any]) -> dict[str, Any]:
     objective = str(job_spec.get("objective", "")).strip()
     if not objective:
         raise ValueError("Job spec requires a non-empty objective")
     deliverables = job_spec.get("deliverables") or [{"id": "result_summary", "description": "보스 검토용 작업 결과"}]
     acceptance_criteria = job_spec.get("acceptance_criteria") or ["작업 보고서와 검증 흔적을 로컬 워크스페이스에 남긴다."]
+    resource_limits = job_spec.get("resource_limits") if isinstance(job_spec.get("resource_limits"), dict) else {}
     return {
         "schema": job_spec.get("schema", "ai-talent-workspace-agent-job/v1"),
         "objective": objective,
@@ -92,7 +211,581 @@ def _normalize_job_spec(job_spec: dict[str, Any]) -> dict[str, Any]:
             for index, item in enumerate(deliverables, start=1)
         ],
         "acceptance_criteria": [str(item) for item in acceptance_criteria],
+        "input_files": _normalize_input_files(job_spec),
+        "resource_limits": resource_limits,
     }
+
+
+def _public_input_path(raw_path: str) -> dict[str, Any]:
+    path = Path(raw_path)
+    record: dict[str, Any] = {
+        "file_name": path.name or "workspace_input",
+        "requested_path_fingerprint_sha256": hashlib.sha256(raw_path.encode("utf-8")).hexdigest(),
+    }
+    if not path.is_absolute() and ".." not in path.parts:
+        record["relative_path"] = path.as_posix()
+    return record
+
+
+def _workspace_input_review(sandbox: WorkspaceSandbox, input_files: list[dict[str, str]]) -> dict[str, Any]:
+    records: list[dict[str, Any]] = []
+    for item in input_files:
+        raw_path = item["path"]
+        record = {
+            **_public_input_path(raw_path),
+            "description": item.get("description"),
+            "purpose": item.get("purpose"),
+            "direct_file_read_performed": False,
+        }
+        try:
+            text = sandbox.read_text(raw_path, purpose=f"declared_job_input:{item.get('purpose', 'job_context')}")
+            data = text.encode("utf-8")
+        except SandboxViolation as exc:
+            record.update(
+                {
+                    "status": "rejected",
+                    "reason": str(exc),
+                }
+            )
+        else:
+            record.update(
+                {
+                    "status": "read",
+                    "byte_count": len(data),
+                    "content_sha256": hashlib.sha256(data).hexdigest(),
+                    "preview": text[:500],
+                    "direct_file_read_performed": True,
+                }
+            )
+        records.append(record)
+    read_count = sum(1 for item in records if item.get("status") == "read")
+    return {
+        "schema": WORKSPACE_INPUT_REVIEW_SCHEMA,
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "declared_input_count": len(input_files),
+        "read_count": read_count,
+        "rejected_count": len(records) - read_count,
+        "inputs": records,
+        "path_policy": {
+            "workspace_root_only": True,
+            "path_escape_rejected": True,
+            "absolute_paths_exported": False,
+        },
+        "adapter_policy": {
+            "source": "declared_workspace_input_files",
+            "materialized_by": "WorkspaceSandbox.read_text_then_write_json",
+            "network_call_performed": False,
+            "subprocess_executed": False,
+            "private_reasoning_trace": "do_not_store",
+            "learning_promotion_performed": False,
+        },
+    }
+
+
+def _research_corpus(job_spec: dict[str, Any], input_review: dict[str, Any] | None) -> list[dict[str, Any]]:
+    corpus: list[dict[str, Any]] = [
+        {
+            "source_type": "objective",
+            "source_ref": "job_spec.objective",
+            "text": job_spec.get("objective", ""),
+        }
+    ]
+    for deliverable in job_spec.get("deliverables", []):
+        if not isinstance(deliverable, dict):
+            continue
+        deliverable_id = str(deliverable.get("id", "deliverable"))
+        corpus.append(
+            {
+                "source_type": "deliverable",
+                "source_ref": f"deliverable:{deliverable_id}",
+                "deliverable_id": deliverable_id,
+                "text": deliverable.get("description", ""),
+            }
+        )
+    for item in (input_review or {}).get("inputs", []):
+        if not isinstance(item, dict) or item.get("status") != "read":
+            continue
+        corpus.append(
+            {
+                "source_type": "declared_input",
+                "source_ref": f"input:{item.get('file_name', 'workspace_input')}",
+                "file_name": item.get("file_name"),
+                "purpose": item.get("purpose"),
+                "content_sha256": item.get("content_sha256"),
+                "text": item.get("preview", ""),
+            }
+        )
+    return corpus
+
+
+def _matched_signal_terms(text: str, keywords: tuple[str, ...]) -> list[str]:
+    folded = text.casefold()
+    return [keyword for keyword in keywords if keyword.casefold() in folded]
+
+
+def _extract_research_signals(corpus: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    signals: list[dict[str, Any]] = []
+    for signal_id, config in RESEARCH_SIGNAL_KEYWORDS.items():
+        matches: list[dict[str, Any]] = []
+        matched_terms: list[str] = []
+        source_input_refs: list[dict[str, Any]] = []
+        for source in corpus:
+            terms = _matched_signal_terms(str(source.get("text", "")), config["keywords"])
+            if not terms:
+                continue
+            matched_terms.extend(terms)
+            matches.append(
+                {
+                    "source_type": source.get("source_type"),
+                    "source_ref": source.get("source_ref"),
+                    "matched_terms": sorted(set(terms)),
+                }
+            )
+            if source.get("source_type") == "declared_input":
+                source_input_refs.append(
+                    {
+                        "file_name": source.get("file_name"),
+                        "purpose": source.get("purpose"),
+                        "content_sha256": source.get("content_sha256"),
+                    }
+                )
+        if not matches:
+            continue
+        signals.append(
+            {
+                "signal_id": signal_id,
+                "label": config["label"],
+                "matched_terms": sorted(set(matched_terms), key=str.casefold),
+                "source_matches": matches,
+                "source_input_refs": source_input_refs,
+                "review_question": config["review_question"],
+                "confidence": "deterministic_keyword_signal",
+                "private_reasoning_trace_stored": False,
+            }
+        )
+    return signals
+
+
+def _deliverable_research_briefs(job_spec: dict[str, Any], signals: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    briefs: list[dict[str, Any]] = []
+    all_signal_ids = [str(item["signal_id"]) for item in signals]
+    question_by_signal = {str(item["signal_id"]): str(item.get("review_question", "")) for item in signals}
+    for deliverable in job_spec["deliverables"]:
+        deliverable_text = f"{job_spec['objective']} {deliverable['description']}"
+        linked: list[str] = []
+        for signal in signals:
+            signal_id = str(signal["signal_id"])
+            terms = tuple(str(term) for term in signal.get("matched_terms", []))
+            if _matched_signal_terms(deliverable_text, terms):
+                linked.append(signal_id)
+        if not linked:
+            linked = all_signal_ids[:5]
+        review_questions = [question_by_signal[item] for item in linked if question_by_signal.get(item)]
+        if not review_questions:
+            review_questions = [
+                "입력 근거, 정책 경계, 반례를 확인한 뒤 보스 검토용 초안으로만 유지합니다."
+            ]
+        briefs.append(
+            {
+                "id": deliverable["id"],
+                "description": deliverable["description"],
+                "linked_signal_ids": linked,
+                "review_questions": review_questions[:5],
+                "draft_focus": (
+                    "Use local input signals as review prompts, then separate evidence, assumptions, "
+                    "risks, and blocked execution actions."
+                ),
+                "private_reasoning_trace_stored": False,
+            }
+        )
+    return briefs
+
+
+def _build_research_analysis(
+    job_spec: dict[str, Any],
+    workspace_run: dict[str, Any],
+    input_review: dict[str, Any] | None,
+) -> dict[str, Any]:
+    corpus = _research_corpus(job_spec, input_review)
+    signals = _extract_research_signals(corpus)
+    base_run = workspace_run.get("base_agent_run", {})
+    tool_execution = base_run.get("tool_execution", {}) if isinstance(base_run, dict) else {}
+    tool_results = tool_execution.get("tool_results", []) if isinstance(tool_execution, dict) else []
+    input_refs = [
+        {
+            "file_name": item.get("file_name"),
+            "purpose": item.get("purpose"),
+            "status": item.get("status"),
+            "content_sha256": item.get("content_sha256"),
+        }
+        for item in (input_review or {}).get("inputs", [])
+        if isinstance(item, dict)
+    ]
+    return {
+        "schema": RESEARCH_ANALYSIS_SCHEMA,
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "objective": job_spec["objective"],
+        "declared_input_count": (input_review or {}).get("declared_input_count", 0),
+        "read_count": (input_review or {}).get("read_count", 0),
+        "rejected_count": (input_review or {}).get("rejected_count", 0),
+        "corpus_summary": {
+            "source_count": len(corpus),
+            "source_types": sorted({str(item.get("source_type")) for item in corpus}),
+            "raw_input_body_exported": False,
+        },
+        "extracted_signals": signals,
+        "signal_count": len(signals),
+        "deliverable_briefs": _deliverable_research_briefs(job_spec, signals),
+        "evidence_refs": {
+            "input_content_refs": input_refs,
+            "registered_tool_summary_count": len(tool_results) if isinstance(tool_results, list) else 0,
+            "llm_runtime": {
+                "engine": workspace_run.get("llm_runtime_result", {}).get("engine"),
+                "status": workspace_run.get("llm_runtime_result", {}).get("status"),
+                "identity_policy": workspace_run.get("llm_runtime_result", {}).get("identity_policy"),
+            },
+            "workspace_trace": "trace.jsonl",
+        },
+        "artifact_policy": {
+            "source": "deterministic_local_research_analysis",
+            "workspace_root_only": True,
+            "absolute_paths_exported": False,
+            "network_call_performed": False,
+            "subprocess_executed": False,
+            "raw_provider_payload_saved": False,
+            "private_reasoning_trace": "do_not_store",
+            "boss_review_required": True,
+            "learning_promotion_performed": False,
+        },
+    }
+
+
+def _safe_deliverable_filename(deliverable_id: str, index: int) -> str:
+    slug = re.sub(r"[^A-Za-z0-9_.-]+", "_", deliverable_id.strip()).strip("._-").lower()
+    if not slug:
+        slug = f"deliverable_{index}"
+    return f"{index:02d}_{slug[:80]}.md"
+
+
+def _input_review_lines(input_review: dict[str, Any] | None) -> list[str]:
+    if not input_review:
+        return ["- Declared inputs: none"]
+    lines = [
+        (
+            f"- Declared inputs: {input_review.get('declared_input_count', 0)} "
+            f"(read {input_review.get('read_count', 0)}, rejected {input_review.get('rejected_count', 0)})"
+        )
+    ]
+    for item in input_review.get("inputs", [])[:5]:
+        if not isinstance(item, dict):
+            continue
+        preview = str(item.get("preview", "")).replace("\n", " ")[:240]
+        lines.append(
+            f"- {item.get('file_name')}: {item.get('status')} / {item.get('purpose')}"
+            + (f" / preview: {preview}" if preview else "")
+        )
+    return lines
+
+
+def _compact_text(value: Any, *, limit: int = 700) -> str:
+    return " ".join(str(value or "").split())[:limit]
+
+
+def _tool_result_summary(item: dict[str, Any]) -> dict[str, Any]:
+    output = item.get("output", {}) if isinstance(item.get("output"), dict) else {}
+    summary = (
+        output.get("summary")
+        or output.get("mode")
+        or output.get("assessment_mode")
+        or output.get("unsupported_claim_policy")
+        or output.get("target")
+        or output.get("reason")
+        or output.get("schema")
+    )
+    evidence_items = output.get("evidence_items", [])
+    checklist = output.get("checklist", [])
+    return {
+        "tool": item.get("tool"),
+        "status": item.get("status"),
+        "capability": item.get("capability"),
+        "output_schema": output.get("schema"),
+        "summary": _compact_text(summary, limit=500),
+        "evidence_item_count": len(evidence_items) if isinstance(evidence_items, list) else 0,
+        "checklist_count": len(checklist) if isinstance(checklist, list) else 0,
+        "private_reasoning_trace_stored": False,
+    }
+
+
+def _build_deliverable_synthesis(
+    manifest: dict[str, Any],
+    job_spec: dict[str, Any],
+    workspace_run: dict[str, Any],
+    input_review: dict[str, Any] | None,
+    research_analysis: dict[str, Any],
+) -> dict[str, Any]:
+    base_run = workspace_run.get("base_agent_run", {})
+    llm_result = workspace_run.get("llm_runtime_result", {})
+    tool_execution = base_run.get("tool_execution", {})
+    tool_results = tool_execution.get("tool_results", []) if isinstance(tool_execution, dict) else []
+    memory = base_run.get("memory_applied", {})
+    policy = base_run.get("policy_decision", {})
+    source_summaries = {
+        "llm_runtime": {
+            "engine": llm_result.get("engine"),
+            "status": llm_result.get("status"),
+            "identity_policy": llm_result.get("identity_policy"),
+            "draft_summary": _compact_text(llm_result.get("draft") or llm_result.get("text"), limit=900),
+            "raw_provider_payload_saved": False,
+        },
+        "registered_tools": [_tool_result_summary(item) for item in tool_results if isinstance(item, dict)],
+        "declared_inputs": {
+            "declared_input_count": (input_review or {}).get("declared_input_count", 0),
+            "read_count": (input_review or {}).get("read_count", 0),
+            "rejected_count": (input_review or {}).get("rejected_count", 0),
+            "input_refs": [
+                {
+                    "file_name": item.get("file_name"),
+                    "status": item.get("status"),
+                    "purpose": item.get("purpose"),
+                    "content_sha256": item.get("content_sha256"),
+                    "preview": _compact_text(item.get("preview"), limit=360),
+                }
+                for item in (input_review or {}).get("inputs", [])
+                if isinstance(item, dict)
+            ],
+        },
+        "research_analysis": {
+            "schema": research_analysis.get("schema"),
+            "signal_count": research_analysis.get("signal_count", 0),
+            "signal_ids": [
+                item.get("signal_id")
+                for item in research_analysis.get("extracted_signals", [])
+                if isinstance(item, dict)
+            ],
+            "deliverable_brief_count": len(research_analysis.get("deliverable_briefs", []))
+            if isinstance(research_analysis.get("deliverable_briefs"), list)
+            else 0,
+            "read_count": research_analysis.get("read_count", 0),
+            "artifact_policy": research_analysis.get("artifact_policy", {}),
+        },
+        "memory_route": {
+            "semantic_theme_count": len(memory.get("semantic_themes", [])) if isinstance(memory, dict) else 0,
+            "procedural_principle_count": len(memory.get("procedural_principles", [])) if isinstance(memory, dict) else 0,
+            "selected_memory_only": True,
+        },
+        "policy": {
+            "status": policy.get("status"),
+            "decision_model": policy.get("decision_model"),
+            "policy_violations": policy.get("policy_violations", []),
+        },
+    }
+    deliverable_records = []
+    for deliverable in job_spec["deliverables"]:
+        deliverable_records.append(
+            {
+                "id": deliverable["id"],
+                "description": deliverable["description"],
+                "synthesis_inputs": [
+                    "llm_runtime.draft_summary",
+                    "registered_tools",
+                    "declared_inputs",
+                    "research_analysis",
+                    "memory_route",
+                    "policy",
+                    "workspace_trace",
+                ],
+                "review_policy": "boss_review_required_before_external_use",
+                "private_reasoning_trace_stored": False,
+            }
+        )
+    return {
+        "schema": DELIVERABLE_SYNTHESIS_SCHEMA,
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "objective": job_spec["objective"],
+        "agent": {
+            "name": manifest.get("agent", {}).get("name"),
+            "role": manifest.get("agent", {}).get("role"),
+        },
+        "source_summaries": source_summaries,
+        "deliverables": deliverable_records,
+        "artifact_policy": {
+            "source": "llm_tool_input_research_analysis_memory_policy_synthesis",
+            "workspace_root_only": True,
+            "network_call_performed": False,
+            "subprocess_executed": False,
+            "raw_provider_payload_saved": False,
+            "private_reasoning_trace": "do_not_store",
+            "learning_promotion_performed": False,
+        },
+    }
+
+
+def _synthesis_lines(synthesis: dict[str, Any]) -> list[str]:
+    sources = synthesis.get("source_summaries", {})
+    llm = sources.get("llm_runtime", {})
+    inputs = sources.get("declared_inputs", {})
+    tools = sources.get("registered_tools", [])
+    lines = [
+        f"- LLM: {llm.get('engine')} / {llm.get('status')}",
+        f"- Declared input reads: {inputs.get('read_count', 0)} of {inputs.get('declared_input_count', 0)}",
+        f"- Registered tool summaries: {len(tools) if isinstance(tools, list) else 0}",
+    ]
+    draft = _compact_text(llm.get("draft_summary"), limit=360)
+    if draft:
+        lines.append(f"- Runtime draft summary: {draft}")
+    for item in tools[:5] if isinstance(tools, list) else []:
+        if not isinstance(item, dict):
+            continue
+        lines.append(f"- Tool {item.get('tool')}: {item.get('summary') or item.get('output_schema')}")
+    return lines
+
+
+def _research_analysis_lines(research_analysis: dict[str, Any]) -> list[str]:
+    signals = research_analysis.get("extracted_signals", [])
+    briefs = {
+        str(item.get("id")): item
+        for item in research_analysis.get("deliverable_briefs", [])
+        if isinstance(item, dict)
+    }
+    lines = [
+        (
+            f"- Local research signals: {research_analysis.get('signal_count', 0)} "
+            f"(inputs read {research_analysis.get('read_count', 0)} of {research_analysis.get('declared_input_count', 0)})"
+        )
+    ]
+    for item in signals[:8] if isinstance(signals, list) else []:
+        if not isinstance(item, dict):
+            continue
+        terms = ", ".join(str(term) for term in item.get("matched_terms", [])[:4])
+        lines.append(f"- {item.get('signal_id')}: {item.get('label')}" + (f" / terms: {terms}" if terms else ""))
+    if briefs:
+        lines.append("- Deliverable review briefs prepared: " + ", ".join(sorted(briefs.keys())[:8]))
+    lines.append("- Analysis policy: deterministic local analysis; no network, subprocess, raw provider payload, or hidden trace.")
+    return lines
+
+
+def _deliverable_text(
+    manifest: dict[str, Any],
+    job_spec: dict[str, Any],
+    deliverable: dict[str, Any],
+    workspace_run: dict[str, Any],
+    input_review: dict[str, Any] | None,
+    synthesis: dict[str, Any],
+    research_analysis: dict[str, Any],
+) -> str:
+    agent = manifest["agent"]
+    llm_result = workspace_run.get("llm_runtime_result", {})
+    base_run = workspace_run.get("base_agent_run", {})
+    selected_tools = base_run.get("selected_tools", [])
+    evidence = workspace_run.get("workspace_outputs", {})
+    return "\n".join(
+        [
+            f"# {deliverable['id']}",
+            "",
+            f"- Agent: {agent.get('name')}",
+            f"- Role: {agent.get('role')}",
+            f"- Objective: {job_spec['objective']}",
+            f"- Deliverable: {deliverable['description']}",
+            f"- LLM engine: {llm_result.get('engine')}",
+            f"- LLM status: {llm_result.get('status')}",
+            f"- Selected tools: {', '.join(selected_tools) if selected_tools else 'none'}",
+            "- Network: blocked",
+            "- Private reasoning trace: not stored",
+            "",
+            "## Declared Inputs",
+            *_input_review_lines(input_review),
+            "",
+            "## Synthesis Evidence",
+            *_synthesis_lines(synthesis),
+            "",
+            "## Local Research Analysis",
+            *_research_analysis_lines(research_analysis),
+            "",
+            "## Work Draft",
+            (
+                "This deliverable was materialized from the job objective, selected local memory summaries, "
+                "declared workspace inputs, deterministic local research analysis, registered tool review packets, "
+                "and the local execution trace."
+            ),
+            "",
+            f"Boss-facing result: {deliverable['description']}",
+            "",
+            "## Evidence",
+            f"- task_plan: {Path(str(evidence.get('task_plan', 'task_plan.md'))).name}",
+            f"- result_summary: {Path(str(evidence.get('result_summary', 'result_summary.md'))).name}",
+            f"- trace: {Path(str(evidence.get('trace', 'trace.jsonl'))).name}",
+            "- verification: acceptance_checklist.json and workspace_execution_proof.json can verify this artifact.",
+            "",
+            "## Review Note",
+            "This file is a reviewable local work artifact. It is not an autonomous external action, trade, upload, or final human approval.",
+        ]
+    )
+
+
+def _write_deliverables(
+    sandbox: WorkspaceSandbox,
+    manifest: dict[str, Any],
+    job_spec: dict[str, Any],
+    workspace_run: dict[str, Any],
+    input_review: dict[str, Any] | None,
+    synthesis: dict[str, Any],
+    research_analysis: dict[str, Any],
+) -> tuple[Path, dict[str, Any], dict[str, Path]]:
+    artifacts: list[dict[str, Any]] = []
+    paths: dict[str, Path] = {}
+    for index, deliverable in enumerate(job_spec["deliverables"], start=1):
+        deliverable_id = str(deliverable["id"])
+        relative_path = Path("deliverables") / _safe_deliverable_filename(deliverable_id, index)
+        text = _deliverable_text(
+            manifest,
+            job_spec,
+            deliverable,
+            workspace_run,
+            input_review,
+            synthesis,
+            research_analysis,
+        ) + "\n"
+        path = sandbox.write_text(relative_path, text, purpose=f"job_deliverable:{deliverable_id}")
+        data = path.read_bytes()
+        paths[deliverable_id] = path
+        artifacts.append(
+            {
+                "id": deliverable_id,
+                "description": deliverable["description"],
+                "relative_path": path.relative_to(sandbox.root).as_posix(),
+                "file_name": path.name,
+                "byte_count": len(data),
+                "content_sha256": hashlib.sha256(data).hexdigest(),
+                "status": "created_as_declared_deliverable_artifact",
+                "private_reasoning_trace_stored": False,
+            }
+        )
+    deliverable_manifest = {
+        "schema": DELIVERABLE_MANIFEST_SCHEMA,
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "objective": job_spec["objective"],
+        "declared_deliverable_count": len(job_spec["deliverables"]),
+        "artifact_count": len(artifacts),
+        "synthesis_schema": synthesis.get("schema"),
+        "synthesis_digest_sha256": _digest(synthesis),
+        "research_analysis_schema": research_analysis.get("schema"),
+        "research_analysis_digest_sha256": _digest(research_analysis),
+        "artifacts": artifacts,
+        "artifact_policy": {
+            "workspace_root_only": True,
+            "relative_paths_only": True,
+            "network_call_performed": False,
+            "subprocess_executed": False,
+            "private_reasoning_trace": "do_not_store",
+            "boss_review_required": True,
+        },
+    }
+    manifest_path = sandbox.write_json(
+        "deliverable_manifest.json",
+        deliverable_manifest,
+        purpose="deliverable_manifest",
+    )
+    return manifest_path, deliverable_manifest, paths
 
 
 def _job_report_text(manifest: dict[str, Any], job_spec: dict[str, Any], workspace_run: dict[str, Any]) -> str:
@@ -111,6 +804,7 @@ def _job_report_text(manifest: dict[str, Any], job_spec: dict[str, Any], workspa
             f"- 실행 상태: {workspace_run['run_status']}",
             "- 런타임 모델: openclaw_style_hired_agent_job",
             "- 네트워크: blocked",
+            f"- 선언 입력 파일: {len(job_spec.get('input_files', []))}개",
             "",
             "## 산출물",
             deliverables,
@@ -124,13 +818,35 @@ def _job_report_text(manifest: dict[str, Any], job_spec: dict[str, Any], workspa
     )
 
 
-def _acceptance_checklist(job_spec: dict[str, Any], workspace_run: dict[str, Any]) -> dict[str, Any]:
+def _acceptance_checklist(
+    job_spec: dict[str, Any],
+    workspace_run: dict[str, Any],
+    *,
+    input_review_path: Path | None = None,
+    research_analysis_path: Path | None = None,
+    deliverable_manifest_path: Path | None = None,
+    deliverable_manifest: dict[str, Any] | None = None,
+    synthesis_path: Path | None = None,
+) -> dict[str, Any]:
     evidence = [
         workspace_run["workspace_outputs"].get("task_plan"),
         workspace_run["workspace_outputs"].get("result_summary"),
         workspace_run["workspace_outputs"].get("trace"),
     ]
+    if input_review_path is not None:
+        evidence.append(str(input_review_path))
+    if research_analysis_path is not None:
+        evidence.append(str(research_analysis_path))
+    if deliverable_manifest_path is not None:
+        evidence.append(str(deliverable_manifest_path))
+    if synthesis_path is not None:
+        evidence.append(str(synthesis_path))
     evidence = [item for item in evidence if item]
+    deliverable_artifacts = {
+        str(item.get("id")): item
+        for item in (deliverable_manifest or {}).get("artifacts", [])
+        if isinstance(item, dict)
+    }
     return {
         "schema": ACCEPTANCE_CHECKLIST_SCHEMA,
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -139,7 +855,9 @@ def _acceptance_checklist(job_spec: dict[str, Any], workspace_run: dict[str, Any
             {
                 "id": item["id"],
                 "description": item["description"],
-                "status": "created_as_workspace_artifact",
+                "status": "created_as_declared_deliverable_artifact",
+                "artifact": deliverable_artifacts.get(item["id"], {}).get("relative_path"),
+                "content_sha256": deliverable_artifacts.get(item["id"], {}).get("content_sha256"),
                 "review_required": "boss_or_oversight_committee",
             }
             for item in job_spec["deliverables"]
@@ -160,10 +878,23 @@ def run_workspace_agent_from_manifest(
     *,
     task: str,
     workspace_dir: Path,
+    runtime_config: dict[str, Any] | None = None,
+    llm_mode: str = "offline",
+    llm_model: str | None = None,
+    llm_client: LLMClient | None = None,
+    resource_limits: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    base_run = run_agent_from_manifest(manifest, task=task)
+    base_run = run_agent_from_manifest(
+        manifest,
+        task=task,
+        runtime_config=runtime_config,
+        llm_mode=llm_mode,
+        llm_model=llm_model,
+        llm_client=llm_client,
+    )
     created_at = datetime.now(timezone.utc).isoformat()
-    workspace_root = workspace_dir.resolve()
+    sandbox = WorkspaceSandbox(workspace_dir, **sandbox_kwargs_from_resource_limits(resource_limits))
+    workspace_root = sandbox.root
 
     result = {
         "schema": WORKSPACE_RUN_SCHEMA,
@@ -173,11 +904,18 @@ def run_workspace_agent_from_manifest(
         "task": task,
         "run_status": base_run["run_status"],
         "policy_violations": base_run["policy_violations"],
+        "llm_runtime_result": base_run.get("llm_runtime_result", {}),
+        "llm_provider_preflight": base_run.get("llm_provider_preflight"),
         "tool_authorization": {
             "allowed_tools": manifest.get("tool_policy", {}).get("allowed_tools", []),
             "blocked_tools": manifest.get("tool_policy", {}).get("blocked_tools", []),
             "network_access": "blocked",
             "workspace_root": str(workspace_root),
+            "sandbox_schema": WORKSPACE_SANDBOX_SCHEMA,
+            "sandbox_enforced": True,
+            "resource_limits": sandbox.policy()["resource_limits"],
+            "capability_grants": base_run.get("policy_decision", {}).get("capability_grants", {}),
+            "capability_scope": base_run.get("tool_execution", {}).get("capability_scope", {}),
         },
         "base_agent_run": base_run,
         "workspace_outputs": {},
@@ -191,41 +929,86 @@ def run_workspace_agent_from_manifest(
         },
     }
 
-    if base_run["run_status"] == "blocked":
-        result["growth_update"] = {
-            "experience_type": "workspace_guardrail_block_after_hire",
-            "reflection": "워크스페이스 실행 전 정책 위반을 감지해 산출물 생성을 중단했다.",
-            "reasoning_delta": [
-                "금지 행동은 계획 파일로도 정당화하지 않는다.",
-                "외부 업로드와 실행 권한은 보스 승인 전 차단한다.",
-            ],
-        }
+    if base_run["run_status"] != "completed":
+        if base_run["run_status"] == "blocked":
+            result["growth_update"] = {
+                "experience_type": "workspace_guardrail_block_after_hire",
+                "reflection": "워크스페이스 실행 전 정책 위반을 감지해 산출물 생성을 중단했다.",
+                "reasoning_delta": [
+                    "금지 행동은 계획 파일로도 정당화하지 않는다.",
+                    "외부 업로드와 실행 권한은 보스 승인 전 차단한다.",
+                ],
+            }
+        elif base_run["run_status"] == "needs_approval":
+            result["growth_update"] = {
+                "experience_type": "workspace_approval_required_after_hire",
+                "reflection": "민감 행동은 보스 승인 전 워크스페이스 산출물 생성도 시작하지 않았다.",
+                "reasoning_delta": [
+                    "승인 대기 상태는 실행 실패가 아니라 실행 전 보류 상태로 기록한다.",
+                    "승인 전에는 계획 파일과 작업 결과 파일도 생성하지 않는다.",
+                ],
+            }
+        elif base_run["run_status"] == "needs_configuration":
+            result["growth_update"] = {
+                "experience_type": "workspace_provider_configuration_required_after_hire",
+                "reflection": "선택한 live LLM provider가 준비되지 않아 워크스페이스 산출물 생성을 시작하지 않았다.",
+                "reasoning_delta": [
+                    "live provider readiness는 워크스페이스 작업 파일 생성보다 먼저 확인한다.",
+                    "provider 미설정 실행은 완료나 작업 경험 후보로 저장하지 않는다.",
+                ],
+            }
+        else:
+            result["growth_update"] = {
+                "experience_type": "workspace_execution_not_started_after_hire",
+                "reflection": "기본 agent run이 완료되지 않아 워크스페이스 실행을 시작하지 않았다.",
+                "reasoning_delta": ["workspace artifacts require a completed base agent run."],
+            }
         return result
 
-    workspace_root.mkdir(parents=True, exist_ok=True)
-    plan_path = _safe_workspace_path(workspace_root, "task_plan.md")
-    summary_path = _safe_workspace_path(workspace_root, "result_summary.md")
-    trace_path = _safe_workspace_path(workspace_root, "trace.jsonl")
+    sandbox.ensure_root()
 
     plan_text = _task_plan_text(manifest, task, base_run)
     summary_text = _summary_text(manifest, task, base_run)
-    plan_path.write_text(plan_text + "\n", encoding="utf-8")
-    summary_path.write_text(summary_text + "\n", encoding="utf-8")
-    _write_jsonl(
-        trace_path,
+    plan_path = sandbox.write_text("task_plan.md", plan_text + "\n", purpose="task_plan")
+    summary_path = sandbox.write_text("result_summary.md", summary_text + "\n", purpose="result_summary")
+    runtime_execution_path = sandbox.write_json("runtime_execution.json", base_run, purpose="runtime_execution_snapshot")
+    workspace_tool_results_path = sandbox.write_json(
+        "workspace_tool_results.json",
+        _workspace_tool_artifacts(base_run),
+        purpose="workspace_tool_artifacts",
+    )
+    trace_path = sandbox.write_jsonl(
+        "trace.jsonl",
         [
             _trace_entry("policy_check", status="passed", violations=[]),
+            _trace_entry(
+                "registered_tool_execution",
+                execution_model=base_run.get("tool_execution", {}).get("execution_model"),
+                selected_tools=base_run.get("selected_tools", []),
+            ),
             _trace_entry("local_file_write", file=plan_path.name, purpose="task_plan"),
             _trace_entry("local_file_write", file=summary_path.name, purpose="result_summary"),
+            _trace_entry("local_file_write", file=runtime_execution_path.name, purpose="runtime_execution_snapshot"),
+            _trace_entry("local_file_write", file=workspace_tool_results_path.name, purpose="workspace_tool_artifacts"),
+            _trace_entry("local_file_write", file="rollback_manifest.json", purpose="rollback_manifest"),
+            _trace_entry("local_file_write", file="workspace_sandbox.json", purpose="workspace_sandbox_policy"),
             _trace_entry("memory_growth_candidate", source="workspace_agent_run"),
         ],
+        purpose="workspace_trace",
     )
+    rollback_path = sandbox.write_rollback_manifest("rollback_manifest.json", operation_id="workspace_agent_run")
+    sandbox_path = sandbox.write_json("workspace_sandbox.json", sandbox.snapshot(), purpose="workspace_sandbox_policy")
 
     result["workspace_outputs"] = {
         "task_plan": str(plan_path),
         "result_summary": str(summary_path),
         "trace": str(trace_path),
+        "runtime_execution": str(runtime_execution_path),
+        "workspace_tool_results": str(workspace_tool_results_path),
+        "rollback_manifest": str(rollback_path),
+        "workspace_sandbox": str(sandbox_path),
     }
+    result["workspace_resource_usage"] = sandbox.resource_usage()
     return result
 
 
@@ -234,14 +1017,29 @@ def run_workspace_agent_job_from_manifest(
     *,
     job_spec: dict[str, Any],
     workspace_dir: Path,
+    runtime_config: dict[str, Any] | None = None,
+    llm_mode: str = "offline",
+    llm_model: str | None = None,
+    llm_client: LLMClient | None = None,
 ) -> dict[str, Any]:
     normalized = _normalize_job_spec(job_spec)
     workspace_run = run_workspace_agent_from_manifest(
         manifest,
         task=normalized["objective"],
         workspace_dir=workspace_dir,
+        runtime_config=runtime_config,
+        llm_mode=llm_mode,
+        llm_model=llm_model,
+        llm_client=llm_client,
+        resource_limits=normalized.get("resource_limits"),
     )
-    job_status = "completed" if workspace_run["run_status"] == "completed" else "blocked"
+    job_status = (
+        "completed"
+        if workspace_run["run_status"] == "completed"
+        else workspace_run["run_status"]
+        if workspace_run["run_status"] in {"blocked", "needs_approval", "needs_configuration"}
+        else "blocked"
+    )
     result = {
         "schema": WORKSPACE_JOB_RUN_SCHEMA,
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -261,27 +1059,116 @@ def run_workspace_agent_job_from_manifest(
             ],
         },
     }
-    if job_status == "blocked":
+    if job_status != "completed":
         return result
 
-    workspace_root = workspace_dir.resolve()
-    job_spec_path = _safe_workspace_path(workspace_root, "job_spec.json")
-    job_report_path = _safe_workspace_path(workspace_root, "job_report.md")
-    checklist_path = _safe_workspace_path(workspace_root, "acceptance_checklist.json")
-    _write_json(job_spec_path, normalized)
-    job_report_path.write_text(_job_report_text(manifest, normalized, workspace_run) + "\n", encoding="utf-8")
-    _write_json(checklist_path, _acceptance_checklist(normalized, workspace_run))
-
-    trace_path = Path(workspace_run["workspace_outputs"]["trace"])
-    with trace_path.open("a", encoding="utf-8") as file:
-        file.write(json.dumps(_trace_entry("local_file_write", file=job_spec_path.name, purpose="job_spec"), ensure_ascii=False) + "\n")
-        file.write(json.dumps(_trace_entry("local_file_write", file=job_report_path.name, purpose="job_report"), ensure_ascii=False) + "\n")
-        file.write(json.dumps(_trace_entry("acceptance_checklist", status="ready_for_boss_review"), ensure_ascii=False) + "\n")
+    sandbox = WorkspaceSandbox(workspace_dir, **sandbox_kwargs_from_resource_limits(normalized.get("resource_limits")))
+    sandbox.ensure_root()
+    job_spec_path = sandbox.write_json("job_spec.json", normalized, purpose="job_spec")
+    input_review: dict[str, Any] | None = None
+    input_review_path: Path | None = None
+    if normalized.get("input_files"):
+        input_review = _workspace_input_review(sandbox, normalized["input_files"])
+        input_review_path = sandbox.write_json(
+            "input_review.json",
+            input_review,
+            purpose="workspace_input_review",
+        )
+    research_analysis = _build_research_analysis(normalized, workspace_run, input_review)
+    research_analysis_path = sandbox.write_json(
+        "research_analysis.json",
+        research_analysis,
+        purpose="workspace_research_analysis",
+    )
+    deliverable_synthesis = _build_deliverable_synthesis(
+        manifest,
+        normalized,
+        workspace_run,
+        input_review,
+        research_analysis,
+    )
+    deliverable_synthesis_path = sandbox.write_json(
+        "deliverable_synthesis.json",
+        deliverable_synthesis,
+        purpose="deliverable_synthesis",
+    )
+    deliverable_manifest_path, deliverable_manifest, deliverable_paths = _write_deliverables(
+        sandbox,
+        manifest,
+        normalized,
+        workspace_run,
+        input_review,
+        deliverable_synthesis,
+        research_analysis,
+    )
+    job_report_path = sandbox.write_text(
+        "job_report.md",
+        _job_report_text(manifest, normalized, workspace_run) + "\n",
+        purpose="job_report",
+    )
+    checklist_path = sandbox.write_json(
+        "acceptance_checklist.json",
+        _acceptance_checklist(
+            normalized,
+            workspace_run,
+            input_review_path=input_review_path,
+            research_analysis_path=research_analysis_path,
+            deliverable_manifest_path=deliverable_manifest_path,
+            deliverable_manifest=deliverable_manifest,
+            synthesis_path=deliverable_synthesis_path,
+        ),
+        purpose="acceptance_checklist",
+    )
+    trace_path = sandbox.append_jsonl(
+        "trace.jsonl",
+        [
+            _trace_entry("local_file_write", file=job_spec_path.name, purpose="job_spec"),
+            *(
+                [
+                    _trace_entry(
+                        "declared_workspace_input_review",
+                        file=input_review_path.name,
+                        input_count=len(normalized.get("input_files", [])),
+                    )
+                ]
+                if input_review_path is not None
+                else []
+            ),
+            _trace_entry(
+                "local_research_analysis_prepared",
+                file=research_analysis_path.name,
+                signal_count=research_analysis.get("signal_count", 0),
+            ),
+            _trace_entry(
+                "deliverable_synthesis_prepared",
+                file=deliverable_synthesis_path.name,
+                source="llm_tool_input_research_analysis_memory_policy_synthesis",
+            ),
+            _trace_entry(
+                "declared_deliverables_materialized",
+                file=deliverable_manifest_path.name,
+                deliverable_count=len(normalized.get("deliverables", [])),
+            ),
+            _trace_entry("local_file_write", file=job_report_path.name, purpose="job_report"),
+            _trace_entry("acceptance_checklist", status="ready_for_boss_review"),
+            _trace_entry("local_file_write", file="job_rollback_manifest.json", purpose="rollback_manifest"),
+        ],
+        purpose="job_trace_append",
+    )
+    rollback_path = sandbox.write_rollback_manifest("job_rollback_manifest.json", operation_id="workspace_agent_job_run")
 
     result["job_outputs"] = {
         "job_spec": str(job_spec_path),
+        "research_analysis": str(research_analysis_path),
+        "deliverable_synthesis": str(deliverable_synthesis_path),
+        "deliverable_manifest": str(deliverable_manifest_path),
+        "deliverables": {key: str(path) for key, path in deliverable_paths.items()},
         "job_report": str(job_report_path),
         "acceptance_checklist": str(checklist_path),
         "trace": str(trace_path),
+        "rollback_manifest": str(rollback_path),
     }
+    if input_review_path is not None:
+        result["job_outputs"]["input_review"] = str(input_review_path)
+    result["job_resource_usage"] = sandbox.resource_usage()
     return result

@@ -12,6 +12,17 @@ MIGRATION_REPORT_SCHEMA = "ai22b-paideia-external-skill-migration/v1"
 IMPORTED_SKILL_SCHEMA = "ai22b-paideia-imported-skill/v1"
 MAX_COPY_BYTES = 5 * 1024 * 1024
 SKIP_DIRS = {".git", ".hg", ".svn", "node_modules", ".venv", "venv", "__pycache__", "dist", "build"}
+SENSITIVE_FILE_NAMES = {
+    ".env",
+    ".env.local",
+    ".env.production",
+    ".npmrc",
+    ".pypirc",
+    "credentials",
+    "credentials.json",
+    "id_ed25519",
+    "id_rsa",
+}
 DANGEROUS_PATTERNS = {
     "remote_shell_pipe": re.compile(r"(curl|wget|irm|iwr|Invoke-WebRequest|Invoke-RestMethod).{0,120}(\|\s*(bash|sh|iex|Invoke-Expression))", re.I | re.S),
     "powershell_execute_expression": re.compile(r"\b(iex|Invoke-Expression)\b", re.I),
@@ -144,6 +155,16 @@ def _scan_file(path: Path) -> list[dict[str, str]]:
     return matches
 
 
+def _is_sensitive_file(rel: Path) -> bool:
+    name = rel.name.casefold()
+    if name in SENSITIVE_FILE_NAMES:
+        return True
+    return name.endswith((".pem", ".key", ".p12", ".pfx")) or any(
+        token in name
+        for token in ("credential", "secret", "private-key", "private_key", "access-token", "auth-token")
+    )
+
+
 def _copy_skill_tree(source_dir: Path, target_dir: Path) -> tuple[list[str], list[dict[str, str]], list[dict[str, str]]]:
     copied: list[str] = []
     skipped: list[dict[str, str]] = []
@@ -171,6 +192,16 @@ def _copy_skill_tree(source_dir: Path, target_dir: Path) -> tuple[list[str], lis
             skipped.append({"path": str(path.relative_to(source_root)), "reason": "stat_failed"})
             continue
         rel = path.relative_to(source_root)
+        if _is_sensitive_file(rel):
+            skipped.append({"path": rel.as_posix(), "reason": "sensitive_file_not_copied"})
+            risks.append(
+                {
+                    "risk_id": "sensitive_file_name",
+                    "file": rel.as_posix(),
+                    "excerpt": "filename indicates credentials, tokens, private keys, or local secrets",
+                }
+            )
+            continue
         if size > MAX_COPY_BYTES:
             skipped.append({"path": rel.as_posix(), "reason": "file_too_large"})
             continue
@@ -214,6 +245,70 @@ def _education_axes_for(package: dict[str, Any]) -> list[str]:
     if any(token in text for token in ["chat", "email", "social", "message"]):
         axes.append("language_pragmatics")
     return list(dict.fromkeys(axes))
+
+
+def _skill_safety_contract(manifest: dict[str, Any]) -> dict[str, Any]:
+    risk_flags = list(manifest.get("risk_flags", []))
+    copied_files = list(manifest.get("copied_files", []))
+    skipped_files = list(manifest.get("skipped_files", []))
+    return {
+        "schema": "paideia-imported-skill-safety-contract/v1",
+        "status": "quarantined",
+        "activation_allowed": False,
+        "execute_imported_code": False,
+        "requires_manual_boss_review": True,
+        "requires_allowlist_before_activation": True,
+        "dangerous_pattern_count": len(manifest.get("risk_matches", [])),
+        "risk_flags": risk_flags,
+        "copied_file_count": len(copied_files),
+        "skipped_file_count": len(skipped_files),
+        "sensitive_files_copied": False,
+        "sensitive_file_skip_count": sum(
+            1 for item in skipped_files if item.get("reason") == "sensitive_file_not_copied"
+        ),
+        "default_permissions": {
+            "filesystem": "none_until_reviewed",
+            "network": "blocked",
+            "subprocess": "blocked",
+            "credential_access": "blocked",
+            "recursive_delete": "blocked",
+        },
+        "review_required_for": sorted(
+            {
+                "code_execution",
+                "filesystem_access",
+                "network_access",
+                "subprocess_access",
+                "memory_promotion",
+                *(risk_flags or []),
+            }
+        ),
+    }
+
+
+def _migration_safety_contract(imported: list[dict[str, Any]]) -> dict[str, Any]:
+    risk_flags = sorted({flag for item in imported for flag in item.get("risk_flags", [])})
+    return {
+        "schema": "paideia-skill-migration-safety-contract/v1",
+        "status": "quarantined_pending_boss_review",
+        "imported_count": len(imported),
+        "all_imported_skills_disabled": all(item.get("activation") == "disabled" for item in imported),
+        "imported_code_executed": False,
+        "sensitive_files_copied": False,
+        "risk_flags": risk_flags,
+        "activation_policy": {
+            "default_activation": "disabled",
+            "manual_boss_review_required": True,
+            "allowlist_required": True,
+            "doctor_required_before_chat": True,
+        },
+        "default_permissions": {
+            "filesystem": "none_until_reviewed",
+            "network": "blocked",
+            "subprocess": "blocked",
+            "credential_access": "blocked",
+        },
+    }
 
 
 def migrate_external_agent_assets(
@@ -262,6 +357,7 @@ def migrate_external_agent_assets(
             ],
             "status": "quarantined_pending_boss_review",
         }
+        manifest["safety_contract"] = _skill_safety_contract(manifest)
         _write_json(target_dir / "paideia_skill_manifest.json", manifest)
         (target_dir / "SKILL.md").write_text(
             _wrapper_skill_md(package, "paideia_skill_manifest.json"),
@@ -275,6 +371,7 @@ def migrate_external_agent_assets(
                 "status": manifest["status"],
                 "activation": manifest["activation"]["status"],
                 "risk_flags": risk_flags,
+                "sensitive_file_skip_count": manifest["safety_contract"]["sensitive_file_skip_count"],
                 "copied_file_count": len(copied),
             }
         )
@@ -292,6 +389,7 @@ def migrate_external_agent_assets(
             "boss_review_required": True,
             "third_party_skills_trusted": False,
         },
+        "safety_contract": _migration_safety_contract(imported),
         "imported_count": len(imported),
         "imported_skills": imported,
     }
@@ -309,6 +407,7 @@ def _update_install_manifest(paideia_kit_dir: Path, report: dict[str, Any]) -> N
     manifest.setdefault("entrypoints", {})["imported_skills"] = "skills/imported"
     manifest.setdefault("entrypoints", {})["skill_migration_report"] = "paideia_skill_migration_report.json"
     manifest["imported_skill_policy"] = report["migration_policy"]
+    manifest["imported_skill_safety_contract"] = report["safety_contract"]
     manifest["imported_skill_count"] = report["imported_count"]
     manifest["directories"] = sorted({*manifest.get("directories", []), "skills"})
     _write_json(manifest_path, manifest)

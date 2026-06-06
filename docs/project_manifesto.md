@@ -45,7 +45,7 @@ Paideia targets two paths:
 - Public role-model path: use sourced public facts and education-process metadata from people such as Benjamin Graham, Grace Hopper, or John Tukey.
 - Self-extension path: use owner-provided documents, work records, preferences, voice assets, and project experience as local-only private material for a personal assistant talent.
 
-The self-extension path needs stronger consent, privacy, and copyright controls, so public samples should use safe templates rather than private owner data.
+The self-extension path uses metadata-only local intake first: Paideia records consent, copyright/use-policy status, extension counts, size buckets, and path fingerprints without reading file contents or exporting raw filenames. Public samples should still use safe templates rather than private owner data.
 
 ## Projection Swarm
 
@@ -57,13 +57,13 @@ This borrows a useful idea from physical-AI simulation: run many bounded variati
 
 Many expert agents rely on long prompts and repeated setup. Paideia aims to keep reusable know-how in local records and route only the most relevant memory into each task. That should reduce unnecessary token use and let each agent become more specialized over time.
 
-This claim must be measured with context size, token usage, success rate, review count, and promotion/quarantine statistics.
+P0 runs now record a `runtime_observability` block with context size, estimated tokens, selected-memory count, review counters, and promotion/quarantine statistics. `compare-runtime-observability` turns those records into a public-safe report against a generic prompt-wrapper full-run replay baseline.
 
 ## External Identity
 
 Long term, generated agents should be able to connect to external identity systems such as [Agent ID Card](https://www.agentidcard.org/). A public identity layer can bind display name, owner, role, scope, credential status, and verification state to the local hiring dossier and install manifest.
 
-The current public release treats this as a planned integration. It should not register agents or upload data without explicit user action.
+The current public release supports local payload/envelope export, pre-registration verification, and owner-provided registration receipt import. It should not register agents or upload data without explicit user action.
 
 ## Project Nature
 
