@@ -6,7 +6,7 @@
 
 | 출처 | 확인한 점 | Paideia Agent 반영 |
 | --- | --- | --- |
-| OpenClaw 온보딩 | 첫 실행에서 provider/model, gateway, 채팅/채널, 스킬, 다음 단계를 선택하게 해야 합니다. | `start-console`이 LLM 서비스와 채팅 표면을 먼저 묻고, `paideia_onboarding.template.json`에 선택값과 카탈로그를 기록합니다. |
+| OpenClaw 온보딩 | 첫 실행에서 provider/model, gateway, 채팅/채널, 스킬, 다음 단계를 선택하게 해야 합니다. | `start-console`이 LLM 서비스와 채팅 표면을 먼저 묻고, 생성된 onboarding session에 선택값, 카탈로그, provider checklist, connection profile, 첫 실행 흐름을 기록합니다. |
 | OpenClaw 모델 provider 문서 | 에이전트는 provider/model 선택과 fallback 정책이 명확해야 합니다. | `llm_service_catalog`에 OpenAI/Codex, deterministic local, bigram, Transformers, llama.cpp/GGUF 경로를 분리했습니다. |
 | OpenClaw agent runtime 문서 | OpenAI/Codex는 런타임 표면일 수 있지만, 그 자체가 에이전트 정체성은 아닙니다. | `llm_identity_policy: application_engine_not_identity`를 기록하고, 정체성은 로컬 교육 산출물에서 오도록 했습니다. |
 | Hermes Agent | 설치, 모델 전환, CLI 채팅, 도구, 스킬, 메모리, 게이트웨이, OpenClaw 마이그레이션을 강조합니다. | 설치 키트, doctor 검사, 스킬 마이그레이션 wrapper, adapter manifest, Reasoning Ledger를 추가했습니다. |

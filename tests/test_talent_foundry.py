@@ -3583,12 +3583,19 @@ class TalentFoundryTests(unittest.TestCase):
             )
             session = json.loads(session_path.read_text(encoding="utf-8"))
             employment_record_exists = Path(session["artifacts"]["employment_record"]).exists()
+            llm_connection_profile = json.loads(
+                Path(session["artifacts"]["llm_connection_profile"]).read_text(encoding="utf-8")
+            )
 
         self.assertEqual(exit_code, 0)
         self.assertEqual(session["schema"], "ai-talent-onboarding-session/v1")
         self.assertEqual(session["status"], "hired_agent_first_goal_cycle_completed")
         self.assertEqual(session["selected_llm_service"]["service_id"], "openai_chatgpt_codex")
         self.assertEqual(session["selected_chat_surface"]["id"], "codex-bridge-chat")
+        self.assertEqual(llm_connection_profile["schema"], "paideia-llm-connection-profile/v1")
+        self.assertEqual(session["llm_connection_profile"]["path"], session["artifacts"]["llm_connection_profile"])
+        self.assertFalse(session["llm_connection_profile"]["public_safe"]["network_call_performed"])
+        self.assertIn("explicit_live_provider_check", session["llm_connection_profile"]["verification_ids"])
         self.assertTrue(employment_record_exists)
 
     def test_guided_console_session_runs_onboarding_from_answers(self) -> None:
@@ -3625,6 +3632,10 @@ class TalentFoundryTests(unittest.TestCase):
             onboarding = json.loads(Path(session["artifacts"]["onboarding_session"]).read_text(encoding="utf-8"))
             provider_matrix = json.loads(Path(session["artifacts"]["llm_provider_matrix"]).read_text(encoding="utf-8"))
             llm_checklist = json.loads(Path(session["artifacts"]["llm_onboarding_checklist"]).read_text(encoding="utf-8"))
+            llm_connection_profile = json.loads(
+                Path(session["artifacts"]["llm_connection_profile"]).read_text(encoding="utf-8")
+            )
+            config = json.loads(Path(session["artifacts"]["paideia_onboarding_config"]).read_text(encoding="utf-8"))
             doctor = json.loads(doctor_path.read_text(encoding="utf-8"))
             artifact_exists = {
                 key: Path(session["artifacts"][key]).exists()
@@ -3633,6 +3644,7 @@ class TalentFoundryTests(unittest.TestCase):
                     "answers",
                     "llm_provider_matrix",
                     "llm_onboarding_checklist",
+                    "llm_connection_profile",
                     "onboarding_session",
                     "employment_record",
                     "first_goal_cycle",
@@ -3659,8 +3671,17 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(onboarding["status"], "hired_agent_first_goal_cycle_completed")
         self.assertEqual(provider_matrix["schema"], "paideia-llm-provider-matrix/v1")
         self.assertEqual(llm_checklist["schema"], "paideia-llm-onboarding-checklist/v1")
+        self.assertEqual(llm_connection_profile["schema"], "paideia-llm-connection-profile/v1")
+        self.assertFalse(llm_connection_profile["public_safe"]["network_call_performed"])
+        self.assertEqual(
+            session["onboarding_summary"]["llm_connection_profile"]["path"],
+            session["artifacts"]["llm_connection_profile"],
+        )
+        self.assertEqual(config["model_auth"]["llm_connection_profile"], session["artifacts"]["llm_connection_profile"])
         self.assertFalse(provider_matrix["public_safe"]["network_call_performed"])
         self.assertEqual(session["onboarding_summary"]["llm_provider_matrix"]["schema"], provider_matrix["schema"])
+        check_by_id = {item["id"]: item for item in doctor["checks"]}
+        self.assertTrue(check_by_id["llm_connection_profile_valid"]["passed"])
         self.assertTrue(all(artifact_exists.values()))
 
     def test_guided_console_can_create_parent_controlled_projection_swarm(self) -> None:
@@ -3876,6 +3897,9 @@ class TalentFoundryTests(unittest.TestCase):
             session_path = Path(session["artifacts"]["onboarding_session"])
             saved_session = json.loads(session_path.read_text(encoding="utf-8"))
             llm_checklist = json.loads(Path(session["artifacts"]["llm_onboarding_checklist"]).read_text(encoding="utf-8"))
+            llm_connection_profile = json.loads(
+                Path(session["artifacts"]["llm_connection_profile"]).read_text(encoding="utf-8")
+            )
             employment_record = json.loads(Path(session["artifacts"]["employment_record"]).read_text(encoding="utf-8"))
             goal_cycle = json.loads(Path(session["artifacts"]["first_goal_cycle"]).read_text(encoding="utf-8"))
             artifact_exists = {
@@ -3889,6 +3913,7 @@ class TalentFoundryTests(unittest.TestCase):
                     "employment_goal",
                     "first_goal_cycle",
                     "llm_onboarding_checklist",
+                    "llm_connection_profile",
                     "onboarding_session",
                 ]
             }
@@ -3903,6 +3928,10 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(session["llm_onboarding_checklist"]["path"], session["artifacts"]["llm_onboarding_checklist"])
         self.assertFalse(session["llm_onboarding_checklist"]["public_safe"]["network_call_performed"])
         self.assertIn("provider_doctor_no_network", session["llm_onboarding_checklist"]["command_ids"])
+        self.assertEqual(llm_connection_profile["schema"], "paideia-llm-connection-profile/v1")
+        self.assertEqual(session["llm_connection_profile"]["path"], session["artifacts"]["llm_connection_profile"])
+        self.assertFalse(session["llm_connection_profile"]["public_safe"]["network_call_performed"])
+        self.assertIn("build-llm-connection-profile", "\n".join(session["next_commands"]))
         self.assertIn("run-agent-runtime-smoke", "\n".join(session["next_commands"]))
         self.assertEqual(employment_record["status"], "active")
         self.assertEqual(employment_record["llm_service"]["service_id"], "openai_chatgpt_codex")
@@ -3910,7 +3939,18 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(goal_cycle["cycle_status"], "completed")
         self.assertEqual(goal_cycle["learning_update"]["decision"], "promoted")
         self.assertLessEqual(
-            {"choose_llm_service", "choose_chat_surface", "llm_onboarding_checklist", "researcher_intake", "blueprint", "raise", "hire", "assign_goal", "first_goal_cycle"},
+            {
+                "choose_llm_service",
+                "choose_chat_surface",
+                "llm_onboarding_checklist",
+                "llm_connection_profile",
+                "researcher_intake",
+                "blueprint",
+                "raise",
+                "hire",
+                "assign_goal",
+                "first_goal_cycle",
+            },
             {stage["id"] for stage in session["stages"]},
         )
         self.assertTrue(all(artifact_exists.values()))

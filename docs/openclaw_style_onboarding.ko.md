@@ -60,6 +60,7 @@ ai22b-talent-foundry doctor-onboarding-session `
 - `paideia_onboarding_config.json`: OpenClaw식 설정 요약
 - `llm_provider_matrix.json`: 선택 가능한 LLM/provider 전체의 no-network readiness matrix
 - `onboarding/llm_onboarding_checklist.json`: 선택 provider의 doctor/live-check/runtime/chat 명령 체크리스트
+- `onboarding/llm_connection_profile.json`: 선택 provider의 환경변수, 모델명, localhost endpoint, 검증 순서, live chat 템플릿
 - `onboarding_doctor.json`: `doctor-onboarding-session`으로 생성하는 health 검증 보고서
 - `agent_id_card_payload.json`: 외부 등록 전 검토할 Agent ID Card payload
 - `agent_identity_envelope.json`: Agent_warrent `ail.v1` 로컬 미등록 envelope

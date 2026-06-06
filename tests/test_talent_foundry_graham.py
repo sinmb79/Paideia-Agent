@@ -351,6 +351,9 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             config = json.loads(Path(session["artifacts"]["paideia_onboarding_config"]).read_text(encoding="utf-8"))
             provider_matrix = json.loads(Path(session["artifacts"]["llm_provider_matrix"]).read_text(encoding="utf-8"))
             llm_checklist = json.loads(Path(session["artifacts"]["llm_onboarding_checklist"]).read_text(encoding="utf-8"))
+            llm_connection_profile = json.loads(
+                Path(session["artifacts"]["llm_connection_profile"]).read_text(encoding="utf-8")
+            )
             doctor_path = output_dir / "onboarding_doctor.json"
             from ai22b.talent_foundry.onboarding_doctor import doctor_onboarding_session
 
@@ -367,11 +370,18 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertEqual(config["schema"], "ai22b-paideia-openclaw-style-config/v1")
         self.assertEqual(config["model_auth"]["llm_provider_matrix"], session["artifacts"]["llm_provider_matrix"])
         self.assertEqual(config["model_auth"]["llm_onboarding_checklist"], session["artifacts"]["llm_onboarding_checklist"])
+        self.assertEqual(config["model_auth"]["llm_connection_profile"], session["artifacts"]["llm_connection_profile"])
         self.assertEqual(config["model_auth"]["default_provider_call"], "none_without_explicit_live_check")
         self.assertEqual(provider_matrix["schema"], "paideia-llm-provider-matrix/v1")
         self.assertFalse(provider_matrix["public_safe"]["network_call_performed"])
         self.assertEqual(llm_checklist["schema"], "paideia-llm-onboarding-checklist/v1")
+        self.assertEqual(llm_connection_profile["schema"], "paideia-llm-connection-profile/v1")
+        self.assertFalse(llm_connection_profile["public_safe"]["network_call_performed"])
         self.assertEqual(session["onboarding_summary"]["llm_provider_matrix"]["schema"], provider_matrix["schema"])
+        self.assertEqual(
+            session["onboarding_summary"]["llm_connection_profile"]["path"],
+            session["artifacts"]["llm_connection_profile"],
+        )
         self.assertFalse(session["onboarding_summary"]["llm_provider_matrix"]["network_call_performed"])
         self.assertEqual(doctor["schema"], "paideia-onboarding-session-doctor/v1")
         self.assertTrue(doctor["passed"])
@@ -380,6 +390,7 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         check_by_id = {item["id"]: item for item in doctor["checks"]}
         self.assertTrue(check_by_id["llm_provider_matrix_valid"]["passed"])
         self.assertTrue(check_by_id["llm_onboarding_checklist_valid"]["passed"])
+        self.assertTrue(check_by_id["llm_connection_profile_valid"]["passed"])
         self.assertTrue(check_by_id["config_links_llm_artifacts"]["passed"])
         self.assertTrue(check_by_id["wizard_health_passed"]["passed"])
         self.assertEqual(config["gateway"]["mode"], "local_loopback")

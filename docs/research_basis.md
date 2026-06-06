@@ -6,7 +6,7 @@ This document maps reference programs, papers, and reports to concrete Paideia A
 
 | Source | What It Shows | Reflected In Paideia Agent |
 | --- | --- | --- |
-| OpenClaw onboarding wizard | First-run setup should choose provider/model, gateway mode, chat/channel path, skills, and next steps. | `start-console` now asks for LLM service and chat surface before the owner request. `paideia_onboarding.template.json` records the selected service, selected surface, catalogs, and first-run flow. |
+| OpenClaw onboarding wizard | First-run setup should choose provider/model, gateway mode, chat/channel path, skills, and next steps. | `start-console` now asks for LLM service and chat surface before the owner request. The generated onboarding session records the selected service, selected surface, catalogs, provider checklist, connection profile, and first-run flow. |
 | OpenClaw model provider docs | Agent programs need explicit provider/model selection and fallback semantics. | `llm_service_catalog` separates OpenAI/Codex, Claude, Gemini, Mistral, OpenRouter, Ollama, LM Studio, deterministic local, bigram, Transformers, and llama.cpp/GGUF paths. |
 | OpenClaw agent runtime docs | OpenAI/Codex can be a runtime surface without making the model provider equal to the agent identity. | Paideia records `llm_identity_policy: application_engine_not_identity` and stores talent identity in local education artifacts. |
 | Hermes Agent repository | Modern agents expose setup, model switching, CLI chat, tools, skills, memory, gateways, and migration. | Paideia adds install kits, doctor checks, skill migration wrappers, adapter manifests, and the `Reasoning Ledger` as a growth record. |

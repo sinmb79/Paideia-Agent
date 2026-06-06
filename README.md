@@ -179,7 +179,7 @@ ai22b-talent-foundry onboard
 
 This wizard uses config detection, QuickStart/Advanced mode, Model/Auth, Workspace, Gateway/Channels, Skills, Education Path, Runtime, Agent Identity, Health Check, and Finish steps.
 
-This sample first selects the LLM service and chat surface, writes `llm_provider_matrix.json` plus a selected-provider checklist, then lets that selected LLM act as the curriculum researcher for the Graham-inspired securities research track.
+This sample first selects the LLM service and chat surface, writes `llm_provider_matrix.json`, a selected-provider checklist, and `llm_connection_profile.json`, then lets that selected LLM act as the curriculum researcher for the Graham-inspired securities research track.
 
 Verify a generated wizard session and its health artifacts:
 
@@ -217,7 +217,7 @@ ai22b-talent-foundry doctor-first-run `
   --output .\first_run_doctor.json
 ```
 
-Add `--onboarding-session .\console_session.json` to fold a generated wizard session into the same report. The doctor verifies the role-model catalog, LLM provider matrix, deterministic checklist, provider doctor, application smoke, full agent runtime smoke, runtime contract doctor, tool capability audit, action policy eval, public release readiness, source SBOM, and package install doctor without live provider calls.
+Add `--onboarding-session .\console_session.json` to fold a generated wizard session into the same report. The doctor verifies the role-model catalog, LLM provider matrix, deterministic checklist, connection profile, provider doctor, application smoke, full agent runtime smoke, runtime contract doctor, tool capability audit, action policy eval, public release readiness, source SBOM, and package install doctor without live provider calls.
 
 List every selectable LLM service and its no-network readiness posture:
 

@@ -124,7 +124,7 @@ ai22b-talent-foundry start-console `
 ai22b-talent-foundry onboard
 ```
 
-이 wizard는 기존 설정 감지, QuickStart/Advanced, Model/Auth, Workspace, Gateway/Channels, Skills, Education Path, Runtime, Agent Identity, Health Check, Finish 순서로 진행합니다. 실행 결과에는 `llm_provider_matrix.json`와 선택 provider 체크리스트가 함께 남습니다.
+이 wizard는 기존 설정 감지, QuickStart/Advanced, Model/Auth, Workspace, Gateway/Channels, Skills, Education Path, Runtime, Agent Identity, Health Check, Finish 순서로 진행합니다. 실행 결과에는 `llm_provider_matrix.json`, 선택 provider 체크리스트, `llm_connection_profile.json`이 함께 남습니다.
 
 생성된 wizard 세션과 health artifact는 다음 명령으로 다시 검증할 수 있습니다.
 
@@ -162,7 +162,7 @@ ai22b-talent-foundry doctor-first-run `
   --output .\first_run_doctor.json
 ```
 
-이미 생성한 wizard 세션까지 같은 보고서에 포함하려면 `--onboarding-session .\console_session.json`을 추가합니다. 이 doctor는 롤모델 카탈로그, LLM provider matrix, deterministic checklist, provider doctor, application smoke, 전체 agent runtime smoke, runtime contract doctor, tool capability audit, action policy eval, public release readiness, source SBOM, package install doctor를 live provider 호출 없이 검증합니다.
+이미 생성한 wizard 세션까지 같은 보고서에 포함하려면 `--onboarding-session .\console_session.json`을 추가합니다. 이 doctor는 롤모델 카탈로그, LLM provider matrix, deterministic checklist, connection profile, provider doctor, application smoke, 전체 agent runtime smoke, runtime contract doctor, tool capability audit, action policy eval, public release readiness, source SBOM, package install doctor를 live provider 호출 없이 검증합니다.
 
 전체 온보딩을 실행하기 전에 선택 가능한 LLM 서비스 전체와 준비 상태를 먼저 볼 수 있습니다.
 

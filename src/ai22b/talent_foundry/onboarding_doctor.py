@@ -118,6 +118,7 @@ def doctor_onboarding_session(
     required_artifacts = {
         "onboarding_session",
         "llm_onboarding_checklist",
+        "llm_connection_profile",
         "employment_record",
         "first_goal_cycle",
     }
@@ -162,6 +163,32 @@ def doctor_onboarding_session(
             else 0,
         },
     )
+    llm_connection_profile = _safe_read_artifact_json(artifacts, "llm_connection_profile")
+    setup_requirements = (
+        llm_connection_profile.get("setup_requirements", {})
+        if isinstance(llm_connection_profile.get("setup_requirements"), dict)
+        else {}
+    )
+    _check(
+        checks,
+        "llm_connection_profile_valid",
+        llm_connection_profile.get("schema") == "paideia-llm-connection-profile/v1"
+        and _public_safe_ok(llm_connection_profile)
+        and setup_requirements.get("requires_live_check_before_agent_work") in {True, False},
+        details={
+            "schema": llm_connection_profile.get("schema"),
+            "status": llm_connection_profile.get("status"),
+            "selected_engine": (
+                llm_connection_profile.get("selected_llm_service", {}).get("engine")
+                if isinstance(llm_connection_profile.get("selected_llm_service"), dict)
+                else None
+            ),
+            "requires_live_check_before_agent_work": setup_requirements.get(
+                "requires_live_check_before_agent_work"
+            ),
+            "network_call_performed": llm_connection_profile.get("public_safe", {}).get("network_call_performed"),
+        },
+    )
 
     config = _safe_read_artifact_json(artifacts, "paideia_onboarding_config")
     if schema == "ai-talent-guided-console-session/v1":
@@ -173,6 +200,7 @@ def doctor_onboarding_session(
                 config.get("schema") == "ai22b-paideia-openclaw-style-config/v1"
                 and model_auth.get("llm_provider_matrix") == str(artifacts.get("llm_provider_matrix"))
                 and model_auth.get("llm_onboarding_checklist") == str(artifacts.get("llm_onboarding_checklist"))
+                and model_auth.get("llm_connection_profile") == str(artifacts.get("llm_connection_profile"))
                 and model_auth.get("default_provider_call") == "none_without_explicit_live_check"
             ),
             details={
