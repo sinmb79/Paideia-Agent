@@ -31,9 +31,11 @@ from ai22b.talent_foundry.cli_llm_commands import handle_llm_runtime_command, re
 from ai22b.talent_foundry.cohort import create_specialist_cohort
 from ai22b.talent_foundry.console import (
     collect_console_answers,
+    format_onboarding_action_run_summary,
     format_onboarding_finish_summary,
     format_onboarding_next_action_summary,
     resolve_onboarding_next_action,
+    run_onboarding_next_action,
     run_console_session,
 )
 from ai22b.talent_foundry.developmental_ecology import build_developmental_ecology
@@ -236,6 +238,25 @@ def _build_parser() -> argparse.ArgumentParser:
         "--strict",
         action="store_true",
         help="Return exit code 2 when the requested action is not found.",
+    )
+
+    onboarding_run_next = subparsers.add_parser(
+        "run-onboarding-next-action",
+        help="Run one safe allowlisted onboarding launch-plan action after explicit owner approval.",
+    )
+    onboarding_run_next.add_argument("--launch-plan", required=True)
+    onboarding_run_next.add_argument("--action", help="Action id to run. Defaults to the launch plan finish recommendation.")
+    onboarding_run_next.add_argument(
+        "--approve",
+        action="store_true",
+        help="Required to execute an allowlisted local action. Without it, the command writes a needs-approval report.",
+    )
+    onboarding_run_next.add_argument("--action-output", help="Output path for the action artifact, such as onboarding_doctor.json.")
+    onboarding_run_next.add_argument("--output", help="Optional JSON run report path.")
+    onboarding_run_next.add_argument(
+        "--strict",
+        action="store_true",
+        help="Return exit code 2 when the action was not executed successfully.",
     )
 
     onboarding_doctor = subparsers.add_parser(
@@ -1095,6 +1116,22 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.strict and next_action.get("status") != "ready":
             return 2
         return 0
+
+    if args.command == "run-onboarding-next-action":
+        report = run_onboarding_next_action(
+            Path(args.launch_plan),
+            action_id=args.action,
+            approved=args.approve,
+            action_output_path=Path(args.action_output) if args.action_output else None,
+        )
+        if args.output:
+            output_path = Path(args.output)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(format_onboarding_action_run_summary(report))
+        if args.strict and report.get("status") != "completed":
+            return 2
+        return 0 if report.get("status") == "completed" else 1
 
     if args.command == "doctor-onboarding-session":
         report = doctor_onboarding_session(

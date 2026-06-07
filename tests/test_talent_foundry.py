@@ -4484,10 +4484,49 @@ class TalentFoundryTests(unittest.TestCase):
                     ]
                 )
             doctor_action_output = doctor_stdout.getvalue()
+            no_approval_run_path = tmp_path / "run_without_approval.json"
+            no_approval_stdout = io.StringIO()
+            with redirect_stdout(no_approval_stdout):
+                no_approval_exit_code = cli_main(
+                    [
+                        "run-onboarding-next-action",
+                        "--launch-plan",
+                        session["artifacts"]["onboarding_launch_plan"],
+                        "--action",
+                        "doctor_onboarding_session",
+                        "--output",
+                        str(no_approval_run_path),
+                    ]
+                )
+            no_approval_report = json.loads(no_approval_run_path.read_text(encoding="utf-8"))
+            run_report_path = tmp_path / "run_onboarding_next_action.json"
+            run_doctor_path = tmp_path / "run_onboarding_doctor.json"
+            run_stdout = io.StringIO()
+            with redirect_stdout(run_stdout):
+                run_exit_code = cli_main(
+                    [
+                        "run-onboarding-next-action",
+                        "--launch-plan",
+                        session["artifacts"]["onboarding_launch_plan"],
+                        "--action",
+                        "doctor_onboarding_session",
+                        "--approve",
+                        "--action-output",
+                        str(run_doctor_path),
+                        "--output",
+                        str(run_report_path),
+                        "--strict",
+                    ]
+                )
+            run_cli_output = run_stdout.getvalue()
+            run_report = json.loads(run_report_path.read_text(encoding="utf-8"))
+            run_doctor = json.loads(run_doctor_path.read_text(encoding="utf-8"))
 
         self.assertEqual(exit_code, 0)
         self.assertEqual(next_exit_code, 0)
         self.assertEqual(doctor_action_exit_code, 0)
+        self.assertEqual(no_approval_exit_code, 1)
+        self.assertEqual(run_exit_code, 0)
         self.assertIn("Paideia Agent onboarding complete", cli_output)
         self.assertIn("Launch plan:", cli_output)
         self.assertIn("onboarding_launch_plan.json", cli_output)
@@ -4505,6 +4544,21 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertFalse(next_action["operator_policy"]["resolver_executes_command"])
         self.assertFalse(next_action["operator_policy"]["resolver_network_call_performed"])
         self.assertIn("doctor_onboarding_session", next_action["available_actions"])
+        self.assertEqual(no_approval_report["schema"], "paideia-onboarding-action-run/v1")
+        self.assertEqual(no_approval_report["status"], "needs_owner_approval")
+        self.assertFalse(no_approval_report["executed"])
+        self.assertFalse(no_approval_report["shell_command_executed"])
+        self.assertIn("Paideia onboarding action run", run_cli_output)
+        self.assertEqual(run_report["schema"], "paideia-onboarding-action-run/v1")
+        self.assertEqual(run_report["status"], "completed")
+        self.assertEqual(run_report["action_id"], "doctor_onboarding_session")
+        self.assertTrue(run_report["executed"])
+        self.assertFalse(run_report["shell_command_executed"])
+        self.assertFalse(run_report["network_call_performed"])
+        self.assertEqual(run_report["execution_adapter"], "internal_doctor_onboarding_session")
+        self.assertTrue(run_report["doctor_passed"])
+        self.assertEqual(run_doctor["schema"], "paideia-onboarding-session-doctor/v1")
+        self.assertTrue(run_doctor["passed"])
         self.assertEqual(session["schema"], "ai-talent-guided-console-session/v1")
         self.assertEqual(session["status"], "hired_agent_first_goal_cycle_completed")
         self.assertEqual(session["answers"]["llm_service"], "openai_chatgpt_codex")
