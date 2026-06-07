@@ -1505,12 +1505,20 @@ def doctor_agent_program(program_path: Path, *, output_path: Path | None = None)
     for manifest_path in imported_skill_manifests:
         manifest = _read_json(manifest_path)
         safety_contract = manifest.get("safety_contract", {})
+        compatibility_profile = manifest.get("compatibility_profile", {})
+        compatibility_gate = (
+            compatibility_profile.get("activation_gate", {})
+            if isinstance(compatibility_profile.get("activation_gate"), dict)
+            else {}
+        )
         detail = {
             "path": str(manifest_path.relative_to(root)),
             "status": manifest.get("status"),
             "activation": manifest.get("activation", {}).get("status"),
             "risk_flags": manifest.get("risk_flags", []),
             "safety_contract_status": safety_contract.get("status"),
+            "compatibility_profile_schema": compatibility_profile.get("schema"),
+            "compatibility_activation_gate": compatibility_gate.get("status"),
             "activation_allowed": safety_contract.get("activation_allowed"),
             "sensitive_files_copied": safety_contract.get("sensitive_files_copied"),
             "execute_imported_code": safety_contract.get("execute_imported_code"),
@@ -1525,6 +1533,9 @@ def doctor_agent_program(program_path: Path, *, output_path: Path | None = None)
             or safety_contract.get("default_permissions", {}).get("network") != "blocked"
             or safety_contract.get("default_permissions", {}).get("subprocess") != "blocked"
             or safety_contract.get("default_permissions", {}).get("credential_access") != "blocked"
+            or compatibility_profile.get("schema") != "paideia-imported-skill-compatibility-profile/v1"
+            or compatibility_gate.get("status") != "locked_pending_owner_allowlist"
+            or compatibility_gate.get("activation_allowed") is not False
         ):
             unsafe_imports.append(detail)
     checks["imported_skills"] = {

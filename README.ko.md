@@ -788,6 +788,10 @@ ai22b-talent-foundry verify-workspace-execution `
 
 GitHub Actions 설정은 `.github/workflows/ci.yml`에 있으며, pull request와 push에서 패키지 컴파일, 회귀 테스트, 공개 저장소 위생 검사를 실행합니다.
 
+## Skill Migration Compatibility
+
+Hermes/OpenClaw/generic 스킬을 가져오면 각 imported skill에 `paideia_compatibility_profile.json`과 `paideia_skill_review.md`가 함께 생성됩니다. 이 파일들은 외부 스킬의 실행 가정을 Paideia의 capability request, activation gate, owner allowlist, disposable workspace test 요구사항으로 바꾸어 기록합니다. 즉, migration은 쉽지만 activation은 보스 검토와 테스트 증거가 있어야만 열리는 구조입니다.
+
 ## Agent_warrent Connector Kit
 
 `build-agent-warrent-connector-kit`는 Paideia가 만든 `agent_warrent_registration_request.json`을 Agent_warrent / Agent ID Card SDK 흐름으로 넘기기 위한 로컬 connector 폴더를 만듭니다.
