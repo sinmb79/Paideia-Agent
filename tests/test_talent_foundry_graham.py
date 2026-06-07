@@ -377,6 +377,9 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             )
             identity_payload = json.loads(Path(session["artifacts"]["agent_id_card_payload"]).read_text(encoding="utf-8"))
             identity_envelope = json.loads(Path(session["artifacts"]["agent_identity_envelope"]).read_text(encoding="utf-8"))
+            agent_warrent_registration_request = json.loads(
+                Path(session["artifacts"]["agent_warrent_registration_request"]).read_text(encoding="utf-8")
+            )
             rollouts = json.loads(Path(session["artifacts"]["simulation_rollouts"]).read_text(encoding="utf-8"))
             rollout_evaluation = json.loads(Path(session["artifacts"]["simulation_rollout_evaluation"]).read_text(encoding="utf-8"))
 
@@ -390,6 +393,11 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertEqual(launch_plan["schema"], "paideia-onboarding-launch-plan/v1")
         self.assertEqual(launch_plan["status"], "ready_for_first_chat")
         self.assertEqual(launch_plan["selected_talent_path"]["role_model_id"], "graham_value_investing")
+        self.assertEqual(launch_plan["operator_dashboard"]["schema"], "paideia-openclaw-onboarding-dashboard/v1")
+        self.assertEqual(launch_plan["operator_dashboard"]["primary_next_action_id"], "first_chat_offline")
+        self.assertIn("first_chat_offline", {item["action_id"] for item in launch_plan["next_action_queue"]})
+        self.assertIn("doctor_onboarding_session", {item["action_id"] for item in launch_plan["next_action_queue"]})
+        self.assertEqual(launch_plan["recommended_next_action_id"], "first_chat_offline")
         self.assertIn("doctor_onboarding_session", {item["id"] for item in launch_plan["command_plan"]})
         self.assertFalse(launch_plan["public_safe"]["network_call_performed"])
         self.assertEqual(provider_matrix["schema"], "paideia-llm-provider-matrix/v1")
@@ -424,6 +432,15 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertEqual(
             identity_envelope["extensions"]["agent_warrent"]["repo_url"],
             "https://github.com/sinmb79/Agent_warrent",
+        )
+        self.assertEqual(
+            agent_warrent_registration_request["schema"],
+            "paideia-agent-warrent-registration-request/v1",
+        )
+        self.assertFalse(agent_warrent_registration_request["submit_ready"])
+        self.assertEqual(
+            session["post_hire_extensions"]["agent_id_card"]["agent_warrent_registration_request_status"],
+            "signature_required_owner_action",
         )
         self.assertEqual(rollouts["schema"], "ai-talent-simulation-rollouts/v1")
         self.assertGreaterEqual(rollouts["summary"]["episode_count"], 4)

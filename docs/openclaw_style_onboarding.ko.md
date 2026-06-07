@@ -60,7 +60,7 @@ ai22b-talent-foundry doctor-onboarding-session `
 
 - `console_session.json`: 전체 온보딩 세션과 health 요약
 - `paideia_onboarding_config.json`: OpenClaw식 설정 요약
-- `onboarding_launch_plan.json`: 온보딩 후 사용자가 따라갈 launch plan. LLM 선택, 채팅 표면, 롤모델 교육 경로, 첫 채팅, live-readiness suite, 다음 goal cycle, doctor 명령을 순서대로 담습니다.
+- `onboarding_launch_plan.json`: 온보딩 후 사용자가 따라갈 launch plan. `operator_dashboard`와 `next_action_queue`를 포함해 LLM 선택, 채팅 표면, 롤모델 교육 경로, Agent Identity, 첫 채팅, live-readiness suite, 다음 goal cycle, doctor 명령을 순서대로 담습니다.
 - `llm_provider_matrix.json`: 선택 가능한 LLM/provider 전체의 no-network readiness matrix
 - `onboarding/llm_onboarding_checklist.json`: 선택 provider의 doctor/live-check/runtime/chat 명령 체크리스트
 - `onboarding/llm_connection_profile.json`: 선택 provider의 환경변수, 모델명, localhost endpoint, 검증 순서, live chat 템플릿
@@ -68,6 +68,7 @@ ai22b-talent-foundry doctor-onboarding-session `
 - `agent_id_card_payload.json`: 외부 등록 전 검토할 Agent ID Card payload
 - `agent_identity_envelope.json`: Agent_warrent `ail.v1` 로컬 미등록 envelope
 - `agent_identity_verification.json`: Agent ID Card payload와 Agent_warrent envelope의 로컬 사전 검증 보고서
+- `agent_warrent_registration_request.json`: Agent_warrent `POST /agents/register`용 로컬 등록 요청 초안. 서명과 외부 등록은 보스가 직접 수행합니다.
 - `agent_identity_registration_receipt.json`: 보스가 외부에서 등록한 결과를 로컬 envelope에 연결한 receipt
 - `simulation_rollouts.json`: 병렬 episode rollout 계획
 - `simulation_rollout_evaluation.json`: episode 순위, winner, 승격 후보, 격리 후보, 보스 검토 gate

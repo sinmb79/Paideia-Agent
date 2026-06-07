@@ -181,11 +181,11 @@ This wizard uses config detection, QuickStart/Advanced mode, Model/Auth, Workspa
 
 This sample first selects the LLM service and chat surface, writes `llm_provider_matrix.json`, a selected-provider checklist, `llm_connection_profile.json`, `llm_live_setup_guide.json`, and `onboarding_launch_plan.json`, then lets that selected LLM act as the curriculum researcher for the Graham-inspired securities research track.
 
-Open `onboarding_launch_plan.json` after the wizard if you want the OpenClaw-style "what do I do next?" view. It lists the selected LLM, selected chat surface, role-model education path, local Agent ID payload status, first chat command, live-readiness suite, chat runtime smoke, next goal cycle, and onboarding doctor command without saving API keys, raw provider payloads, or hidden reasoning traces.
+Open `onboarding_launch_plan.json` after the wizard if you want the OpenClaw-style "what do I do next?" view. It now includes an `operator_dashboard` and `next_action_queue` with Model/Auth, Chat Surface, Education Path, Agent Identity, Health Check, and Learning Loop cards. It lists the selected LLM, selected chat surface, role-model education path, local Agent ID payload status, Agent_warrent registration request draft, first chat command, live-readiness suite, chat runtime smoke, next goal cycle, and onboarding doctor command without saving API keys, raw provider payloads, or hidden reasoning traces.
 
 The CLI also prints a finish summary after `start-console` or `onboard`: console session path, launch plan path, selected LLM/chat surface, onboarding doctor command, live-readiness command, first chat command, and the recommended finish action.
 
-You can also ask Paideia to read the launch plan and show the next action without executing it:
+You can also ask Paideia to read the launch plan and show the next action without executing it. The result includes the queue stage, queue position, safe-runner allowlist status, and the dashboard's primary next action:
 
 ```powershell
 ai22b-talent-foundry show-onboarding-next-action `
