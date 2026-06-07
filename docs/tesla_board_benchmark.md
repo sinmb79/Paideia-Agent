@@ -18,6 +18,7 @@ This note translates Boss's Tesla AI-chip board analogy into Paideia Agent softw
 | Prefer in-place reuse over result movement. | The Reasoning Ledger stores reviewable principles and repaired habits, not hidden chain-of-thought transcripts. |
 | Separate main and staging paths. | The chat answer can be produced immediately, while learning updates move through `candidate -> review -> promote/quarantine`. |
 | Add redundancy and scoreboards. | Doctor checks, public hygiene audits, assessments, transcript records, and dossier review work as deployment scoreboards. |
+| Keep parallel lanes under one controller. | A parent-controlled projection swarm can dispatch task projections, but every lane returns to `projection_synthesis_board`; no projection writes durable memory directly. |
 | Optimize for batch size one. | Paideia prioritizes low-latency retrieval for one real Boss question, not a generic batch benchmark. |
 
 ## Memory Board Architecture
@@ -47,7 +48,8 @@ flowchart LR
 2. `Reasoning Ledger / Ariadne Thread` should preserve reviewable routes from learning experiences to problem-solving habits.
 3. `learning_ledger` should promote exam, assignment, and work results only after review; unreviewed candidates stay staged.
 4. `parallel_life_sim` should roll out multiple episode clones from the same growth checkpoint, then merge only verified summaries back into the main talent.
-5. Codex remains the local execution gateway for files, tests, browsing, and verification; the selected LLM provides language and reasoning compute.
+5. `hired_projection_swarm_cycle` should create per-projection evidence candidates, compare them on a parent synthesis board, and promote only the reviewed parent synthesis to the learning ledger.
+6. Codex remains the local execution gateway for files, tests, browsing, and verification; the selected LLM provides language and reasoning compute.
 
 ## Boundaries
 

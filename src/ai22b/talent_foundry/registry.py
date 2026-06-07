@@ -51,6 +51,8 @@ HIRED_AGENT_TEAM_SCHEMA = "ai-talent-hired-agent-team/v1"
 HIRED_TEAM_CYCLE_SCHEMA = "ai-talent-hired-team-cycle/v1"
 HIRED_PROJECTION_SWARM_SCHEMA = "ai-talent-hired-projection-swarm/v1"
 HIRED_PROJECTION_SWARM_CYCLE_SCHEMA = "ai-talent-hired-projection-swarm-cycle/v1"
+PROJECTION_LEARNING_CANDIDATE_SCHEMA = "paideia-projection-learning-candidate/v1"
+PROJECTION_SYNTHESIS_BOARD_SCHEMA = "paideia-parent-controlled-projection-synthesis-board/v1"
 MEMORY_LIFECYCLE_MAINTENANCE_SCHEMA = "paideia-memory-lifecycle-maintenance/v1"
 SIMULATION_ROLLOUT_EVALUATION_SCHEMA = "ai-talent-simulation-rollout-evaluation/v1"
 REVIEWED_ROLLOUT_LEARNING_EVENT_SCHEMA = "paideia-reviewed-rollout-learning-event/v1"
@@ -524,6 +526,8 @@ def _run_source(event: dict[str, Any]) -> str:
     schema = event.get("schema")
     if schema == "ai-talent-workspace-agent-run/v1":
         return "workspace_agent_run"
+    if schema == HIRED_PROJECTION_SWARM_CYCLE_SCHEMA:
+        return "hired_projection_swarm_cycle"
     if schema == "ai-talent-hired-agent-job-run/v1":
         return "hired_agent_job_run"
     if schema == "ai-talent-agent-run/v1":
@@ -700,6 +704,9 @@ def assemble_hired_projection_swarm(
         "projections_can_work_together": True,
         "projection_peer_consciousness": False,
         "result_merge": "parent_synthesis_before_growth_merge",
+        "parent_synthesis_board_required": True,
+        "projection_direct_memory_write_allowed": False,
+        "automatic_projection_promotion_allowed": False,
     }
     projections = [
         {
@@ -751,8 +758,17 @@ def assemble_hired_projection_swarm(
                 "merge_target": "parent_growth_log",
                 "separate_employment_records": False,
                 "not_separate_consciousnesses": True,
+                "projection_outputs_are_candidates_only": True,
+                "parent_synthesis_required_before_learning": True,
             },
             "command_model": command_model,
+            "synthesis_requirements": {
+                "board_schema": PROJECTION_SYNTHESIS_BOARD_SCHEMA,
+                "compare_each_projection": True,
+                "record_accept_hold_decision_per_projection": True,
+                "only_parent_synthesis_can_enter_learning_ledger": True,
+                "private_reasoning_trace": "do_not_store",
+            },
             "learning_policy": "분신 결과는 독립 인재의 경력으로 저장하지 않고 본체 성장 후보로 병합한다.",
         },
     }
@@ -1380,6 +1396,141 @@ def run_hired_team_cycle(
     return cycle
 
 
+def _workspace_output_status(workspace_run: dict[str, Any]) -> dict[str, Any]:
+    outputs = workspace_run.get("workspace_outputs", {})
+    if not isinstance(outputs, dict):
+        return {
+            "declared_output_count": 0,
+            "existing_output_count": 0,
+            "missing_output_keys": [],
+            "all_declared_outputs_present": False,
+        }
+
+    missing = []
+    existing = 0
+    for key, value in outputs.items():
+        if isinstance(value, str) and Path(value).exists():
+            existing += 1
+        else:
+            missing.append(str(key))
+    return {
+        "declared_output_count": len(outputs),
+        "existing_output_count": existing,
+        "missing_output_keys": missing,
+        "all_declared_outputs_present": bool(outputs) and existing == len(outputs),
+    }
+
+
+def _projection_learning_candidate(
+    *,
+    projection: dict[str, Any],
+    directive: dict[str, Any],
+    workspace_run: dict[str, Any],
+    quality_label: dict[str, Any],
+) -> dict[str, Any]:
+    output_status = _workspace_output_status(workspace_run)
+    run_completed = workspace_run.get("run_status") == "completed"
+    accepted = run_completed and output_status["all_declared_outputs_present"]
+    decision = "candidate_for_parent_synthesis" if accepted else "hold_for_parent_review"
+    return {
+        "schema": PROJECTION_LEARNING_CANDIDATE_SCHEMA,
+        "projection_id": projection["projection_id"],
+        "role_id": projection["role_id"],
+        "role_name": projection["role_name"],
+        "decision": decision,
+        "run_status": workspace_run.get("run_status"),
+        "quality_label": quality_label,
+        "evidence_summary": {
+            "workspace_output_status": output_status,
+            "directive_source": directive["source"],
+            "execution_mode": directive["execution_mode"],
+            "focus": projection["focus"],
+        },
+        "memory_policy": {
+            "durable_memory_written": False,
+            "learning_ledger_updated": False,
+            "reasoning_ledger_updated": False,
+            "only_parent_synthesis_can_promote": True,
+            "private_reasoning_trace": "do_not_store",
+        },
+    }
+
+
+def _build_projection_synthesis_board(
+    *,
+    swarm: dict[str, Any],
+    objective: str,
+    contributions: list[dict[str, Any]],
+    quality_label: dict[str, Any],
+) -> dict[str, Any]:
+    rows = []
+    accepted_projection_ids = []
+    held_projection_ids = []
+    employment_ids = {
+        item.get("employment_context", {}).get("employment_id")
+        for item in contributions
+        if isinstance(item.get("employment_context"), dict)
+    }
+
+    for item in contributions:
+        candidate = item.get("projection_learning_candidate", {})
+        accepted = candidate.get("decision") == "candidate_for_parent_synthesis"
+        if accepted:
+            accepted_projection_ids.append(item["projection_id"])
+            parent_action = "accept_as_parent_synthesis_input"
+        else:
+            held_projection_ids.append(item["projection_id"])
+            parent_action = "hold_for_repair_or_boss_review"
+        evidence_summary = candidate.get("evidence_summary", {})
+        rows.append(
+            {
+                "projection_id": item["projection_id"],
+                "role_id": item["role_id"],
+                "role_name": item["role_name"],
+                "focus": item["focus"],
+                "run_status": item.get("run_status"),
+                "candidate_decision": candidate.get("decision"),
+                "parent_action": parent_action,
+                "evidence_summary": evidence_summary,
+                "memory_written_by_projection": False,
+                "separate_consciousness_created": False,
+            }
+        )
+
+    all_outputs_returned = len(rows) == len(contributions)
+    all_candidates_gated = all(
+        item.get("projection_learning_candidate", {}).get("memory_policy", {}).get("durable_memory_written") is False
+        for item in contributions
+    )
+    board_decision = "ready_for_parent_learning_update" if rows and not held_projection_ids else "hold_for_boss_review"
+    return {
+        "schema": PROJECTION_SYNTHESIS_BOARD_SCHEMA,
+        "swarm_id": swarm["swarm_id"],
+        "objective_fingerprint_sha256": hashlib.sha256(objective.encode("utf-8")).hexdigest(),
+        "quality_label": quality_label,
+        "row_count": len(rows),
+        "rows": rows,
+        "arbitration": {
+            "controller": "parent_body",
+            "decision_rule": "projection outputs are evidence candidates; parent synthesis makes the only durable learning decision",
+            "accepted_projection_ids": accepted_projection_ids,
+            "held_projection_ids": held_projection_ids,
+            "parent_decision": board_decision,
+            "boss_review_required": True,
+            "automatic_projection_memory_write": False,
+            "automatic_learning_promotion": False,
+        },
+        "synthesis_quality_gates": {
+            "single_parent_identity": len(employment_ids) == 1,
+            "all_projection_outputs_return_to_parent": all_outputs_returned,
+            "projection_direct_memory_write_blocked": all_candidates_gated,
+            "parent_synthesis_required": True,
+            "separate_consciousness_created": False,
+            "private_reasoning_trace": "do_not_store",
+        },
+    }
+
+
 def run_hired_projection_swarm_cycle(
     swarm_path: Path,
     *,
@@ -1399,7 +1550,6 @@ def run_hired_projection_swarm_cycle(
         record_path = Path(projection["employment_record_path"])
         projection_workspace = workspace_dir / projection["projection_id"]
         run_path = workspace_dir / f"{projection['projection_id']}_workspace_run.json"
-        learning_update_path = workspace_dir / f"{projection['projection_id']}_learning_update.json"
         directive = {
             "projection_id": projection["projection_id"],
             "source": "parent_body_directive",
@@ -1426,11 +1576,11 @@ def run_hired_projection_swarm_cycle(
             workspace_dir=projection_workspace,
             output_path=run_path,
         )
-        learning_update = record_hired_learning_experience(
-            record_path,
-            run_path=run_path,
+        projection_candidate = _projection_learning_candidate(
+            projection=projection,
+            directive=directive,
+            workspace_run=workspace_run,
             quality_label=quality_label,
-            output_path=learning_update_path,
         )
         contributions.append(
             {
@@ -1446,13 +1596,19 @@ def run_hired_projection_swarm_cycle(
                 "directive": directive,
                 "run_status": workspace_run.get("run_status"),
                 "workspace_run": workspace_run,
-                "learning_update": learning_update,
+                "projection_learning_candidate": projection_candidate,
             }
         )
 
     statuses = [item["run_status"] for item in contributions]
     cycle_status = "completed" if statuses and all(status == "completed" for status in statuses) else "blocked"
     created_at = datetime.now(timezone.utc).isoformat()
+    synthesis_board = _build_projection_synthesis_board(
+        swarm=swarm,
+        objective=objective,
+        contributions=contributions,
+        quality_label=quality_label,
+    )
     cycle = {
         "schema": HIRED_PROJECTION_SWARM_CYCLE_SCHEMA,
         "cycle_id": hashlib.sha256(f"{swarm['swarm_id']}|{objective}|{created_at}".encode("utf-8")).hexdigest()[:16],
@@ -1471,24 +1627,56 @@ def run_hired_projection_swarm_cycle(
             "separate_consciousness_created": False,
         },
         "contributions": contributions,
+        "projection_synthesis_board": synthesis_board,
         "parent_synthesis": {
             "summary": "본체가 역할별 분신 결과를 모아 하나의 검토 결과로 합성한다.",
+            "summary_en": "Parent body collected projection outputs into one reviewed synthesis board.",
             "roles_consulted": [item["role_id"] for item in contributions],
+            "accepted_projection_ids": synthesis_board["arbitration"]["accepted_projection_ids"],
+            "held_projection_ids": synthesis_board["arbitration"]["held_projection_ids"],
+            "synthesis_board_schema": synthesis_board["schema"],
             "separate_consciousness_created": False,
             "final_control": "parent_body",
             "joint_collaboration_allowed": True,
+            "projection_memory_write": "blocked_until_parent_synthesis",
             "investment_execution": "blocked",
         },
         "parent_growth_merge": {
             "merge_target": "parent_growth_log",
-            "merge_status": "pending_boss_review",
-            "learning_update_count": len(contributions),
+            "merge_status": "pending_parent_synthesis_record",
+            "projection_candidate_count": len(contributions),
+            "parent_learning_update_count": 0,
+            "policy_summary": "Projection outputs are evidence candidates only; the parent synthesis is the only learning-ledger input.",
             "principle": "분신의 경험은 독립 인재 이력이 아니라 본체의 업무 경험 후보로만 반영한다.",
         },
     }
 
     if output_path is not None:
         _write_json(output_path, cycle)
+        parent_record_path = Path(swarm["projections"][0]["employment_record_path"]) if swarm.get("projections") else None
+        if parent_record_path is not None and cycle_status == "completed":
+            parent_update_path = output_path.parent / f"{output_path.stem}.parent_learning_update.json"
+            parent_learning_update = record_hired_learning_experience(
+                parent_record_path,
+                run_path=output_path,
+                quality_label=quality_label,
+                output_path=parent_update_path,
+            )
+            cycle["parent_learning_update"] = parent_learning_update
+            cycle["parent_learning_update_artifact"] = {
+                "file_name": parent_update_path.name,
+                "path_recorded_as_local_artifact": True,
+            }
+            cycle["projection_synthesis_board"]["arbitration"][
+                "parent_learning_update_decision"
+            ] = parent_learning_update.get("decision")
+            cycle["parent_growth_merge"]["parent_learning_update_count"] = 1
+            cycle["parent_growth_merge"]["merge_status"] = (
+                "parent_synthesis_promoted_to_learning_ledger"
+                if parent_learning_update.get("decision") == "promoted"
+                else "parent_synthesis_recorded_for_review"
+            )
+            _write_json(output_path, cycle)
     log_path = (output_path.parent if output_path is not None else swarm_path.parent) / "hired_projection_swarm_cycle_log.jsonl"
     log_path.parent.mkdir(parents=True, exist_ok=True)
     with log_path.open("a", encoding="utf-8") as file:

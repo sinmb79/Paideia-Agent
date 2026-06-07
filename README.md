@@ -768,6 +768,27 @@ ai22b-talent-foundry verify-workspace-execution `
 
 The proof checks the source run schema/status, required workspace artifacts, sandbox enforcement, rollback manifests, LLM identity boundary, reviewable `llm_plan`, suggestion-only tool-plan alignment, provider preflight, agent `execution_contract`, review-gated memory candidate, private-reasoning retention policy, acceptance checklist, and dataflow transpose verification where applicable. Absolute local paths are fingerprinted instead of copied into the proof.
 
+Parent-controlled projection swarms let one hired talent split a job into task-limited projections without creating separate agent identities:
+
+```powershell
+ai22b-talent-foundry assemble-hired-projection-swarm `
+  --employment-record .\employment_record.json `
+  --swarm-name "Graham Junior projection swarm" `
+  --domain securities_research `
+  --output .\hired_projection_swarm.json
+
+ai22b-talent-foundry run-hired-projection-swarm-cycle `
+  --swarm .\hired_projection_swarm.json `
+  --objective "Review a quarterly research routine as one controlled swarm." `
+  --workspace .\projection_swarm_workspace `
+  --score 94 `
+  --reviewed-by Boss `
+  --status verified `
+  --output .\hired_projection_swarm_cycle.json
+```
+
+The cycle writes `projection_learning_candidate` records for each projection, a `projection_synthesis_board` that compares accepted and held projection outputs, and one `parent_learning_update` for the parent body. Projection outputs do not write durable memory directly. Only the reviewed parent synthesis can enter the learning ledger and Reasoning Ledger candidate path.
+
 Parent-controlled projection work now has a rollout evaluator:
 
 ```powershell

@@ -89,6 +89,15 @@ def _summarize_event(source: str, event: dict[str, Any]) -> str:
             "워크스페이스 에이전트 실행 경험: "
             f"{event.get('run_status')} 상태로 계획, 결과, 트레이스 {sorted(outputs)}를 남겼다."
         )
+    if source == "hired_projection_swarm_cycle":
+        synthesis = event.get("parent_synthesis", {}) if isinstance(event.get("parent_synthesis"), dict) else {}
+        accepted = synthesis.get("accepted_projection_ids", [])
+        held = synthesis.get("held_projection_ids", [])
+        return (
+            "Parent-controlled projection swarm cycle: "
+            f"{event.get('cycle_status')} with {len(accepted)} accepted projection candidates "
+            f"and {len(held)} held candidates."
+        )
     if source == "chat_turn":
         return f"채팅 학습 경험: {event.get('lesson', event.get('message_summary', 'conversation_after_hire'))}"
     if source == "simulation_rollout_winner":
@@ -301,6 +310,26 @@ def _contribution_reference(item: dict[str, Any]) -> dict[str, Any]:
         "run_status": item.get("run_status"),
         "workspace_run": _summary_of_named_packet("workspace_run", item.get("workspace_run", {})),
         "learning_update": _summary_of_named_packet("learning_update", item.get("learning_update", {})),
+        "projection_learning_candidate": _bounded_public_reference(
+            item.get("projection_learning_candidate", {}),
+            depth=1,
+        ),
+    }
+
+
+def _projection_swarm_contribution_reference(item: dict[str, Any]) -> dict[str, Any]:
+    candidate = item.get("projection_learning_candidate", {})
+    evidence = candidate.get("evidence_summary", {}) if isinstance(candidate, dict) else {}
+    output_status = evidence.get("workspace_output_status", {}) if isinstance(evidence, dict) else {}
+    return {
+        "projection_id": item.get("projection_id"),
+        "role_id": item.get("role_id"),
+        "role_name": item.get("role_name"),
+        "run_status": item.get("run_status"),
+        "candidate_decision": candidate.get("decision") if isinstance(candidate, dict) else None,
+        "workspace_output_status": output_status,
+        "memory_written_by_projection": False,
+        "separate_consciousness_created": False,
     }
 
 
@@ -326,14 +355,58 @@ def _safe_event_reference(source: str, event: dict[str, Any]) -> dict[str, Any]:
     elif source == "workspace_agent_run":
         reference = _summary_of_named_packet("workspace_run", event)
         reference["event_summary"] = _bounded_public_reference(event.get("summary", ""))
+    elif source == "hired_projection_swarm_cycle":
+        board = event.get("projection_synthesis_board", {})
+        arbitration = board.get("arbitration", {}) if isinstance(board, dict) else {}
+        quality_gates = board.get("synthesis_quality_gates", {}) if isinstance(board, dict) else {}
+        public_quality_gates = {
+            key: value for key, value in quality_gates.items() if key != "private_reasoning_trace"
+        }
+        synthesis = event.get("parent_synthesis", {}) if isinstance(event.get("parent_synthesis"), dict) else {}
+        merge = event.get("parent_growth_merge", {}) if isinstance(event.get("parent_growth_merge"), dict) else {}
+        objective = str(event.get("objective", ""))
+        reference = {
+            "schema": event.get("schema"),
+            "cycle_status": event.get("cycle_status"),
+            "swarm_id": event.get("swarm_id"),
+            "objective_fingerprint_sha256": hashlib.sha256(objective.encode("utf-8")).hexdigest(),
+            "projection_synthesis_board": {
+                "schema": board.get("schema") if isinstance(board, dict) else None,
+                "row_count": board.get("row_count") if isinstance(board, dict) else None,
+                "accepted_projection_count": len(arbitration.get("accepted_projection_ids", [])),
+                "held_projection_count": len(arbitration.get("held_projection_ids", [])),
+                "parent_decision": arbitration.get("parent_decision"),
+                "automatic_projection_memory_write": arbitration.get("automatic_projection_memory_write"),
+                "automatic_learning_promotion": arbitration.get("automatic_learning_promotion"),
+                "synthesis_quality_gates": public_quality_gates,
+            },
+            "parent_synthesis": {
+                "final_control": synthesis.get("final_control"),
+                "projection_memory_write": synthesis.get("projection_memory_write"),
+                "separate_consciousness_created": synthesis.get("separate_consciousness_created"),
+                "joint_collaboration_allowed": synthesis.get("joint_collaboration_allowed"),
+            },
+            "parent_growth_merge": {
+                "merge_status": merge.get("merge_status"),
+                "projection_candidate_count": merge.get("projection_candidate_count"),
+                "parent_learning_update_count": merge.get("parent_learning_update_count"),
+            },
+        }
     else:
         reference = _bounded_public_reference(event)
     if isinstance(event.get("contributions"), list):
-        reference["contributions"] = [
-            _contribution_reference(item)
-            for item in event["contributions"][:MAX_SAFE_REFERENCE_LIST_ITEMS]
-            if isinstance(item, dict)
-        ]
+        if source == "hired_projection_swarm_cycle":
+            reference["contributions"] = [
+                _projection_swarm_contribution_reference(item)
+                for item in event["contributions"][:MAX_SAFE_REFERENCE_LIST_ITEMS]
+                if isinstance(item, dict)
+            ]
+        else:
+            reference["contributions"] = [
+                _contribution_reference(item)
+                for item in event["contributions"][:MAX_SAFE_REFERENCE_LIST_ITEMS]
+                if isinstance(item, dict)
+            ]
         if len(event["contributions"]) > MAX_SAFE_REFERENCE_LIST_ITEMS:
             reference["contributions"].append(
                 {"omitted_item_count": len(event["contributions"]) - MAX_SAFE_REFERENCE_LIST_ITEMS}
@@ -366,6 +439,9 @@ def _skills_from_event(source: str, event: dict[str, Any], event_reference: dict
     if source == "simulation_rollout_winner" or "simulation_rollout" in text or "rollout" in text:
         skills.append("parallel_rollout_review")
         skills.append("reviewed_simulation_learning")
+    if source == "hired_projection_swarm_cycle" or "projection_synthesis_board" in text:
+        skills.append("parent_controlled_projection_synthesis")
+        skills.append("parallel_projection_arbitration")
     if "정체성" in text or "부모" in text or "가족" in text or "개인정보" in text:
         skills.append("identity_boundary_conversation")
     if "일반 대화" in text or "자연스럽" in text or "말투" in text:
