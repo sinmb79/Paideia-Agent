@@ -137,6 +137,16 @@ ai22b-talent-foundry show-onboarding-next-action `
   --launch-plan .\onboarding_launch_plan.json
 ```
 
+launch plan의 안전한 로컬 액션은 명시적 승인 후 실행할 수 있습니다. 첫 allowlist 실행 대상은 `doctor_onboarding_session`이며, Paideia는 launch plan의 shell 문자열을 그대로 실행하지 않고 내부 doctor 함수를 호출합니다.
+
+```powershell
+ai22b-talent-foundry run-onboarding-next-action `
+  --launch-plan .\onboarding_launch_plan.json `
+  --action doctor_onboarding_session `
+  --approve `
+  --output .\onboarding_action_run.json
+```
+
 생성된 wizard 세션과 health artifact, launch plan은 다음 명령으로 다시 검증할 수 있습니다.
 
 ```powershell

@@ -33,6 +33,8 @@ CONSOLE_SESSION_SCHEMA = "ai-talent-guided-console-session/v1"
 OPENCLAW_STYLE_WIZARD_SCHEMA = "ai22b-paideia-openclaw-style-onboarding/v1"
 ONBOARDING_LAUNCH_PLAN_SCHEMA = "paideia-onboarding-launch-plan/v1"
 ONBOARDING_NEXT_ACTION_SCHEMA = "paideia-onboarding-next-action/v1"
+ONBOARDING_ACTION_RUN_SCHEMA = "paideia-onboarding-action-run/v1"
+ONBOARDING_ACTION_ALLOWLIST = {"doctor_onboarding_session"}
 
 SPECIALIST_TEAM_ROLES = [
     ("macro", "거시경제 분석 에이전트"),
@@ -960,6 +962,117 @@ def format_onboarding_next_action_summary(next_action: dict[str, Any]) -> str:
         lines.append("- Available actions: " + ", ".join(str(item) for item in available))
     if next_action.get("status") != "ready":
         lines.append("No matching action was found in the launch plan.")
+    return "\n".join(lines)
+
+
+def run_onboarding_next_action(
+    launch_plan_path: Path,
+    *,
+    action_id: str | None = None,
+    approved: bool = False,
+    action_output_path: Path | None = None,
+) -> dict[str, Any]:
+    next_action = resolve_onboarding_next_action(launch_plan_path, action_id=action_id)
+    selected_action_id = str(next_action.get("action_id") or "")
+    base_report = {
+        "schema": ONBOARDING_ACTION_RUN_SCHEMA,
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "launch_plan_path": str(launch_plan_path),
+        "action_id": selected_action_id,
+        "next_action_status": next_action.get("status"),
+        "allowed_actions": sorted(ONBOARDING_ACTION_ALLOWLIST),
+        "approved_by_owner": approved,
+        "shell_command_executed": False,
+        "network_call_performed": False,
+        "raw_provider_payload_saved": False,
+        "private_reasoning_trace": "do_not_store",
+    }
+    if next_action.get("status") != "ready":
+        return {
+            **base_report,
+            "status": "not_found",
+            "executed": False,
+            "reason": "requested_action_not_found_in_launch_plan",
+        }
+    if selected_action_id not in ONBOARDING_ACTION_ALLOWLIST:
+        return {
+            **base_report,
+            "status": "blocked_not_allowlisted",
+            "executed": False,
+            "reason": "action_is_not_in_safe_onboarding_runner_allowlist",
+            "command_or_path": next_action.get("command_or_path"),
+            "network_call_if_executed": next_action.get("network_call_if_executed"),
+        }
+    if next_action.get("network_call_if_executed") is True:
+        return {
+            **base_report,
+            "status": "blocked_network_action",
+            "executed": False,
+            "reason": "network_actions_must_be_run_manually_after_review",
+            "command_or_path": next_action.get("command_or_path"),
+        }
+    if not approved:
+        return {
+            **base_report,
+            "status": "needs_owner_approval",
+            "executed": False,
+            "reason": "pass_approve_to_execute_the_allowlisted_local_action",
+            "command_or_path": next_action.get("command_or_path"),
+        }
+
+    launch_plan = json.loads(launch_plan_path.read_text(encoding="utf-8"))
+    artifacts = launch_plan.get("artifacts", {}) if isinstance(launch_plan.get("artifacts"), dict) else {}
+    if selected_action_id == "doctor_onboarding_session":
+        from ai22b.talent_foundry.onboarding_doctor import doctor_onboarding_session
+
+        session_path_value = artifacts.get("console_session")
+        if not session_path_value:
+            return {
+                **base_report,
+                "status": "blocked_missing_artifact",
+                "executed": False,
+                "reason": "console_session_artifact_missing_from_launch_plan",
+            }
+        doctor_output = action_output_path or launch_plan_path.parent / "onboarding_doctor.json"
+        doctor_report = doctor_onboarding_session(
+            Path(str(session_path_value)),
+            output_path=doctor_output,
+        )
+        return {
+            **base_report,
+            "status": "completed" if doctor_report.get("passed") else "completed_with_failed_doctor",
+            "executed": True,
+            "execution_adapter": "internal_doctor_onboarding_session",
+            "command_or_path": next_action.get("command_or_path"),
+            "doctor_report_path": str(doctor_output),
+            "doctor_passed": bool(doctor_report.get("passed")),
+            "doctor_status": doctor_report.get("status"),
+            "doctor_failed_count": doctor_report.get("summary", {}).get("failed_count")
+            if isinstance(doctor_report.get("summary"), dict)
+            else None,
+        }
+    return {
+        **base_report,
+        "status": "blocked_not_implemented",
+        "executed": False,
+        "reason": "action_is_allowlisted_but_no_internal_adapter_is_registered",
+    }
+
+
+def format_onboarding_action_run_summary(report: dict[str, Any]) -> str:
+    lines = [
+        "Paideia onboarding action run",
+        f"- Status: {report.get('status')}",
+        f"- Action: {report.get('action_id')}",
+        f"- Executed: {report.get('executed')}",
+        f"- Shell command executed: {report.get('shell_command_executed')}",
+        f"- Network call performed: {report.get('network_call_performed')}",
+    ]
+    if report.get("reason"):
+        lines.append(f"- Reason: {report.get('reason')}")
+    if report.get("doctor_report_path"):
+        lines.append(f"- Doctor report: {report.get('doctor_report_path')}")
+        lines.append(f"- Doctor passed: {report.get('doctor_passed')}")
     return "\n".join(lines)
 
 
