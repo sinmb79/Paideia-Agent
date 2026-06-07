@@ -62,6 +62,7 @@ from ai22b.talent_foundry.life_trace import build_life_trace, read_life_trace_js
 from ai22b.talent_foundry.llm_runtime import build_llm_runtime_config
 from ai22b.talent_foundry.llm_onboarding import (
     build_llm_connection_profile,
+    build_llm_live_setup_guide,
     build_llm_onboarding_checklist,
     build_llm_provider_matrix,
 )
@@ -358,6 +359,17 @@ def _build_parser() -> argparse.ArgumentParser:
     llm_connection_profile.add_argument("--llm-model-path")
     llm_connection_profile.add_argument("--chat-surface", default=DEFAULT_CHAT_SURFACE_ID, choices=chat_surface_ids())
     llm_connection_profile.add_argument("--output", required=True)
+
+    llm_live_setup_guide = subparsers.add_parser(
+        "build-llm-live-setup-guide",
+        help="Build a no-network owner-facing guide for the selected LLM's live setup and readiness sequence.",
+    )
+    llm_live_setup_guide.add_argument("--llm-service", choices=llm_service_ids())
+    llm_live_setup_guide.add_argument("--llm-engine")
+    llm_live_setup_guide.add_argument("--llm-model")
+    llm_live_setup_guide.add_argument("--llm-model-path")
+    llm_live_setup_guide.add_argument("--chat-surface", default=DEFAULT_CHAT_SURFACE_ID, choices=chat_surface_ids())
+    llm_live_setup_guide.add_argument("--output", required=True)
 
     raise_command = subparsers.add_parser("raise", help="Materialize a blueprint into employable local agent outputs.")
     raise_command.add_argument("--blueprint", required=True)
@@ -1501,6 +1513,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         print(str(Path(args.output)))
         return 0 if profile.get("schema") else 1
+
+    if args.command == "build-llm-live-setup-guide":
+        guide = build_llm_live_setup_guide(
+            llm_service=args.llm_service,
+            llm_engine=args.llm_engine,
+            llm_model=args.llm_model,
+            llm_model_path=args.llm_model_path,
+            chat_surface=args.chat_surface,
+            output_path=Path(args.output),
+        )
+        print(str(Path(args.output)))
+        return 0 if guide.get("schema") else 1
 
     llm_runtime_exit_code = handle_llm_runtime_command(args)
     if llm_runtime_exit_code is not None:

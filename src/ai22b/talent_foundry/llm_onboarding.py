@@ -25,6 +25,7 @@ from ai22b.talent_foundry.onboarding_choices import (
 LLM_ONBOARDING_CHECKLIST_SCHEMA = "paideia-llm-onboarding-checklist/v1"
 LLM_PROVIDER_MATRIX_SCHEMA = "paideia-llm-provider-matrix/v1"
 LLM_CONNECTION_PROFILE_SCHEMA = "paideia-llm-connection-profile/v1"
+LLM_LIVE_SETUP_GUIDE_SCHEMA = "paideia-llm-live-setup-guide/v1"
 
 ENV_REQUIREMENTS: dict[str, list[list[str]]] = {
     "openai_chatgpt_codex": [["OPENAI_API_KEY"]],
@@ -142,6 +143,16 @@ def _chat_runtime_smoke_command(
         f"--output {output}",
     ]
     return " ".join(part for part in parts if part)
+
+
+def _command_by_id(checklist: dict[str, Any], command_id: str) -> dict[str, Any]:
+    command_plan = checklist.get("command_plan", [])
+    if not isinstance(command_plan, list):
+        return {}
+    for item in command_plan:
+        if isinstance(item, dict) and item.get("id") == command_id:
+            return item
+    return {}
 
 
 def _profile_env_setup(engine: str) -> list[dict[str, Any]]:
@@ -331,6 +342,218 @@ def build_llm_connection_profile(
     if output_path is not None:
         _write_json(output_path, profile)
     return profile
+
+
+def _setup_guide_status(profile: dict[str, Any], *, needs_live: bool) -> str:
+    if not needs_live:
+        if profile.get("status") == "offline_ready_no_setup":
+            return "offline_ready_no_live_setup_required"
+        return "local_setup_required_before_offline_use"
+    if profile.get("status") in {"ready_for_explicit_live_check", "ready_for_localhost_live_check"}:
+        return "ready_for_explicit_live_check"
+    return "needs_owner_configuration_before_live"
+
+
+def _setup_cards(profile: dict[str, Any], *, needs_live: bool) -> list[dict[str, Any]]:
+    setup = profile.get("setup_requirements", {}) if isinstance(profile.get("setup_requirements"), dict) else {}
+    cards: list[dict[str, Any]] = []
+    required_env = setup.get("required_env", []) if isinstance(setup.get("required_env"), list) else []
+    if required_env:
+        cards.append(
+            {
+                "id": "api_credentials",
+                "title": "API credential",
+                "status": "owner_action_required",
+                "required_env": required_env,
+                "secret_policy": (
+                    "Paste secrets into your shell or local secret manager only; "
+                    "Paideia does not write secret values into this guide."
+                ),
+            }
+        )
+    if setup.get("requires_model_argument"):
+        cards.append(
+            {
+                "id": "model_argument",
+                "title": "Model name",
+                "status": "owner_action_required" if setup.get("recommended_model_argument") == "<model>" else "ready",
+                "recommended_value": setup.get("recommended_model_argument"),
+                "examples": {
+                    "openai_chatgpt_codex": "gpt-4.1-mini",
+                    "anthropic_claude_api": "claude-3-5-sonnet-latest",
+                    "google_gemini_api": "gemini-1.5-pro",
+                    "ollama_local_http": "llama3.1",
+                    "lm_studio_local_http": "loaded-local-model",
+                },
+            }
+        )
+    if setup.get("requires_localhost_endpoint"):
+        cards.append(
+            {
+                "id": "localhost_endpoint",
+                "title": "Local model server",
+                "status": "ready_for_owner_live_check",
+                "recommended_value": setup.get("recommended_model_path_argument"),
+                "network_scope": "localhost_only",
+            }
+        )
+    if setup.get("requires_model_path"):
+        cards.append(
+            {
+                "id": "local_model_path",
+                "title": "Local model files",
+                "status": "owner_action_required",
+                "recommended_value": setup.get("recommended_model_path_argument"),
+                "network_scope": "local_files_only",
+            }
+        )
+    if not cards:
+        cards.append(
+            {
+                "id": "no_live_setup_required",
+                "title": "No live setup required",
+                "status": "ready",
+                "reason": (
+                    "This selected engine can run the public-safe offline path without "
+                    "credentials, localhost, or model files."
+                ),
+            }
+        )
+    if needs_live:
+        cards.append(
+            {
+                "id": "owner_live_intent",
+                "title": "Explicit live-check consent",
+                "status": "required_before_provider_call",
+                "policy": "Live API or localhost calls happen only when the owner runs a command with --live-check.",
+            }
+        )
+    return cards
+
+
+def build_llm_live_setup_guide(
+    *,
+    llm_service: str | None = DEFAULT_LLM_SERVICE_ID,
+    llm_engine: str | None = None,
+    llm_model: str | None = None,
+    llm_model_path: str | None = None,
+    chat_surface: str | None = DEFAULT_CHAT_SURFACE_ID,
+    output_path: Path | None = None,
+) -> dict[str, Any]:
+    """Build a no-network owner-facing guide for live provider setup."""
+
+    checklist = build_llm_onboarding_checklist(
+        llm_service=llm_service,
+        llm_engine=llm_engine,
+        llm_model=llm_model,
+        llm_model_path=llm_model_path,
+        chat_surface=chat_surface,
+    )
+    profile = build_llm_connection_profile(
+        llm_service=llm_service,
+        llm_engine=llm_engine,
+        llm_model=llm_model,
+        llm_model_path=llm_model_path,
+        chat_surface=chat_surface,
+    )
+    selected_llm = profile["selected_llm_service"]
+    selected_chat = profile["selected_chat_surface"]
+    needs_live = bool(profile["setup_requirements"]["requires_live_check_before_agent_work"])
+    status = _setup_guide_status(profile, needs_live=needs_live)
+    no_network_doctor = _command_by_id(checklist, "provider_doctor_no_network")
+    live_readiness_command = _command_by_id(checklist, "llm_live_readiness_suite")
+    guide = {
+        "schema": LLM_LIVE_SETUP_GUIDE_SCHEMA,
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "status": status,
+        "selected_llm_service": selected_llm,
+        "selected_chat_surface": selected_chat,
+        "setup_cards": _setup_cards(profile, needs_live=needs_live),
+        "readiness_gate": {
+            "connection_profile_status": profile.get("status"),
+            "doctor_status": profile.get("readiness", {}).get("doctor_status"),
+            "live_preflight_status": profile.get("readiness", {}).get("live_preflight_status"),
+            "blocking_checks": profile.get("readiness", {}).get("blocking_checks", []),
+            "requires_explicit_live_check": needs_live,
+            "ready_for_daily_live_work_when": [
+                "provider doctor passes with --live-check",
+                "application-engine live smoke passes",
+                "agent-runtime live smoke passes",
+                "chat-runtime smoke passes for the selected chat surface",
+            ]
+            if needs_live
+            else [
+                "offline deterministic/provider-free checks pass",
+                "chat-runtime smoke passes before daily conversation",
+            ],
+        },
+        "safe_runbook": [
+            {
+                "id": "review_connection_profile",
+                "network_call": False,
+                "artifact": "<llm_connection_profile.json>",
+                "purpose": "Review setup requirements before any provider call.",
+            },
+            {
+                "id": "no_network_provider_doctor",
+                "network_call": False,
+                "command": no_network_doctor.get("command"),
+                "purpose": "Check static provider configuration without contacting APIs or localhost servers.",
+            },
+            {
+                "id": "explicit_live_readiness_suite",
+                "network_call": needs_live,
+                "command": live_readiness_command.get("command"),
+                "purpose": "Run only after the owner intentionally wants to call the selected API or localhost provider.",
+            },
+            {
+                "id": "first_live_chat_template",
+                "network_call": needs_live,
+                "command": profile.get("daily_use_commands", {}).get("live_chat_template"),
+                "purpose": "Start daily chat only after the readiness suite is reviewed.",
+            },
+        ],
+        "daily_use": {
+            "offline_first_chat": profile.get("daily_use_commands", {}).get("offline_first_chat"),
+            "chat_runtime_smoke": profile.get("daily_use_commands", {}).get("chat_runtime_smoke"),
+            "live_chat_template": profile.get("daily_use_commands", {}).get("live_chat_template"),
+        },
+        "owner_visible_summary": {
+            "ko": (
+                "선택한 LLM은 오프라인 경로로 바로 점검할 수 있으며, 별도 live 설정은 필요하지 않습니다."
+                if status == "offline_ready_no_live_setup_required"
+                else "선택한 LLM은 live 사용 전에 보스가 모델, 키, localhost, 또는 로컬 모델 경로를 설정하고 --live-check를 직접 실행해야 합니다."
+                if status == "needs_owner_configuration_before_live"
+                else "선택한 LLM은 설정값이 채워져 있어 명시적 --live-check로 실제 연결을 확인할 수 있습니다."
+            ),
+            "en": (
+                "The selected LLM can be checked through the offline path without separate live setup."
+                if status == "offline_ready_no_live_setup_required"
+                else "Before live use, the owner must configure the model, key, localhost server, or local model path and intentionally run --live-check."
+                if status == "needs_owner_configuration_before_live"
+                else "The selected LLM has enough setup metadata for an explicit --live-check."
+            ),
+        },
+        "data_policy": {
+            "llm_is_identity": False,
+            "send_private_training_files": False,
+            "send_selected_memory_summaries_only": True,
+            "raw_provider_payload_saved": False,
+            "private_reasoning_trace": "do_not_store",
+            "secret_values_exported": False,
+        },
+        "public_safe": {
+            "network_call_performed": False,
+            "live_check_performed": False,
+            "subprocess_executed": False,
+            "secret_values_exported": False,
+            "raw_provider_payload_saved": False,
+            "private_reasoning_trace": "do_not_store",
+        },
+    }
+    if output_path is not None:
+        _write_json(output_path, guide)
+    return guide
 
 
 def _readiness_status(doctor: dict[str, Any], live_preflight: dict[str, Any], *, engine: str) -> str:

@@ -41,7 +41,7 @@ from ai22b.talent_foundry.learning_loop import build_reasoning_kernel, create_le
 from ai22b.talent_foundry.memory_lifecycle import MEMORY_LIFECYCLE_STATUS_CARD_SCHEMA
 from ai22b.talent_foundry.memory_substrate import CHAT_RUNTIME_STATUS_CARD_SCHEMA
 from ai22b.talent_foundry.llm_adapter_contracts import LLM_ADAPTER_CONTRACTS_SCHEMA, run_llm_adapter_contracts
-from ai22b.talent_foundry.llm_onboarding import build_llm_connection_profile
+from ai22b.talent_foundry.llm_onboarding import build_llm_connection_profile, build_llm_live_setup_guide
 from ai22b.talent_foundry.onboarding_choices import LLM_SERVICE_CATALOG
 from ai22b.talent_foundry.package_install_doctor import PACKAGE_INSTALL_DOCTOR_SCHEMA, doctor_package_install
 from ai22b.talent_foundry.role_models import list_role_models, summarize_role_model
@@ -164,6 +164,7 @@ REQUIRED_PUBLIC_PROGRAM_COMMANDS = {
     "onboard-agent",
     "build-llm-onboarding-checklist",
     "build-llm-connection-profile",
+    "build-llm-live-setup-guide",
     "raise",
     "doctor-llm-provider",
     "doctor-llm-adapters",
@@ -211,6 +212,7 @@ PUBLIC_SAFE_FIRST_RUN_COMMANDS = {
     "list-llm-services",
     "build-llm-onboarding-checklist",
     "build-llm-connection-profile",
+    "build-llm-live-setup-guide",
     "doctor-llm-provider",
     "doctor-llm-adapters",
     "run-llm-application-smoke",
@@ -1053,9 +1055,24 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
         llm_engine="deterministic_local",
         chat_surface="codex-bridge-chat",
     )
+    llm_live_setup_guide = build_llm_live_setup_guide(
+        llm_service="deterministic_local",
+        llm_engine="deterministic_local",
+        chat_surface="codex-bridge-chat",
+    )
     connection_profile_public = (
         llm_connection_profile.get("public_safe", {})
         if isinstance(llm_connection_profile.get("public_safe"), dict)
+        else {}
+    )
+    live_setup_public = (
+        llm_live_setup_guide.get("public_safe", {})
+        if isinstance(llm_live_setup_guide.get("public_safe"), dict)
+        else {}
+    )
+    live_setup_gate = (
+        llm_live_setup_guide.get("readiness_gate", {})
+        if isinstance(llm_live_setup_guide.get("readiness_gate"), dict)
         else {}
     )
     connection_profile_setup = (
@@ -1236,6 +1253,14 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
         ),
         "llm_connection_profile_network_call_performed": connection_profile_public.get("network_call_performed"),
         "llm_connection_profile_secret_values_exported": connection_profile_public.get("secret_values_exported"),
+        "llm_live_setup_guide_schema": llm_live_setup_guide.get("schema"),
+        "llm_live_setup_guide_status": llm_live_setup_guide.get("status"),
+        "llm_live_setup_guide_selected_engine": llm_live_setup_guide.get("selected_llm_service", {}).get("engine")
+        if isinstance(llm_live_setup_guide.get("selected_llm_service"), dict)
+        else None,
+        "llm_live_setup_guide_requires_live_check": live_setup_gate.get("requires_explicit_live_check"),
+        "llm_live_setup_guide_network_call_performed": live_setup_public.get("network_call_performed"),
+        "llm_live_setup_guide_secret_values_exported": live_setup_public.get("secret_values_exported"),
         "application_smoke_passed": application_smoke.get("passed"),
         "application_smoke_status": application_smoke.get("status"),
         "application_smoke_engine": application_smoke.get("engine"),
@@ -1414,6 +1439,8 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
             and smoke_contract.get("network_call_made_by_doctor") is False
             and connection_profile_public.get("network_call_performed") is False
             and connection_profile_public.get("secret_values_exported") is False
+            and live_setup_public.get("network_call_performed") is False
+            and live_setup_public.get("secret_values_exported") is False
             and adapter_public.get("network_call_performed") is False
             and adapter_public.get("localhost_call_performed") is False
             and adapter_public.get("external_provider_called") is False
@@ -1469,6 +1496,12 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
         and details["llm_connection_profile_requires_live_check"] is False
         and details["llm_connection_profile_network_call_performed"] is False
         and details["llm_connection_profile_secret_values_exported"] is False
+        and details["llm_live_setup_guide_schema"] == "paideia-llm-live-setup-guide/v1"
+        and details["llm_live_setup_guide_status"] == "offline_ready_no_live_setup_required"
+        and details["llm_live_setup_guide_selected_engine"] == "deterministic_local"
+        and details["llm_live_setup_guide_requires_live_check"] is False
+        and details["llm_live_setup_guide_network_call_performed"] is False
+        and details["llm_live_setup_guide_secret_values_exported"] is False
         and details["application_smoke_schema"] == LLM_APPLICATION_SMOKE_SCHEMA
         and details["application_smoke_passed"] is True
         and details["application_smoke_status"] == "passed"

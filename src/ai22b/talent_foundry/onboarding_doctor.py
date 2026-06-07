@@ -133,6 +133,7 @@ def doctor_onboarding_session(
         required_artifacts |= {
             "answers",
             "llm_provider_matrix",
+            "llm_live_setup_guide",
             "onboarding_launch_plan",
             "paideia_onboarding_config",
         }
@@ -201,6 +202,33 @@ def doctor_onboarding_session(
             "network_call_performed": llm_connection_profile.get("public_safe", {}).get("network_call_performed"),
         },
     )
+    llm_live_setup_guide = _safe_read_artifact_json(artifacts, "llm_live_setup_guide")
+    readiness_gate = (
+        llm_live_setup_guide.get("readiness_gate", {})
+        if isinstance(llm_live_setup_guide.get("readiness_gate"), dict)
+        else {}
+    )
+    if schema == "ai-talent-guided-console-session/v1":
+        _check(
+            checks,
+            "llm_live_setup_guide_valid",
+            llm_live_setup_guide.get("schema") == "paideia-llm-live-setup-guide/v1"
+            and _public_safe_ok(llm_live_setup_guide)
+            and readiness_gate.get("requires_explicit_live_check") in {True, False},
+            details={
+                "schema": llm_live_setup_guide.get("schema"),
+                "status": llm_live_setup_guide.get("status"),
+                "selected_engine": (
+                    llm_live_setup_guide.get("selected_llm_service", {}).get("engine")
+                    if isinstance(llm_live_setup_guide.get("selected_llm_service"), dict)
+                    else None
+                ),
+                "requires_explicit_live_check": readiness_gate.get("requires_explicit_live_check"),
+                "network_call_performed": llm_live_setup_guide.get("public_safe", {}).get(
+                    "network_call_performed"
+                ),
+            },
+        )
 
     config = _safe_read_artifact_json(artifacts, "paideia_onboarding_config")
     launch_plan = _safe_read_artifact_json(artifacts, "onboarding_launch_plan")
@@ -216,6 +244,7 @@ def doctor_onboarding_session(
                 and model_auth.get("llm_provider_matrix") == str(artifacts.get("llm_provider_matrix"))
                 and model_auth.get("llm_onboarding_checklist") == str(artifacts.get("llm_onboarding_checklist"))
                 and model_auth.get("llm_connection_profile") == str(artifacts.get("llm_connection_profile"))
+                and model_auth.get("llm_live_setup_guide") == str(artifacts.get("llm_live_setup_guide"))
                 and model_auth.get("default_provider_call") == "none_without_explicit_live_check"
                 and runtime.get("onboarding_launch_plan") == str(artifacts.get("onboarding_launch_plan"))
                 and config_launch_plan.get("path") == str(artifacts.get("onboarding_launch_plan"))
@@ -239,6 +268,7 @@ def doctor_onboarding_session(
         }
         required_command_ids = {
             "connection_profile",
+            "live_setup_guide",
             "provider_doctor_no_network",
             "llm_live_readiness_suite",
             "agent_runtime_smoke",
