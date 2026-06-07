@@ -10,6 +10,7 @@ from typing import Any
 from ai22b.talent_foundry.agent_identity_card import (
     build_agent_id_card_payload,
     build_agent_identity_layer_envelope,
+    build_agent_warrent_registration_request,
     verify_agent_identity_artifacts,
 )
 from ai22b.talent_foundry.agent_runner import run_agent_from_manifest
@@ -123,6 +124,13 @@ def _llm_live_setup_guide_entrypoint(record_name: str) -> str:
     return f"{stem}.llm_live_setup_guide.json"
 
 
+def _agent_warrent_registration_request_entrypoint(record_name: str) -> str:
+    stem = Path(record_name).stem or "employment_record"
+    if stem == "employment_record":
+        return "agent_warrent_registration_request.json"
+    return f"{stem}.agent_warrent_registration_request.json"
+
+
 def _summarize_llm_connection_profile(profile: dict[str, Any], *, entrypoint: str) -> dict[str, Any]:
     setup = profile.get("setup_requirements", {})
     public_safe = profile.get("public_safe", {})
@@ -196,8 +204,16 @@ def _summarize_agent_identity_artifacts(
     payload: dict[str, Any],
     envelope: dict[str, Any],
     verification: dict[str, Any],
+    registration_request: dict[str, Any] | None = None,
+    registration_request_entrypoint: str | None = None,
 ) -> dict[str, Any]:
     agent_warrent = envelope.get("extensions", {}).get("agent_warrent", {})
+    registration_request = registration_request or {}
+    registration_validation = (
+        registration_request.get("validation", {})
+        if isinstance(registration_request.get("validation"), dict)
+        else {}
+    )
     return {
         "schema": "paideia-hired-agent-identity-summary/v1",
         "agent_id_card_payload": {
@@ -222,6 +238,15 @@ def _summarize_agent_identity_artifacts(
             "valid": bool(verification.get("valid")),
             "network_action_performed": bool(verification.get("network_action_performed")),
             "external_registration": verification.get("external_registration"),
+        },
+        "agent_warrent_registration_request": {
+            "schema": registration_request.get("schema"),
+            "entrypoint": registration_request_entrypoint,
+            "status": registration_request.get("status"),
+            "submit_ready": bool(registration_request.get("submit_ready")),
+            "signature_required": bool(registration_validation.get("signature_required")),
+            "network_action_performed": bool(registration_request.get("network_action_performed")),
+            "external_registration": registration_request.get("external_registration"),
         },
         "policy": {
             "external_registration": "manual_owner_action_only",
@@ -281,6 +306,7 @@ def hire_installed_agent(
         chat_surface=selected_chat_surface["id"],
         output_path=llm_live_setup_guide_path,
     )
+    agent_warrent_registration_request_entrypoint = _agent_warrent_registration_request_entrypoint(record_name)
     employment_id = _employment_id(
         install_id=installed_manifest["install_id"],
         employer=employer,
@@ -327,6 +353,7 @@ def hire_installed_agent(
             "agent_id_card_payload": "agent_id_card_payload.json",
             "agent_identity_envelope": "agent_identity_envelope.json",
             "agent_identity_verification": "agent_identity_verification.json",
+            "agent_warrent_registration_request": agent_warrent_registration_request_entrypoint,
             "chat_log": "employment_chat_log.jsonl",
             "last_chat": "last_hired_agent_chat.json",
             "run_log": "employment_run_log.jsonl",
@@ -380,6 +407,9 @@ def hire_installed_agent(
     agent_id_card_payload_path = target_root / employment_record["entrypoints"]["agent_id_card_payload"]
     agent_identity_envelope_path = target_root / employment_record["entrypoints"]["agent_identity_envelope"]
     agent_identity_verification_path = target_root / employment_record["entrypoints"]["agent_identity_verification"]
+    agent_warrent_registration_request_path = (
+        target_root / employment_record["entrypoints"]["agent_warrent_registration_request"]
+    )
     agent_id_card_payload = build_agent_id_card_payload(
         installed_manifest_path=installed_manifest_path,
         employment_record_path=employment_record_path,
@@ -397,10 +427,18 @@ def hire_installed_agent(
         envelope_path=agent_identity_envelope_path,
         output_path=agent_identity_verification_path,
     )
+    agent_warrent_registration_request = build_agent_warrent_registration_request(
+        installed_manifest_path=installed_manifest_path,
+        employment_record_path=employment_record_path,
+        owner_key_id="OWNER_KEY_ID_REQUIRED",
+        output_path=agent_warrent_registration_request_path,
+    )
     employment_record["agent_identity"] = _summarize_agent_identity_artifacts(
         payload=agent_id_card_payload,
         envelope=agent_identity_envelope,
         verification=agent_identity_verification,
+        registration_request=agent_warrent_registration_request,
+        registration_request_entrypoint=employment_record["entrypoints"]["agent_warrent_registration_request"],
     )
     _write_json(employment_record_path, employment_record)
 
@@ -434,6 +472,7 @@ def hire_installed_agent(
         "agent_id_card_payload": agent_id_card_payload_path,
         "agent_identity_envelope": agent_identity_envelope_path,
         "agent_identity_verification": agent_identity_verification_path,
+        "agent_warrent_registration_request": agent_warrent_registration_request_path,
     }
 
 

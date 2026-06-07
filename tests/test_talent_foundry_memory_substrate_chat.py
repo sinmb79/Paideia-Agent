@@ -43,6 +43,9 @@ class TalentFoundryMemorySubstrateChatTests(unittest.TestCase):
             agent_identity_verification = json.loads(
                 artifacts["agent_identity_verification"].read_text(encoding="utf-8")
             )
+            agent_warrent_registration_request = json.loads(
+                artifacts["agent_warrent_registration_request"].read_text(encoding="utf-8")
+            )
 
         self.assertEqual(substrate["schema"], "ai-talent-memory-substrate/v1")
         self.assertEqual(substrate["agent"]["name"], "grham-쥬니어")
@@ -99,8 +102,20 @@ class TalentFoundryMemorySubstrateChatTests(unittest.TestCase):
         self.assertIn("agent_id_card_payload", employment_record["entrypoints"])
         self.assertIn("agent_identity_envelope", employment_record["entrypoints"])
         self.assertIn("agent_identity_verification", employment_record["entrypoints"])
+        self.assertIn("agent_warrent_registration_request", employment_record["entrypoints"])
         self.assertEqual(agent_id_payload["schema"], "ai-talent-agent-id-card-payload/v1")
         self.assertEqual(agent_identity_envelope["version"], "ail.v1")
+        self.assertEqual(
+            agent_warrent_registration_request["schema"],
+            "paideia-agent-warrent-registration-request/v1",
+        )
+        self.assertEqual(
+            employment_record["agent_identity"]["agent_warrent_registration_request"]["entrypoint"],
+            employment_record["entrypoints"]["agent_warrent_registration_request"],
+        )
+        self.assertFalse(agent_warrent_registration_request["submit_ready"])
+        self.assertTrue(agent_warrent_registration_request["validation"]["signature_required"])
+        self.assertFalse(agent_warrent_registration_request["network_action_performed"])
         self.assertEqual(
             agent_identity_envelope["delegation"]["task_ref"],
             "employment:" + employment_record["employment_id"],

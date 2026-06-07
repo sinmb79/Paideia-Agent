@@ -9,6 +9,7 @@ from typing import Any
 from ai22b.talent_foundry.agent_identity_card import (
     build_agent_id_card_payload,
     build_agent_identity_layer_envelope,
+    build_agent_warrent_registration_request,
 )
 from ai22b.talent_foundry.llm_onboarding import build_llm_connection_profile, build_llm_live_setup_guide
 from ai22b.talent_foundry.llm_runtime import build_llm_provider_preflight, build_llm_runtime_config
@@ -961,6 +962,7 @@ def build_paideia_agent_install_kit(
         entrypoints.get("language_development_program", "language_development_program.json"),
         entrypoints.get("llm_connection_profile", DEFAULT_LLM_CONNECTION_PROFILE),
         entrypoints.get("llm_live_setup_guide", DEFAULT_LLM_LIVE_SETUP_GUIDE),
+        entrypoints.get("agent_warrent_registration_request", "agent_warrent_registration_request.json"),
     ]
     for name in dict.fromkeys(required_names):
         copied_name = _copy_if_present(source_root / name, output_dir / name)
@@ -1073,6 +1075,7 @@ def build_paideia_agent_install_kit(
     if installed_manifest_path.exists():
         payload_path = output_dir / "agent_id_card_payload.json"
         envelope_path = output_dir / "agent_identity_envelope.json"
+        registration_request_path = output_dir / "agent_warrent_registration_request.json"
         payload = build_agent_id_card_payload(
             installed_manifest_path=installed_manifest_path,
             employment_record_path=output_dir / "employment_record.json",
@@ -1085,15 +1088,26 @@ def build_paideia_agent_install_kit(
             surface="paideia_agent_install_kit",
             task_ref="paideia-agent-kit-identity",
         )
+        registration_request = build_agent_warrent_registration_request(
+            installed_manifest_path=installed_manifest_path,
+            employment_record_path=output_dir / "employment_record.json",
+            owner_key_id="OWNER_KEY_ID_REQUIRED",
+            output_path=registration_request_path,
+        )
         copied[payload_path.name] = "generated_agent_id_card_payload"
         copied[envelope_path.name] = "generated_agent_warrent_ail_v1_envelope"
+        copied[registration_request_path.name] = "generated_agent_warrent_registration_request_draft"
         program["entrypoints"]["agent_id_card_payload"] = payload_path.name
         program["entrypoints"]["agent_identity_envelope"] = envelope_path.name
+        program["entrypoints"]["agent_warrent_registration_request"] = registration_request_path.name
         program["installable_runtime"]["agent_identity_layer"] = {
             "payload_schema": payload["schema"],
             "envelope_version": envelope["version"],
             "agent_warrent_repo": envelope["extensions"]["agent_warrent"]["repo_url"],
             "registration_state": envelope["extensions"]["agent_warrent"]["registration_state"],
+            "registration_request_schema": registration_request["schema"],
+            "registration_request_status": registration_request["status"],
+            "registration_request_submit_ready": registration_request["submit_ready"],
             "network_action_performed": False,
         }
         _write_json(program_path, program)
@@ -1157,6 +1171,8 @@ def build_paideia_agent_install_kit(
         kit_entrypoints["agent_id_card_payload"] = "agent_id_card_payload.json"
     if (output_dir / "agent_identity_envelope.json").exists():
         kit_entrypoints["agent_identity_envelope"] = "agent_identity_envelope.json"
+    if (output_dir / "agent_warrent_registration_request.json").exists():
+        kit_entrypoints["agent_warrent_registration_request"] = "agent_warrent_registration_request.json"
 
     manifest = {
         "schema": INSTALL_KIT_SCHEMA,
@@ -1337,6 +1353,47 @@ def doctor_agent_program(program_path: Path, *, output_path: Path | None = None)
             "public_safe": llm_live_setup_public_safe,
         },
     }
+    registration_request_name = program.get("entrypoints", {}).get("agent_warrent_registration_request")
+    registration_request_path = root / str(registration_request_name) if registration_request_name else None
+    registration_request = (
+        _read_json(registration_request_path)
+        if registration_request_path and registration_request_path.exists()
+        else {}
+    )
+    registration_validation = (
+        registration_request.get("validation", {}) if isinstance(registration_request.get("validation"), dict) else {}
+    )
+    registration_public_safe = (
+        registration_request.get("public_safe", {}) if isinstance(registration_request.get("public_safe"), dict) else {}
+    )
+    checks["agent_warrent_registration_request"] = {
+        "passed": (
+            not registration_request_name
+            or (
+                registration_request_path is not None
+                and registration_request_path.exists()
+                and registration_request.get("schema") == "paideia-agent-warrent-registration-request/v1"
+                and registration_request.get("external_registration") == "manual_owner_action_only"
+                and registration_request.get("network_action_performed") is False
+                and registration_request.get("submit_ready") is False
+                and registration_validation.get("valid") is True
+                and registration_validation.get("signature_required") is True
+                and registration_public_safe.get("no_network_call") is True
+                and registration_public_safe.get("raw_owner_private_key_stored") is False
+            )
+        ),
+        "details": {
+            "entrypoint": registration_request_name,
+            "exists": bool(registration_request_path and registration_request_path.exists()),
+            "schema": registration_request.get("schema") if isinstance(registration_request, dict) else None,
+            "status": registration_request.get("status") if isinstance(registration_request, dict) else None,
+            "submit_ready": registration_request.get("submit_ready") if isinstance(registration_request, dict) else None,
+            "signature_required": registration_validation.get("signature_required"),
+            "network_action_performed": registration_request.get("network_action_performed")
+            if isinstance(registration_request, dict)
+            else None,
+        },
+    }
     readiness_name = program.get("entrypoints", {}).get("runtime_readiness")
     readiness_path = root / str(readiness_name) if readiness_name else None
     readiness = _read_json(readiness_path) if readiness_path and readiness_path.exists() else {}
@@ -1455,6 +1512,7 @@ def doctor_paideia_kit_first_run(
     readiness_path = kit_dir / DEFAULT_RUNTIME_READINESS
     llm_profile_path = kit_dir / DEFAULT_LLM_CONNECTION_PROFILE
     llm_live_setup_guide_path = kit_dir / DEFAULT_LLM_LIVE_SETUP_GUIDE
+    agent_warrent_registration_request_path = kit_dir / "agent_warrent_registration_request.json"
     program_doctor_path = kit_dir / "paideia_doctor_report.json"
     first_chat_path = kit_dir / DEFAULT_KIT_FIRST_RUN_CHAT
     checks: list[dict[str, Any]] = []
@@ -1551,6 +1609,30 @@ def doctor_paideia_kit_first_run(
             status=llm_live_setup_guide.get("status"),
         )
     )
+    agent_warrent_registration_request = (
+        _read_json(agent_warrent_registration_request_path)
+        if agent_warrent_registration_request_path.exists()
+        else {}
+    )
+    registration_validation = (
+        agent_warrent_registration_request.get("validation", {})
+        if isinstance(agent_warrent_registration_request.get("validation"), dict)
+        else {}
+    )
+    checks.append(
+        _check(
+            "agent_warrent_registration_request_manual_only",
+            agent_warrent_registration_request.get("schema") == "paideia-agent-warrent-registration-request/v1"
+            and agent_warrent_registration_request.get("network_action_performed") is False
+            and agent_warrent_registration_request.get("external_registration") == "manual_owner_action_only"
+            and agent_warrent_registration_request.get("submit_ready") is False
+            and registration_validation.get("valid") is True
+            and registration_validation.get("signature_required") is True,
+            schema=agent_warrent_registration_request.get("schema"),
+            status=agent_warrent_registration_request.get("status"),
+            submit_ready=agent_warrent_registration_request.get("submit_ready"),
+        )
+    )
 
     chat: dict[str, Any] = {}
     if program_path.exists():
@@ -1613,6 +1695,7 @@ def doctor_paideia_kit_first_run(
             "install_manifest": DEFAULT_INSTALL_MANIFEST,
             "llm_connection_profile": DEFAULT_LLM_CONNECTION_PROFILE,
             "llm_live_setup_guide": DEFAULT_LLM_LIVE_SETUP_GUIDE,
+            "agent_warrent_registration_request": "agent_warrent_registration_request.json",
             "runtime_readiness": DEFAULT_RUNTIME_READINESS,
             "first_chat_output": first_chat_path.name,
             "program_doctor_output": program_doctor_path.name,
@@ -1662,6 +1745,12 @@ def doctor_paideia_kit_first_run(
                     if isinstance(llm_live_setup_guide.get("readiness_gate"), dict)
                     else None
                 ),
+            },
+            "agent_warrent_registration_request": {
+                "schema": agent_warrent_registration_request.get("schema"),
+                "status": agent_warrent_registration_request.get("status"),
+                "submit_ready": agent_warrent_registration_request.get("submit_ready"),
+                "signature_required": registration_validation.get("signature_required"),
             },
             "first_chat": {
                 "schema": chat.get("schema"),

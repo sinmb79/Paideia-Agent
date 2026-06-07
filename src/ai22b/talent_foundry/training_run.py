@@ -419,6 +419,7 @@ def materialize_training_blueprint(
     artifacts["agent_id_card_payload"] = hiring["agent_id_card_payload"]
     artifacts["agent_identity_envelope"] = hiring["agent_identity_envelope"]
     artifacts["agent_identity_verification"] = hiring["agent_identity_verification"]
+    artifacts["agent_warrent_registration_request"] = hiring["agent_warrent_registration_request"]
     installed_root = artifacts["employment_record"].parent
     artifacts["hired_agent_run"] = installed_root / "last_hired_agent_run.json"
     artifacts["hired_dataflow_workspace"] = installed_root / "agent_dataflow_workspace"
@@ -475,6 +476,7 @@ def materialize_training_blueprint(
             "installed_agent_manifest_created": install["installed_manifest"].exists(),
             "employment_record_created": hiring["employment_record"].exists(),
             "hired_llm_live_setup_guide_created": hiring["llm_live_setup_guide"].exists(),
+            "agent_warrent_registration_request_created": hiring["agent_warrent_registration_request"].exists(),
             "developmental_ecology_created": artifacts["developmental_ecology"].exists(),
             "life_trace_created": artifacts["life_trace"].exists(),
             "growth_profile_created": artifacts["growth_profile"].exists(),
