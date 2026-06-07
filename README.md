@@ -179,9 +179,11 @@ ai22b-talent-foundry onboard
 
 This wizard uses config detection, QuickStart/Advanced mode, Model/Auth, Workspace, Gateway/Channels, Skills, Education Path, Runtime, Agent Identity, Health Check, and Finish steps.
 
-This sample first selects the LLM service and chat surface, writes `llm_provider_matrix.json`, a selected-provider checklist, and `llm_connection_profile.json`, then lets that selected LLM act as the curriculum researcher for the Graham-inspired securities research track.
+This sample first selects the LLM service and chat surface, writes `llm_provider_matrix.json`, a selected-provider checklist, `llm_connection_profile.json`, and `onboarding_launch_plan.json`, then lets that selected LLM act as the curriculum researcher for the Graham-inspired securities research track.
 
-Verify a generated wizard session and its health artifacts:
+Open `onboarding_launch_plan.json` after the wizard if you want the OpenClaw-style "what do I do next?" view. It lists the selected LLM, selected chat surface, role-model education path, local Agent ID payload status, first chat command, live-readiness suite, chat runtime smoke, next goal cycle, and onboarding doctor command without saving API keys, raw provider payloads, or hidden reasoning traces.
+
+Verify a generated wizard session and its health artifacts, including the launch plan:
 
 ```powershell
 ai22b-talent-foundry doctor-onboarding-session `

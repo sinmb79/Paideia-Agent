@@ -16,7 +16,8 @@ flowchart TD
     H --> I["Runtime"]
     I --> J["Agent Identity"]
     J --> K["Health Check"]
-    K --> L["Finish"]
+    K --> L["Launch Plan"]
+    L --> M["Finish"]
 ```
 
 ## Paideia에 추가된 단계
@@ -26,6 +27,7 @@ flowchart TD
 - `Runtime`: 단일 에이전트, 본체 제어 분신 군체, 별도 전문팀, simulation rollout을 선택합니다.
 - `Agent Identity`: Agent ID Card 등록용 payload와 Agent_warrent/Agent Identity Layer `ail.v1` envelope를 로컬 파일로만 생성합니다. 외부 등록은 자동으로 하지 않습니다.
 - `Health Check`: 산출물, 로컬 전용 정책, 외부 채널 비활성화, LLM provider matrix, 선택 provider checklist, 다음 명령을 점검합니다.
+- `Launch Plan`: 선택한 LLM, 채팅 표면, 교육 경로, Agent ID payload, 첫 채팅, live-readiness, 다음 업무 cycle, doctor 명령을 한 파일에 묶어 다음 행동을 보여줍니다.
 
 ## 실행
 
@@ -58,6 +60,7 @@ ai22b-talent-foundry doctor-onboarding-session `
 
 - `console_session.json`: 전체 온보딩 세션과 health 요약
 - `paideia_onboarding_config.json`: OpenClaw식 설정 요약
+- `onboarding_launch_plan.json`: 온보딩 후 사용자가 따라갈 launch plan. LLM 선택, 채팅 표면, 롤모델 교육 경로, 첫 채팅, live-readiness suite, 다음 goal cycle, doctor 명령을 순서대로 담습니다.
 - `llm_provider_matrix.json`: 선택 가능한 LLM/provider 전체의 no-network readiness matrix
 - `onboarding/llm_onboarding_checklist.json`: 선택 provider의 doctor/live-check/runtime/chat 명령 체크리스트
 - `onboarding/llm_connection_profile.json`: 선택 provider의 환경변수, 모델명, localhost endpoint, 검증 순서, live chat 템플릿

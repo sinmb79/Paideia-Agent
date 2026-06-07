@@ -7,6 +7,7 @@ from typing import Any
 
 
 ONBOARDING_SESSION_DOCTOR_SCHEMA = "paideia-onboarding-session-doctor/v1"
+ONBOARDING_LAUNCH_PLAN_SCHEMA = "paideia-onboarding-launch-plan/v1"
 SUPPORTED_SESSION_SCHEMAS = {
     "ai-talent-guided-console-session/v1",
     "ai-talent-onboarding-session/v1",
@@ -71,6 +72,12 @@ def _public_safe_ok(packet: dict[str, Any]) -> bool:
     )
 
 
+def _ids(items: Any) -> set[str]:
+    if not isinstance(items, list):
+        return set()
+    return {str(item.get("id")) for item in items if isinstance(item, dict) and item.get("id")}
+
+
 def doctor_onboarding_session(
     session_path: Path,
     *,
@@ -123,7 +130,12 @@ def doctor_onboarding_session(
         "first_goal_cycle",
     }
     if schema == "ai-talent-guided-console-session/v1":
-        required_artifacts |= {"answers", "llm_provider_matrix", "paideia_onboarding_config"}
+        required_artifacts |= {
+            "answers",
+            "llm_provider_matrix",
+            "onboarding_launch_plan",
+            "paideia_onboarding_config",
+        }
     missing_required = sorted(key for key in required_artifacts if key not in artifacts)
     missing_files = sorted(key for key in required_artifacts if key in artifacts and not artifacts[key].exists())
     _check(
@@ -191,8 +203,11 @@ def doctor_onboarding_session(
     )
 
     config = _safe_read_artifact_json(artifacts, "paideia_onboarding_config")
+    launch_plan = _safe_read_artifact_json(artifacts, "onboarding_launch_plan")
     if schema == "ai-talent-guided-console-session/v1":
         model_auth = config.get("model_auth", {}) if isinstance(config.get("model_auth"), dict) else {}
+        runtime = config.get("runtime", {}) if isinstance(config.get("runtime"), dict) else {}
+        config_launch_plan = config.get("launch_plan", {}) if isinstance(config.get("launch_plan"), dict) else {}
         _check(
             checks,
             "config_links_llm_artifacts",
@@ -202,10 +217,67 @@ def doctor_onboarding_session(
                 and model_auth.get("llm_onboarding_checklist") == str(artifacts.get("llm_onboarding_checklist"))
                 and model_auth.get("llm_connection_profile") == str(artifacts.get("llm_connection_profile"))
                 and model_auth.get("default_provider_call") == "none_without_explicit_live_check"
+                and runtime.get("onboarding_launch_plan") == str(artifacts.get("onboarding_launch_plan"))
+                and config_launch_plan.get("path") == str(artifacts.get("onboarding_launch_plan"))
             ),
             details={
                 "schema": config.get("schema"),
                 "default_provider_call": model_auth.get("default_provider_call"),
+                "launch_plan": config_launch_plan.get("path"),
+            },
+        )
+        launch_flow_ids = _ids(launch_plan.get("flow"))
+        launch_command_ids = _ids(launch_plan.get("command_plan"))
+        required_flow_ids = {
+            "existing_config",
+            "model_auth",
+            "gateway_channels",
+            "education_path",
+            "raise_install_hire",
+            "health_check",
+            "finish",
+        }
+        required_command_ids = {
+            "connection_profile",
+            "provider_doctor_no_network",
+            "llm_live_readiness_suite",
+            "agent_runtime_smoke",
+            "chat_runtime_smoke",
+            "first_chat_offline",
+            "doctor_onboarding_session",
+        }
+        selected_llm = (
+            launch_plan.get("selected_llm", {})
+            if isinstance(launch_plan.get("selected_llm"), dict)
+            else {}
+        )
+        selected_chat = (
+            launch_plan.get("selected_chat_surface", {})
+            if isinstance(launch_plan.get("selected_chat_surface"), dict)
+            else {}
+        )
+        _check(
+            checks,
+            "onboarding_launch_plan_valid",
+            (
+                launch_plan.get("schema") == ONBOARDING_LAUNCH_PLAN_SCHEMA
+                and _public_safe_ok(launch_plan)
+                and required_flow_ids.issubset(launch_flow_ids)
+                and required_command_ids.issubset(launch_command_ids)
+                and bool(selected_llm.get("engine"))
+                and bool(selected_chat.get("id"))
+                and launch_plan.get("public_safe", {}).get("external_registration_performed") is False
+            ),
+            details={
+                "schema": launch_plan.get("schema"),
+                "status": launch_plan.get("status"),
+                "missing_flow_ids": sorted(required_flow_ids - launch_flow_ids),
+                "missing_command_ids": sorted(required_command_ids - launch_command_ids),
+                "selected_engine": selected_llm.get("engine"),
+                "selected_chat_surface": selected_chat.get("id"),
+                "external_registration_performed": launch_plan.get("public_safe", {}).get(
+                    "external_registration_performed"
+                ),
             },
         )
 
