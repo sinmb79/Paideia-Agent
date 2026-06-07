@@ -19,7 +19,11 @@ from ai22b.talent_foundry.onboarding_choices import (
     LLM_SERVICE_CATALOG,
 )
 from ai22b.talent_foundry.owner_self_extension import build_owner_self_extension_intake
-from ai22b.talent_foundry.role_models import list_role_models, summarize_role_model
+from ai22b.talent_foundry.role_models import (
+    build_role_model_curriculum_catalog,
+    list_role_models,
+    summarize_role_model,
+)
 from ai22b.talent_foundry.registry import (
     assemble_hired_agent_team,
     assemble_hired_projection_swarm,
@@ -33,6 +37,7 @@ from ai22b.talent_foundry.simulation_rollouts import build_simulation_rollouts, 
 CONSOLE_SESSION_SCHEMA = "ai-talent-guided-console-session/v1"
 OPENCLAW_STYLE_WIZARD_SCHEMA = "ai22b-paideia-openclaw-style-onboarding/v1"
 ONBOARDING_LAUNCH_PLAN_SCHEMA = "paideia-onboarding-launch-plan/v1"
+ONBOARDING_CHOICE_MANIFEST_SCHEMA = "paideia-onboarding-choice-manifest/v1"
 ONBOARDING_DASHBOARD_SCHEMA = "paideia-openclaw-onboarding-dashboard/v1"
 ONBOARDING_DASHBOARD_VIEW_SCHEMA = "paideia-onboarding-dashboard-view/v1"
 ONBOARDING_NEXT_ACTION_SCHEMA = "paideia-onboarding-next-action/v1"
@@ -554,6 +559,203 @@ def build_openclaw_style_wizard(
     }
 
 
+def _choice_label(catalog: list[dict[str, Any]], item_id: str | None) -> str | None:
+    if not item_id:
+        return None
+    for item in catalog:
+        if item.get("id") == item_id or item.get("service_id") == item_id or item.get("role_model_id") == item_id:
+            return str(item.get("label") or item.get("display_name") or item_id)
+    return item_id
+
+
+def _selected_role_model_card(domain: str | None, role_model_id: str | None) -> dict[str, Any]:
+    if not role_model_id:
+        return {}
+    catalog = build_role_model_curriculum_catalog(domain)
+    for item in catalog.get("role_models", []):
+        if isinstance(item, dict) and item.get("role_model_id") == role_model_id:
+            curriculum = item.get("curriculum", {}) if isinstance(item.get("curriculum"), dict) else {}
+            return {
+                "role_model_id": item.get("role_model_id"),
+                "display_name": item.get("display_name"),
+                "domain": item.get("domain"),
+                "primary_agent_use_case": item.get("primary_agent_use_case"),
+                "curriculum": {
+                    "status": curriculum.get("status"),
+                    "curriculum_id": curriculum.get("curriculum_id"),
+                    "stage_count": curriculum.get("stage_count"),
+                    "course_count": curriculum.get("course_count"),
+                    "assessment_count": curriculum.get("assessment_count"),
+                    "required_for_hiring_count": curriculum.get("required_for_hiring_count"),
+                },
+                "blueprint_command": item.get("blueprint_command"),
+                "policy": item.get("policy", {}),
+            }
+    return {
+        "role_model_id": role_model_id,
+        "status": "not_found_in_public_curriculum_catalog",
+        "curriculum": {"status": "missing"},
+    }
+
+
+def build_onboarding_choice_manifest(
+    *,
+    normalized: dict[str, str],
+    output_dir: Path,
+    output_path: Path,
+    onboarding: dict[str, Any],
+    artifacts: dict[str, Any],
+    wizard: dict[str, Any],
+    launch_plan_path: Path | None = None,
+    status: str,
+) -> dict[str, Any]:
+    selected_llm = onboarding.get("selected_llm_service", {})
+    if not isinstance(selected_llm, dict):
+        selected_llm = {}
+    selected_chat = onboarding.get("selected_chat_surface", {})
+    if not isinstance(selected_chat, dict):
+        selected_chat = {}
+    role_model_id = normalized.get("role_model_id") or None
+    role_model_card = _selected_role_model_card(normalized.get("domain"), role_model_id)
+    requested_workspace = normalized.get("workspace_dir") or ""
+    private_curriculum_dir = normalized.get("private_curriculum_dir") or ""
+    wizard_steps = wizard.get("steps", []) if isinstance(wizard.get("steps"), list) else []
+    question_ids_by_step: dict[str, list[str]] = {}
+    for question in questions_with_choices():
+        step = str(question.get("step") or "setup")
+        question_ids_by_step.setdefault(step, []).append(str(question["id"]))
+
+    return {
+        "schema": ONBOARDING_CHOICE_MANIFEST_SCHEMA,
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "status": status,
+        "style_source": "OpenClaw-style sequential chooser adapted for Paideia Agent",
+        "flow_contract": {
+            "llm_selected_before_research_request": True,
+            "chat_surface_selected_before_first_chat": True,
+            "role_model_curriculum_selected_before_raise": True,
+            "agent_identity_selected_before_external_registration": True,
+            "llm_is_identity": False,
+            "local_artifacts_are_identity": True,
+        },
+        "chooser_steps": [
+            {
+                "id": str(step.get("id")),
+                "title": step.get("title"),
+                "status": step.get("status"),
+                "question_ids": question_ids_by_step.get(str(step.get("id")), []),
+            }
+            for step in wizard_steps
+            if isinstance(step, dict)
+        ],
+        "selected": {
+            "mode": normalized.get("onboarding_mode", "quickstart"),
+            "owner": normalized.get("owner"),
+            "llm_service": {
+                "service_id": selected_llm.get("service_id") or selected_llm.get("id") or normalized.get("llm_service"),
+                "label": selected_llm.get("label")
+                or _choice_label(LLM_SERVICE_CATALOG, normalized.get("llm_service")),
+                "engine": selected_llm.get("engine"),
+                "status": selected_llm.get("status"),
+                "runtime_readiness": selected_llm.get("runtime_readiness"),
+                "network_access": selected_llm.get("network_access"),
+                "selected_model": selected_llm.get("selected_model") or normalized.get("llm_model") or None,
+                "selected_model_path_supplied": bool(
+                    selected_llm.get("selected_model_path") or normalized.get("llm_model_path")
+                ),
+                "raw_model_path_saved_in_choice_manifest": False,
+            },
+            "chat_surface": {
+                "id": selected_chat.get("id") or normalized.get("chat_surface"),
+                "label": selected_chat.get("label")
+                or _choice_label(CHAT_SURFACE_CATALOG, normalized.get("chat_surface")),
+                "entrypoint": selected_chat.get("entrypoint"),
+                "channel_policy": selected_chat.get("channel_policy"),
+            },
+            "gateway_channels": {
+                "gateway_mode": normalized.get("gateway_mode"),
+                "channel_mode": normalized.get("channel_mode"),
+                "external_channels_enabled": normalized.get("channel_mode") not in {"local_only", "later", ""},
+                "external_channels_review_required": True,
+            },
+            "skills": {
+                "mode": normalized.get("skills_mode"),
+                "migration_policy": "quarantine_import_only_until_review",
+                "external_code_execution_during_onboarding": False,
+            },
+            "education_path": {
+                "talent_source": normalized.get("talent_source"),
+                "talent_name": normalized.get("talent_name"),
+                "gender": normalized.get("gender"),
+                "domain": normalized.get("domain"),
+                "role_model_id": role_model_id,
+                "role_model_label": role_model_card.get("display_name") or role_model_id,
+                "role_model_curriculum": role_model_card.get("curriculum", {}),
+                "role_model_policy": role_model_card.get("policy", {}),
+                "blueprint_command": role_model_card.get("blueprint_command"),
+            },
+            "storage": {
+                "requested_workspace_dir_supplied": bool(requested_workspace),
+                "effective_output_dir": str(output_dir),
+                "console_session_path": str(output_path),
+                "private_curriculum_dir_supplied": bool(private_curriculum_dir),
+                "raw_private_curriculum_dir_saved_in_choice_manifest": False,
+                "public_release_rule": "exclude_data_private_absolute_paths_and_runtime_chat_logs",
+            },
+            "runtime": {
+                "agent_surface": normalized.get("agent_surface"),
+                "post_hire_mode": normalized.get("post_hire_mode"),
+                "simulation_rollouts_enabled": normalized.get("simulation_rollouts_enabled"),
+                "finish_action": normalized.get("finish_action"),
+            },
+            "agent_identity": {
+                "agent_id_card_mode": normalized.get("agent_id_card_mode"),
+                "agent_id_card_payload": artifacts.get("agent_id_card_payload"),
+                "agent_identity_envelope": artifacts.get("agent_identity_envelope"),
+                "agent_warrent_registration_request": artifacts.get("agent_warrent_registration_request"),
+                "external_registration": "manual_owner_action_only",
+                "external_registration_performed": False,
+            },
+        },
+        "researcher_mode": {
+            "selected_llm_acts_as": "curriculum_researcher_and_growth_program_operator",
+            "owner_request": normalized.get("request"),
+            "outputs_expected": [
+                "training_blueprint",
+                "curriculum_manifest",
+                "assessment_transcript",
+                "reasoning_ledger",
+                "hiring_dossier",
+                "employment_record",
+            ],
+            "private_reasoning_trace": "do_not_store",
+        },
+        "launch_plan": {
+            "path": str(launch_plan_path) if launch_plan_path is not None else artifacts.get("onboarding_launch_plan"),
+            "recommended_finish_action": normalized.get("finish_action"),
+        },
+        "artifact_links": {
+            "onboarding_session": artifacts.get("onboarding_session"),
+            "llm_provider_matrix": artifacts.get("llm_provider_matrix"),
+            "llm_onboarding_checklist": artifacts.get("llm_onboarding_checklist"),
+            "llm_connection_profile": artifacts.get("llm_connection_profile"),
+            "llm_live_setup_guide": artifacts.get("llm_live_setup_guide"),
+            "onboarding_launch_plan": artifacts.get("onboarding_launch_plan"),
+            "paideia_onboarding_config": artifacts.get("paideia_onboarding_config"),
+            "employment_record": artifacts.get("employment_record"),
+        },
+        "public_safe": {
+            "network_call_performed": False,
+            "secret_values_exported": False,
+            "raw_provider_payload_saved": False,
+            "private_reasoning_trace": "do_not_store",
+            "raw_model_path_saved": False,
+            "raw_private_curriculum_dir_saved": False,
+            "external_registration_performed": False,
+        },
+    }
+
+
 def _read_json_if_exists(path: str | None) -> dict[str, Any]:
     if not path:
         return {}
@@ -631,6 +833,7 @@ def _build_next_action_queue(
     base_order = [
         ("doctor_onboarding_session", "health_check"),
         ("first_chat_offline", "first_conversation"),
+        ("review_onboarding_choices", "setup_review"),
         ("llm_live_readiness_suite", "model_auth"),
         ("chat_runtime_smoke", "chat_surface"),
         ("next_goal_cycle", "learning_loop"),
@@ -685,6 +888,17 @@ def _build_operator_dashboard(
                         "provider_doctor_no_network",
                         "llm_live_readiness_suite",
                     ]
+                    if action_id in command_ids
+                ],
+            },
+            {
+                "id": "onboarding_choices",
+                "title": "Onboarding Choices",
+                "status": "recorded",
+                "choice_manifest": artifacts.get("onboarding_choice_manifest"),
+                "action_ids": [
+                    action_id
+                    for action_id in ["review_onboarding_choices"]
                     if action_id in command_ids
                 ],
             },
@@ -799,6 +1013,14 @@ def build_onboarding_launch_plan(
             "required_before_agent_work": False,
             "expected": "shows required model, key, localhost, explicit live-check, and daily chat steps without storing secrets.",
         },
+        {
+            "id": "review_onboarding_choices",
+            "title": "Review selected LLM, chat, role-model curriculum, storage, and Agent ID choices",
+            "path": artifacts.get("onboarding_choice_manifest", ""),
+            "network_call": False,
+            "required_before_agent_work": False,
+            "expected": "shows the selected setup and policy receipt without storing raw local model paths or private curriculum paths.",
+        },
         _copy_command(
             command_id="provider_doctor_no_network",
             title="Verify provider configuration without network transport",
@@ -875,6 +1097,19 @@ def build_onboarding_launch_plan(
             "title": "Existing Config",
             "status": "completed",
             "artifact": str(output_dir / "paideia_onboarding_config.json"),
+        },
+        {
+            "id": "choice_manifest",
+            "title": "Choice Manifest",
+            "status": "completed" if artifacts.get("onboarding_choice_manifest") else "missing",
+            "artifact": artifacts.get("onboarding_choice_manifest"),
+            "proves": [
+                "selected_llm_service",
+                "selected_chat_surface",
+                "selected_role_model_curriculum",
+                "storage_policy",
+                "agent_identity_policy",
+            ],
         },
         {
             "id": "model_auth",
@@ -964,6 +1199,7 @@ def build_onboarding_launch_plan(
             "finish_action": normalized.get("finish_action"),
             "primary_next_action_id": operator_dashboard.get("primary_next_action_id"),
             "wizard_step_count": len(wizard.get("steps", [])) if isinstance(wizard.get("steps"), list) else 0,
+            "choice_manifest": artifacts.get("onboarding_choice_manifest"),
         },
         "selected_llm": selected_llm,
         "selected_chat_surface": selected_chat,
@@ -1061,6 +1297,7 @@ def format_onboarding_finish_summary(session: dict[str, Any]) -> str:
         f"- LLM engine: {connection.get('selected_engine', '')}",
         f"- Chat surface: {answers.get('chat_surface', '')}",
         f"- Console session: {artifacts.get('console_session', '')}",
+        f"- Choice manifest: {artifacts.get('onboarding_choice_manifest', '')}",
         f"- Launch plan: {launch_plan_path}",
         f"- Config: {artifacts.get('paideia_onboarding_config', '')}",
         "",
@@ -1676,6 +1913,11 @@ def write_openclaw_style_config(
             "operator_dashboard": "embedded_in_launch_plan",
             "next_action_queue": "embedded_in_launch_plan",
         },
+        "choice_manifest": {
+            "path": artifacts.get("onboarding_choice_manifest"),
+            "schema": ONBOARDING_CHOICE_MANIFEST_SCHEMA,
+            "purpose": "records selected LLM, chat surface, education path, storage, and Agent ID policy",
+        },
         "artifacts": artifacts,
     }
     _write_json(config_path, config)
@@ -1748,6 +1990,8 @@ def run_console_session(
         "agent_identity_verification": onboarding["artifacts"].get("agent_identity_verification"),
         "agent_warrent_registration_request": onboarding["artifacts"].get("agent_warrent_registration_request"),
     }
+    choice_manifest_path = output_dir / "onboarding_choice_manifest.json"
+    artifacts["onboarding_choice_manifest"] = str(choice_manifest_path)
     status = onboarding["status"]
     if normalized.get("talent_source") == "owner_self_extension" and normalized.get("private_curriculum_dir"):
         owner_intake_path = output_dir / "owner_self_extension_intake.json"
@@ -1930,6 +2174,18 @@ def run_console_session(
     )
     _write_json(launch_plan_path, launch_plan)
     artifacts["onboarding_launch_plan"] = str(launch_plan_path)
+    artifacts["paideia_onboarding_config"] = str(output_dir / "paideia_onboarding_config.json")
+    choice_manifest = build_onboarding_choice_manifest(
+        normalized=normalized,
+        output_dir=output_dir,
+        output_path=output_path,
+        onboarding=onboarding,
+        artifacts=artifacts,
+        wizard=wizard,
+        launch_plan_path=launch_plan_path,
+        status=status,
+    )
+    _write_json(choice_manifest_path, choice_manifest)
     config_path = write_openclaw_style_config(
         output_dir=output_dir,
         normalized=normalized,
@@ -1971,6 +2227,17 @@ def run_console_session(
             },
         },
         "local_policy": onboarding["local_policy"],
+        "onboarding_choice_manifest": {
+            "schema": choice_manifest["schema"],
+            "path": str(choice_manifest_path),
+            "selected_llm_service": choice_manifest["selected"]["llm_service"]["service_id"],
+            "selected_chat_surface": choice_manifest["selected"]["chat_surface"]["id"],
+            "role_model_id": choice_manifest["selected"]["education_path"]["role_model_id"],
+            "curriculum_status": choice_manifest["selected"]["education_path"]["role_model_curriculum"].get("status"),
+            "external_registration_performed": choice_manifest["selected"]["agent_identity"][
+                "external_registration_performed"
+            ],
+        },
         "post_hire_extensions": post_hire_extensions,
         "launch_plan": {
             "schema": launch_plan["schema"],

@@ -179,11 +179,13 @@ ai22b-talent-foundry onboard
 
 This wizard uses config detection, QuickStart/Advanced mode, Model/Auth, Workspace, Gateway/Channels, Skills, Education Path, Runtime, Agent Identity, Health Check, and Finish steps.
 
-This sample first selects the LLM service and chat surface, writes `llm_provider_matrix.json`, a selected-provider checklist, `llm_connection_profile.json`, `llm_live_setup_guide.json`, and `onboarding_launch_plan.json`, then lets that selected LLM act as the curriculum researcher for the Graham-inspired securities research track.
+This sample first selects the LLM service and chat surface, writes `llm_provider_matrix.json`, a selected-provider checklist, `llm_connection_profile.json`, `llm_live_setup_guide.json`, `onboarding_choice_manifest.json`, and `onboarding_launch_plan.json`, then lets that selected LLM act as the curriculum researcher for the Graham-inspired securities research track.
 
-Open `onboarding_launch_plan.json` after the wizard if you want the OpenClaw-style "what do I do next?" view. It now includes an `operator_dashboard` and `next_action_queue` with Model/Auth, Chat Surface, Education Path, Agent Identity, Health Check, and Learning Loop cards. It lists the selected LLM, selected chat surface, role-model education path, local Agent ID payload status, Agent_warrent registration request draft, first chat command, live-readiness suite, chat runtime smoke, next goal cycle, and onboarding doctor command without saving API keys, raw provider payloads, or hidden reasoning traces.
+Open `onboarding_choice_manifest.json` when you want the choice receipt: selected LLM service, chat surface, gateway/channel posture, skill migration mode, role-model curriculum, storage policy, runtime mode, and Agent ID/Agent_warrent policy in one public-safe document. It records whether a local model path or private curriculum directory was supplied without storing those raw paths.
 
-The CLI also prints a finish summary after `start-console` or `onboard`: console session path, launch plan path, selected LLM/chat surface, onboarding doctor command, live-readiness command, first chat command, and the recommended finish action.
+Open `onboarding_launch_plan.json` after the wizard if you want the OpenClaw-style "what do I do next?" view. It now includes an `operator_dashboard` and `next_action_queue` with Model/Auth, Onboarding Choices, Chat Surface, Education Path, Agent Identity, Health Check, and Learning Loop cards. It lists the selected LLM, selected chat surface, role-model education path, local Agent ID payload status, Agent_warrent registration request draft, first chat command, live-readiness suite, chat runtime smoke, next goal cycle, and onboarding doctor command without saving API keys, raw provider payloads, or hidden reasoning traces.
+
+The CLI also prints a finish summary after `start-console` or `onboard`: console session path, choice manifest path, launch plan path, selected LLM/chat surface, onboarding doctor command, live-readiness command, first chat command, and the recommended finish action.
 
 You can print the dashboard view directly from the launch plan. This renders the cards and next-action queue, but does not execute commands or call providers:
 

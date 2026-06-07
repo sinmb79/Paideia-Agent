@@ -8,6 +8,7 @@ from typing import Any
 
 ONBOARDING_SESSION_DOCTOR_SCHEMA = "paideia-onboarding-session-doctor/v1"
 ONBOARDING_LAUNCH_PLAN_SCHEMA = "paideia-onboarding-launch-plan/v1"
+ONBOARDING_CHOICE_MANIFEST_SCHEMA = "paideia-onboarding-choice-manifest/v1"
 ONBOARDING_DASHBOARD_SCHEMA = "paideia-openclaw-onboarding-dashboard/v1"
 SUPPORTED_SESSION_SCHEMAS = {
     "ai-talent-guided-console-session/v1",
@@ -140,6 +141,7 @@ def doctor_onboarding_session(
             "answers",
             "llm_provider_matrix",
             "llm_live_setup_guide",
+            "onboarding_choice_manifest",
             "onboarding_launch_plan",
             "paideia_onboarding_config",
         }
@@ -237,10 +239,14 @@ def doctor_onboarding_session(
 
     config = _safe_read_artifact_json(artifacts, "paideia_onboarding_config")
     launch_plan = _safe_read_artifact_json(artifacts, "onboarding_launch_plan")
+    choice_manifest = _safe_read_artifact_json(artifacts, "onboarding_choice_manifest")
     if schema == "ai-talent-guided-console-session/v1":
         model_auth = config.get("model_auth", {}) if isinstance(config.get("model_auth"), dict) else {}
         runtime = config.get("runtime", {}) if isinstance(config.get("runtime"), dict) else {}
         config_launch_plan = config.get("launch_plan", {}) if isinstance(config.get("launch_plan"), dict) else {}
+        config_choice_manifest = (
+            config.get("choice_manifest", {}) if isinstance(config.get("choice_manifest"), dict) else {}
+        )
         _check(
             checks,
             "config_links_llm_artifacts",
@@ -253,11 +259,63 @@ def doctor_onboarding_session(
                 and model_auth.get("default_provider_call") == "none_without_explicit_live_check"
                 and runtime.get("onboarding_launch_plan") == str(artifacts.get("onboarding_launch_plan"))
                 and config_launch_plan.get("path") == str(artifacts.get("onboarding_launch_plan"))
+                and config_choice_manifest.get("path") == str(artifacts.get("onboarding_choice_manifest"))
             ),
             details={
                 "schema": config.get("schema"),
                 "default_provider_call": model_auth.get("default_provider_call"),
                 "launch_plan": config_launch_plan.get("path"),
+                "choice_manifest": config_choice_manifest.get("path"),
+            },
+        )
+        choice_selected = (
+            choice_manifest.get("selected", {}) if isinstance(choice_manifest.get("selected"), dict) else {}
+        )
+        choice_llm = (
+            choice_selected.get("llm_service", {}) if isinstance(choice_selected.get("llm_service"), dict) else {}
+        )
+        choice_chat = (
+            choice_selected.get("chat_surface", {}) if isinstance(choice_selected.get("chat_surface"), dict) else {}
+        )
+        choice_education = (
+            choice_selected.get("education_path", {})
+            if isinstance(choice_selected.get("education_path"), dict)
+            else {}
+        )
+        choice_curriculum = (
+            choice_education.get("role_model_curriculum", {})
+            if isinstance(choice_education.get("role_model_curriculum"), dict)
+            else {}
+        )
+        choice_identity = (
+            choice_selected.get("agent_identity", {})
+            if isinstance(choice_selected.get("agent_identity"), dict)
+            else {}
+        )
+        _check(
+            checks,
+            "onboarding_choice_manifest_valid",
+            (
+                choice_manifest.get("schema") == ONBOARDING_CHOICE_MANIFEST_SCHEMA
+                and _public_safe_ok(choice_manifest)
+                and bool(choice_llm.get("service_id"))
+                and bool(choice_llm.get("engine"))
+                and bool(choice_chat.get("id"))
+                and bool(choice_education.get("talent_source"))
+                and choice_curriculum.get("status") in {"connected", "missing", None}
+                and choice_identity.get("external_registration_performed") is False
+                and choice_llm.get("raw_model_path_saved_in_choice_manifest") is False
+                and choice_manifest.get("flow_contract", {}).get("llm_is_identity") is False
+            ),
+            details={
+                "schema": choice_manifest.get("schema"),
+                "selected_llm_service": choice_llm.get("service_id"),
+                "selected_engine": choice_llm.get("engine"),
+                "selected_chat_surface": choice_chat.get("id"),
+                "talent_source": choice_education.get("talent_source"),
+                "role_model_id": choice_education.get("role_model_id"),
+                "curriculum_status": choice_curriculum.get("status"),
+                "external_registration_performed": choice_identity.get("external_registration_performed"),
             },
         )
         launch_flow_ids = _ids(launch_plan.get("flow"))
@@ -275,6 +333,7 @@ def doctor_onboarding_session(
         )
         required_flow_ids = {
             "existing_config",
+            "choice_manifest",
             "model_auth",
             "gateway_channels",
             "education_path",
@@ -285,6 +344,7 @@ def doctor_onboarding_session(
         required_command_ids = {
             "connection_profile",
             "live_setup_guide",
+            "review_onboarding_choices",
             "provider_doctor_no_network",
             "llm_live_readiness_suite",
             "agent_runtime_smoke",
