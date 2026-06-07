@@ -32,6 +32,46 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertEqual(hopper["status"], "ready_public_metadata")
         self.assertIn("debugging", hopper["primary_agent_use_case"])
 
+    def test_role_model_curriculum_catalog_connects_all_public_choices(self) -> None:
+        from ai22b.talent_foundry.role_models import build_role_model_curriculum_catalog, list_role_models
+
+        catalog = build_role_model_curriculum_catalog()
+        role_model_ids = {item["role_model_id"] for item in list_role_models()}
+        cards = {item["role_model_id"]: item for item in catalog["role_models"]}
+
+        self.assertEqual(catalog["schema"], "paideia-role-model-curriculum-catalog/v1")
+        self.assertEqual(catalog["summary"]["role_model_count"], len(role_model_ids))
+        self.assertEqual(catalog["summary"]["missing_curriculum_count"], 0)
+        self.assertTrue(catalog["summary"]["ready_for_onboarding"])
+        self.assertEqual(set(catalog["summary"]["missing_role_model_ids"]), set())
+        self.assertEqual(set(cards), role_model_ids)
+        self.assertFalse(catalog["public_safe"]["network_call_performed"])
+        self.assertFalse(catalog["public_safe"]["private_materials_included"])
+        self.assertFalse(catalog["public_safe"]["copyrighted_bodies_included"])
+
+        for role_model_id, card in cards.items():
+            curriculum = card["curriculum"]
+            self.assertEqual(curriculum["status"], "connected", role_model_id)
+            self.assertGreaterEqual(curriculum["stage_count"], 5, role_model_id)
+            self.assertGreaterEqual(curriculum["assessment_count"], 8, role_model_id)
+            self.assertGreaterEqual(curriculum["required_for_hiring_count"], 6, role_model_id)
+            self.assertIn("--role-model", card["blueprint_command"])
+            self.assertIn(role_model_id, card["blueprint_command"])
+            self.assertIn("assessment_transcript.json", card["hiring_outputs"])
+            self.assertEqual(card["policy"]["impersonation"], "forbidden")
+            self.assertEqual(card["policy"]["personality_injection"], "forbidden")
+
+        software_catalog = build_role_model_curriculum_catalog("software_agent_engineering")
+        self.assertEqual(software_catalog["domain"], "software_agent_engineering")
+        self.assertEqual(
+            {item["domain"] for item in software_catalog["role_models"]},
+            {"software_agent_engineering"},
+        )
+        self.assertLess(
+            software_catalog["summary"]["role_model_count"],
+            catalog["summary"]["role_model_count"],
+        )
+
     def test_graham_blueprint_contains_role_model_saju_curriculum_and_artifacts(self) -> None:
         from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
 

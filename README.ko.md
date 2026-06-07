@@ -102,7 +102,7 @@ python -m pip install -e ".[dev]"        # 테스트
 
 CI의 package smoke 테스트는 `pip install -e ".[dev]"` 이후 실행됩니다. 설치된 distribution metadata, 노출된 console script entry point, 실제 callable script target, 기능별 optional extras 분리, 패키지 메타데이터 hygiene를 확인합니다.
 
-CI는 공개 안전 first-run CLI smoke 테스트도 실행합니다. 이 테스트는 `list-role-models`, `list-llm-services`, `build-llm-onboarding-checklist --llm-engine deterministic_local`, `build-llm-connection-profile --llm-engine deterministic_local`, `build-llm-live-setup-guide --llm-engine deterministic_local`, `show-llm-connection-status --llm-engine deterministic_local`, `doctor-llm-provider --llm-engine deterministic_local`, `doctor-llm-adapters`, `run-llm-application-smoke --llm-engine deterministic_local`, `run-agent-runtime-smoke --llm-engine deterministic_local`, `run-chat-runtime-smoke --llm-engine deterministic_local`, `doctor-llm-live-readiness --llm-engine deterministic_local`, `audit-tool-capabilities --strict`, `run-action-policy-eval`, `audit-public-release-readiness`, `build-source-sbom`, `doctor-package-install`, `doctor-runtime-contract`, `doctor-first-run`이 비공개 파일, API 키, 네트워크 접근 없이 실행되고 검토 가능한 JSON 리포트를 쓰는지 확인합니다.
+CI는 공개 안전 first-run CLI smoke 테스트도 실행합니다. 이 테스트는 `list-role-models`, `list-role-model-curricula`, `list-llm-services`, `build-llm-onboarding-checklist --llm-engine deterministic_local`, `build-llm-connection-profile --llm-engine deterministic_local`, `build-llm-live-setup-guide --llm-engine deterministic_local`, `show-llm-connection-status --llm-engine deterministic_local`, `doctor-llm-provider --llm-engine deterministic_local`, `doctor-llm-adapters`, `run-llm-application-smoke --llm-engine deterministic_local`, `run-agent-runtime-smoke --llm-engine deterministic_local`, `run-chat-runtime-smoke --llm-engine deterministic_local`, `doctor-llm-live-readiness --llm-engine deterministic_local`, `audit-tool-capabilities --strict`, `run-action-policy-eval`, `audit-public-release-readiness`, `build-source-sbom`, `doctor-package-install`, `doctor-runtime-contract`, `doctor-first-run`이 비공개 파일, API 키, 네트워크 접근 없이 실행되고 검토 가능한 JSON 리포트를 쓰는지 확인합니다.
 
 롤모델 목록:
 
@@ -110,6 +110,15 @@ CI는 공개 안전 first-run CLI smoke 테스트도 실행합니다. 이 테스
 ai22b-talent-foundry list-role-models
 ai22b-talent-foundry list-role-models --domain software_agent_engineering
 ```
+
+각 롤모델이 실제 커리큘럼, 성장 단계, 시험/과제, 고용 dossier 경로까지 연결되어 있는지 확인하려면 아래 명령을 사용합니다.
+
+```powershell
+ai22b-talent-foundry list-role-model-curricula
+ai22b-talent-foundry list-role-model-curricula --domain software_agent_engineering
+```
+
+이 카탈로그는 온보딩에서 사용자에게 보여줄 수 있는 선택 화면용 데이터입니다. `curriculum_status`, 학습 단계 수, 과목 수, 필수 고용 평가 게이트, 첫 blueprint 명령, 공개 안전 플래그를 포함하며, 비공개 교재 본문, 저작권 교재 본문, API 키, 로컬 절대경로는 포함하지 않습니다.
 
 Graham Junior 샘플:
 

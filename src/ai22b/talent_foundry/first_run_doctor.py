@@ -22,7 +22,7 @@ from ai22b.talent_foundry.package_install_doctor import doctor_package_install
 from ai22b.talent_foundry.action_policy import ACTION_POLICY_DECISION_MODEL
 from ai22b.talent_foundry.policy_eval import DEFAULT_POLICY_EVAL_SUITE, run_action_policy_eval
 from ai22b.talent_foundry.public_release import audit_public_release_readiness
-from ai22b.talent_foundry.role_models import list_role_models, summarize_role_model
+from ai22b.talent_foundry.role_models import build_role_model_curriculum_catalog, list_role_models, summarize_role_model
 from ai22b.talent_foundry.runtime_contract_doctor import doctor_runtime_contract
 from ai22b.talent_foundry.source_sbom import build_source_sbom
 from ai22b.talent_foundry.tool_registry import audit_tool_capability_registry
@@ -369,6 +369,7 @@ def doctor_first_run(
     checks: list[dict[str, Any]] = []
     role_models = [summarize_role_model(item) for item in list_role_models("securities_research")]
     role_model_ids = {str(item.get("role_model_id", "")) for item in role_models}
+    role_model_curriculum_catalog = build_role_model_curriculum_catalog()
     provider_matrix = build_llm_provider_matrix(chat_surface="codex-bridge-chat")
     llm_checklist = build_llm_onboarding_checklist(
         llm_service="deterministic_local",
@@ -445,6 +446,26 @@ def doctor_first_run(
         "role_model_catalog_available",
         "graham_value_investing" in role_model_ids and len(role_model_ids) >= 1,
         details={"domain": "securities_research", "role_model_ids": sorted(role_model_ids)},
+    )
+    _check(
+        checks,
+        "role_model_curriculum_catalog_ready",
+        role_model_curriculum_catalog.get("schema") == "paideia-role-model-curriculum-catalog/v1"
+        and _as_dict(role_model_curriculum_catalog.get("summary")).get("ready_for_onboarding") is True
+        and _as_dict(role_model_curriculum_catalog.get("summary")).get("missing_curriculum_count") == 0
+        and _as_dict(role_model_curriculum_catalog.get("public_safe")).get("network_call_performed") is False
+        and _as_dict(role_model_curriculum_catalog.get("public_safe")).get("private_materials_included") is False
+        and _as_dict(role_model_curriculum_catalog.get("public_safe")).get("copyrighted_bodies_included") is False,
+        details={
+            "schema": role_model_curriculum_catalog.get("schema"),
+            "role_model_count": _as_dict(role_model_curriculum_catalog.get("summary")).get("role_model_count"),
+            "missing_curriculum_count": _as_dict(role_model_curriculum_catalog.get("summary")).get(
+                "missing_curriculum_count"
+            ),
+            "ready_for_onboarding": _as_dict(role_model_curriculum_catalog.get("summary")).get(
+                "ready_for_onboarding"
+            ),
+        },
     )
     _check(
         checks,
@@ -764,6 +785,24 @@ def doctor_first_run(
             "role_models": {
                 "domain": "securities_research",
                 "role_model_ids": sorted(role_model_ids),
+            },
+            "role_model_curriculum_catalog": {
+                "schema": role_model_curriculum_catalog.get("schema"),
+                "role_model_count": _as_dict(role_model_curriculum_catalog.get("summary")).get(
+                    "role_model_count"
+                ),
+                "missing_curriculum_count": _as_dict(role_model_curriculum_catalog.get("summary")).get(
+                    "missing_curriculum_count"
+                ),
+                "ready_for_onboarding": _as_dict(role_model_curriculum_catalog.get("summary")).get(
+                    "ready_for_onboarding"
+                ),
+                "network_call_performed": _as_dict(role_model_curriculum_catalog.get("public_safe")).get(
+                    "network_call_performed"
+                ),
+                "private_materials_included": _as_dict(role_model_curriculum_catalog.get("public_safe")).get(
+                    "private_materials_included"
+                ),
             },
             "llm_provider_matrix": {
                 "schema": provider_matrix.get("schema"),

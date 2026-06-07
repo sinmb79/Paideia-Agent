@@ -74,6 +74,7 @@ models/adapters/*
 !models/adapters/.gitkeep
 models/checkpoints/*
 !models/checkpoints/.gitkeep
+!models/checkpoints/tiny_bigram_seed.json
 data/processed/*
 !data/processed/.gitkeep
 
