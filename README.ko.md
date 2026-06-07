@@ -6,6 +6,17 @@
 
 Paideia Agent는 로컬 우선 AI 인재 육성 프로그램이자 설치형 에이전트 런타임입니다. 단순히 프롬프트 프로필을 만드는 것이 아니라, 공개 근거가 있는 커리큘럼, 시험, 과제, 피드백, 이력서형 dossier, Reasoning Ledger를 거쳐 고용 가능한 로컬 AI 인재를 만드는 것을 목표로 합니다.
 
+## 현재 공개 프리뷰 상태
+
+GitHub `main` 브랜치에는 설치해서 바로 검토할 수 있는 Paideia Agent 공개 프리뷰가 올라와 있습니다.
+
+- OpenClaw식 온보딩 흐름에서 LLM 서비스, 채팅 표면, 롤모델 커리큘럼, 스킬 마이그레이션 정책, 저장소 정책, 런타임 모드, Agent ID 정책을 선택합니다.
+- Graham Junior 증권 리서치 샘플을 바로 테스트할 수 있고, 소프트웨어 엔지니어링, 데이터 분석, 보안, 마케팅, 교육, 헬스케어 운영, 경영, 법무/컴플라이언스 리서치, 블록체인 프로토콜, SRE, 딥리서치, 회계통제 분야의 롤모델 과정도 선택할 수 있습니다.
+- Agent_warrent / Agent ID Card 로컬 export를 지원합니다. Paideia는 검토용 connector 파일만 준비하며, 서명, 업로드, 외부 등록은 보스가 명시적으로 수행해야 합니다.
+- Hermes/OpenClaw/generic 스킬은 호환성 프로필로 격리 import됩니다. 필요한 권한과 테스트 근거를 검토하기 전에는 기본 비활성화 상태입니다.
+- 본체 제어 projection swarm을 지원합니다. 하나의 고용된 인재가 작업 분신을 나눠 실행하고, `projection_synthesis_board`에서 결과를 비교한 뒤, 검토된 본체 synthesis만 learning ledger로 승격합니다.
+- 공개 안전 release gate로 package install doctor, first-run doctor, public release readiness audit, source hygiene script, action-policy eval, LLM adapter contract, 전체 회귀 테스트를 제공합니다.
+
 ## 발단
 
 Paideia Agent는 "나 자신을 확장한 AI 에이전트가 있다면?", "내가 존경하는 분야별 롤모델의 학습 과정을 따라 AI 인재를 키울 수 있다면?"이라는 질문에서 출발했습니다.
