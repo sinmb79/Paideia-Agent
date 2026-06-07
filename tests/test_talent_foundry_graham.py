@@ -22,15 +22,23 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         from ai22b.talent_foundry.role_models import list_role_models, summarize_role_model
 
         software_models = [summarize_role_model(model) for model in list_role_models("software_agent_engineering")]
+        sre_models = [summarize_role_model(model) for model in list_role_models("devops_sre_incident_response")]
+        research_models = [summarize_role_model(model) for model in list_role_models("deep_research_knowledge_work")]
+        accounting_models = [summarize_role_model(model) for model in list_role_models("finance_accounting_operations")]
         all_models = [summarize_role_model(model) for model in list_role_models()]
 
         self.assertIn("hopper_software_tooling", {item["role_model_id"] for item in software_models})
         self.assertIn("dijkstra_verified_programming", {item["role_model_id"] for item in software_models})
+        self.assertIn("hamilton_reliability_incident_response", {item["role_model_id"] for item in sre_models})
+        self.assertIn("bush_deep_research_memex", {item["role_model_id"] for item in research_models})
+        self.assertIn("washington_wylie_accounting_controls", {item["role_model_id"] for item in accounting_models})
         self.assertIn("tukey_data_analysis", {item["role_model_id"] for item in all_models})
-        self.assertGreaterEqual(len(all_models), 10)
+        self.assertGreaterEqual(len(all_models), 16)
         hopper = next(item for item in software_models if item["role_model_id"] == "hopper_software_tooling")
         self.assertEqual(hopper["status"], "ready_public_metadata")
         self.assertIn("debugging", hopper["primary_agent_use_case"])
+        hamilton = next(item for item in sre_models if item["role_model_id"] == "hamilton_reliability_incident_response")
+        self.assertIn("incident", hamilton["primary_agent_use_case"].casefold())
 
     def test_role_model_curriculum_catalog_connects_all_public_choices(self) -> None:
         from ai22b.talent_foundry.role_models import build_role_model_curriculum_catalog, list_role_models
@@ -63,10 +71,19 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             self.assertEqual(card["policy"]["personality_injection"], "forbidden")
 
         software_catalog = build_role_model_curriculum_catalog("software_agent_engineering")
+        sre_catalog = build_role_model_curriculum_catalog("devops_sre_incident_response")
+        research_catalog = build_role_model_curriculum_catalog("deep_research_knowledge_work")
+        accounting_catalog = build_role_model_curriculum_catalog("finance_accounting_operations")
         self.assertEqual(software_catalog["domain"], "software_agent_engineering")
         self.assertEqual(
             {item["domain"] for item in software_catalog["role_models"]},
             {"software_agent_engineering"},
+        )
+        self.assertEqual({item["role_model_id"] for item in sre_catalog["role_models"]}, {"hamilton_reliability_incident_response"})
+        self.assertEqual({item["role_model_id"] for item in research_catalog["role_models"]}, {"bush_deep_research_memex"})
+        self.assertEqual(
+            {item["role_model_id"] for item in accounting_catalog["role_models"]},
+            {"washington_wylie_accounting_controls"},
         )
         self.assertLess(
             software_catalog["summary"]["role_model_count"],

@@ -68,6 +68,9 @@ The onboarding catalog now also includes selectable public-metadata role-model t
 | `legal_compliance_research` | `ginsburg_legal_research` | legal/compliance research summaries, not legal advice |
 | `blockchain_protocol_research` | `finney_blockchain_protocol` | protocol research, wallet-safety review, not investment advice |
 | `information_systems_research` | `shannon_information_theory` | information theory, compression, uncertainty modeling |
+| `devops_sre_incident_response` | `hamilton_reliability_incident_response` | DevOps on-call, SRE incident review, reliability postmortems |
+| `deep_research_knowledge_work` | `bush_deep_research_memex` | deep research, citation trails, knowledge synthesis |
+| `finance_accounting_operations` | `washington_wylie_accounting_controls` | accounting operations, reconciliations, audit controls, not financial advice |
 
 All of these are **process templates**, not impersonation targets. The catalog stores public facts, source links, curriculum pressure, and assessment ladders. It does not store copyrighted textbook bodies or inject a public figure's personality.
 
