@@ -56,6 +56,8 @@ class CliSmokeTests(unittest.TestCase):
             llm_onboarding_path = tmp_path / "llm_onboarding_checklist.json"
             llm_connection_profile_path = tmp_path / "llm_connection_profile.json"
             llm_live_setup_guide_path = tmp_path / "llm_live_setup_guide.json"
+            llm_connection_status_path = tmp_path / "llm_connection_status.json"
+            llm_connection_status_external_path = tmp_path / "llm_connection_status.openrouter.json"
             doctor_path = tmp_path / "llm_provider_doctor.json"
             adapter_contracts_path = tmp_path / "llm_adapter_contracts.json"
             llm_smoke_path = tmp_path / "llm_application_smoke.json"
@@ -111,6 +113,25 @@ class CliSmokeTests(unittest.TestCase):
                     "deterministic_local",
                     "--output",
                     str(llm_live_setup_guide_path),
+                ]
+            )
+            llm_connection_status_code = cli_main(
+                [
+                    "show-llm-connection-status",
+                    "--llm-engine",
+                    "deterministic_local",
+                    "--output",
+                    str(llm_connection_status_path),
+                    "--strict",
+                ]
+            )
+            llm_connection_status_external_code = cli_main(
+                [
+                    "show-llm-connection-status",
+                    "--llm-engine",
+                    "openrouter_api",
+                    "--output",
+                    str(llm_connection_status_external_path),
                 ]
             )
             doctor_code = cli_main(
@@ -235,6 +256,10 @@ class CliSmokeTests(unittest.TestCase):
             llm_onboarding = json.loads(llm_onboarding_path.read_text(encoding="utf-8"))
             llm_connection_profile = json.loads(llm_connection_profile_path.read_text(encoding="utf-8"))
             llm_live_setup_guide = json.loads(llm_live_setup_guide_path.read_text(encoding="utf-8"))
+            llm_connection_status = json.loads(llm_connection_status_path.read_text(encoding="utf-8"))
+            llm_connection_status_external = json.loads(
+                llm_connection_status_external_path.read_text(encoding="utf-8")
+            )
             doctor = json.loads(doctor_path.read_text(encoding="utf-8"))
             adapter_contracts = json.loads(adapter_contracts_path.read_text(encoding="utf-8"))
             llm_smoke = json.loads(llm_smoke_path.read_text(encoding="utf-8"))
@@ -264,6 +289,8 @@ class CliSmokeTests(unittest.TestCase):
         self.assertEqual(llm_onboarding_code, 0)
         self.assertEqual(llm_connection_profile_code, 0)
         self.assertEqual(llm_live_setup_guide_code, 0)
+        self.assertEqual(llm_connection_status_code, 0)
+        self.assertEqual(llm_connection_status_external_code, 0)
         self.assertEqual(doctor_code, 0)
         self.assertEqual(adapter_contracts_code, 0)
         self.assertEqual(llm_smoke_code, 0)
@@ -361,6 +388,27 @@ class CliSmokeTests(unittest.TestCase):
                 "first_live_chat_template",
             },
             runbook_ids,
+        )
+
+        self.assertEqual(llm_connection_status["schema"], "paideia-llm-connection-status-card/v1")
+        self.assertEqual(llm_connection_status["status"], "offline_ready")
+        self.assertEqual(llm_connection_status["selected_llm_service"]["engine"], "deterministic_local")
+        self.assertEqual(llm_connection_status["primary_next_action_id"], "offline_first_chat")
+        self.assertFalse(llm_connection_status["public_safe"]["network_call_performed"])
+        self.assertFalse(llm_connection_status["public_safe"]["secret_values_exported"])
+        self.assertIn(
+            "offline_first_chat",
+            {item["action_id"] for item in llm_connection_status["next_action_queue"]},
+        )
+        self.assertTrue(any(item["recommended"] for item in llm_connection_status["next_action_queue"]))
+        self.assertEqual(llm_connection_status_external["schema"], "paideia-llm-connection-status-card/v1")
+        self.assertEqual(llm_connection_status_external["status"], "needs_owner_configuration")
+        self.assertEqual(llm_connection_status_external["selected_llm_service"]["engine"], "openrouter_api")
+        self.assertEqual(llm_connection_status_external["primary_next_action_id"], "configure_required_inputs")
+        self.assertFalse(llm_connection_status_external["public_safe"]["network_call_performed"])
+        self.assertIn(
+            "configure_required_inputs",
+            {item["action_id"] for item in llm_connection_status_external["next_action_queue"]},
         )
 
         self.assertEqual(doctor["schema"], "paideia-llm-provider-doctor/v1")

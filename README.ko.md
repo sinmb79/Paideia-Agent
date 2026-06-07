@@ -102,7 +102,7 @@ python -m pip install -e ".[dev]"        # 테스트
 
 CI의 package smoke 테스트는 `pip install -e ".[dev]"` 이후 실행됩니다. 설치된 distribution metadata, 노출된 console script entry point, 실제 callable script target, 기능별 optional extras 분리, 패키지 메타데이터 hygiene를 확인합니다.
 
-CI는 공개 안전 first-run CLI smoke 테스트도 실행합니다. 이 테스트는 `list-role-models`, `list-llm-services`, `build-llm-onboarding-checklist --llm-engine deterministic_local`, `build-llm-connection-profile --llm-engine deterministic_local`, `build-llm-live-setup-guide --llm-engine deterministic_local`, `doctor-llm-provider --llm-engine deterministic_local`, `doctor-llm-adapters`, `run-llm-application-smoke --llm-engine deterministic_local`, `run-agent-runtime-smoke --llm-engine deterministic_local`, `run-chat-runtime-smoke --llm-engine deterministic_local`, `doctor-llm-live-readiness --llm-engine deterministic_local`, `audit-tool-capabilities --strict`, `run-action-policy-eval`, `audit-public-release-readiness`, `build-source-sbom`, `doctor-package-install`, `doctor-runtime-contract`, `doctor-first-run`이 비공개 파일, API 키, 네트워크 접근 없이 실행되고 검토 가능한 JSON 리포트를 쓰는지 확인합니다.
+CI는 공개 안전 first-run CLI smoke 테스트도 실행합니다. 이 테스트는 `list-role-models`, `list-llm-services`, `build-llm-onboarding-checklist --llm-engine deterministic_local`, `build-llm-connection-profile --llm-engine deterministic_local`, `build-llm-live-setup-guide --llm-engine deterministic_local`, `show-llm-connection-status --llm-engine deterministic_local`, `doctor-llm-provider --llm-engine deterministic_local`, `doctor-llm-adapters`, `run-llm-application-smoke --llm-engine deterministic_local`, `run-agent-runtime-smoke --llm-engine deterministic_local`, `run-chat-runtime-smoke --llm-engine deterministic_local`, `doctor-llm-live-readiness --llm-engine deterministic_local`, `audit-tool-capabilities --strict`, `run-action-policy-eval`, `audit-public-release-readiness`, `build-source-sbom`, `doctor-package-install`, `doctor-runtime-contract`, `doctor-first-run`이 비공개 파일, API 키, 네트워크 접근 없이 실행되고 검토 가능한 JSON 리포트를 쓰는지 확인합니다.
 
 롤모델 목록:
 
@@ -261,6 +261,17 @@ ai22b-talent-foundry build-llm-live-setup-guide `
 ```
 
 이 guide는 필요한 모델명, API 키, localhost 서버 또는 로컬 모델 경로를 `setup_cards`로 정리하고, 명시적 `--live-check` gate, no-network doctor, live readiness suite, 첫 live chat template을 `safe_runbook`으로 묶습니다. 생성 과정에서 secret 값을 저장하거나 provider를 호출하지 않습니다.
+
+한 화면짜리 운영자 상태판이 필요하면 connection status card를 출력합니다. 이 명령은 checklist, connection profile, setup guide를 카드와 다음 액션 큐로 합쳐 보여주지만 provider를 호출하지 않습니다.
+
+```powershell
+ai22b-talent-foundry show-llm-connection-status `
+  --llm-service openai_chatgpt_codex `
+  --llm-model gpt-4.1-mini `
+  --output .\llm_connection_status.openai.json
+```
+
+상태 카드는 선택한 provider가 `offline_ready`, `needs_owner_configuration`, `ready_for_explicit_live_check` 중 어디에 있는지 보여주고, 필요한 입력 설정, 명시적 live-readiness suite 실행, 첫 offline chat 등 다음 행동을 추천합니다.
 
 ## P0 실행 루프
 

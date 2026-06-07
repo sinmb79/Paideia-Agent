@@ -146,7 +146,7 @@ python -m pip install -e ".[dev]"        # tests
 
 CI runs a package smoke test after `pip install -e ".[dev]"`. It verifies the installed distribution metadata, exposed console script entry points, callable script targets, optional extras split by runtime capability, and package metadata hygiene.
 
-CI also runs a CLI smoke test for public-safe first-run commands. It verifies that `list-role-models`, `list-llm-services`, `build-llm-onboarding-checklist --llm-engine deterministic_local`, `build-llm-connection-profile --llm-engine deterministic_local`, `build-llm-live-setup-guide --llm-engine deterministic_local`, `doctor-llm-provider --llm-engine deterministic_local`, `doctor-llm-adapters`, `run-llm-application-smoke --llm-engine deterministic_local`, `run-agent-runtime-smoke --llm-engine deterministic_local`, `run-chat-runtime-smoke --llm-engine deterministic_local`, `doctor-llm-live-readiness --llm-engine deterministic_local`, `audit-tool-capabilities --strict`, `run-action-policy-eval`, `audit-public-release-readiness`, `build-source-sbom`, `doctor-package-install`, `doctor-runtime-contract`, and `doctor-first-run` execute without private files, API keys, or network access while writing reviewable JSON reports.
+CI also runs a CLI smoke test for public-safe first-run commands. It verifies that `list-role-models`, `list-llm-services`, `build-llm-onboarding-checklist --llm-engine deterministic_local`, `build-llm-connection-profile --llm-engine deterministic_local`, `build-llm-live-setup-guide --llm-engine deterministic_local`, `show-llm-connection-status --llm-engine deterministic_local`, `doctor-llm-provider --llm-engine deterministic_local`, `doctor-llm-adapters`, `run-llm-application-smoke --llm-engine deterministic_local`, `run-agent-runtime-smoke --llm-engine deterministic_local`, `run-chat-runtime-smoke --llm-engine deterministic_local`, `doctor-llm-live-readiness --llm-engine deterministic_local`, `audit-tool-capabilities --strict`, `run-action-policy-eval`, `audit-public-release-readiness`, `build-source-sbom`, `doctor-package-install`, `doctor-runtime-contract`, and `doctor-first-run` execute without private files, API keys, or network access while writing reviewable JSON reports.
 
 The source package declares an MIT license in `LICENSE` and `pyproject.toml`. Public release readiness is tracked separately from generated agent bundles; see [Public Release Readiness](docs/public_release_readiness.md) and [공개 릴리스 준비도](docs/public_release_readiness.ko.md).
 
@@ -316,6 +316,17 @@ ai22b-talent-foundry build-llm-live-setup-guide `
 ```
 
 The guide records required model/key/localhost/local-model steps, the explicit `--live-check` gate, safe no-network doctor command, live readiness suite command, and first live chat template. It stores no API key values and performs no provider call while generating the file.
+
+For a one-screen operator view, render the connection status card. It merges the checklist, connection profile, and setup guide into cards and a next-action queue without calling the provider:
+
+```powershell
+ai22b-talent-foundry show-llm-connection-status `
+  --llm-service openai_chatgpt_codex `
+  --llm-model gpt-4.1-mini `
+  --output .\llm_connection_status.openai.json
+```
+
+The status card tells you whether the selected provider is `offline_ready`, `needs_owner_configuration`, or `ready_for_explicit_live_check`, then shows the recommended next action such as configuring required inputs, running the explicit live-readiness suite, or starting the first offline chat.
 
 List available role models:
 
