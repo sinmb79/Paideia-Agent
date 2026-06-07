@@ -128,6 +128,8 @@ ai22b-talent-foundry onboard
 
 온보딩이 끝나면 먼저 `onboarding_launch_plan.json`을 열어보면 됩니다. 이 파일은 선택한 LLM, 선택한 채팅 표면, 롤모델 교육 경로, Agent ID Card payload 상태, 첫 채팅 명령, live-readiness suite, chat runtime smoke, 다음 목표 cycle, onboarding doctor 명령을 순서대로 보여줍니다. API key, provider 원문 응답, 숨은 추론 trace는 저장하지 않습니다.
 
+또한 `start-console` 또는 `onboard`가 끝나면 터미널에 완료 요약이 바로 출력됩니다. 여기에는 console session 경로, launch plan 경로, 선택한 LLM/채팅 표면, onboarding doctor 명령, live-readiness 명령, 첫 채팅 명령, 추천 finish action이 포함됩니다.
+
 생성된 wizard 세션과 health artifact, launch plan은 다음 명령으로 다시 검증할 수 있습니다.
 
 ```powershell

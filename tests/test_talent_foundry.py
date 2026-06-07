@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+import io
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 
 
@@ -4440,21 +4442,31 @@ class TalentFoundryTests(unittest.TestCase):
             answers_path.write_text(json.dumps(answers, ensure_ascii=False, indent=2), encoding="utf-8")
             output_dir = tmp_path / "console_run"
             output_path = output_dir / "console_session.json"
-            exit_code = cli_main(
-                [
-                    "start-console",
-                    "--answers",
-                    str(answers_path),
-                    "--output-dir",
-                    str(output_dir),
-                    "--output",
-                    str(output_path),
-                ]
-            )
+            stdout = io.StringIO()
+            with redirect_stdout(stdout):
+                exit_code = cli_main(
+                    [
+                        "start-console",
+                        "--answers",
+                        str(answers_path),
+                        "--output-dir",
+                        str(output_dir),
+                        "--output",
+                        str(output_path),
+                    ]
+                )
+            cli_output = stdout.getvalue()
             session = json.loads(output_path.read_text(encoding="utf-8"))
             onboarding_exists = Path(session["artifacts"]["onboarding_session"]).exists()
 
         self.assertEqual(exit_code, 0)
+        self.assertIn("Paideia Agent onboarding complete", cli_output)
+        self.assertIn("Launch plan:", cli_output)
+        self.assertIn("onboarding_launch_plan.json", cli_output)
+        self.assertIn("doctor-onboarding-session", cli_output)
+        self.assertIn("first_chat_offline", cli_output)
+        self.assertIn("openai_chatgpt_codex", cli_output)
+        self.assertIn("codex-bridge-chat", cli_output)
         self.assertEqual(session["schema"], "ai-talent-guided-console-session/v1")
         self.assertEqual(session["status"], "hired_agent_first_goal_cycle_completed")
         self.assertEqual(session["answers"]["llm_service"], "openai_chatgpt_codex")

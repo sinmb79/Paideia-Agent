@@ -817,6 +817,87 @@ def build_onboarding_launch_plan(
     }
 
 
+def _command_lookup(launch_plan: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    command_plan = launch_plan.get("command_plan", [])
+    if not isinstance(command_plan, list):
+        return {}
+    return {
+        str(item["id"]): item
+        for item in command_plan
+        if isinstance(item, dict) and item.get("id")
+    }
+
+
+def _launch_finish_step(launch_plan: dict[str, Any]) -> dict[str, Any]:
+    flow = launch_plan.get("flow", [])
+    if not isinstance(flow, list):
+        return {}
+    for item in flow:
+        if isinstance(item, dict) and item.get("id") == "finish":
+            return item
+    return {}
+
+
+def _command_or_path(item: dict[str, Any]) -> str:
+    command = str(item.get("command") or "").strip()
+    if command:
+        return command
+    path = str(item.get("path") or "").strip()
+    return path
+
+
+def format_onboarding_finish_summary(session: dict[str, Any]) -> str:
+    artifacts = session.get("artifacts", {}) if isinstance(session.get("artifacts"), dict) else {}
+    answers = session.get("answers", {}) if isinstance(session.get("answers"), dict) else {}
+    launch_plan_path = str(artifacts.get("onboarding_launch_plan") or "")
+    launch_plan = _read_json_if_exists(launch_plan_path)
+    command_by_id = _command_lookup(launch_plan)
+    finish_step = _launch_finish_step(launch_plan)
+    session_launch = session.get("launch_plan", {}) if isinstance(session.get("launch_plan"), dict) else {}
+    recommended_id = (
+        str(finish_step.get("recommended_command_id") or session_launch.get("recommended_command_id") or "").strip()
+    )
+    recommended_command = _command_or_path(command_by_id.get(recommended_id, {}))
+    doctor_command = _command_or_path(command_by_id.get("doctor_onboarding_session", {}))
+    readiness_command = _command_or_path(command_by_id.get("llm_live_readiness_suite", {}))
+    first_chat_command = _command_or_path(command_by_id.get("first_chat_offline", {}))
+    onboarding_summary = (
+        session.get("onboarding_summary", {}) if isinstance(session.get("onboarding_summary"), dict) else {}
+    )
+    connection = (
+        onboarding_summary.get("llm_connection_profile", {})
+        if isinstance(onboarding_summary.get("llm_connection_profile"), dict)
+        else {}
+    )
+    lines = [
+        "Paideia Agent onboarding complete",
+        f"- Status: {session.get('status', 'unknown')}",
+        f"- Talent: {answers.get('talent_name', '')}",
+        f"- LLM service: {answers.get('llm_service', '')}",
+        f"- LLM engine: {connection.get('selected_engine', '')}",
+        f"- Chat surface: {answers.get('chat_surface', '')}",
+        f"- Console session: {artifacts.get('console_session', '')}",
+        f"- Launch plan: {launch_plan_path}",
+        f"- Config: {artifacts.get('paideia_onboarding_config', '')}",
+        "",
+        "Next steps",
+    ]
+    if launch_plan_path:
+        lines.append(f"1. Review launch plan: {launch_plan_path}")
+    if doctor_command:
+        lines.append(f"2. Verify onboarding: {doctor_command}")
+    if readiness_command:
+        lines.append(f"3. Check LLM live readiness: {readiness_command}")
+    if first_chat_command:
+        lines.append(f"4. First chat command: {first_chat_command}")
+    if recommended_id:
+        lines.append(f"Recommended finish action: {recommended_id}")
+    if recommended_command:
+        lines.append(f"Recommended command: {recommended_command}")
+    lines.append("Public-safe note: no API keys, raw provider payloads, or hidden reasoning traces were saved.")
+    return "\n".join(line for line in lines if line is not None)
+
+
 def write_openclaw_style_config(
     *,
     output_dir: Path,

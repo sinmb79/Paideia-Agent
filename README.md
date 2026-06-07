@@ -183,6 +183,8 @@ This sample first selects the LLM service and chat surface, writes `llm_provider
 
 Open `onboarding_launch_plan.json` after the wizard if you want the OpenClaw-style "what do I do next?" view. It lists the selected LLM, selected chat surface, role-model education path, local Agent ID payload status, first chat command, live-readiness suite, chat runtime smoke, next goal cycle, and onboarding doctor command without saving API keys, raw provider payloads, or hidden reasoning traces.
 
+The CLI also prints a finish summary after `start-console` or `onboard`: console session path, launch plan path, selected LLM/chat surface, onboarding doctor command, live-readiness command, first chat command, and the recommended finish action.
+
 Verify a generated wizard session and its health artifacts, including the launch plan:
 
 ```powershell
