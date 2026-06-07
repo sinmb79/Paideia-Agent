@@ -354,12 +354,19 @@ class PublicArtifactSchemaTests(unittest.TestCase):
         _assert_invalid(self, "hiring_dossier.v1.schema.json", unsafe)
 
     def test_hidden_unicode_bidi_controls_are_detected(self) -> None:
-        from ai22b.talent_foundry.public_inventory import hidden_unicode_bidi_matches
+        from ai22b.talent_foundry.public_inventory import (
+            hidden_control_character_matches,
+            hidden_unicode_bidi_matches,
+        )
 
         matches = hidden_unicode_bidi_matches("safe text \u202E hidden direction")
 
         self.assertEqual(matches[0]["codepoint"], "U+202E")
         self.assertEqual(matches[0]["rule"], "hidden_unicode_bidi_control")
+
+        control_matches = hidden_control_character_matches("safe text \u200B zero width")
+        self.assertEqual(control_matches[0]["codepoint"], "U+200B")
+        self.assertEqual(control_matches[0]["rule"], "hidden_control_character_observation")
 
     def test_public_inventory_detects_provider_secrets_and_real_local_paths(self) -> None:
         from ai22b.talent_foundry.public_inventory import scan_public_candidate_files
@@ -390,6 +397,18 @@ class PublicArtifactSchemaTests(unittest.TestCase):
         rules = {issue["rule"] for issue in report["issues"]}
         self.assertIn("provider_secret_assignment", rules)
         self.assertIn("generic_local_windows_user_path", rules)
+
+    def test_public_inventory_reports_non_bidi_controls_without_blocking(self) -> None:
+        from ai22b.talent_foundry.public_inventory import scan_public_candidate_files
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "README.md").write_text("Zero width\u200Bmarker", encoding="utf-8")
+            report = scan_public_candidate_files(root)
+
+        self.assertEqual(report["issue_count"], 0)
+        self.assertEqual(report["observation_count"], 1)
+        self.assertEqual(report["observations"][0]["rule"], "hidden_control_character_observation")
 
 
 if __name__ == "__main__":

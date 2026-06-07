@@ -139,8 +139,9 @@ class PackageSmokeTests(unittest.TestCase):
 
         self.assertTrue(license_file.exists())
         self.assertIn("MIT License", license_file.read_text(encoding="utf-8"))
-        self.assertEqual(project.get("license", {}).get("file"), "LICENSE")
-        self.assertIn("License :: OSI Approved :: MIT License", project.get("classifiers", []))
+        self.assertEqual(project.get("license"), "MIT")
+        self.assertIn("LICENSE", project.get("license-files", []))
+        self.assertNotIn("License :: OSI Approved :: MIT License", project.get("classifiers", []))
         self.assertEqual(project.get("urls", {}).get("Repository"), "https://github.com/sinmb79/Paideia-Agent")
         self.assertTrue(Path("SECURITY.md").exists())
         self.assertTrue(Path("README.ko.md").exists())
@@ -153,6 +154,7 @@ class PackageSmokeTests(unittest.TestCase):
         self.assertTrue(Path("schemas/README.md").exists())
         self.assertTrue(Path("docs/public_release_readiness.md").exists())
         self.assertTrue(Path("docs/public_release_readiness.ko.md").exists())
+        self.assertTrue(Path(".github/workflows/optional-dependency-audit.yml").exists())
 
     def test_public_release_readiness_audit_passes_without_network_or_subprocess(self) -> None:
         from ai22b.talent_foundry.public_release import audit_public_release_readiness
@@ -171,6 +173,14 @@ class PackageSmokeTests(unittest.TestCase):
         self.assertFalse(report["policy"]["secret_values_exported"])
         check_by_id = {item["id"]: item for item in report["checks"]}
         self.assertTrue(check_by_id["installed_package_metadata_smoke"]["passed"])
+        self.assertTrue(check_by_id["ci_release_gates"]["passed"])
+        self.assertTrue(check_by_id["optional_dependency_audit_workflow"]["passed"])
+        ci_details = check_by_id["ci_release_gates"]["details"]
+        self.assertEqual(ci_details["missing_or_old_actions"], [])
+        self.assertEqual(ci_details["checkout_steps_without_persist_credentials_false"], 0)
+        self.assertEqual(ci_details["missing_release_gates_needs"], [])
+        self.assertEqual(ci_details["missing_release_gates_os"], [])
+        self.assertEqual(ci_details["missing_release_gates_python"], [])
         self.assertTrue(check_by_id["public_candidate_content_scan"]["passed"])
         self.assertEqual(check_by_id["public_candidate_content_scan"]["details"]["issue_count"], 0)
 
@@ -182,6 +192,8 @@ class PackageSmokeTests(unittest.TestCase):
         self.assertEqual(sbom["schema"], "paideia-source-sbom/v1")
         self.assertEqual(sbom["package"]["name"], "paideia-agent")
         self.assertEqual(sbom["package"]["version"], "0.1.0")
+        self.assertEqual(sbom["package"]["license"], "MIT")
+        self.assertIn("LICENSE", sbom["package"]["license_files"])
         self.assertEqual(sbom["package"]["license_detected"], "MIT")
         self.assertEqual(sbom["dependencies"]["direct"], [])
         self.assertEqual(sbom["dependencies"]["direct_count"], 0)

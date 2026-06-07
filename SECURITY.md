@@ -15,6 +15,7 @@ Ignored by default:
 - `models/**`
 - `.env*`
 - `node_modules/**`
+- `build/**`
 - `dist/**`
 - `target/**`
 
@@ -23,6 +24,14 @@ Run before publishing:
 ```powershell
 .\scripts\check_public_repo_hygiene.ps1
 ```
+
+## CI Supply Chain
+
+GitHub Actions run with `permissions: contents: read`. Repository checkout uses
+`actions/checkout@v6` with `persist-credentials: false`, and Dependabot monitors
+official GitHub Actions updates. The public-preview policy uses official action
+tags plus Dependabot for maintainability; formal release branches should revisit
+full-length commit SHA pinning after the release branch is frozen.
 
 ## Imported Skills
 

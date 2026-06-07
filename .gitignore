@@ -60,6 +60,8 @@ apps/ai-talent-foundry/README.ko.md
 apps/ai-idea-coach/
 node_modules/
 **/node_modules/
+build/
+**/build/
 dist/
 **/dist/
 target/

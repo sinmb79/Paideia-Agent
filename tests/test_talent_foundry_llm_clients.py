@@ -27,6 +27,25 @@ def _headers(request) -> dict[str, str]:
 
 
 class TalentFoundryLlmClientTests(unittest.TestCase):
+    def test_llm_result_public_artifact_contract_overrides_unsafe_fields(self) -> None:
+        from ai22b.talent_foundry.llm_clients import LLMResult
+
+        result = LLMResult(
+            schema="paideia-llm-client-result/v1",
+            engine="fixture",
+            status="completed",
+            text="ok",
+            fields={
+                "raw_output_saved": True,
+                "private_reasoning_trace": "full_chain_of_thought",
+                "provider_packet": {"private_reasoning_trace": "hidden details"},
+            },
+        ).to_public_artifact()
+
+        self.assertFalse(result["raw_output_saved"])
+        self.assertEqual(result["private_reasoning_trace"], "do_not_store")
+        self.assertEqual(result["provider_packet"], {})
+
     def test_private_reasoning_policy_marker_is_not_counted_as_hidden_trace(self) -> None:
         from ai22b.talent_foundry.llm_clients import count_private_reasoning_fields
 
@@ -35,6 +54,16 @@ class TalentFoundryLlmClientTests(unittest.TestCase):
 
         self.assertEqual(count_private_reasoning_fields(safe), 0)
         self.assertEqual(count_private_reasoning_fields(unsafe), 1)
+
+    def test_public_reasoning_trace_policy_normalizes_or_rejects_builder_values(self) -> None:
+        from ai22b.talent_foundry.dossier import public_reasoning_trace_policy
+
+        self.assertEqual(public_reasoning_trace_policy("not_stored"), "do_not_store")
+        self.assertEqual(public_reasoning_trace_policy(None), "do_not_store")
+        with self.assertRaises(ValueError):
+            public_reasoning_trace_policy("full_chain_of_thought")
+        with self.assertRaises(ValueError):
+            public_reasoning_trace_policy({"private_reasoning_trace": "full_chain_of_thought"})
 
     def test_llm_adapter_contract_doctor_public_safe_no_network(self) -> None:
         from ai22b.talent_foundry.llm_adapter_contracts import run_llm_adapter_contracts

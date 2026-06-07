@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import unicodedata
 import re
 from pathlib import Path
 from typing import Any
@@ -34,6 +35,7 @@ PUBLIC_SCAN_EXCLUDED_DIR_NAMES = {
     ".mypy_cache",
     ".pytest_cache",
     "__pycache__",
+    "build",
     "node_modules",
     "dist",
     "target",
@@ -64,6 +66,7 @@ PATH_BLOCKLIST_PATTERNS = [
     re.compile(r"^runs/"),
     re.compile(r"^apps/[^/]+/runs/"),
     re.compile(r"(^|/)node_modules/"),
+    re.compile(r"(^|/)build/"),
     re.compile(r"(^|/)dist/"),
     re.compile(r"(^|/)target/"),
 ]
@@ -126,6 +129,7 @@ HIDDEN_UNICODE_BIDI_CONTROLS = tuple(
     )
 )
 HIDDEN_UNICODE_BIDI_PATTERN = re.compile("[" + re.escape("".join(HIDDEN_UNICODE_BIDI_CONTROLS)) + "]")
+ALLOWED_CONTROL_CHARACTERS = {"\n", "\r", "\t"}
 
 
 def read_text(path: Path) -> str:
@@ -179,9 +183,37 @@ def hidden_unicode_bidi_matches(text: str) -> list[dict[str, Any]]:
     return matches
 
 
+def hidden_control_character_matches(text: str) -> list[dict[str, Any]]:
+    """Report non-printing Unicode controls without failing the public gate.
+
+    Bidi controls remain blocking because they can visually reorder reviewed
+    text. This broader report helps diagnose GitHub hidden-Unicode warnings
+    before deciding whether a specific category should become a hard gate.
+    """
+
+    matches = []
+    for index, character in enumerate(text):
+        if character in ALLOWED_CONTROL_CHARACTERS or character in HIDDEN_UNICODE_BIDI_CONTROLS:
+            continue
+        category = unicodedata.category(character)
+        if category not in {"Cc", "Cf"}:
+            continue
+        matches.append(
+            {
+                "index": index,
+                "codepoint": f"U+{ord(character):04X}",
+                "name": unicodedata.name(character, "UNKNOWN"),
+                "category": category,
+                "rule": "hidden_control_character_observation",
+            }
+        )
+    return matches
+
+
 def scan_public_candidate_files(root: Path) -> dict[str, Any]:
     candidate_files = public_candidate_files(root)
     issues: list[dict[str, Any]] = []
+    observations: list[dict[str, Any]] = []
 
     for path in candidate_files:
         rel = safe_rel(path, root)
@@ -221,12 +253,25 @@ def scan_public_candidate_files(root: Path) -> dict[str, Any]:
                     "matches": hidden_matches[:10],
                 }
             )
+        hidden_control_matches = hidden_control_character_matches(text)
+        if hidden_control_matches:
+            observations.append(
+                {
+                    "type": "hidden_control_character_observation",
+                    "file": rel,
+                    "rule": "hidden_control_character_observation",
+                    "match_count": len(hidden_control_matches),
+                    "matches": hidden_control_matches[:10],
+                }
+            )
 
     return {
         "candidate_file_count": len(candidate_files),
         "candidate_roots": PUBLIC_SCAN_ROOT_FILES + PUBLIC_SCAN_DIRS,
         "issue_count": len(issues),
         "issues": issues,
+        "observation_count": len(observations),
+        "observations": observations,
     }
 
 

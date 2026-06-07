@@ -6,9 +6,9 @@ import re
 import urllib.error
 import urllib.parse
 import urllib.request
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Mapping, Protocol
 
 
 LLM_CLIENT_RESULT_SCHEMA = "paideia-llm-client-result/v1"
@@ -45,6 +45,33 @@ SAFE_PRIVATE_REASONING_METADATA_KEYS = {
     "privatereasoningfieldvaluesstored",
 }
 SAFE_PRIVATE_REASONING_POLICY_VALUES = {"do_not_store", "not_stored", "omitted"}
+
+
+@dataclass(frozen=True)
+class LLMResult:
+    schema: str
+    engine: str
+    status: str
+    identity_policy: str = "application_engine_not_identity"
+    text: str | None = None
+    reason: str | None = None
+    fields: Mapping[str, Any] = field(default_factory=dict)
+
+    def to_public_artifact(self) -> dict[str, Any]:
+        artifact: dict[str, Any] = {
+            "schema": self.schema,
+            "engine": self.engine,
+            "status": self.status,
+            "identity_policy": self.identity_policy,
+        }
+        if self.text is not None:
+            artifact["text"] = _redact_secret_text(self.text.strip())
+        if self.reason is not None:
+            artifact["reason"] = self.reason
+        artifact.update(_sanitize_value(dict(self.fields)))
+        artifact["raw_output_saved"] = False
+        artifact["private_reasoning_trace"] = "do_not_store"
+        return artifact
 
 
 class LLMClient(Protocol):
@@ -184,29 +211,23 @@ def sanitize_llm_result_packet(value: Any) -> Any:
 
 
 def _ok(engine: str, text: str, **fields: Any) -> dict[str, Any]:
-    return {
-        "schema": LLM_CLIENT_RESULT_SCHEMA,
-        "engine": engine,
-        "status": "completed",
-        "text": _redact_secret_text(text.strip()),
-        "identity_policy": "application_engine_not_identity",
-        "raw_output_saved": False,
-        "private_reasoning_trace": "do_not_store",
-        **_sanitize_value(fields),
-    }
+    return LLMResult(
+        schema=LLM_CLIENT_RESULT_SCHEMA,
+        engine=engine,
+        status="completed",
+        text=text,
+        fields=fields,
+    ).to_public_artifact()
 
 
 def _unavailable(engine: str, reason: str, **fields: Any) -> dict[str, Any]:
-    return {
-        "schema": LLM_CLIENT_RESULT_SCHEMA,
-        "engine": engine,
-        "status": "unavailable",
-        "reason": reason,
-        "identity_policy": "application_engine_not_identity",
-        "raw_output_saved": False,
-        "private_reasoning_trace": "do_not_store",
-        **_sanitize_value(fields),
-    }
+    return LLMResult(
+        schema=LLM_CLIENT_RESULT_SCHEMA,
+        engine=engine,
+        status="unavailable",
+        reason=reason,
+        fields=fields,
+    ).to_public_artifact()
 
 
 def _post_json(

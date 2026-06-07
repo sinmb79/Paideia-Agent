@@ -5,6 +5,13 @@ from typing import Any
 
 
 SCHEMA = "ai-talent-hiring-dossier/v1"
+PUBLIC_REASONING_TRACE_POLICY_VALUES = {"", "do_not_store", "not_stored", "omitted"}
+
+
+def public_reasoning_trace_policy(value: object) -> str:
+    if value is None or (isinstance(value, str) and value in PUBLIC_REASONING_TRACE_POLICY_VALUES):
+        return "do_not_store"
+    raise ValueError("public artifacts must not retain private reasoning traces")
 
 
 def _academic_from_sources(hiring_packet: dict[str, Any], agent_manifest: dict[str, Any]) -> dict[str, Any]:
@@ -104,10 +111,9 @@ def build_hiring_dossier(
     growth_profile = hiring_packet.get("growth_profile") or agent_manifest.get("identity_source", {}).get(
         "growth_profile"
     )
-    private_reasoning_trace_policy = (
+    private_reasoning_trace_policy = public_reasoning_trace_policy(
         learning_ledger.get("policy", {}).get("private_reasoning_trace")
         or llm_policy.get("private_reasoning_trace")
-        or "do_not_store"
     )
 
     return {
