@@ -483,6 +483,7 @@ def run_demo(output_dir: Path = DEFAULT_RUN_DIR) -> dict[str, Path]:
     paths["employment_registry"] = hiring["registry_index"]
     paths["local_llm_connection_profile"] = hiring["llm_connection_profile"]
     paths["local_llm_live_setup_guide"] = hiring["llm_live_setup_guide"]
+    paths["local_agent_warrent_registration_request"] = hiring["agent_warrent_registration_request"]
     run_hired_agent(
         paths["local_employment_record"],
         task="거시경제 질문을 정리하고 투자 실행 없이 리서치 보조 결과를 남겨줘.",
