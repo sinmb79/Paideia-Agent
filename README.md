@@ -8,6 +8,17 @@ The project takes inspiration from modern agent systems such as [Hermes Agent](h
 
 > Research preview: this repository contains program code, public metadata, test fixtures, and documentation. Private training outputs, local memories, personal data, model checkpoints, and generated run artifacts stay outside the source tree.
 
+## Current Public Preview
+
+The GitHub `main` branch now contains the installable Paideia Agent preview:
+
+- OpenClaw-style onboarding that asks the owner to choose an LLM service, chat surface, role-model curriculum, skill-migration posture, storage policy, runtime mode, and Agent ID policy.
+- A directly testable Graham Junior securities-research sample plus additional role-model process tracks for software engineering, data analysis, cybersecurity, marketing, education, healthcare operations, management, legal/compliance research, blockchain protocol research, SRE, deep research, and accounting controls.
+- Agent_warrent / Agent ID Card local export support, with manual owner-controlled registration only. Paideia prepares reviewed connector files but does not sign, upload, or register by itself.
+- Hermes/OpenClaw/generic skill migration into a quarantined compatibility profile. Imported skills stay disabled until the owner reviews required capabilities and test evidence.
+- Parent-controlled projection swarm cycles. A hired talent can split work into task projections, compare them on `projection_synthesis_board`, and promote only the reviewed parent synthesis into the learning ledger.
+- Public-safe release gates: package install doctor, first-run doctor, public release readiness audit, source hygiene script, action-policy eval, LLM adapter contracts, and the full regression suite.
+
 ## Origin
 
 Paideia Agent starts from a simple question: what if an AI agent could extend you, or what if a field role model's learning path could become the curriculum for a local AI talent that helps you work?
