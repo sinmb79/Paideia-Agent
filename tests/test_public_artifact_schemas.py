@@ -367,6 +367,9 @@ class PublicArtifactSchemaTests(unittest.TestCase):
         control_matches = hidden_control_character_matches("safe text \u200B zero width")
         self.assertEqual(control_matches[0]["codepoint"], "U+200B")
         self.assertEqual(control_matches[0]["rule"], "hidden_control_character_observation")
+        self.assertEqual(control_matches[0]["line"], 1)
+        self.assertGreater(control_matches[0]["column"], 1)
+        self.assertIn("\\u200b", control_matches[0]["escaped_surrounding_snippet"].casefold())
 
     def test_public_inventory_detects_provider_secrets_and_real_local_paths(self) -> None:
         from ai22b.talent_foundry.public_inventory import scan_public_candidate_files
@@ -409,6 +412,10 @@ class PublicArtifactSchemaTests(unittest.TestCase):
         self.assertEqual(report["issue_count"], 0)
         self.assertEqual(report["observation_count"], 1)
         self.assertEqual(report["observations"][0]["rule"], "hidden_control_character_observation")
+        self.assertIn(
+            "\\u200b",
+            report["observations"][0]["matches"][0]["escaped_surrounding_snippet"].casefold(),
+        )
 
 
 if __name__ == "__main__":

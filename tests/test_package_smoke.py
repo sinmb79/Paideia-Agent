@@ -101,6 +101,7 @@ class PackageSmokeTests(unittest.TestCase):
         self.assertEqual(project.get("dependencies", []), [])
         self.assertIn("pytest", optional["dev"])
         self.assertIn("pytest-cov", optional["dev"])
+        self.assertIn("pyyaml", optional["dev"])
         self.assertIn("ruff", optional["dev"])
         self.assertIn("build", optional["dev"])
         self.assertIn("bandit", optional["security"])
@@ -132,6 +133,13 @@ class PackageSmokeTests(unittest.TestCase):
         ]
         for fragment in forbidden_fragments:
             self.assertNotIn(fragment, pyproject_text)
+
+    def test_bandit_global_skip_policy_is_narrowed(self) -> None:
+        bandit = self._pyproject().get("tool", {}).get("bandit", {})
+        skips = set(bandit.get("skips", []))
+
+        self.assertNotIn("B108", skips)
+        self.assertTrue({"B105", "B311", "B608", "B615"} <= skips)
 
     def test_public_release_license_and_metadata_are_declared(self) -> None:
         project = self._pyproject()["project"]
@@ -176,13 +184,77 @@ class PackageSmokeTests(unittest.TestCase):
         self.assertTrue(check_by_id["ci_release_gates"]["passed"])
         self.assertTrue(check_by_id["optional_dependency_audit_workflow"]["passed"])
         ci_details = check_by_id["ci_release_gates"]["details"]
+        optional_details = check_by_id["optional_dependency_audit_workflow"]["details"]
         self.assertEqual(ci_details["missing_or_old_actions"], [])
         self.assertEqual(ci_details["checkout_steps_without_persist_credentials_false"], 0)
+        self.assertEqual(ci_details["upload_artifact_steps_missing_retention_days"], [])
         self.assertEqual(ci_details["missing_release_gates_needs"], [])
         self.assertEqual(ci_details["missing_release_gates_os"], [])
         self.assertEqual(ci_details["missing_release_gates_python"], [])
+        self.assertEqual(optional_details["upload_artifact_steps_missing_retention_days"], [])
         self.assertTrue(check_by_id["public_candidate_content_scan"]["passed"])
         self.assertEqual(check_by_id["public_candidate_content_scan"]["details"]["issue_count"], 0)
+
+    def test_workflow_readiness_uses_yaml_structure_not_line_order(self) -> None:
+        from ai22b.talent_foundry.public_release import (
+            REQUIRED_CI_MARKERS,
+            _workflow_marker_check,
+        )
+
+        command_markers = "\n".join(f"          {marker}" for marker in REQUIRED_CI_MARKERS)
+        workflow_text = f"""
+name: CI
+permissions:
+  contents: read
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with: {{persist-credentials: false}}
+      - uses: actions/setup-python@v6
+      - uses: actions/upload-artifact@v7
+        with:
+          name: security-reports
+          path: runs/*.json
+          retention-days: 14
+  release-gates:
+    needs: [security, test]
+    runs-on: ${{{{ matrix.os }}}}
+    strategy:
+      matrix:
+        python-version: ["3.12", "3.11"]
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+      - run: |
+{command_markers}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: public-release-gate-reports
+          path: runs/*.json
+          retention-days: 14
+  test:
+    runs-on: ${{{{ matrix.os }}}}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+"""
+
+        check = _workflow_marker_check(workflow_text)
+
+        self.assertTrue(check["passed"], check["details"])
+        self.assertIsNone(check["details"]["workflow_yaml_parse_error"])
+        self.assertEqual(check["details"]["upload_artifact_steps_missing_retention_days"], [])
 
     def test_source_sbom_inventory_records_package_dependency_and_file_evidence(self) -> None:
         from ai22b.talent_foundry.source_sbom import build_source_sbom

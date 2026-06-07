@@ -132,6 +132,18 @@ HIDDEN_UNICODE_BIDI_PATTERN = re.compile("[" + re.escape("".join(HIDDEN_UNICODE_
 ALLOWED_CONTROL_CHARACTERS = {"\n", "\r", "\t"}
 
 
+def _line_column(text: str, index: int) -> tuple[int, int]:
+    line = text.count("\n", 0, index) + 1
+    line_start = text.rfind("\n", 0, index) + 1
+    return line, index - line_start + 1
+
+
+def _escaped_surrounding_snippet(text: str, index: int, *, radius: int = 24) -> str:
+    start = max(0, index - radius)
+    end = min(len(text), index + radius + 1)
+    return text[start:end].encode("unicode_escape").decode("ascii")
+
+
 def read_text(path: Path) -> str:
     try:
         return path.read_text(encoding="utf-8")
@@ -173,10 +185,16 @@ def hidden_unicode_bidi_matches(text: str) -> list[dict[str, Any]]:
     matches = []
     for match in HIDDEN_UNICODE_BIDI_PATTERN.finditer(text):
         codepoint = ord(match.group(0))
+        line, column = _line_column(text, match.start())
         matches.append(
             {
                 "index": match.start(),
+                "line": line,
+                "column": column,
                 "codepoint": f"U+{codepoint:04X}",
+                "name": unicodedata.name(match.group(0), "UNKNOWN"),
+                "category": unicodedata.category(match.group(0)),
+                "escaped_surrounding_snippet": _escaped_surrounding_snippet(text, match.start()),
                 "rule": "hidden_unicode_bidi_control",
             }
         )
@@ -198,12 +216,16 @@ def hidden_control_character_matches(text: str) -> list[dict[str, Any]]:
         category = unicodedata.category(character)
         if category not in {"Cc", "Cf"}:
             continue
+        line, column = _line_column(text, index)
         matches.append(
             {
                 "index": index,
+                "line": line,
+                "column": column,
                 "codepoint": f"U+{ord(character):04X}",
                 "name": unicodedata.name(character, "UNKNOWN"),
                 "category": category,
+                "escaped_surrounding_snippet": _escaped_surrounding_snippet(text, index),
                 "rule": "hidden_control_character_observation",
             }
         )

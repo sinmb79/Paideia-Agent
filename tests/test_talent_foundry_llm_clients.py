@@ -46,6 +46,27 @@ class TalentFoundryLlmClientTests(unittest.TestCase):
         self.assertEqual(result["private_reasoning_trace"], "do_not_store")
         self.assertEqual(result["provider_packet"], {})
 
+    def test_client_generate_result_returns_typed_result_before_public_artifact(self) -> None:
+        from ai22b.talent_foundry.llm_clients import DeterministicClient, LLMResult
+
+        client = DeterministicClient()
+        typed_result = client.generate_result(
+            [{"role": "user", "content": json.dumps({"task": "typed contract smoke"})}],
+            tools=[{"name": "evidence_packet"}],
+            policy={"private_reasoning_trace": "do_not_store"},
+        )
+        artifact = client.generate(
+            [{"role": "user", "content": json.dumps({"task": "typed contract smoke"})}],
+            tools=[{"name": "evidence_packet"}],
+            policy={"private_reasoning_trace": "do_not_store"},
+        )
+
+        self.assertIsInstance(typed_result, LLMResult)
+        self.assertEqual(typed_result.status, "completed")
+        self.assertEqual(artifact["schema"], "paideia-llm-client-result/v1")
+        self.assertFalse(artifact["raw_output_saved"])
+        self.assertEqual(artifact["private_reasoning_trace"], "do_not_store")
+
     def test_private_reasoning_policy_marker_is_not_counted_as_hidden_trace(self) -> None:
         from ai22b.talent_foundry.llm_clients import count_private_reasoning_fields
 
@@ -84,6 +105,7 @@ class TalentFoundryLlmClientTests(unittest.TestCase):
         self.assertEqual(report["public_safe"]["private_reasoning_trace"], "do_not_store")
         self.assertTrue(checks["client_factory_contract"]["passed"])
         self.assertTrue(checks["deterministic_generate_contract"]["passed"])
+        self.assertTrue(checks["deterministic_generate_contract"]["typed_result_contract_used"])
         self.assertTrue(checks["external_api_missing_credentials_fail_closed"]["passed"])
         self.assertTrue(checks["localhost_adapters_explicit_live_contract"]["passed"])
         self.assertTrue(checks["local_model_missing_path_fail_closed"]["passed"])

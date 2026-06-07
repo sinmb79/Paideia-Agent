@@ -75,6 +75,15 @@ class LLMResult:
 
 
 class LLMClient(Protocol):
+    def generate_result(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        tools: list[dict[str, Any]] | None = None,
+        policy: dict[str, Any] | None = None,
+    ) -> LLMResult:
+        """Generate a typed language result before public artifact conversion."""
+
     def generate(
         self,
         messages: list[dict[str, str]],
@@ -83,6 +92,26 @@ class LLMClient(Protocol):
         policy: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Generate a language result without becoming the agent identity."""
+
+
+class PublicArtifactLLMClient:
+    def generate_result(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        tools: list[dict[str, Any]] | None = None,
+        policy: dict[str, Any] | None = None,
+    ) -> LLMResult:
+        raise NotImplementedError
+
+    def generate(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        tools: list[dict[str, Any]] | None = None,
+        policy: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        return self.generate_result(messages, tools=tools, policy=policy).to_public_artifact()
 
 
 def build_runtime_messages(*, manifest: dict[str, Any], task: str, policy_context: dict[str, Any] | None = None) -> list[dict[str, str]]:
@@ -210,24 +239,24 @@ def sanitize_llm_result_packet(value: Any) -> Any:
     return _sanitize_value(value)
 
 
-def _ok(engine: str, text: str, **fields: Any) -> dict[str, Any]:
+def _ok(engine: str, text: str, **fields: Any) -> LLMResult:
     return LLMResult(
         schema=LLM_CLIENT_RESULT_SCHEMA,
         engine=engine,
         status="completed",
         text=text,
         fields=fields,
-    ).to_public_artifact()
+    )
 
 
-def _unavailable(engine: str, reason: str, **fields: Any) -> dict[str, Any]:
+def _unavailable(engine: str, reason: str, **fields: Any) -> LLMResult:
     return LLMResult(
         schema=LLM_CLIENT_RESULT_SCHEMA,
         engine=engine,
         status="unavailable",
         reason=reason,
         fields=fields,
-    ).to_public_artifact()
+    )
 
 
 def _post_json(
@@ -256,23 +285,23 @@ def _extract_openai_compatible_text(data: dict[str, Any]) -> str:
     return str(data.get("choices", [{}])[0].get("message", {}).get("content", ""))
 
 
-def _model_required(engine: str, model: str | None) -> dict[str, Any] | None:
+def _model_required(engine: str, model: str | None) -> LLMResult | None:
     if model:
         return None
     return _unavailable(engine, "model_required_for_live_provider")
 
 
 @dataclass
-class DeterministicClient:
+class DeterministicClient(PublicArtifactLLMClient):
     engine: str = "deterministic_local"
 
-    def generate(
+    def generate_result(
         self,
         messages: list[dict[str, str]],
         *,
         tools: list[dict[str, Any]] | None = None,
         policy: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
+    ) -> LLMResult:
         task_payload = messages[-1].get("content", "{}") if messages else "{}"
         try:
             task = json.loads(task_payload).get("task", "requested task")
@@ -287,16 +316,16 @@ class DeterministicClient:
 
 
 @dataclass
-class OpenAIResponsesClient:
+class OpenAIResponsesClient(PublicArtifactLLMClient):
     model: str = DEFAULT_OPENAI_MODEL
 
-    def generate(
+    def generate_result(
         self,
         messages: list[dict[str, str]],
         *,
         tools: list[dict[str, Any]] | None = None,
         policy: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
+    ) -> LLMResult:
         if not os.environ.get("OPENAI_API_KEY"):
             return _unavailable("openai_responses_api", "OPENAI_API_KEY_not_set", model=self.model)
         try:
@@ -346,18 +375,18 @@ class OpenAIResponsesClient:
 
 
 @dataclass
-class AnthropicMessagesClient:
+class AnthropicMessagesClient(PublicArtifactLLMClient):
     model: str | None
     endpoint: str = ANTHROPIC_MESSAGES_ENDPOINT
     api_key_env: str = "ANTHROPIC_API_KEY"
 
-    def generate(
+    def generate_result(
         self,
         messages: list[dict[str, str]],
         *,
         tools: list[dict[str, Any]] | None = None,
         policy: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
+    ) -> LLMResult:
         required = _model_required("anthropic_claude_api", self.model)
         if required:
             return required
@@ -402,17 +431,17 @@ class AnthropicMessagesClient:
 
 
 @dataclass
-class GeminiGenerateContentClient:
+class GeminiGenerateContentClient(PublicArtifactLLMClient):
     model: str | None
     endpoint_template: str = GEMINI_GENERATE_ENDPOINT
 
-    def generate(
+    def generate_result(
         self,
         messages: list[dict[str, str]],
         *,
         tools: list[dict[str, Any]] | None = None,
         policy: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
+    ) -> LLMResult:
         required = _model_required("google_gemini_api", self.model)
         if required:
             return required
@@ -460,20 +489,20 @@ class GeminiGenerateContentClient:
 
 
 @dataclass
-class OpenAICompatibleChatClient:
+class OpenAICompatibleChatClient(PublicArtifactLLMClient):
     engine: str
     model: str | None
     endpoint: str
     api_key_env: str
     extra_headers: dict[str, str] | None = None
 
-    def generate(
+    def generate_result(
         self,
         messages: list[dict[str, str]],
         *,
         tools: list[dict[str, Any]] | None = None,
         policy: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
+    ) -> LLMResult:
         required = _model_required(self.engine, self.model)
         if required:
             return required
@@ -513,17 +542,17 @@ class OpenAICompatibleChatClient:
 
 
 @dataclass
-class OllamaClient:
+class OllamaClient(PublicArtifactLLMClient):
     model: str = DEFAULT_OLLAMA_MODEL
     endpoint: str = DEFAULT_OLLAMA_ENDPOINT
 
-    def generate(
+    def generate_result(
         self,
         messages: list[dict[str, str]],
         *,
         tools: list[dict[str, Any]] | None = None,
         policy: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
+    ) -> LLMResult:
         url = self.endpoint.rstrip("/") + "/api/generate"
         body = json.dumps(
             {
@@ -560,17 +589,17 @@ class OllamaClient:
 
 
 @dataclass
-class LMStudioClient:
+class LMStudioClient(PublicArtifactLLMClient):
     model: str = "local-model"
     endpoint: str = DEFAULT_LM_STUDIO_ENDPOINT
 
-    def generate(
+    def generate_result(
         self,
         messages: list[dict[str, str]],
         *,
         tools: list[dict[str, Any]] | None = None,
         policy: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
+    ) -> LLMResult:
         body = json.dumps(
             {
                 "model": self.model,
@@ -601,16 +630,16 @@ class LMStudioClient:
 
 
 @dataclass
-class TransformersLocalClient:
+class TransformersLocalClient(PublicArtifactLLMClient):
     model_path: str
 
-    def generate(
+    def generate_result(
         self,
         messages: list[dict[str, str]],
         *,
         tools: list[dict[str, Any]] | None = None,
         policy: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
+    ) -> LLMResult:
         path = Path(self.model_path)
         if not path.exists():
             return _unavailable(

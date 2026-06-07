@@ -78,6 +78,7 @@ REQUIRED_RELEASE_GATE_NEEDS = {"test", "security"}
 REQUIRED_RELEASE_GATE_OS = {"windows-latest", "ubuntu-latest"}
 REQUIRED_RELEASE_GATE_PYTHON = {"3.11", "3.12"}
 REQUIRED_OPTIONAL_AUDIT_EXTRAS = {"live-llm", "local-llm", "rag", "fine-tune", "all"}
+REQUIRED_ARTIFACT_RETENTION_DAYS = 14
 REQUIRED_OPTIONAL_AUDIT_MARKERS = [
     "workflow_dispatch:",
     "schedule:",
@@ -137,7 +138,126 @@ def _line_has(text: str, needle: str) -> bool:
     return needle in normalized
 
 
-def _workflow_uses_entries(text: str) -> list[str]:
+def _load_workflow_document(text: str) -> tuple[dict[str, Any], str | None]:
+    if not text.strip():
+        return {}, "workflow_empty"
+    try:
+        import yaml
+    except ModuleNotFoundError:
+        return {}, "pyyaml_not_installed"
+    try:
+        loaded = yaml.safe_load(text)
+    except Exception as exc:
+        return {}, f"workflow_yaml_parse_failed:{type(exc).__name__}"
+    if loaded is None:
+        return {}, "workflow_empty"
+    if not isinstance(loaded, dict):
+        return {}, "workflow_root_not_mapping"
+    return loaded, None
+
+
+def _workflow_jobs(workflow: dict[str, Any]) -> dict[str, Any]:
+    jobs = workflow.get("jobs", {})
+    return jobs if isinstance(jobs, dict) else {}
+
+
+def _workflow_steps(workflow: dict[str, Any]) -> list[dict[str, Any]]:
+    steps: list[dict[str, Any]] = []
+    for job in _workflow_jobs(workflow).values():
+        if not isinstance(job, dict):
+            continue
+        job_steps = job.get("steps", [])
+        if not isinstance(job_steps, list):
+            continue
+        steps.extend(step for step in job_steps if isinstance(step, dict))
+    return steps
+
+
+def _as_string_set(value: Any) -> set[str]:
+    if isinstance(value, list):
+        return {str(item) for item in value}
+    if isinstance(value, tuple):
+        return {str(item) for item in value}
+    if isinstance(value, str):
+        return {value}
+    return set()
+
+
+def _workflow_uses_entries(workflow: dict[str, Any] | str) -> list[str]:
+    if isinstance(workflow, str):
+        workflow, _ = _load_workflow_document(workflow)
+    entries = []
+    for step in _workflow_steps(workflow):
+        uses = step.get("uses")
+        if isinstance(uses, str):
+            entries.append(uses.strip("'\""))
+    return entries
+
+
+def _workflow_upload_artifact_retention(workflow: dict[str, Any]) -> dict[str, Any]:
+    steps = []
+    missing_or_invalid = []
+    for index, step in enumerate(_workflow_steps(workflow)):
+        uses = str(step.get("uses", ""))
+        if not uses.startswith("actions/upload-artifact@"):
+            continue
+        with_block = step.get("with", {})
+        if not isinstance(with_block, dict):
+            with_block = {}
+        raw_retention = with_block.get("retention-days")
+        try:
+            retention_days = int(raw_retention)
+        except (TypeError, ValueError):
+            retention_days = None
+        step_name = str(step.get("name") or f"upload-artifact-step-{index}")
+        item = {
+            "name": step_name,
+            "retention_days": retention_days,
+            "required_retention_days": REQUIRED_ARTIFACT_RETENTION_DAYS,
+            "passed": retention_days == REQUIRED_ARTIFACT_RETENTION_DAYS,
+        }
+        steps.append(item)
+        if not item["passed"]:
+            missing_or_invalid.append(step_name)
+    return {
+        "upload_artifact_steps": steps,
+        "upload_artifact_steps_missing_retention_days": missing_or_invalid,
+    }
+
+
+def _workflow_permissions_contents_read_yaml(workflow: dict[str, Any]) -> bool:
+    permissions = workflow.get("permissions")
+    if not isinstance(permissions, dict):
+        return False
+    return str(permissions.get("contents", "")).casefold() == "read"
+
+
+def _workflow_checkout_steps_missing_persist_credentials_false(workflow: dict[str, Any]) -> int:
+    missing = 0
+    for step in _workflow_steps(workflow):
+        uses = str(step.get("uses", ""))
+        if not uses.startswith("actions/checkout@"):
+            continue
+        with_block = step.get("with", {})
+        if not isinstance(with_block, dict):
+            with_block = {}
+        value = with_block.get("persist-credentials")
+        if value is not False and str(value).casefold() != "false":
+            missing += 1
+    return missing
+
+
+def _workflow_matrix_values(job: dict[str, Any], key: str) -> set[str]:
+    strategy = job.get("strategy", {})
+    if not isinstance(strategy, dict):
+        return set()
+    matrix = strategy.get("matrix", {})
+    if not isinstance(matrix, dict):
+        return set()
+    return _as_string_set(matrix.get(key))
+
+
+def _workflow_legacy_uses_entries(text: str) -> list[str]:
     entries = []
     for raw in text.splitlines():
         match = re.match(r"^\s*uses:\s*([^\s#]+)", raw)
@@ -225,7 +345,8 @@ def _workflow_values(block: str, *, key: str) -> set[str]:
 
 
 def _workflow_marker_check(text: str) -> dict[str, Any]:
-    uses_entries = _workflow_uses_entries(text)
+    workflow, parse_error = _load_workflow_document(text)
+    uses_entries = _workflow_uses_entries(workflow) if not parse_error else _workflow_legacy_uses_entries(text)
     action_versions = {
         action: sorted(
             version
@@ -239,19 +360,37 @@ def _workflow_marker_check(text: str) -> dict[str, Any]:
         for action, minimum in REQUIRED_CI_ACTION_MAJOR_MINIMUMS.items()
         if not action_versions[action] or min(action_versions[action]) < minimum
     ]
-    jobs = _top_level_job_ids(text)
+    jobs_map = _workflow_jobs(workflow)
+    jobs = set(str(key) for key in jobs_map) if not parse_error else _top_level_job_ids(text)
+    release_job = jobs_map.get("release-gates", {}) if isinstance(jobs_map.get("release-gates"), dict) else {}
     release_block = _job_block(text, "release-gates")
-    release_needs = _workflow_values(release_block, key="needs")
-    release_os = _workflow_values(release_block, key="os")
-    release_python = _workflow_values(release_block, key="python-version")
+    release_needs = _as_string_set(release_job.get("needs")) if release_job else _workflow_values(release_block, key="needs")
+    release_os = _workflow_matrix_values(release_job, "os") if release_job else _workflow_values(release_block, key="os")
+    release_python = (
+        _workflow_matrix_values(release_job, "python-version")
+        if release_job
+        else _workflow_values(release_block, key="python-version")
+    )
     missing_commands = [marker for marker in REQUIRED_CI_MARKERS if not _line_has(text, marker)]
-    checkout_steps_without_credential_opt_out = _checkout_steps_missing_persist_credentials_false(text)
+    checkout_steps_without_credential_opt_out = (
+        _workflow_checkout_steps_missing_persist_credentials_false(workflow)
+        if not parse_error
+        else _checkout_steps_missing_persist_credentials_false(text)
+    )
+    retention = _workflow_upload_artifact_retention(workflow) if not parse_error else {
+        "upload_artifact_steps": [],
+        "upload_artifact_steps_missing_retention_days": ["workflow_yaml_unavailable"],
+    }
     details = {
+        "workflow_yaml_parse_error": parse_error,
         "missing_jobs": sorted(REQUIRED_CI_JOBS - jobs),
-        "permissions_contents_read": _workflow_permissions_contents_read(text),
+        "permissions_contents_read": _workflow_permissions_contents_read_yaml(workflow)
+        if not parse_error
+        else _workflow_permissions_contents_read(text),
         "action_major_versions": action_versions,
         "missing_or_old_actions": missing_or_old_actions,
         "checkout_steps_without_persist_credentials_false": checkout_steps_without_credential_opt_out,
+        **retention,
         "release_gates_needs": sorted(release_needs),
         "missing_release_gates_needs": sorted(REQUIRED_RELEASE_GATE_NEEDS - release_needs),
         "release_gates_os": sorted(release_os),
@@ -261,10 +400,12 @@ def _workflow_marker_check(text: str) -> dict[str, Any]:
         "missing_command_markers": missing_commands,
     }
     passed = (
-        not details["missing_jobs"]
+        not parse_error
+        and not details["missing_jobs"]
         and details["permissions_contents_read"]
         and not missing_or_old_actions
         and checkout_steps_without_credential_opt_out == 0
+        and not details["upload_artifact_steps_missing_retention_days"]
         and not details["missing_release_gates_needs"]
         and not details["missing_release_gates_os"]
         and not details["missing_release_gates_python"]
@@ -274,7 +415,8 @@ def _workflow_marker_check(text: str) -> dict[str, Any]:
 
 
 def _optional_dependency_audit_check(text: str) -> dict[str, Any]:
-    uses_entries = _workflow_uses_entries(text)
+    workflow, parse_error = _load_workflow_document(text)
+    uses_entries = _workflow_uses_entries(workflow) if not parse_error else _workflow_legacy_uses_entries(text)
     action_versions = {
         action: sorted(
             version
@@ -288,24 +430,44 @@ def _optional_dependency_audit_check(text: str) -> dict[str, Any]:
         for action, minimum in REQUIRED_CI_ACTION_MAJOR_MINIMUMS.items()
         if not action_versions[action] or min(action_versions[action]) < minimum
     ]
-    extras = _workflow_values(text, key="extra")
+    jobs_map = _workflow_jobs(workflow)
+    optional_job = (
+        jobs_map.get("optional-dependency-audit", {})
+        if isinstance(jobs_map.get("optional-dependency-audit"), dict)
+        else {}
+    )
+    extras = _workflow_matrix_values(optional_job, "extra") if optional_job else _workflow_values(text, key="extra")
     missing_markers = [marker for marker in REQUIRED_OPTIONAL_AUDIT_MARKERS if not _line_has(text, marker)]
-    checkout_steps_without_credential_opt_out = _checkout_steps_missing_persist_credentials_false(text)
+    checkout_steps_without_credential_opt_out = (
+        _workflow_checkout_steps_missing_persist_credentials_false(workflow)
+        if not parse_error
+        else _checkout_steps_missing_persist_credentials_false(text)
+    )
+    retention = _workflow_upload_artifact_retention(workflow) if not parse_error else {
+        "upload_artifact_steps": [],
+        "upload_artifact_steps_missing_retention_days": ["workflow_yaml_unavailable"],
+    }
     details = {
-        "permissions_contents_read": _workflow_permissions_contents_read(text),
+        "workflow_yaml_parse_error": parse_error,
+        "permissions_contents_read": _workflow_permissions_contents_read_yaml(workflow)
+        if not parse_error
+        else _workflow_permissions_contents_read(text),
         "action_major_versions": action_versions,
         "missing_or_old_actions": missing_or_old_actions,
         "extras": sorted(extras),
         "missing_extras": sorted(REQUIRED_OPTIONAL_AUDIT_EXTRAS - extras),
         "missing_markers": missing_markers,
         "checkout_steps_without_persist_credentials_false": checkout_steps_without_credential_opt_out,
+        **retention,
     }
     passed = (
-        details["permissions_contents_read"]
+        not parse_error
+        and details["permissions_contents_read"]
         and not missing_or_old_actions
         and not details["missing_extras"]
         and not missing_markers
         and checkout_steps_without_credential_opt_out == 0
+        and not details["upload_artifact_steps_missing_retention_days"]
     )
     return {"passed": passed, "details": details}
 
@@ -446,6 +608,7 @@ def audit_public_release_readiness(
             **ci_check["details"],
             "required_jobs": sorted(REQUIRED_CI_JOBS),
             "required_action_major_minimums": REQUIRED_CI_ACTION_MAJOR_MINIMUMS,
+            "required_artifact_retention_days": REQUIRED_ARTIFACT_RETENTION_DAYS,
             "required_command_markers": REQUIRED_CI_MARKERS,
         },
         issue="ci_release_gate_missing",
@@ -462,6 +625,7 @@ def audit_public_release_readiness(
         details={
             **optional_audit_check["details"],
             "required_extras": sorted(REQUIRED_OPTIONAL_AUDIT_EXTRAS),
+            "required_artifact_retention_days": REQUIRED_ARTIFACT_RETENTION_DAYS,
             "required_markers": REQUIRED_OPTIONAL_AUDIT_MARKERS,
         },
         issue="optional_dependency_audit_workflow_missing",

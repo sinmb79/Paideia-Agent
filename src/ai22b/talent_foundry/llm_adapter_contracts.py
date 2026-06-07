@@ -9,6 +9,7 @@ from typing import Any, Iterator
 
 from ai22b.config import PROJECT_ROOT
 from ai22b.talent_foundry.llm_clients import (
+    LLMResult,
     SECRET_ENV_KEYS,
     build_llm_client,
     build_runtime_messages,
@@ -161,7 +162,7 @@ def _deterministic_contract() -> dict[str, Any]:
     manifest = _doctor_manifest()
     runtime_config = build_llm_runtime_config(engine="deterministic_local")
     client = build_llm_client(runtime_config)
-    result = client.generate(
+    typed_result = client.generate_result(
         build_runtime_messages(
             manifest=manifest,
             task="Verify deterministic adapter contract.",
@@ -169,10 +170,12 @@ def _deterministic_contract() -> dict[str, Any]:
         tools=[{"name": "evidence_packet"}],
         policy={"mode": "public_safe_contract"},
     )
+    result = typed_result.to_public_artifact()
     private_fields = count_private_reasoning_fields(result)
     serialized = _json_clean(result)
     passed = (
-        result.get("schema") == CLIENT_RESULT_SCHEMA
+        isinstance(typed_result, LLMResult)
+        and result.get("schema") == CLIENT_RESULT_SCHEMA
         and result.get("status") == "completed"
         and result.get("identity_policy") == "application_engine_not_identity"
         and result.get("network_access") == "blocked"
@@ -187,6 +190,7 @@ def _deterministic_contract() -> dict[str, Any]:
         "result_status": result.get("status"),
         "network_access": result.get("network_access"),
         "raw_output_saved": result.get("raw_output_saved"),
+        "typed_result_contract_used": isinstance(typed_result, LLMResult),
         "private_reasoning_field_count": private_fields,
         "serialized_result_chars": len(serialized),
     }
@@ -199,7 +203,7 @@ def _external_fail_closed_contract() -> dict[str, Any]:
         for engine in sorted(EXTERNAL_API_ENGINES):
             runtime_config = build_llm_runtime_config(engine=engine, model=EXTERNAL_SAMPLE_MODELS[engine])
             client = build_llm_client(runtime_config)
-            result = client.generate(
+            typed_result = client.generate_result(
                 build_runtime_messages(
                     manifest=manifest,
                     task=f"Verify {engine} missing-credential contract.",
@@ -207,11 +211,13 @@ def _external_fail_closed_contract() -> dict[str, Any]:
                 tools=[],
                 policy={"mode": "public_safe_contract"},
             )
+            result = typed_result.to_public_artifact()
             sanitized = sanitize_llm_result_packet(result)
             serialized = _json_clean(sanitized)
             reason = str(sanitized.get("reason", ""))
             passed = (
-                sanitized.get("schema") == CLIENT_RESULT_SCHEMA
+                isinstance(typed_result, LLMResult)
+                and sanitized.get("schema") == CLIENT_RESULT_SCHEMA
                 and sanitized.get("status") == "unavailable"
                 and (
                     "not_set" in reason
@@ -230,6 +236,7 @@ def _external_fail_closed_contract() -> dict[str, Any]:
                     "model": sanitized.get("model"),
                     "network_call_attempted": False,
                     "raw_provider_payload_saved": False,
+                    "typed_result_contract_used": isinstance(typed_result, LLMResult),
                     "private_reasoning_field_count": count_private_reasoning_fields(sanitized),
                     "passed": passed,
                 }
@@ -290,7 +297,7 @@ def _local_model_contract() -> dict[str, Any]:
     missing_path = PROJECT_ROOT / "models" / "__paideia_missing_transformers_contract_model__"
     runtime_config = build_llm_runtime_config(engine="transformers_local", model_path=str(missing_path))
     client = build_llm_client(runtime_config)
-    result = client.generate(
+    typed_result = client.generate_result(
         build_runtime_messages(
             manifest=_doctor_manifest(),
             task="Verify local Transformers missing-model contract.",
@@ -298,13 +305,15 @@ def _local_model_contract() -> dict[str, Any]:
         tools=[],
         policy={"mode": "public_safe_contract"},
     )
+    result = typed_result.to_public_artifact()
     smoke_without_path = run_llm_application_smoke(
         engine="bigram_local",
         llm_mode="offline",
         task="Verify local model engines fail closed when a model path is missing.",
     )
     passed = (
-        result.get("schema") == CLIENT_RESULT_SCHEMA
+        isinstance(typed_result, LLMResult)
+        and result.get("schema") == CLIENT_RESULT_SCHEMA
         and result.get("status") == "unavailable"
         and result.get("reason") == "local_model_path_not_found"
         and result.get("local_files_only") is True
@@ -320,6 +329,7 @@ def _local_model_contract() -> dict[str, Any]:
         "transformers_reason": result.get("reason"),
         "transformers_local_files_only": result.get("local_files_only"),
         "transformers_network_access": result.get("network_access"),
+        "typed_result_contract_used": isinstance(typed_result, LLMResult),
         "runtime_local_model_without_path_passed": smoke_without_path.get("passed"),
         "runtime_local_model_without_path_status": smoke_without_path.get("runtime_result", {}).get("status")
         if isinstance(smoke_without_path.get("runtime_result"), dict)

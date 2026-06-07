@@ -33,10 +33,12 @@ The hygiene script now checks release risks that should fail fast:
 - hidden bidirectional Unicode controls that can make reviewed text render differently from stored text;
 - required public-release files such as `README.md`, `README.ko.md`, `SECURITY.md`, `LICENSE`, `pyproject.toml`, and machine-readable files under `schemas/`.
 
-The Python readiness audit writes a reviewable `paideia-public-release-readiness/v1` report. It checks source repository metadata, CI gates, and public candidate files under roots such as `src`, `docs`, `tests`, `scripts`, `examples`, and `data/public`. It does not call the network, execute subprocesses, or inspect private generated runtime state.
+The Python readiness audit writes a reviewable `paideia-public-release-readiness/v1` report. It checks source repository metadata, CI gates, and public candidate files under roots such as `src`, `docs`, `tests`, `scripts`, `examples`, and `data/public`. It parses GitHub workflow files with `PyYAML` for job, matrix, `needs`, action, checkout credential, and artifact retention policy checks; command strings are still checked as command markers because they are shell payloads. The audit does not call the network, execute subprocesses, or inspect private generated runtime state.
 It also includes report-only observations for hidden Unicode control/format
 characters other than bidi controls, so GitHub hidden-text warnings can be
-diagnosed before a hard gate is added.
+diagnosed before a hard gate is added. Each observation includes the file,
+codepoint, Unicode name/category, line, column, and an escaped surrounding
+snippet.
 
 The first-run smoke suite also writes `paideia-llm-provider-matrix/v1`, builds `paideia-llm-onboarding-checklist/v1`, and materializes `paideia-llm-connection-profile/v1` with the deterministic local engine. This proves the LLM/service selection path can list all selectable providers and produce setup requirements, provider doctor, live-check, application smoke, agent runtime smoke, and first chat commands without calling a provider by default or exporting secrets.
 
@@ -55,17 +57,22 @@ GitHub Actions release readiness runs with `permissions: contents: read`,
 actions, and Dependabot monitoring for GitHub Actions. The security and
 release-gate jobs upload generated JSON reports as workflow artifacts so
 reviewers can inspect the exact Bandit, pip-audit, doctor, SBOM, and public
-hygiene evidence from the CI run. The readiness audit checks CI structure
+hygiene evidence from the CI run. These artifacts use `retention-days: 14`
+because the reports are review evidence, not long-term data storage. The
+readiness audit checks CI structure
 instead of exact action-version strings, so Dependabot can update major versions
 without breaking the gate as long as the required jobs, commands, minimum action
-majors, matrix, artifacts, and checkout credential policy remain intact.
+majors, matrix, artifacts, retention policy, and checkout credential policy
+remain intact.
 
 Optional dependency vulnerability checks run in a separate scheduled/manual
 workflow (`.github/workflows/optional-dependency-audit.yml`). It installs and
 audits `live-llm`, `local-llm`, `rag`, `fine-tune`, and `all` extras with
 `pip-audit --local`, then uploads one JSON artifact per optional dependency
 group. These checks are intentionally outside the normal PR path because some
-LLM/RAG/fine-tuning dependency trees are large.
+LLM/RAG/fine-tuning dependency trees are large. Preview releases must review the
+latest optional audit result before publication; stable releases should block on
+unresolved high or critical vulnerabilities in optional extras.
 
 The current preview policy uses official GitHub Action tags plus Dependabot for
 maintainability. Formal production releases should revisit full-length commit

@@ -33,6 +33,7 @@ dev = [
   "jsonschema",
   "pytest",
   "pytest-cov",
+  "pyyaml",
   "ruff",
   "tomli; python_version < '3.11'",
 ]
@@ -56,6 +57,7 @@ all = [
   "pip-audit",
   "pytest",
   "pytest-cov",
+  "pyyaml",
   "ragas",
   "ruff",
   "sentence-transformers",
@@ -74,7 +76,6 @@ where = ["src"]
 [tool.bandit]
 skips = [
   "B105", # Public-safe boolean/status fixture names trigger hardcoded-password false positives.
-  "B108", # Local path hygiene patterns intentionally list temp path prefixes.
   "B311", # Educational from-scratch model sampling is deterministic/non-cryptographic.
   "B608", # Long generated markdown templates are misread as SQL construction.
   "B615", # Local-only Hugging Face loading uses local_files_only=True.

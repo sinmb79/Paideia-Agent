@@ -56,3 +56,4 @@ jobs:
         with:
           name: optional-dependency-audit-${{ matrix.extra }}
           path: runs/pip_audit_${{ matrix.extra }}.json
+          retention-days: 14

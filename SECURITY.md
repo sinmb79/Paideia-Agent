@@ -31,7 +31,14 @@ GitHub Actions run with `permissions: contents: read`. Repository checkout uses
 `actions/checkout@v6` with `persist-credentials: false`, and Dependabot monitors
 official GitHub Actions updates. The public-preview policy uses official action
 tags plus Dependabot for maintainability; formal release branches should revisit
-full-length commit SHA pinning after the release branch is frozen.
+full-length commit SHA pinning after the release branch is frozen. Security,
+release-gate, and optional dependency audit artifacts are short-lived review
+evidence and use a 14-day retention policy.
+
+Optional dependency audits run outside the normal PR path because LLM, RAG, and
+fine-tuning dependency trees can be large. Preview releases should review the
+latest optional audit result before publication; stable releases should block on
+unresolved high or critical vulnerabilities in optional extras.
 
 ## Imported Skills
 
