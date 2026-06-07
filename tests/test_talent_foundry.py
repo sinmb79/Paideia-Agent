@@ -3271,6 +3271,7 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertLessEqual(
             {
                 "blueprint",
+                "list-role-model-curricula",
                 "start-console",
                 "onboard-agent",
                 "raise",
@@ -3310,6 +3311,17 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("projection_swarm", manifest["guided_console"]["post_hire_modes"])
         self.assertIn("specialist_team", manifest["guided_console"]["post_hire_modes"])
         self.assertIn("single", manifest["guided_console"]["post_hire_modes"])
+        self.assertEqual(
+            manifest["guided_console"]["role_model_curriculum_catalog"]["schema"],
+            "paideia-role-model-curriculum-catalog/v1",
+        )
+        self.assertTrue(
+            manifest["guided_console"]["role_model_curriculum_catalog"]["summary"]["ready_for_onboarding"]
+        )
+        self.assertEqual(
+            manifest["guided_console"]["role_model_curriculum_catalog"]["summary"]["missing_curriculum_count"],
+            0,
+        )
         self.assertEqual(manifest["family_lineage_model"]["child_blueprint"], "family_seed_to_training_blueprint")
         self.assertEqual(manifest["family_lineage_model"]["biological_claim"], "not_claimed")
         self.assertEqual(manifest["reasoning_model"]["memory_routing"]["active_context_budget"], "bounded")
@@ -3832,6 +3844,7 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("doctor-paideia-kit-first-run", {command["id"] for command in manifest["commands"]})
         self.assertIn("migrate-agent-assets", {command["id"] for command in manifest["commands"]})
         self.assertIn("run-agent-program-chat", {command["id"] for command in manifest["commands"]})
+        self.assertIn("list-role-model-curricula", {command["id"] for command in manifest["commands"]})
 
     def test_build_agent_program_creates_paideia_center_manifest(self) -> None:
         from ai22b.talent_foundry.agent_program import build_agent_program

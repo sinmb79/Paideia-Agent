@@ -85,7 +85,11 @@ from ai22b.talent_foundry.program import create_talent_plan
 from ai22b.talent_foundry.program_manifest import build_public_program_manifest
 from ai22b.talent_foundry.public_release import audit_public_release_readiness
 from ai22b.talent_foundry.records import build_career_records
-from ai22b.talent_foundry.role_models import list_role_models, summarize_role_model
+from ai22b.talent_foundry.role_models import (
+    build_role_model_curriculum_catalog,
+    list_role_models,
+    summarize_role_model,
+)
 from ai22b.talent_foundry.same_sky_eval import run_same_sky_eval
 from ai22b.talent_foundry.skill_migration import migrate_external_agent_assets
 from ai22b.talent_foundry.simulation_rollouts import evaluate_simulation_rollouts
@@ -170,6 +174,13 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     list_role_models_command.add_argument("--domain")
     list_role_models_command.add_argument("--output")
+
+    list_role_model_curricula_command = subparsers.add_parser(
+        "list-role-model-curricula",
+        help="List role-model templates with their curriculum, stage, assessment, and hiring-gate readiness.",
+    )
+    list_role_model_curricula_command.add_argument("--domain")
+    list_role_model_curricula_command.add_argument("--output")
 
     list_llm_services_command = subparsers.add_parser(
         "list-llm-services",
@@ -1070,6 +1081,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             "domain": args.domain,
             "role_models": [summarize_role_model(item) for item in list_role_models(args.domain)],
         }
+        if args.output:
+            output_path = Path(args.output)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+            print(str(output_path))
+        else:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.command == "list-role-model-curricula":
+        result = build_role_model_curriculum_catalog(args.domain)
         if args.output:
             output_path = Path(args.output)
             output_path.parent.mkdir(parents=True, exist_ok=True)

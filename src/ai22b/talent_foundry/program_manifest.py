@@ -7,7 +7,11 @@ from typing import Any
 
 from ai22b.config import PROJECT_ROOT
 from ai22b.talent_foundry.onboarding_choices import CHAT_SURFACE_CATALOG, LLM_SERVICE_CATALOG
-from ai22b.talent_foundry.role_models import list_role_models, summarize_role_model
+from ai22b.talent_foundry.role_models import (
+    build_role_model_curriculum_catalog,
+    list_role_models,
+    summarize_role_model,
+)
 
 
 PUBLIC_PROGRAM_MANIFEST_SCHEMA = "ai-talent-foundry-public-program-manifest/v1"
@@ -15,6 +19,7 @@ DEFAULT_PUBLIC_PROGRAM_MANIFEST_NAME = "ai_talent_foundry_public_manifest.json"
 
 REQUIRED_INSTALLER_COMMANDS = [
     "list-role-models",
+    "list-role-model-curricula",
     "list-llm-services",
     "prepare-owner-self-extension-intake",
     "blueprint",
@@ -133,6 +138,7 @@ def _research_summary() -> dict[str, Any]:
 def _commands() -> list[dict[str, str]]:
     purposes = {
         "list-role-models": "List role-model process templates available for a talent track.",
+        "list-role-model-curricula": "List role-model process templates with curriculum, stage, assessment, and hiring-gate readiness.",
         "list-llm-services": "List selectable LLM services with no-network readiness, live-check, smoke, runtime, and chat commands.",
         "prepare-owner-self-extension-intake": "Prepare metadata-only local owner self-extension intake without exporting private filenames, paths, or file contents.",
         "blueprint": "Create a growth-to-employment blueprint from an owner request.",
@@ -305,6 +311,7 @@ def build_public_program_manifest(run_dir: Path, *, output_path: Path | None = N
             "llm_service_catalog": LLM_SERVICE_CATALOG,
             "chat_surface_catalog": CHAT_SURFACE_CATALOG,
             "role_model_catalog": [summarize_role_model(item) for item in list_role_models()],
+            "role_model_curriculum_catalog": build_role_model_curriculum_catalog(),
             "bundled_sample_answers": "examples/graham_junior_onboarding.answers.json",
             "post_hire_modes": ["single", "projection_swarm", "specialist_team"],
             "answers_file_supported": True,

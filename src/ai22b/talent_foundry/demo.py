@@ -615,7 +615,7 @@ def run_demo(output_dir: Path = DEFAULT_RUN_DIR) -> dict[str, Path]:
     )
     bigram_model_path = PROJECT_ROOT / "models" / "checkpoints" / "shinyong_stage_12_graduate_school_bigram.json"
     if not bigram_model_path.exists():
-        bigram_model_path = PROJECT_ROOT / "models" / "checkpoints" / "tiny_bigram_seed.json"
+        bigram_model_path = PROJECT_ROOT / "data" / "public" / "model_fixtures" / "tiny_bigram_seed.json"
     bigram_hiring = hire_installed_agent(
         paths["installed_agent_manifest"],
         employer="보스",

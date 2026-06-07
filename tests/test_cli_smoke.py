@@ -52,6 +52,7 @@ class CliSmokeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             role_models_path = tmp_path / "role_models.json"
+            role_model_curricula_path = tmp_path / "role_model_curricula.json"
             llm_services_path = tmp_path / "llm_services.json"
             llm_onboarding_path = tmp_path / "llm_onboarding_checklist.json"
             llm_connection_profile_path = tmp_path / "llm_connection_profile.json"
@@ -79,6 +80,13 @@ class CliSmokeTests(unittest.TestCase):
                     "securities_research",
                     "--output",
                     str(role_models_path),
+                ]
+            )
+            role_model_curricula_code = cli_main(
+                [
+                    "list-role-model-curricula",
+                    "--output",
+                    str(role_model_curricula_path),
                 ]
             )
             llm_services_code = cli_main(
@@ -252,6 +260,7 @@ class CliSmokeTests(unittest.TestCase):
             )
 
             role_models = json.loads(role_models_path.read_text(encoding="utf-8"))
+            role_model_curricula = json.loads(role_model_curricula_path.read_text(encoding="utf-8"))
             llm_services = json.loads(llm_services_path.read_text(encoding="utf-8"))
             llm_onboarding = json.loads(llm_onboarding_path.read_text(encoding="utf-8"))
             llm_connection_profile = json.loads(llm_connection_profile_path.read_text(encoding="utf-8"))
@@ -285,6 +294,7 @@ class CliSmokeTests(unittest.TestCase):
             runtime_contract_doctor = json.loads(runtime_contract_doctor_path.read_text(encoding="utf-8"))
 
         self.assertEqual(role_models_code, 0)
+        self.assertEqual(role_model_curricula_code, 0)
         self.assertEqual(llm_services_code, 0)
         self.assertEqual(llm_onboarding_code, 0)
         self.assertEqual(llm_connection_profile_code, 0)
@@ -308,6 +318,16 @@ class CliSmokeTests(unittest.TestCase):
         self.assertEqual(role_models["schema"], "ai-talent-role-model-list/v1")
         self.assertEqual(role_models["domain"], "securities_research")
         self.assertIn("graham_value_investing", {item["role_model_id"] for item in role_models["role_models"]})
+
+        self.assertEqual(role_model_curricula["schema"], "paideia-role-model-curriculum-catalog/v1")
+        self.assertTrue(role_model_curricula["summary"]["ready_for_onboarding"])
+        self.assertEqual(role_model_curricula["summary"]["missing_curriculum_count"], 0)
+        self.assertIn("hopper_software_tooling", role_model_curricula["summary"]["role_model_ids"])
+        self.assertFalse(role_model_curricula["public_safe"]["network_call_performed"])
+        self.assertFalse(role_model_curricula["public_safe"]["private_materials_included"])
+        curricula_by_id = {item["role_model_id"]: item for item in role_model_curricula["role_models"]}
+        self.assertEqual(curricula_by_id["graham_value_investing"]["curriculum"]["status"], "connected")
+        self.assertIn("--role-model graham_value_investing", curricula_by_id["graham_value_investing"]["blueprint_command"])
 
         self.assertEqual(llm_services["schema"], "paideia-llm-provider-matrix/v1")
         self.assertEqual(llm_services["selected_chat_surface"]["id"], "codex-bridge-chat")
@@ -814,6 +834,7 @@ class CliSmokeTests(unittest.TestCase):
         first_run_checks = {item["id"]: item for item in first_run_doctor["checks"]}
         for check_id in {
             "role_model_catalog_available",
+            "role_model_curriculum_catalog_ready",
             "llm_provider_matrix_public_safe",
             "llm_onboarding_checklist_public_safe",
             "llm_connection_profile_public_safe",
@@ -834,6 +855,13 @@ class CliSmokeTests(unittest.TestCase):
         }:
             self.assertTrue(first_run_checks[check_id]["passed"], check_id)
         self.assertIn("graham_value_investing", first_run_doctor["artifacts"]["role_models"]["role_model_ids"])
+        self.assertEqual(
+            first_run_doctor["artifacts"]["role_model_curriculum_catalog"]["schema"],
+            "paideia-role-model-curriculum-catalog/v1",
+        )
+        self.assertTrue(first_run_doctor["artifacts"]["role_model_curriculum_catalog"]["ready_for_onboarding"])
+        self.assertEqual(first_run_doctor["artifacts"]["role_model_curriculum_catalog"]["missing_curriculum_count"], 0)
+        self.assertFalse(first_run_doctor["artifacts"]["role_model_curriculum_catalog"]["network_call_performed"])
         self.assertEqual(
             first_run_doctor["artifacts"]["llm_live_setup_guide"]["schema"],
             "paideia-llm-live-setup-guide/v1",

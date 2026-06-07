@@ -12,6 +12,7 @@ ROLE_MODEL_SCHEMA = "ai-talent-role-model/v1"
 ROLE_MODEL_CATALOG_SCHEMA = "ai-talent-role-model-catalog/v1"
 CURRICULUM_MANIFEST_SCHEMA = "ai-talent-curriculum-manifest/v1"
 CURRICULUM_CATALOG_SCHEMA = "ai-talent-curriculum-catalog/v1"
+ROLE_MODEL_CURRICULUM_CATALOG_SCHEMA = "paideia-role-model-curriculum-catalog/v1"
 ROLE_MODEL_CATALOG_DIR = PROJECT_ROOT / "apps" / "ai-talent-foundry" / "catalogs" / "role_models"
 CURRICULUM_CATALOG_DIR = PROJECT_ROOT / "apps" / "ai-talent-foundry" / "catalogs" / "curricula"
 DEFAULT_PRIVATE_CURRICULUM_DIR = storage_path("private", "curricula", "graham_securities")
@@ -55,6 +56,8 @@ def get_role_model(role_model_id: str) -> dict[str, Any]:
 
 def _curriculum_for(role_model: dict[str, Any]) -> dict[str, Any]:
     role_model_id = role_model["role_model_id"]
+    if not CURRICULUM_CATALOG_DIR.exists():
+        raise RoleModelNotFoundError(f"No curriculum catalog directory for role model: {role_model_id}")
     for path in sorted(CURRICULUM_CATALOG_DIR.glob("*.json")):
         item = _read_json(path)
         if item.get("schema") == CURRICULUM_MANIFEST_SCHEMA:
@@ -121,3 +124,147 @@ def summarize_role_model(role_model: dict[str, Any]) -> dict[str, Any]:
         "source_count": len(role_model.get("source_facts", [])),
         "copyright_policy": role_model.get("copyright_policy", {}).get("public_repo_policy"),
     }
+
+
+def _summarize_curriculum(curriculum: dict[str, Any]) -> dict[str, Any]:
+    stages = list(curriculum.get("stages", []))
+    course_count = sum(len(stage.get("courses", [])) for stage in stages)
+    assessment_count = sum(len(stage.get("assessments", [])) for stage in stages)
+    assessment_ladder = curriculum.get("assessment_ladder", {})
+    required_for_hiring = list(assessment_ladder.get("required_for_hiring", []))
+    major_defaults = curriculum.get("major_defaults", {})
+    return {
+        "status": "connected",
+        "curriculum_id": curriculum.get("curriculum_id"),
+        "language": curriculum.get("language"),
+        "track_id": major_defaults.get("track_id"),
+        "track_name": major_defaults.get("track_name"),
+        "specialty": major_defaults.get("specialty"),
+        "target_role": major_defaults.get("target_role"),
+        "university": major_defaults.get("university"),
+        "graduate_school": major_defaults.get("graduate_school"),
+        "doctoral_project": major_defaults.get("doctoral_project"),
+        "stage_count": len(stages),
+        "course_count": course_count,
+        "assessment_count": assessment_count,
+        "required_for_hiring_count": len(required_for_hiring),
+        "required_for_hiring": required_for_hiring,
+        "stage_cards": [
+            {
+                "id": stage.get("id"),
+                "label": stage.get("label"),
+                "course_count": len(stage.get("courses", [])),
+                "assessment_count": len(stage.get("assessments", [])),
+            }
+            for stage in stages
+        ],
+        "record_policy": assessment_ladder.get("record_policy"),
+        "reasoning_ledger_policy": curriculum.get("process_replication", {}).get("reasoning_kibo_policy"),
+        "material_policy": curriculum.get("material_policy", {}),
+    }
+
+
+def _missing_curriculum_summary(role_model: dict[str, Any], error: Exception) -> dict[str, Any]:
+    return {
+        "status": "missing",
+        "curriculum_id": None,
+        "role_model_id": role_model.get("role_model_id"),
+        "reason": str(error),
+        "stage_count": 0,
+        "course_count": 0,
+        "assessment_count": 0,
+        "required_for_hiring_count": 0,
+        "required_for_hiring": [],
+        "stage_cards": [],
+    }
+
+
+def summarize_role_model_curriculum(role_model: dict[str, Any]) -> dict[str, Any]:
+    role_summary = summarize_role_model(role_model)
+    try:
+        curriculum_summary = _summarize_curriculum(_curriculum_for(role_model))
+    except RoleModelNotFoundError as exc:
+        curriculum_summary = _missing_curriculum_summary(role_model, exc)
+    role_model_id = role_summary["role_model_id"]
+    return {
+        **role_summary,
+        "selection_card": {
+            "id": role_model_id,
+            "label": role_summary["display_name"],
+            "domain": role_summary["domain"],
+            "primary_agent_use_case": role_summary["primary_agent_use_case"],
+            "curriculum_status": curriculum_summary["status"],
+            "track_name": curriculum_summary.get("track_name"),
+            "stage_count": curriculum_summary["stage_count"],
+            "assessment_count": curriculum_summary["assessment_count"],
+            "required_for_hiring_count": curriculum_summary["required_for_hiring_count"],
+        },
+        "curriculum": curriculum_summary,
+        "blueprint_command": (
+            "ai22b-talent-foundry blueprint "
+            f"--domain {role_summary['domain']} "
+            f"--role-model {role_model_id} "
+            "--talent-name <name> --gender <gender> --owner <owner> --request <goal>"
+        ),
+        "raise_command": "ai22b-talent-foundry raise --blueprint <blueprint.json>",
+        "hiring_outputs": [
+            "assessment_transcript.json",
+            "reasoning_kibo.jsonl",
+            "hiring_dossier.json",
+            "HIRING_DOSSIER.ko.md",
+            "agent_identity_envelope.json",
+            "agent_warrent_registration_request.json",
+        ],
+        "policy": {
+            "impersonation": "forbidden",
+            "personality_injection": "forbidden",
+            "copyright": role_model.get("copyright_policy", {}).get("public_repo_policy"),
+            "saju_birth_seed": role_model.get("emulation_policy", {}).get(
+                "saju_role",
+                "symbolic_initial_condition_generator_only",
+            ),
+            "private_materials": "metadata_only_until_owner_supplies_local_copy",
+        },
+    }
+
+
+def build_role_model_curriculum_catalog(
+    domain: str | None = None,
+    *,
+    output_path: str | Path | None = None,
+) -> dict[str, Any]:
+    cards = [summarize_role_model_curriculum(item) for item in list_role_models(domain)]
+    connected = [item for item in cards if item["curriculum"]["status"] == "connected"]
+    missing = [item for item in cards if item["curriculum"]["status"] != "connected"]
+    result = {
+        "schema": ROLE_MODEL_CURRICULUM_CATALOG_SCHEMA,
+        "domain": domain,
+        "summary": {
+            "role_model_count": len(cards),
+            "curriculum_connected_count": len(connected),
+            "missing_curriculum_count": len(missing),
+            "ready_for_onboarding": bool(cards) and not missing,
+            "domains": sorted({str(item["domain"]) for item in cards if item.get("domain")}),
+            "role_model_ids": [item["role_model_id"] for item in cards],
+            "missing_role_model_ids": [item["role_model_id"] for item in missing],
+        },
+        "onboarding_use": {
+            "first_screen": "Choose a role model process template after selecting the LLM service and chat surface.",
+            "selection_policy": "education_process_replication_not_impersonation",
+            "llm_identity_policy": "application_engine_not_identity",
+            "curriculum_gate": "A role model is ready for onboarding only when curriculum_status is connected.",
+        },
+        "public_safe": {
+            "network_call_performed": False,
+            "secret_values_exported": False,
+            "private_materials_included": False,
+            "local_absolute_paths_exported": False,
+            "copyrighted_bodies_included": False,
+        },
+        "role_models": cards,
+    }
+    if output_path:
+        output = Path(output_path)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+    return result
