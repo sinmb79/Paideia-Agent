@@ -126,6 +126,7 @@ def doctor_onboarding_session(
         "onboarding_session",
         "llm_onboarding_checklist",
         "llm_connection_profile",
+        "llm_live_setup_guide",
         "employment_record",
         "first_goal_cycle",
     }
@@ -208,27 +209,26 @@ def doctor_onboarding_session(
         if isinstance(llm_live_setup_guide.get("readiness_gate"), dict)
         else {}
     )
-    if schema == "ai-talent-guided-console-session/v1":
-        _check(
-            checks,
-            "llm_live_setup_guide_valid",
-            llm_live_setup_guide.get("schema") == "paideia-llm-live-setup-guide/v1"
-            and _public_safe_ok(llm_live_setup_guide)
-            and readiness_gate.get("requires_explicit_live_check") in {True, False},
-            details={
-                "schema": llm_live_setup_guide.get("schema"),
-                "status": llm_live_setup_guide.get("status"),
-                "selected_engine": (
-                    llm_live_setup_guide.get("selected_llm_service", {}).get("engine")
-                    if isinstance(llm_live_setup_guide.get("selected_llm_service"), dict)
-                    else None
-                ),
-                "requires_explicit_live_check": readiness_gate.get("requires_explicit_live_check"),
-                "network_call_performed": llm_live_setup_guide.get("public_safe", {}).get(
-                    "network_call_performed"
-                ),
-            },
-        )
+    _check(
+        checks,
+        "llm_live_setup_guide_valid",
+        llm_live_setup_guide.get("schema") == "paideia-llm-live-setup-guide/v1"
+        and _public_safe_ok(llm_live_setup_guide)
+        and readiness_gate.get("requires_explicit_live_check") in {True, False},
+        details={
+            "schema": llm_live_setup_guide.get("schema"),
+            "status": llm_live_setup_guide.get("status"),
+            "selected_engine": (
+                llm_live_setup_guide.get("selected_llm_service", {}).get("engine")
+                if isinstance(llm_live_setup_guide.get("selected_llm_service"), dict)
+                else None
+            ),
+            "requires_explicit_live_check": readiness_gate.get("requires_explicit_live_check"),
+            "network_call_performed": llm_live_setup_guide.get("public_safe", {}).get(
+                "network_call_performed"
+            ),
+        },
+    )
 
     config = _safe_read_artifact_json(artifacts, "paideia_onboarding_config")
     launch_plan = _safe_read_artifact_json(artifacts, "onboarding_launch_plan")

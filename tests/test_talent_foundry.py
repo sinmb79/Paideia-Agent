@@ -3874,6 +3874,7 @@ class TalentFoundryTests(unittest.TestCase):
             identity_envelope = json.loads((kit_dir / "agent_identity_envelope.json").read_text(encoding="utf-8"))
             runtime_readiness = json.loads((kit_dir / "paideia_runtime_readiness.json").read_text(encoding="utf-8"))
             llm_profile = json.loads((kit_dir / "llm_connection_profile.json").read_text(encoding="utf-8"))
+            llm_live_setup_guide = json.loads((kit_dir / "llm_live_setup_guide.json").read_text(encoding="utf-8"))
             hermes_adapter_exists = (kit_dir / "adapter_manifests" / "hermes_style.json").exists()
             openclaw_adapter_exists = (kit_dir / "adapter_manifests" / "openclaw_style.json").exists()
 
@@ -3881,9 +3882,11 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(manifest["status"], "ready")
         self.assertIn("paideia_onboarding.template.json", manifest["files"])
         self.assertIn("llm_connection_profile.json", manifest["files"])
+        self.assertIn("llm_live_setup_guide.json", manifest["files"])
         self.assertIn("paideia_runtime_readiness.json", manifest["files"])
         self.assertIn("agent_identity_envelope.json", manifest["files"])
         self.assertEqual(manifest["entrypoints"]["llm_connection_profile"], "llm_connection_profile.json")
+        self.assertEqual(manifest["entrypoints"]["llm_live_setup_guide"], "llm_live_setup_guide.json")
         self.assertEqual(manifest["entrypoints"]["runtime_readiness"], "paideia_runtime_readiness.json")
         self.assertEqual(manifest["entrypoints"]["agent_identity_envelope"], "agent_identity_envelope.json")
         self.assertIn("doctor_paideia.ps1", manifest["files"])
@@ -3894,9 +3897,12 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertTrue(doctor["checks"]["security_defaults"]["passed"])
         self.assertTrue(doctor["checks"]["onboarding_choices"]["passed"])
         self.assertTrue(doctor["checks"]["llm_connection_profile"]["passed"])
+        self.assertTrue(doctor["checks"]["llm_live_setup_guide"]["passed"])
         self.assertTrue(doctor["checks"]["runtime_readiness"]["passed"])
         self.assertEqual(llm_profile["schema"], "paideia-llm-connection-profile/v1")
+        self.assertEqual(llm_live_setup_guide["schema"], "paideia-llm-live-setup-guide/v1")
         self.assertFalse(llm_profile["public_safe"]["network_call_performed"])
+        self.assertFalse(llm_live_setup_guide["public_safe"]["network_call_performed"])
         self.assertEqual(runtime_readiness["schema"], "ai22b-paideia-kit-runtime-readiness/v1")
         self.assertTrue(runtime_readiness["passed"])
         self.assertEqual(runtime_readiness["runtime_config"]["identity_policy"], "application_engine_not_identity")
@@ -3954,6 +3960,7 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertTrue(report["passed"])
         self.assertEqual(report["schema"], "ai22b-paideia-agent-program-doctor/v1")
         self.assertTrue(report["checks"]["llm_connection_profile"]["passed"])
+        self.assertTrue(report["checks"]["llm_live_setup_guide"]["passed"])
         self.assertTrue(report["checks"]["runtime_readiness"]["passed"])
 
     def test_cli_doctor_paideia_kit_first_run_runs_offline_chat_smoke(self) -> None:
@@ -4000,8 +4007,10 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertTrue(check_by_id["runtime_readiness_passed"]["passed"])
         self.assertTrue(check_by_id["runtime_preflight_no_network"]["passed"])
         self.assertTrue(check_by_id["llm_connection_profile_public_safe"]["passed"])
+        self.assertTrue(check_by_id["llm_live_setup_guide_public_safe"]["passed"])
         self.assertTrue(check_by_id["offline_first_chat_completed"]["passed"])
         self.assertEqual(report["artifacts"]["first_chat"]["chat_status"], "completed")
+        self.assertEqual(report["artifacts"]["llm_live_setup_guide"]["schema"], "paideia-llm-live-setup-guide/v1")
         self.assertEqual(report["artifacts"]["first_chat"]["output"], "paideia_first_run_chat_smoke.json")
         self.assertEqual(
             report["artifacts"]["first_chat"]["program_chat_status_card"]["schema"],
@@ -4236,6 +4245,9 @@ class TalentFoundryTests(unittest.TestCase):
             llm_connection_profile = json.loads(
                 Path(session["artifacts"]["llm_connection_profile"]).read_text(encoding="utf-8")
             )
+            llm_live_setup_guide = json.loads(
+                Path(session["artifacts"]["llm_live_setup_guide"]).read_text(encoding="utf-8")
+            )
 
         self.assertEqual(exit_code, 0)
         self.assertEqual(session["schema"], "ai-talent-onboarding-session/v1")
@@ -4243,8 +4255,11 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(session["selected_llm_service"]["service_id"], "openai_chatgpt_codex")
         self.assertEqual(session["selected_chat_surface"]["id"], "codex-bridge-chat")
         self.assertEqual(llm_connection_profile["schema"], "paideia-llm-connection-profile/v1")
+        self.assertEqual(llm_live_setup_guide["schema"], "paideia-llm-live-setup-guide/v1")
         self.assertEqual(session["llm_connection_profile"]["path"], session["artifacts"]["llm_connection_profile"])
+        self.assertEqual(session["llm_live_setup_guide"]["path"], session["artifacts"]["llm_live_setup_guide"])
         self.assertFalse(session["llm_connection_profile"]["public_safe"]["network_call_performed"])
+        self.assertFalse(session["llm_live_setup_guide"]["public_safe"]["network_call_performed"])
         self.assertIn("explicit_live_provider_check", session["llm_connection_profile"]["verification_ids"])
         self.assertTrue(employment_record_exists)
 
@@ -4829,6 +4844,9 @@ class TalentFoundryTests(unittest.TestCase):
             llm_connection_profile = json.loads(
                 Path(session["artifacts"]["llm_connection_profile"]).read_text(encoding="utf-8")
             )
+            llm_live_setup_guide = json.loads(
+                Path(session["artifacts"]["llm_live_setup_guide"]).read_text(encoding="utf-8")
+            )
             employment_record = json.loads(Path(session["artifacts"]["employment_record"]).read_text(encoding="utf-8"))
             goal_cycle = json.loads(Path(session["artifacts"]["first_goal_cycle"]).read_text(encoding="utf-8"))
             artifact_exists = {
@@ -4843,6 +4861,7 @@ class TalentFoundryTests(unittest.TestCase):
                     "first_goal_cycle",
                     "llm_onboarding_checklist",
                     "llm_connection_profile",
+                    "llm_live_setup_guide",
                     "onboarding_session",
                 ]
             }
@@ -4858,8 +4877,11 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertFalse(session["llm_onboarding_checklist"]["public_safe"]["network_call_performed"])
         self.assertIn("provider_doctor_no_network", session["llm_onboarding_checklist"]["command_ids"])
         self.assertEqual(llm_connection_profile["schema"], "paideia-llm-connection-profile/v1")
+        self.assertEqual(llm_live_setup_guide["schema"], "paideia-llm-live-setup-guide/v1")
         self.assertEqual(session["llm_connection_profile"]["path"], session["artifacts"]["llm_connection_profile"])
+        self.assertEqual(session["llm_live_setup_guide"]["path"], session["artifacts"]["llm_live_setup_guide"])
         self.assertFalse(session["llm_connection_profile"]["public_safe"]["network_call_performed"])
+        self.assertFalse(session["llm_live_setup_guide"]["public_safe"]["network_call_performed"])
         self.assertIn("build-llm-connection-profile", "\n".join(session["next_commands"]))
         self.assertIn("run-agent-runtime-smoke", "\n".join(session["next_commands"]))
         self.assertEqual(employment_record["status"], "active")
@@ -4873,6 +4895,7 @@ class TalentFoundryTests(unittest.TestCase):
                 "choose_chat_surface",
                 "llm_onboarding_checklist",
                 "llm_connection_profile",
+                "llm_live_setup_guide",
                 "researcher_intake",
                 "blueprint",
                 "raise",
@@ -5364,6 +5387,7 @@ class TalentFoundryTests(unittest.TestCase):
             employment_record = json.loads(hiring["employment_record"].read_text(encoding="utf-8"))
             registry_index = json.loads(hiring["registry_index"].read_text(encoding="utf-8"))
             llm_connection_profile = json.loads(hiring["llm_connection_profile"].read_text(encoding="utf-8"))
+            llm_live_setup_guide = json.loads(hiring["llm_live_setup_guide"].read_text(encoding="utf-8"))
             agent_id_payload = json.loads(hiring["agent_id_card_payload"].read_text(encoding="utf-8"))
             agent_identity_envelope = json.loads(hiring["agent_identity_envelope"].read_text(encoding="utf-8"))
             agent_identity_verification = json.loads(hiring["agent_identity_verification"].read_text(encoding="utf-8"))
@@ -5375,11 +5399,18 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertTrue(employment_record["growth_after_hire"]["continues"])
         self.assertEqual(employment_record["relationship"], "installed_ai_talent_hired_as_local_agent")
         self.assertEqual(employment_record["entrypoints"]["llm_connection_profile"], "llm_connection_profile.json")
+        self.assertEqual(employment_record["entrypoints"]["llm_live_setup_guide"], "llm_live_setup_guide.json")
         self.assertEqual(employment_record["llm_connection_profile"]["schema"], "paideia-llm-connection-profile/v1")
         self.assertEqual(employment_record["llm_connection_profile"]["entrypoint"], "llm_connection_profile.json")
         self.assertEqual(employment_record["llm_connection_profile"]["selected_engine"], "deterministic_local")
+        self.assertEqual(employment_record["llm_live_setup_guide"]["schema"], "paideia-llm-live-setup-guide/v1")
+        self.assertEqual(employment_record["llm_live_setup_guide"]["entrypoint"], "llm_live_setup_guide.json")
+        self.assertEqual(employment_record["llm_live_setup_guide"]["selected_engine"], "deterministic_local")
+        self.assertFalse(employment_record["llm_live_setup_guide"]["requires_explicit_live_check"])
         self.assertEqual(llm_connection_profile["schema"], "paideia-llm-connection-profile/v1")
+        self.assertEqual(llm_live_setup_guide["schema"], "paideia-llm-live-setup-guide/v1")
         self.assertFalse(llm_connection_profile["public_safe"]["network_call_performed"])
+        self.assertFalse(llm_live_setup_guide["public_safe"]["network_call_performed"])
         self.assertEqual(employment_record["entrypoints"]["agent_id_card_payload"], "agent_id_card_payload.json")
         self.assertEqual(employment_record["entrypoints"]["agent_identity_envelope"], "agent_identity_envelope.json")
         self.assertEqual(employment_record["entrypoints"]["agent_identity_verification"], "agent_identity_verification.json")
@@ -6919,13 +6950,20 @@ class TalentFoundryTests(unittest.TestCase):
             )
             employment_record = json.loads(hiring["employment_record"].read_text(encoding="utf-8"))
             llm_connection_profile = json.loads(hiring["llm_connection_profile"].read_text(encoding="utf-8"))
+            llm_live_setup_guide = json.loads(hiring["llm_live_setup_guide"].read_text(encoding="utf-8"))
 
         self.assertEqual(employment_record["llm_runtime"]["schema"], "ai-talent-llm-runtime/v1")
         self.assertEqual(employment_record["llm_runtime"]["identity_policy"], "application_engine_not_identity")
         self.assertEqual(employment_record["llm_runtime"]["engine"], "deterministic_local")
         self.assertEqual(employment_record["llm_runtime"]["network_access"], "blocked")
         self.assertEqual(employment_record["llm_connection_profile"]["status"], "offline_ready_no_setup")
+        self.assertEqual(
+            employment_record["llm_live_setup_guide"]["status"],
+            "offline_ready_no_live_setup_required",
+        )
         self.assertEqual(llm_connection_profile["selected_llm_service"]["engine"], "deterministic_local")
+        self.assertEqual(llm_live_setup_guide["selected_llm_service"]["engine"], "deterministic_local")
+        self.assertFalse(llm_live_setup_guide["readiness_gate"]["requires_explicit_live_check"])
 
     def test_hire_installed_agent_uses_distinct_ids_for_distinct_llm_runtime_contracts(self) -> None:
         from ai22b.talent_foundry.demo import run_demo
@@ -6952,9 +6990,14 @@ class TalentFoundryTests(unittest.TestCase):
 
         self.assertNotEqual(first_record["employment_id"], second_record["employment_id"])
         self.assertEqual(first_record["entrypoints"]["llm_connection_profile"], "llm_connection_profile.json")
+        self.assertEqual(first_record["entrypoints"]["llm_live_setup_guide"], "llm_live_setup_guide.json")
         self.assertEqual(
             second_record["entrypoints"]["llm_connection_profile"],
             "employment_record.bigram.llm_connection_profile.json",
+        )
+        self.assertEqual(
+            second_record["entrypoints"]["llm_live_setup_guide"],
+            "employment_record.bigram.llm_live_setup_guide.json",
         )
 
     def test_cli_install_package_command_writes_installed_manifest(self) -> None:

@@ -6,7 +6,11 @@ from pathlib import Path
 from typing import Any
 
 from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
-from ai22b.talent_foundry.llm_onboarding import build_llm_connection_profile, build_llm_onboarding_checklist
+from ai22b.talent_foundry.llm_onboarding import (
+    build_llm_connection_profile,
+    build_llm_live_setup_guide,
+    build_llm_onboarding_checklist,
+)
 from ai22b.talent_foundry.onboarding_choices import (
     DEFAULT_CHAT_SURFACE_ID,
     DEFAULT_LLM_SERVICE_ID,
@@ -102,6 +106,15 @@ def run_agent_onboarding(
         chat_surface=selected_chat_surface["id"],
         output_path=llm_connection_profile_path,
     )
+    llm_live_setup_guide_path = output_dir / "llm_live_setup_guide.json"
+    llm_live_setup_guide = build_llm_live_setup_guide(
+        llm_service=selected_llm_service["service_id"],
+        llm_engine=selected_llm_service["engine"],
+        llm_model=selected_llm_service.get("selected_model"),
+        llm_model_path=selected_llm_service.get("selected_model_path"),
+        chat_surface=selected_chat_surface["id"],
+        output_path=llm_live_setup_guide_path,
+    )
 
     blueprint = create_agent_training_blueprint(
         owner=owner,
@@ -188,6 +201,7 @@ def run_agent_onboarding(
         "researcher_intake": str(researcher_intake_path),
         "llm_onboarding_checklist": str(llm_onboarding_checklist_path),
         "llm_connection_profile": str(llm_connection_profile_path),
+        "llm_live_setup_guide": str(llm_live_setup_guide_path),
         "onboarding_session": str(output_path),
     }
     checklist_commands = {
@@ -250,6 +264,20 @@ def run_agent_onboarding(
             "verification_ids": [item["id"] for item in llm_connection_profile["verification_sequence"]],
             "public_safe": llm_connection_profile["public_safe"],
         },
+        "llm_live_setup_guide": {
+            "path": str(llm_live_setup_guide_path),
+            "status": llm_live_setup_guide["status"],
+            "selected_engine": llm_live_setup_guide["selected_llm_service"]["engine"],
+            "requires_explicit_live_check": llm_live_setup_guide["readiness_gate"][
+                "requires_explicit_live_check"
+            ],
+            "setup_card_ids": [
+                item["id"]
+                for item in llm_live_setup_guide["setup_cards"]
+                if isinstance(item, dict) and isinstance(item.get("id"), str)
+            ],
+            "public_safe": llm_live_setup_guide["public_safe"],
+        },
         "researcher_mode": researcher_intake["researcher_contract"],
         "employment": {
             "relationship": "owner_raised_ai_talent_hired_as_local_agent",
@@ -271,6 +299,7 @@ def run_agent_onboarding(
             _stage("choose_chat_surface", "completed"),
             _stage("llm_onboarding_checklist", llm_onboarding_checklist["status"], llm_onboarding_checklist_path),
             _stage("llm_connection_profile", llm_connection_profile["status"], llm_connection_profile_path),
+            _stage("llm_live_setup_guide", llm_live_setup_guide["status"], llm_live_setup_guide_path),
             _stage("researcher_intake", "completed", researcher_intake_path),
             _stage("blueprint", "completed", Path(training_run["artifacts"]["training_blueprint"])),
             _stage("raise", "completed", Path(training_run["artifacts"]["training_run"])),

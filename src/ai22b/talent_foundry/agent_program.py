@@ -10,7 +10,7 @@ from ai22b.talent_foundry.agent_identity_card import (
     build_agent_id_card_payload,
     build_agent_identity_layer_envelope,
 )
-from ai22b.talent_foundry.llm_onboarding import build_llm_connection_profile
+from ai22b.talent_foundry.llm_onboarding import build_llm_connection_profile, build_llm_live_setup_guide
 from ai22b.talent_foundry.llm_runtime import build_llm_provider_preflight, build_llm_runtime_config
 from ai22b.talent_foundry.memory_substrate import build_memory_substrate, run_chat_turn_from_employment, write_memory_substrate
 from ai22b.talent_foundry.onboarding_choices import (
@@ -36,6 +36,7 @@ DEFAULT_ONBOARDING_TEMPLATE = "paideia_onboarding.template.json"
 DEFAULT_INSTALL_MANIFEST = "paideia_agent_install_manifest.json"
 DEFAULT_DOCTOR_SCRIPT = "doctor_paideia.ps1"
 DEFAULT_LLM_CONNECTION_PROFILE = "llm_connection_profile.json"
+DEFAULT_LLM_LIVE_SETUP_GUIDE = "llm_live_setup_guide.json"
 DEFAULT_RUNTIME_READINESS = "paideia_runtime_readiness.json"
 DEFAULT_KIT_FIRST_RUN_DOCTOR = "paideia_kit_first_run_doctor.json"
 DEFAULT_KIT_FIRST_RUN_CHAT = "paideia_first_run_chat_smoke.json"
@@ -916,6 +917,11 @@ def build_agent_program(
     )
     if llm_profile_name:
         program["entrypoints"]["llm_connection_profile"] = str(llm_profile_name)
+    llm_live_setup_guide_name = entrypoints.get("llm_live_setup_guide") or employment.get(
+        "llm_live_setup_guide", {}
+    ).get("entrypoint")
+    if llm_live_setup_guide_name:
+        program["entrypoints"]["llm_live_setup_guide"] = str(llm_live_setup_guide_name)
     _write_json(output_path, program)
     return program
 
@@ -954,6 +960,7 @@ def build_paideia_agent_install_kit(
         entrypoints.get("memory_substrate", "memory_substrate.json"),
         entrypoints.get("language_development_program", "language_development_program.json"),
         entrypoints.get("llm_connection_profile", DEFAULT_LLM_CONNECTION_PROFILE),
+        entrypoints.get("llm_live_setup_guide", DEFAULT_LLM_LIVE_SETUP_GUIDE),
     ]
     for name in dict.fromkeys(required_names):
         copied_name = _copy_if_present(source_root / name, output_dir / name)
@@ -992,6 +999,35 @@ def build_paideia_agent_install_kit(
             copied[llm_profile_name] = "generated_no_network_from_employment_llm_runtime"
     if llm_profile_path.exists() and not employment.get("entrypoints", {}).get("llm_connection_profile"):
         employment.setdefault("entrypoints", {})["llm_connection_profile"] = llm_profile_name
+        _write_json(employment_copy_path, employment)
+    llm_live_setup_guide_name = entrypoints.get("llm_live_setup_guide") or DEFAULT_LLM_LIVE_SETUP_GUIDE
+    llm_live_setup_guide_path = output_dir / llm_live_setup_guide_name
+    if not llm_live_setup_guide_path.exists():
+        runtime = employment.get("llm_runtime", {}) if isinstance(employment.get("llm_runtime"), dict) else {}
+        llm_service = employment.get("llm_service", {}) if isinstance(employment.get("llm_service"), dict) else {}
+        chat_surface = employment.get("chat_surface", {}) if isinstance(employment.get("chat_surface"), dict) else {}
+        guide = build_llm_live_setup_guide(
+            llm_service=llm_service.get("service_id"),
+            llm_engine=runtime.get("engine") or llm_service.get("engine") or "deterministic_local",
+            llm_model=runtime.get("model") or llm_service.get("selected_model"),
+            llm_model_path=runtime.get("model_path") or llm_service.get("selected_model_path"),
+            chat_surface=chat_surface.get("id") or DEFAULT_CHAT_SURFACE_ID,
+            output_path=llm_live_setup_guide_path,
+        )
+        readiness_gate = guide.get("readiness_gate", {}) if isinstance(guide.get("readiness_gate"), dict) else {}
+        employment.setdefault("entrypoints", {})["llm_live_setup_guide"] = llm_live_setup_guide_name
+        employment["llm_live_setup_guide"] = {
+            "schema": guide["schema"],
+            "entrypoint": llm_live_setup_guide_name,
+            "selected_engine": guide["selected_llm_service"]["engine"],
+            "status": guide["status"],
+            "requires_explicit_live_check": readiness_gate.get("requires_explicit_live_check"),
+            "public_safe": guide["public_safe"],
+        }
+        _write_json(employment_copy_path, employment)
+        copied[llm_live_setup_guide_name] = "generated_no_network_from_employment_llm_runtime"
+    if llm_live_setup_guide_path.exists() and not employment.get("entrypoints", {}).get("llm_live_setup_guide"):
+        employment.setdefault("entrypoints", {})["llm_live_setup_guide"] = llm_live_setup_guide_name
         _write_json(employment_copy_path, employment)
 
     optional_patterns = [
@@ -1065,6 +1101,9 @@ def build_paideia_agent_install_kit(
     llm_connection_profile = _read_json(llm_profile_path) if llm_profile_path.exists() else None
     if llm_connection_profile:
         program["entrypoints"]["llm_connection_profile"] = _rel(llm_profile_path, output_dir)
+    llm_live_setup_guide = _read_json(llm_live_setup_guide_path) if llm_live_setup_guide_path.exists() else None
+    if llm_live_setup_guide:
+        program["entrypoints"]["llm_live_setup_guide"] = _rel(llm_live_setup_guide_path, output_dir)
     runtime_readiness_path = output_dir / DEFAULT_RUNTIME_READINESS
     runtime_readiness = _build_kit_runtime_readiness(
         employment=employment,
@@ -1112,6 +1151,8 @@ def build_paideia_agent_install_kit(
     }
     if llm_profile_path.exists():
         kit_entrypoints["llm_connection_profile"] = llm_profile_path.name
+    if llm_live_setup_guide_path.exists():
+        kit_entrypoints["llm_live_setup_guide"] = llm_live_setup_guide_path.name
     if (output_dir / "agent_id_card_payload.json").exists():
         kit_entrypoints["agent_id_card_payload"] = "agent_id_card_payload.json"
     if (output_dir / "agent_identity_envelope.json").exists():
@@ -1258,6 +1299,44 @@ def doctor_agent_program(program_path: Path, *, output_path: Path | None = None)
             "public_safe": llm_public_safe,
         },
     }
+    llm_live_setup_guide_name = program.get("entrypoints", {}).get("llm_live_setup_guide")
+    llm_live_setup_guide_path = root / str(llm_live_setup_guide_name) if llm_live_setup_guide_name else None
+    llm_live_setup_guide = (
+        _read_json(llm_live_setup_guide_path)
+        if llm_live_setup_guide_path and llm_live_setup_guide_path.exists()
+        else {}
+    )
+    llm_live_setup_public_safe = (
+        llm_live_setup_guide.get("public_safe", {}) if isinstance(llm_live_setup_guide, dict) else {}
+    )
+    llm_live_readiness_gate = (
+        llm_live_setup_guide.get("readiness_gate", {}) if isinstance(llm_live_setup_guide, dict) else {}
+    )
+    checks["llm_live_setup_guide"] = {
+        "passed": (
+            not llm_live_setup_guide_name
+            or (
+                llm_live_setup_guide_path is not None
+                and llm_live_setup_guide_path.exists()
+                and llm_live_setup_guide.get("schema") == "paideia-llm-live-setup-guide/v1"
+                and llm_live_readiness_gate.get("requires_explicit_live_check") in {True, False}
+                and llm_live_setup_public_safe.get("network_call_performed") is False
+                and llm_live_setup_public_safe.get("secret_values_exported") is False
+                and llm_live_setup_public_safe.get("raw_provider_payload_saved") is False
+            )
+        ),
+        "details": {
+            "entrypoint": llm_live_setup_guide_name,
+            "exists": bool(llm_live_setup_guide_path and llm_live_setup_guide_path.exists()),
+            "schema": llm_live_setup_guide.get("schema") if isinstance(llm_live_setup_guide, dict) else None,
+            "status": llm_live_setup_guide.get("status") if isinstance(llm_live_setup_guide, dict) else None,
+            "selected_engine": llm_live_setup_guide.get("selected_llm_service", {}).get("engine")
+            if isinstance(llm_live_setup_guide.get("selected_llm_service"), dict)
+            else None,
+            "requires_explicit_live_check": llm_live_readiness_gate.get("requires_explicit_live_check"),
+            "public_safe": llm_live_setup_public_safe,
+        },
+    }
     readiness_name = program.get("entrypoints", {}).get("runtime_readiness")
     readiness_path = root / str(readiness_name) if readiness_name else None
     readiness = _read_json(readiness_path) if readiness_path and readiness_path.exists() else {}
@@ -1375,6 +1454,7 @@ def doctor_paideia_kit_first_run(
     install_manifest_path = kit_dir / DEFAULT_INSTALL_MANIFEST
     readiness_path = kit_dir / DEFAULT_RUNTIME_READINESS
     llm_profile_path = kit_dir / DEFAULT_LLM_CONNECTION_PROFILE
+    llm_live_setup_guide_path = kit_dir / DEFAULT_LLM_LIVE_SETUP_GUIDE
     program_doctor_path = kit_dir / "paideia_doctor_report.json"
     first_chat_path = kit_dir / DEFAULT_KIT_FIRST_RUN_CHAT
     checks: list[dict[str, Any]] = []
@@ -1454,6 +1534,23 @@ def doctor_paideia_kit_first_run(
             status=llm_profile.get("status"),
         )
     )
+    llm_live_setup_guide = _read_json(llm_live_setup_guide_path) if llm_live_setup_guide_path.exists() else {}
+    llm_live_public_safe = (
+        llm_live_setup_guide.get("public_safe", {})
+        if isinstance(llm_live_setup_guide.get("public_safe"), dict)
+        else {}
+    )
+    checks.append(
+        _check(
+            "llm_live_setup_guide_public_safe",
+            llm_live_setup_guide.get("schema") == "paideia-llm-live-setup-guide/v1"
+            and llm_live_public_safe.get("network_call_performed") is False
+            and llm_live_public_safe.get("secret_values_exported") is False
+            and llm_live_public_safe.get("raw_provider_payload_saved") is False,
+            schema=llm_live_setup_guide.get("schema"),
+            status=llm_live_setup_guide.get("status"),
+        )
+    )
 
     chat: dict[str, Any] = {}
     if program_path.exists():
@@ -1515,6 +1612,7 @@ def doctor_paideia_kit_first_run(
             "program": DEFAULT_AGENT_PROGRAM_FILE,
             "install_manifest": DEFAULT_INSTALL_MANIFEST,
             "llm_connection_profile": DEFAULT_LLM_CONNECTION_PROFILE,
+            "llm_live_setup_guide": DEFAULT_LLM_LIVE_SETUP_GUIDE,
             "runtime_readiness": DEFAULT_RUNTIME_READINESS,
             "first_chat_output": first_chat_path.name,
             "program_doctor_output": program_doctor_path.name,
@@ -1555,6 +1653,15 @@ def doctor_paideia_kit_first_run(
             "llm_connection_profile": {
                 "schema": llm_profile.get("schema"),
                 "status": llm_profile.get("status"),
+            },
+            "llm_live_setup_guide": {
+                "schema": llm_live_setup_guide.get("schema"),
+                "status": llm_live_setup_guide.get("status"),
+                "requires_explicit_live_check": (
+                    llm_live_setup_guide.get("readiness_gate", {}).get("requires_explicit_live_check")
+                    if isinstance(llm_live_setup_guide.get("readiness_gate"), dict)
+                    else None
+                ),
             },
             "first_chat": {
                 "schema": chat.get("schema"),

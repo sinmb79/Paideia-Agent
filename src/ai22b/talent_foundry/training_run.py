@@ -415,6 +415,7 @@ def materialize_training_blueprint(
     artifacts["employment_record"] = hiring["employment_record"]
     artifacts["employment_registry"] = hiring["registry_index"]
     artifacts["hired_llm_connection_profile"] = hiring["llm_connection_profile"]
+    artifacts["hired_llm_live_setup_guide"] = hiring["llm_live_setup_guide"]
     artifacts["agent_id_card_payload"] = hiring["agent_id_card_payload"]
     artifacts["agent_identity_envelope"] = hiring["agent_identity_envelope"]
     artifacts["agent_identity_verification"] = hiring["agent_identity_verification"]
@@ -473,6 +474,7 @@ def materialize_training_blueprint(
             "release_package_created": package["archive"].exists(),
             "installed_agent_manifest_created": install["installed_manifest"].exists(),
             "employment_record_created": hiring["employment_record"].exists(),
+            "hired_llm_live_setup_guide_created": hiring["llm_live_setup_guide"].exists(),
             "developmental_ecology_created": artifacts["developmental_ecology"].exists(),
             "life_trace_created": artifacts["life_trace"].exists(),
             "growth_profile_created": artifacts["growth_profile"].exists(),

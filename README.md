@@ -553,7 +553,7 @@ ai22b-talent-foundry build-llm-live-setup-guide `
 
 The setup guide wraps the same provider facts into `setup_cards`, a `readiness_gate`, `safe_runbook`, and `daily_use` commands so a non-expert operator can see exactly what to configure before the first live chat or agent run. It is generated without saving secrets or calling the provider.
 
-Hiring an installed talent also writes the same no-network profile next to the `employment_record.json` and links it through `entrypoints.llm_connection_profile`. This keeps the selected LLM/chat setup attached to the hired agent, not only to the onboarding session, so later `run-hired-agent`, chat, workspace, and dataflow checks can be audited from the employment record folder.
+Hiring an installed talent also writes the same no-network profile and live setup guide next to the `employment_record.json`, then links them through `entrypoints.llm_connection_profile` and `entrypoints.llm_live_setup_guide`. The employment record embeds public-safe summaries of both artifacts, so the selected LLM/chat setup stays attached to the hired agent, not only to the onboarding session. Later `run-hired-agent`, chat, workspace, dataflow, install-kit, and first-run doctor checks can be audited from the employment record folder without exporting secrets or calling a provider.
 
 To verify adapter contracts across the supported provider families without calling live APIs or localhost servers, run:
 
