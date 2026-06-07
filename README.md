@@ -192,7 +192,7 @@ ai22b-talent-foundry show-onboarding-next-action `
   --launch-plan .\onboarding_launch_plan.json
 ```
 
-To run a safe allowlisted local action from the launch plan, use explicit approval. Supported runner actions start with `doctor_onboarding_session` and `first_chat_offline`; Paideia calls internal functions rather than executing the launch-plan shell string:
+To run a safe allowlisted local action from the launch plan, use explicit approval. Supported runner actions start with `doctor_onboarding_session`, `llm_live_readiness_suite`, and `first_chat_offline`; Paideia calls internal functions rather than executing the launch-plan shell string. The readiness runner always forces no-network mode; live provider checks remain manual:
 
 ```powershell
 ai22b-talent-foundry run-onboarding-next-action `
@@ -200,6 +200,14 @@ ai22b-talent-foundry run-onboarding-next-action `
   --action doctor_onboarding_session `
   --approve `
   --output .\onboarding_action_run.json
+```
+
+```powershell
+ai22b-talent-foundry run-onboarding-next-action `
+  --launch-plan .\onboarding_launch_plan.json `
+  --action llm_live_readiness_suite `
+  --approve `
+  --action-output .\llm_live_readiness
 ```
 
 ```powershell

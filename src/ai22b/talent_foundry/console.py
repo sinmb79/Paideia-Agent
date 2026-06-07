@@ -34,7 +34,7 @@ OPENCLAW_STYLE_WIZARD_SCHEMA = "ai22b-paideia-openclaw-style-onboarding/v1"
 ONBOARDING_LAUNCH_PLAN_SCHEMA = "paideia-onboarding-launch-plan/v1"
 ONBOARDING_NEXT_ACTION_SCHEMA = "paideia-onboarding-next-action/v1"
 ONBOARDING_ACTION_RUN_SCHEMA = "paideia-onboarding-action-run/v1"
-ONBOARDING_ACTION_ALLOWLIST = {"doctor_onboarding_session", "first_chat_offline"}
+ONBOARDING_ACTION_ALLOWLIST = {"doctor_onboarding_session", "first_chat_offline", "llm_live_readiness_suite"}
 
 SPECIALIST_TEAM_ROLES = [
     ("macro", "거시경제 분석 에이전트"),
@@ -1004,7 +1004,8 @@ def run_onboarding_next_action(
             "command_or_path": next_action.get("command_or_path"),
             "network_call_if_executed": next_action.get("network_call_if_executed"),
         }
-    if next_action.get("network_call_if_executed") is True:
+    internal_no_network_override = selected_action_id == "llm_live_readiness_suite"
+    if next_action.get("network_call_if_executed") is True and not internal_no_network_override:
         return {
             **base_report,
             "status": "blocked_network_action",
@@ -1084,6 +1085,53 @@ def run_onboarding_next_action(
             "reply_generation_mode": chat_run.get("reply_generation_mode"),
             "learn_from_chat": False,
         }
+    if selected_action_id == "llm_live_readiness_suite":
+        from ai22b.talent_foundry.llm_live_readiness import run_llm_live_readiness_suite
+
+        selected_llm = (
+            launch_plan.get("selected_llm", {}) if isinstance(launch_plan.get("selected_llm"), dict) else {}
+        )
+        selected_chat = (
+            launch_plan.get("selected_chat_surface", {})
+            if isinstance(launch_plan.get("selected_chat_surface"), dict)
+            else {}
+        )
+        engine = str(selected_llm.get("engine") or "")
+        if not engine:
+            return {
+                **base_report,
+                "status": "blocked_missing_artifact",
+                "executed": False,
+                "reason": "selected_llm_engine_missing_from_launch_plan",
+            }
+        readiness_dir = action_output_path or launch_plan_path.parent / "llm_live_readiness"
+        readiness = run_llm_live_readiness_suite(
+            engine=engine,
+            model=selected_llm.get("selected_model"),
+            model_path=selected_llm.get("selected_model_path"),
+            service=selected_llm.get("service_id"),
+            chat_surface=selected_chat.get("id"),
+            live_check=False,
+            output_dir=readiness_dir,
+            task="Run a no-network Paideia onboarding readiness check from the launch plan runner.",
+        )
+        return {
+            **base_report,
+            "status": "completed",
+            "executed": True,
+            "execution_adapter": "internal_llm_live_readiness_suite_no_network",
+            "command_or_path": next_action.get("command_or_path"),
+            "launch_plan_command_would_call_network": bool(next_action.get("network_call_if_executed")),
+            "runner_forced_live_check": False,
+            "llm_live_readiness_dir": str(readiness_dir),
+            "llm_live_readiness_summary": readiness.get("summary_path"),
+            "llm_live_readiness_passed": bool(readiness.get("passed")),
+            "llm_live_readiness_review_required": readiness.get("passed") is not True,
+            "llm_live_ready": bool(readiness.get("live_ready")),
+            "llm_mode": readiness.get("llm_mode"),
+            "engine": readiness.get("engine"),
+            "live_check_requested": bool(readiness.get("live_check_requested")),
+        }
     return {
         **base_report,
         "status": "blocked_not_implemented",
@@ -1109,6 +1157,10 @@ def format_onboarding_action_run_summary(report: dict[str, Any]) -> str:
     if report.get("chat_output_path"):
         lines.append(f"- Chat output: {report.get('chat_output_path')}")
         lines.append(f"- Chat status: {report.get('chat_status')}")
+    if report.get("llm_live_readiness_dir"):
+        lines.append(f"- LLM readiness dir: {report.get('llm_live_readiness_dir')}")
+        lines.append(f"- LLM readiness passed: {report.get('llm_live_readiness_passed')}")
+        lines.append(f"- Live check requested: {report.get('live_check_requested')}")
     return "\n".join(lines)
 
 
