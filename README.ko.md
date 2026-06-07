@@ -321,7 +321,7 @@ ai22b-talent-foundry build-llm-live-setup-guide `
 
 setup guide는 같은 provider 정보를 `setup_cards`, `readiness_gate`, `safe_runbook`, `daily_use` 명령으로 묶어서, 비전문 사용자도 첫 live chat 또는 agent 실행 전에 무엇을 설정해야 하는지 확인할 수 있게 합니다. 이 파일도 secret 저장이나 provider 호출 없이 생성됩니다.
 
-설치된 인재를 고용할 때도 같은 no-network profile이 `employment_record.json` 옆에 자동으로 생성되고 `entrypoints.llm_connection_profile`로 연결됩니다. 그래서 선택한 LLM/채팅 설정이 온보딩 세션에만 남지 않고, 고용된 에이전트 폴더에서 `run-hired-agent`, 채팅, workspace, dataflow 검증까지 추적할 수 있습니다.
+설치된 인재를 고용할 때도 같은 no-network profile과 live setup guide가 `employment_record.json` 옆에 자동으로 생성되고, 각각 `entrypoints.llm_connection_profile`, `entrypoints.llm_live_setup_guide`로 연결됩니다. `employment_record.json`에는 두 산출물의 public-safe 요약도 함께 들어갑니다. 그래서 선택한 LLM/채팅 설정이 온보딩 세션에만 남지 않고, 고용된 에이전트 폴더에서 `run-hired-agent`, 채팅, workspace, dataflow, 설치 키트, first-run doctor 검증까지 추적할 수 있습니다.
 
 지원 provider 계열의 adapter 계약을 live API나 localhost 서버 호출 없이 확인하려면 다음 명령을 실행합니다.
 
@@ -567,6 +567,7 @@ ai22b-talent-foundry onboard-agent `
 - `memory_substrate.json`
 - `22b_paideia_agent_program.json`
 - `llm_connection_profile.json`: 선택된 LLM, 모델/endpoint, no-network doctor와 live-check 순서를 기록한 연결 프로필
+- `llm_live_setup_guide.json`: 선택된 LLM을 실제 live chat/agent 실행에 연결하기 전 확인할 setup cards, readiness gate, safe runbook, daily use 명령을 담은 no-network 안내서
 - `paideia_runtime_readiness.json`: 설치형 kit의 LLM preflight, 첫 실행 smoke 명령, fail-closed 정책을 검증하는 준비 카드
 - `paideia_kit_first_run_doctor.json`: kit doctor와 offline 첫 채팅 smoke를 함께 검증한 첫 실행 보고서
 - `paideia_first_run_chat_smoke.json`: live provider 호출 없이 생성한 첫 대화 검증 산출물

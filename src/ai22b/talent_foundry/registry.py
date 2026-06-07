@@ -34,7 +34,7 @@ from ai22b.talent_foundry.llm_runtime import (
     build_llm_runtime_config,
     invoke_llm_application_engine,
 )
-from ai22b.talent_foundry.llm_onboarding import build_llm_connection_profile
+from ai22b.talent_foundry.llm_onboarding import build_llm_connection_profile, build_llm_live_setup_guide
 from ai22b.talent_foundry.onboarding_choices import resolve_chat_surface, resolve_llm_service
 from ai22b.talent_foundry.team import DEFAULT_TEAM_ROLES
 from ai22b.talent_foundry.workspace_agent import run_workspace_agent_from_manifest, run_workspace_agent_job_from_manifest
@@ -116,6 +116,13 @@ def _llm_connection_profile_entrypoint(record_name: str) -> str:
     return f"{stem}.llm_connection_profile.json"
 
 
+def _llm_live_setup_guide_entrypoint(record_name: str) -> str:
+    stem = Path(record_name).stem or "employment_record"
+    if stem == "employment_record":
+        return "llm_live_setup_guide.json"
+    return f"{stem}.llm_live_setup_guide.json"
+
+
 def _summarize_llm_connection_profile(profile: dict[str, Any], *, entrypoint: str) -> dict[str, Any]:
     setup = profile.get("setup_requirements", {})
     public_safe = profile.get("public_safe", {})
@@ -131,6 +138,42 @@ def _summarize_llm_connection_profile(profile: dict[str, Any], *, entrypoint: st
         )
         if isinstance(setup, dict)
         else False,
+        "public_safe": {
+            "network_call_performed": bool(public_safe.get("network_call_performed"))
+            if isinstance(public_safe, dict)
+            else False,
+            "secret_values_exported": bool(public_safe.get("secret_values_exported"))
+            if isinstance(public_safe, dict)
+            else False,
+            "raw_provider_payload_saved": bool(public_safe.get("raw_provider_payload_saved"))
+            if isinstance(public_safe, dict)
+            else False,
+            "private_reasoning_trace": public_safe.get("private_reasoning_trace")
+            if isinstance(public_safe, dict)
+            else "do_not_store",
+        },
+    }
+
+
+def _summarize_llm_live_setup_guide(guide: dict[str, Any], *, entrypoint: str) -> dict[str, Any]:
+    selected = guide.get("selected_llm_service", {})
+    readiness_gate = guide.get("readiness_gate", {})
+    public_safe = guide.get("public_safe", {})
+    setup_cards = guide.get("setup_cards", [])
+    return {
+        "schema": guide.get("schema"),
+        "entrypoint": entrypoint,
+        "status": guide.get("status"),
+        "selected_engine": selected.get("engine") if isinstance(selected, dict) else None,
+        "selected_service_id": selected.get("service_id") if isinstance(selected, dict) else None,
+        "requires_explicit_live_check": bool(readiness_gate.get("requires_explicit_live_check"))
+        if isinstance(readiness_gate, dict)
+        else False,
+        "setup_card_ids": [
+            item.get("id")
+            for item in setup_cards
+            if isinstance(item, dict) and isinstance(item.get("id"), str)
+        ],
         "public_safe": {
             "network_call_performed": bool(public_safe.get("network_call_performed"))
             if isinstance(public_safe, dict)
@@ -228,6 +271,16 @@ def hire_installed_agent(
         chat_surface=selected_chat_surface["id"],
         output_path=llm_connection_profile_path,
     )
+    llm_live_setup_guide_entrypoint = _llm_live_setup_guide_entrypoint(record_name)
+    llm_live_setup_guide_path = target_root / llm_live_setup_guide_entrypoint
+    llm_live_setup_guide = build_llm_live_setup_guide(
+        llm_service=selected_llm_service["service_id"],
+        llm_engine=selected_llm_service["engine"],
+        llm_model=selected_llm_service.get("selected_model"),
+        llm_model_path=selected_llm_service.get("selected_model_path"),
+        chat_surface=selected_chat_surface["id"],
+        output_path=llm_live_setup_guide_path,
+    )
     employment_id = _employment_id(
         install_id=installed_manifest["install_id"],
         employer=employer,
@@ -270,6 +323,7 @@ def hire_installed_agent(
             "life_trace": installed_manifest["entrypoints"].get("life_trace", "life_trace.jsonl"),
             "growth_profile": installed_manifest["entrypoints"].get("growth_profile", "growth_profile.json"),
             "llm_connection_profile": llm_connection_profile_entrypoint,
+            "llm_live_setup_guide": llm_live_setup_guide_entrypoint,
             "agent_id_card_payload": "agent_id_card_payload.json",
             "agent_identity_envelope": "agent_identity_envelope.json",
             "agent_identity_verification": "agent_identity_verification.json",
@@ -302,6 +356,10 @@ def hire_installed_agent(
         "llm_connection_profile": _summarize_llm_connection_profile(
             llm_connection_profile,
             entrypoint=llm_connection_profile_entrypoint,
+        ),
+        "llm_live_setup_guide": _summarize_llm_live_setup_guide(
+            llm_live_setup_guide,
+            entrypoint=llm_live_setup_guide_entrypoint,
         ),
         "llm_runtime": build_llm_runtime_config(
             engine=selected_llm_service["engine"],
@@ -372,6 +430,7 @@ def hire_installed_agent(
         "employment_record": employment_record_path,
         "registry_index": registry_index_path,
         "llm_connection_profile": llm_connection_profile_path,
+        "llm_live_setup_guide": llm_live_setup_guide_path,
         "agent_id_card_payload": agent_id_card_payload_path,
         "agent_identity_envelope": agent_identity_envelope_path,
         "agent_identity_verification": agent_identity_verification_path,

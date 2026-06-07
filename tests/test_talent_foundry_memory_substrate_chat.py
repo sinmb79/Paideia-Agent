@@ -35,6 +35,9 @@ class TalentFoundryMemorySubstrateChatTests(unittest.TestCase):
             hired_llm_profile = json.loads(
                 artifacts["hired_llm_connection_profile"].read_text(encoding="utf-8")
             )
+            hired_llm_live_setup_guide = json.loads(
+                artifacts["hired_llm_live_setup_guide"].read_text(encoding="utf-8")
+            )
             agent_id_payload = json.loads(artifacts["agent_id_card_payload"].read_text(encoding="utf-8"))
             agent_identity_envelope = json.loads(artifacts["agent_identity_envelope"].read_text(encoding="utf-8"))
             agent_identity_verification = json.loads(
@@ -72,16 +75,27 @@ class TalentFoundryMemorySubstrateChatTests(unittest.TestCase):
         self.assertIn("life_trace", employment_record["entrypoints"])
         self.assertIn("growth_profile", employment_record["entrypoints"])
         self.assertIn("llm_connection_profile", employment_record["entrypoints"])
+        self.assertIn("llm_live_setup_guide", employment_record["entrypoints"])
         self.assertEqual(hired_llm_profile["schema"], "paideia-llm-connection-profile/v1")
+        self.assertEqual(hired_llm_live_setup_guide["schema"], "paideia-llm-live-setup-guide/v1")
         self.assertEqual(
             employment_record["llm_connection_profile"]["entrypoint"],
             employment_record["entrypoints"]["llm_connection_profile"],
         )
         self.assertEqual(
+            employment_record["llm_live_setup_guide"]["entrypoint"],
+            employment_record["entrypoints"]["llm_live_setup_guide"],
+        )
+        self.assertEqual(
             employment_record["llm_connection_profile"]["selected_engine"],
             hired_llm_profile["selected_llm_service"]["engine"],
         )
+        self.assertEqual(
+            employment_record["llm_live_setup_guide"]["selected_engine"],
+            hired_llm_live_setup_guide["selected_llm_service"]["engine"],
+        )
         self.assertFalse(hired_llm_profile["public_safe"]["network_call_performed"])
+        self.assertFalse(hired_llm_live_setup_guide["public_safe"]["network_call_performed"])
         self.assertIn("agent_id_card_payload", employment_record["entrypoints"])
         self.assertIn("agent_identity_envelope", employment_record["entrypoints"])
         self.assertIn("agent_identity_verification", employment_record["entrypoints"])
