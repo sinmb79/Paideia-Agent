@@ -1128,6 +1128,153 @@ def _load_or_build_substrate(
     return substrate, candidate
 
 
+def _memory_tile(node: dict[str, Any]) -> dict[str, Any]:
+    metadata = node.get("metadata", {}) if isinstance(node.get("metadata"), dict) else {}
+    try:
+        strength = float(node.get("strength", 0.0))
+    except (TypeError, ValueError):
+        strength = 0.0
+    metadata_allowlist = {
+        key: metadata.get(key)
+        for key in [
+            "entry_type",
+            "education_stage",
+            "assessment_count",
+            "ledger_update_count",
+            "promotion_state",
+            "age_year",
+            "domain",
+            "stress_level",
+            "review_status",
+        ]
+        if key in metadata
+    }
+    return {
+        "id": node.get("id"),
+        "source": node.get("source"),
+        "layer": node.get("layer"),
+        "stage": node.get("stage"),
+        "title": _trim_text(node.get("title"), 140),
+        "summary": _trim_text(node.get("summary"), 520),
+        "tags": list(node.get("tags") or [])[:14],
+        "strength": strength,
+        "metadata": metadata_allowlist,
+        "private_reasoning_trace": "not_stored",
+    }
+
+
+def _top_source_tiles(
+    substrate: dict[str, Any],
+    *,
+    sources: set[str],
+    limit: int = 6,
+) -> list[dict[str, Any]]:
+    nodes = [
+        node
+        for node in substrate.get("nodes", [])
+        if isinstance(node, dict) and str(node.get("source")) in sources
+    ]
+    def strength_of(node: dict[str, Any]) -> float:
+        try:
+            return float(node.get("strength", 0.0))
+        except (TypeError, ValueError):
+            return 0.0
+
+    nodes = sorted(nodes, key=strength_of, reverse=True)
+    return [_memory_tile(node) for node in nodes[:limit]]
+
+
+def _build_live_chat_memory_bridge(
+    *,
+    memory_substrate: dict[str, Any],
+    active_route: dict[str, Any],
+    message: str,
+) -> dict[str, Any]:
+    selected_tiles = [
+        _memory_tile(node)
+        for node in active_route.get("selected_nodes", [])
+        if isinstance(node, dict)
+    ][:8]
+    operator_tiles = [
+        {
+            "operator": _trim_text(item.get("operator"), 120),
+            "summary": _trim_text(item.get("summary"), 420),
+            "stage": item.get("stage"),
+        }
+        for item in active_route.get("operator_candidates", [])
+        if isinstance(item, dict)
+    ][:5]
+    return {
+        "schema": "paideia-live-chat-memory-bridge/v1",
+        "created_at_utc": _now(),
+        "message_summary": _trim_text(message, 240),
+        "purpose": (
+            "Give the selected LLM a compact, reviewable bridge from the local Paideia talent data "
+            "to this chat turn. The LLM is the language engine; identity and learning habits come from these tiles."
+        ),
+        "source_counts": {
+            key: memory_substrate.get("source_counts", {}).get(key)
+            for key in [
+                "reasoning_kibo_entries",
+                "grade_learning_records",
+                "grade_learning_nodes",
+                "life_trace_events",
+                "life_trace_nodes",
+                "growth_profile_nodes",
+                "learning_ledger_promoted_experiences",
+                "conversation_method_skills",
+            ]
+            if key in memory_substrate.get("source_counts", {})
+        },
+        "selected_memory_tiles": selected_tiles,
+        "operator_candidates": operator_tiles,
+        "education_growth_context": {
+            "summary": memory_substrate.get("grade_learning_records", {}),
+            "grade_learning_tiles": _top_source_tiles(
+                memory_substrate,
+                sources={"grade_learning_records"},
+                limit=6,
+            ),
+            "reasoning_ledger_tiles": _top_source_tiles(
+                memory_substrate,
+                sources={"reasoning_kibo", "learning_ledger_reasoning_kernel"},
+                limit=6,
+            ),
+        },
+        "developmental_context": {
+            "life_trace": memory_substrate.get("life_trace", {}),
+            "growth_profile": memory_substrate.get("growth_profile", {}),
+            "life_and_growth_tiles": _top_source_tiles(
+                memory_substrate,
+                sources={"life_trace", "growth_profile"},
+                limit=6,
+            ),
+        },
+        "conversation_context": {
+            "method_training_schema": memory_substrate.get("conversation_method_training", {}).get("schema"),
+            "conversation_tiles": _top_source_tiles(
+                memory_substrate,
+                sources={"conversation_method_training", "language_development_program"},
+                limit=6,
+            ),
+        },
+        "response_contract": {
+            "answer_language": "ko-KR",
+            "use_local_identity_context_first": True,
+            "use_grade_learning_records_for_growth_questions": True,
+            "ordinary_conversation_should_remain_natural": True,
+            "reviewable_reasoning_summary_only": True,
+            "hidden_chain_of_thought": "forbidden",
+            "private_reasoning_trace": "not_stored",
+        },
+        "data_minimization": {
+            "full_private_files_sent": False,
+            "raw_chat_log_sent": False,
+            "selected_summaries_sent": True,
+        },
+    }
+
+
 def build_chat_context(
     *,
     employment_record: dict[str, Any],
@@ -1141,6 +1288,11 @@ def build_chat_context(
 ) -> dict[str, Any]:
     agent = employment_record["agent"]
     active_route = memory_substrate.get("active_route") or activate_memory_route(memory_substrate, objective=message)
+    memory_bridge = _build_live_chat_memory_bridge(
+        memory_substrate=memory_substrate,
+        active_route=active_route,
+        message=message,
+    )
     system_prompt = (
         f"You are {agent['name']}, a Korean-first local AI talent hired by the Boss. "
         "OpenAI ChatGPT Codex is only the language and tool reasoning engine. "
@@ -1163,6 +1315,7 @@ def build_chat_context(
                 "agent_manifest",
                 "learning_ledger",
                 substrate_path_name,
+                "memory_bridge",
                 "growth_profile",
                 "grade_learning_records",
             ],
@@ -1200,6 +1353,7 @@ def build_chat_context(
         },
         "recent_chat_history": recent_chat_history or [],
         "active_memory_route": active_route,
+        "memory_bridge": memory_bridge,
         "conversation_method_training": memory_substrate.get(
             "conversation_method_training",
             CONVERSATION_METHOD_TRAINING,
@@ -1255,6 +1409,15 @@ def _live_chat_instructions(agent_name: str) -> str:
     )
 
 
+def _live_chat_instructions_with_memory_bridge(agent_name: str) -> str:
+    return (
+        "Read local_talent_context.memory_bridge first. It links local grade learning records, "
+        "Reasoning Ledger summaries, life trace, growth profile, and conversation development records "
+        "to this exact chat turn. "
+        + _live_chat_instructions(agent_name)
+    )
+
+
 def _compact_chat_context_for_live_llm(chat_context: dict[str, Any]) -> dict[str, Any]:
     return {
         "schema": chat_context.get("schema"),
@@ -1264,6 +1427,7 @@ def _compact_chat_context_for_live_llm(chat_context: dict[str, Any]) -> dict[str
         "identity_record": chat_context.get("identity_record"),
         "learning_profile": chat_context.get("learning_profile"),
         "active_memory_route": chat_context.get("active_memory_route"),
+        "memory_bridge": chat_context.get("memory_bridge"),
         "conversation_method_training": chat_context.get("conversation_method_training"),
         "language_development_program": chat_context.get("language_development_program"),
         "recent_chat_history": chat_context.get("recent_chat_history", []),
@@ -1368,7 +1532,7 @@ def _call_openai_responses_chat(
         client = OpenAI()
         response = client.responses.create(
             model=model,
-            instructions=_live_chat_instructions(chat_context["agent"]["name"]),
+            instructions=_live_chat_instructions_with_memory_bridge(chat_context["agent"]["name"]),
             input=json.dumps(payload, ensure_ascii=False),
             max_output_tokens=max_output_tokens,
         )
@@ -1423,7 +1587,7 @@ def _invoke_generic_live_chat_llm(
     messages = [
         {
             "role": "system",
-            "content": _live_chat_instructions(chat_context["agent"]["name"]),
+            "content": _live_chat_instructions_with_memory_bridge(chat_context["agent"]["name"]),
         },
         {
             "role": "user",
@@ -2564,6 +2728,16 @@ def run_chat_turn_from_employment(
             substrate=substrate_path.name,
             selected_memory_count=selected_memory_count,
             private_reasoning_trace=False,
+        ),
+        _chat_trace_entry(
+            "memory_bridge_built",
+            schema=chat_context.get("memory_bridge", {}).get("schema"),
+            selected_tile_count=len(chat_context.get("memory_bridge", {}).get("selected_memory_tiles", [])),
+            grade_learning_tile_count=len(
+                chat_context.get("memory_bridge", {})
+                .get("education_growth_context", {})
+                .get("grade_learning_tiles", [])
+            ),
         ),
         _chat_trace_entry(
             "base_runtime_checked",
