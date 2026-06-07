@@ -10,6 +10,7 @@ from ai22b.config import talent_foundry_storage_path
 from ai22b.talent_foundry.agent_identity_card import (
     build_agent_id_card_payload,
     build_agent_identity_layer_envelope,
+    build_agent_warrent_connector_kit,
     build_agent_warrent_registration_request,
     import_agent_identity_registration,
     verify_agent_identity_artifacts,
@@ -689,6 +690,14 @@ def _build_parser() -> argparse.ArgumentParser:
     agent_warrent_registration.add_argument("--owner-key-id", required=True)
     agent_warrent_registration.add_argument("--owner-signature")
     agent_warrent_registration.add_argument("--output", required=True)
+
+    agent_warrent_connector = subparsers.add_parser(
+        "build-agent-warrent-connector-kit",
+        help="Build an owner-controlled Agent_warrent SDK bridge kit from a local registration request.",
+    )
+    agent_warrent_connector.add_argument("--registration-request", required=True)
+    agent_warrent_connector.add_argument("--output-dir", required=True)
+    agent_warrent_connector.add_argument("--server-url", default="https://api.agentidcard.org")
 
     verify_agent_id_card = subparsers.add_parser(
         "verify-agent-id-card",
@@ -1751,6 +1760,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         print(json.dumps(request, ensure_ascii=False, indent=2))
         return 0 if request["validation"]["valid"] else 2
+
+    if args.command == "build-agent-warrent-connector-kit":
+        kit = build_agent_warrent_connector_kit(
+            registration_request_path=Path(args.registration_request),
+            output_dir=Path(args.output_dir),
+            server_url=args.server_url,
+        )
+        print(json.dumps(kit, ensure_ascii=False, indent=2))
+        return 0 if kit["validation"]["valid"] else 2
 
     if args.command == "verify-agent-id-card":
         report = verify_agent_identity_artifacts(

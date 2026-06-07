@@ -671,6 +671,11 @@ ai22b-talent-foundry export-agent-warrent-registration-request `
   --owner-key-id owk_your_owner_key `
   --output .\agent_warrent_registration_request.json
 
+ai22b-talent-foundry build-agent-warrent-connector-kit `
+  --registration-request .\agent_warrent_registration_request.json `
+  --output-dir .\agent_warrent_connector `
+  --server-url https://api.agentidcard.org
+
 ai22b-talent-foundry verify-agent-id-card `
   --payload .\agent_id_card_payload.json `
   --envelope .\agent_identity_envelope.json `
@@ -782,6 +787,19 @@ ai22b-talent-foundry verify-workspace-execution `
 ```
 
 GitHub Actions 설정은 `.github/workflows/ci.yml`에 있으며, pull request와 push에서 패키지 컴파일, 회귀 테스트, 공개 저장소 위생 검사를 실행합니다.
+
+## Agent_warrent Connector Kit
+
+`build-agent-warrent-connector-kit`는 Paideia가 만든 `agent_warrent_registration_request.json`을 Agent_warrent / Agent ID Card SDK 흐름으로 넘기기 위한 로컬 connector 폴더를 만듭니다.
+
+```powershell
+ai22b-talent-foundry build-agent-warrent-connector-kit `
+  --registration-request .\agent_warrent_registration_request.json `
+  --output-dir .\agent_warrent_connector `
+  --server-url https://api.agentidcard.org
+```
+
+생성되는 `agent_warrent_connector/`에는 connector manifest, 복사된 등록 요청, 등록 body 템플릿, 보스가 직접 owner private key로 서명하거나 명시적으로 제출할 때 쓰는 `agent_warrent_submit_template.py`가 들어갑니다. Paideia는 이 명령에서도 서명, 등록, 업로드, 네트워크 호출을 자동 수행하지 않습니다.
 
 ## 더 보기
 

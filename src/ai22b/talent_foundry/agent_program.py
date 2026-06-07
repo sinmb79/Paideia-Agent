@@ -9,6 +9,7 @@ from typing import Any
 from ai22b.talent_foundry.agent_identity_card import (
     build_agent_id_card_payload,
     build_agent_identity_layer_envelope,
+    build_agent_warrent_connector_kit,
     build_agent_warrent_registration_request,
 )
 from ai22b.talent_foundry.llm_onboarding import build_llm_connection_profile, build_llm_live_setup_guide
@@ -1121,12 +1122,18 @@ def build_paideia_agent_install_kit(
             owner_key_id="OWNER_KEY_ID_REQUIRED",
             output_path=registration_request_path,
         )
+        connector = build_agent_warrent_connector_kit(
+            registration_request_path=registration_request_path,
+            output_dir=output_dir / "agent_warrent_connector",
+        )
         copied[payload_path.name] = "generated_agent_id_card_payload"
         copied[envelope_path.name] = "generated_agent_warrent_ail_v1_envelope"
         copied[registration_request_path.name] = "generated_agent_warrent_registration_request_draft"
+        copied["agent_warrent_connector"] = "generated_owner_controlled_agent_warrent_sdk_bridge"
         program["entrypoints"]["agent_id_card_payload"] = payload_path.name
         program["entrypoints"]["agent_identity_envelope"] = envelope_path.name
         program["entrypoints"]["agent_warrent_registration_request"] = registration_request_path.name
+        program["entrypoints"]["agent_warrent_connector"] = "agent_warrent_connector/agent_warrent_connector_manifest.json"
         program["installable_runtime"]["agent_identity_layer"] = {
             "payload_schema": payload["schema"],
             "envelope_version": envelope["version"],
@@ -1135,6 +1142,8 @@ def build_paideia_agent_install_kit(
             "registration_request_schema": registration_request["schema"],
             "registration_request_status": registration_request["status"],
             "registration_request_submit_ready": registration_request["submit_ready"],
+            "connector_kit_schema": connector["schema"],
+            "connector_kit_status": connector["status"],
             "network_action_performed": False,
         }
         _write_json(program_path, program)
@@ -1200,6 +1209,8 @@ def build_paideia_agent_install_kit(
         kit_entrypoints["agent_identity_envelope"] = "agent_identity_envelope.json"
     if (output_dir / "agent_warrent_registration_request.json").exists():
         kit_entrypoints["agent_warrent_registration_request"] = "agent_warrent_registration_request.json"
+    if (output_dir / "agent_warrent_connector" / "agent_warrent_connector_manifest.json").exists():
+        kit_entrypoints["agent_warrent_connector"] = "agent_warrent_connector/agent_warrent_connector_manifest.json"
 
     manifest = {
         "schema": INSTALL_KIT_SCHEMA,
@@ -1421,6 +1432,35 @@ def doctor_agent_program(program_path: Path, *, output_path: Path | None = None)
             else None,
         },
     }
+    connector_name = program.get("entrypoints", {}).get("agent_warrent_connector")
+    connector_path = root / str(connector_name) if connector_name else None
+    connector = _read_json(connector_path) if connector_path and connector_path.exists() else {}
+    connector_public_safe = connector.get("public_safe", {}) if isinstance(connector.get("public_safe"), dict) else {}
+    connector_validation = connector.get("validation", {}) if isinstance(connector.get("validation"), dict) else {}
+    checks["agent_warrent_connector"] = {
+        "passed": (
+            not connector_name
+            or (
+                connector_path is not None
+                and connector_path.exists()
+                and connector.get("schema") == "paideia-agent-warrent-connector-kit/v1"
+                and connector.get("external_registration") == "manual_owner_action_only"
+                and connector.get("network_action_performed") is False
+                and connector_public_safe.get("no_network_call") is True
+                and connector_public_safe.get("raw_owner_private_key_stored") is False
+                and connector_validation.get("valid") is True
+            )
+        ),
+        "details": {
+            "entrypoint": connector_name,
+            "exists": bool(connector_path and connector_path.exists()),
+            "schema": connector.get("schema") if isinstance(connector, dict) else None,
+            "status": connector.get("status") if isinstance(connector, dict) else None,
+            "network_action_performed": connector.get("network_action_performed")
+            if isinstance(connector, dict)
+            else None,
+        },
+    }
     readiness_name = program.get("entrypoints", {}).get("runtime_readiness")
     readiness_path = root / str(readiness_name) if readiness_name else None
     readiness = _read_json(readiness_path) if readiness_path and readiness_path.exists() else {}
@@ -1540,6 +1580,7 @@ def doctor_paideia_kit_first_run(
     llm_profile_path = kit_dir / DEFAULT_LLM_CONNECTION_PROFILE
     llm_live_setup_guide_path = kit_dir / DEFAULT_LLM_LIVE_SETUP_GUIDE
     agent_warrent_registration_request_path = kit_dir / "agent_warrent_registration_request.json"
+    agent_warrent_connector_path = kit_dir / "agent_warrent_connector" / "agent_warrent_connector_manifest.json"
     program_doctor_path = kit_dir / "paideia_doctor_report.json"
     first_chat_path = kit_dir / DEFAULT_KIT_FIRST_RUN_CHAT
     checks: list[dict[str, Any]] = []
@@ -1660,6 +1701,35 @@ def doctor_paideia_kit_first_run(
             submit_ready=agent_warrent_registration_request.get("submit_ready"),
         )
     )
+    agent_warrent_connector = (
+        _read_json(agent_warrent_connector_path)
+        if agent_warrent_connector_path.exists()
+        else {}
+    )
+    connector_public_safe = (
+        agent_warrent_connector.get("public_safe", {})
+        if isinstance(agent_warrent_connector.get("public_safe"), dict)
+        else {}
+    )
+    connector_validation = (
+        agent_warrent_connector.get("validation", {})
+        if isinstance(agent_warrent_connector.get("validation"), dict)
+        else {}
+    )
+    checks.append(
+        _check(
+            "agent_warrent_connector_manual_only",
+            agent_warrent_connector.get("schema") == "paideia-agent-warrent-connector-kit/v1"
+            and agent_warrent_connector.get("network_action_performed") is False
+            and agent_warrent_connector.get("external_registration") == "manual_owner_action_only"
+            and connector_public_safe.get("no_network_call") is True
+            and connector_public_safe.get("raw_owner_private_key_stored") is False
+            and connector_validation.get("valid") is True,
+            schema=agent_warrent_connector.get("schema"),
+            status=agent_warrent_connector.get("status"),
+            manifest=agent_warrent_connector_path.name,
+        )
+    )
 
     chat: dict[str, Any] = {}
     if program_path.exists():
@@ -1723,6 +1793,7 @@ def doctor_paideia_kit_first_run(
             "llm_connection_profile": DEFAULT_LLM_CONNECTION_PROFILE,
             "llm_live_setup_guide": DEFAULT_LLM_LIVE_SETUP_GUIDE,
             "agent_warrent_registration_request": "agent_warrent_registration_request.json",
+            "agent_warrent_connector": "agent_warrent_connector/agent_warrent_connector_manifest.json",
             "runtime_readiness": DEFAULT_RUNTIME_READINESS,
             "first_chat_output": first_chat_path.name,
             "program_doctor_output": program_doctor_path.name,
@@ -1778,6 +1849,14 @@ def doctor_paideia_kit_first_run(
                 "status": agent_warrent_registration_request.get("status"),
                 "submit_ready": agent_warrent_registration_request.get("submit_ready"),
                 "signature_required": registration_validation.get("signature_required"),
+            },
+            "agent_warrent_connector": {
+                "schema": agent_warrent_connector.get("schema"),
+                "status": agent_warrent_connector.get("status"),
+                "network_action_performed": agent_warrent_connector.get("network_action_performed"),
+                "entrypoint": "agent_warrent_connector/agent_warrent_connector_manifest.json"
+                if agent_warrent_connector_path.exists()
+                else None,
             },
             "first_chat": {
                 "schema": chat.get("schema"),
