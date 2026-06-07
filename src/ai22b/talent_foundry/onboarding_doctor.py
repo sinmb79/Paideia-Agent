@@ -8,6 +8,7 @@ from typing import Any
 
 ONBOARDING_SESSION_DOCTOR_SCHEMA = "paideia-onboarding-session-doctor/v1"
 ONBOARDING_LAUNCH_PLAN_SCHEMA = "paideia-onboarding-launch-plan/v1"
+ONBOARDING_DASHBOARD_SCHEMA = "paideia-openclaw-onboarding-dashboard/v1"
 SUPPORTED_SESSION_SCHEMAS = {
     "ai-talent-guided-console-session/v1",
     "ai-talent-onboarding-session/v1",
@@ -75,7 +76,11 @@ def _public_safe_ok(packet: dict[str, Any]) -> bool:
 def _ids(items: Any) -> set[str]:
     if not isinstance(items, list):
         return set()
-    return {str(item.get("id")) for item in items if isinstance(item, dict) and item.get("id")}
+    return {
+        str(item.get("id") or item.get("action_id"))
+        for item in items
+        if isinstance(item, dict) and (item.get("id") or item.get("action_id"))
+    }
 
 
 def doctor_onboarding_session(
@@ -257,6 +262,17 @@ def doctor_onboarding_session(
         )
         launch_flow_ids = _ids(launch_plan.get("flow"))
         launch_command_ids = _ids(launch_plan.get("command_plan"))
+        launch_next_action_ids = _ids(launch_plan.get("next_action_queue"))
+        operator_dashboard = (
+            launch_plan.get("operator_dashboard", {})
+            if isinstance(launch_plan.get("operator_dashboard"), dict)
+            else {}
+        )
+        dashboard_safety = (
+            operator_dashboard.get("safety_posture", {})
+            if isinstance(operator_dashboard.get("safety_posture"), dict)
+            else {}
+        )
         required_flow_ids = {
             "existing_config",
             "model_auth",
@@ -297,14 +313,24 @@ def doctor_onboarding_session(
                 and bool(selected_llm.get("engine"))
                 and bool(selected_chat.get("id"))
                 and launch_plan.get("public_safe", {}).get("external_registration_performed") is False
+                and operator_dashboard.get("schema") == ONBOARDING_DASHBOARD_SCHEMA
+                and bool(operator_dashboard.get("primary_next_action_id"))
+                and {"doctor_onboarding_session", "first_chat_offline"}.issubset(launch_next_action_ids)
+                and dashboard_safety.get("secret_values_exported") is False
+                and dashboard_safety.get("external_registration_performed") is False
+                and dashboard_safety.get("learning_promotion_review_gated") is True
             ),
             details={
                 "schema": launch_plan.get("schema"),
                 "status": launch_plan.get("status"),
+                "operator_dashboard_schema": operator_dashboard.get("schema"),
+                "primary_next_action_id": operator_dashboard.get("primary_next_action_id"),
+                "next_action_queue_ids": sorted(launch_next_action_ids),
                 "missing_flow_ids": sorted(required_flow_ids - launch_flow_ids),
                 "missing_command_ids": sorted(required_command_ids - launch_command_ids),
                 "selected_engine": selected_llm.get("engine"),
                 "selected_chat_surface": selected_chat.get("id"),
+                "dashboard_secret_values_exported": dashboard_safety.get("secret_values_exported"),
                 "external_registration_performed": launch_plan.get("public_safe", {}).get(
                     "external_registration_performed"
                 ),

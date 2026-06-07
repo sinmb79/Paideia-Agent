@@ -4324,6 +4324,9 @@ class TalentFoundryTests(unittest.TestCase):
             )
             launch_plan = json.loads(Path(session["artifacts"]["onboarding_launch_plan"]).read_text(encoding="utf-8"))
             config = json.loads(Path(session["artifacts"]["paideia_onboarding_config"]).read_text(encoding="utf-8"))
+            agent_warrent_registration_request = json.loads(
+                Path(session["artifacts"]["agent_warrent_registration_request"]).read_text(encoding="utf-8")
+            )
             doctor = json.loads(doctor_path.read_text(encoding="utf-8"))
             artifact_exists = {
                 key: Path(session["artifacts"][key]).exists()
@@ -4338,6 +4341,7 @@ class TalentFoundryTests(unittest.TestCase):
                     "onboarding_session",
                     "employment_record",
                     "first_goal_cycle",
+                    "agent_warrent_registration_request",
                 ]
             }
 
@@ -4369,6 +4373,13 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(launch_plan["status"], "ready_for_first_chat")
         self.assertEqual(launch_plan["selected_llm"]["engine"], "openai_chatgpt_codex")
         self.assertEqual(launch_plan["selected_chat_surface"]["id"], "codex-bridge-chat")
+        self.assertEqual(launch_plan["operator_dashboard"]["schema"], "paideia-openclaw-onboarding-dashboard/v1")
+        self.assertEqual(launch_plan["operator_dashboard"]["primary_next_action_id"], "first_chat_offline")
+        self.assertEqual(launch_plan["recommended_next_action_id"], "first_chat_offline")
+        self.assertIn("first_chat_offline", {item["action_id"] for item in launch_plan["next_action_queue"]})
+        self.assertIn("doctor_onboarding_session", {item["action_id"] for item in launch_plan["next_action_queue"]})
+        self.assertFalse(launch_plan["operator_dashboard"]["safety_posture"]["secret_values_exported"])
+        self.assertFalse(launch_plan["operator_dashboard"]["safety_posture"]["external_registration_performed"])
         self.assertFalse(launch_plan["public_safe"]["network_call_performed"])
         self.assertFalse(launch_plan["public_safe"]["external_registration_performed"])
         launch_flow_ids = {item["id"] for item in launch_plan["flow"]}
@@ -4413,8 +4424,23 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(config["model_auth"]["llm_connection_profile"], session["artifacts"]["llm_connection_profile"])
         self.assertEqual(config["model_auth"]["llm_live_setup_guide"], session["artifacts"]["llm_live_setup_guide"])
         self.assertEqual(config["launch_plan"]["path"], session["artifacts"]["onboarding_launch_plan"])
+        self.assertEqual(config["launch_plan"]["operator_dashboard"], "embedded_in_launch_plan")
+        self.assertEqual(config["launch_plan"]["next_action_queue"], "embedded_in_launch_plan")
         self.assertEqual(session["launch_plan"]["path"], session["artifacts"]["onboarding_launch_plan"])
+        self.assertEqual(session["launch_plan"]["operator_dashboard_schema"], "paideia-openclaw-onboarding-dashboard/v1")
+        self.assertEqual(session["launch_plan"]["primary_next_action_id"], "first_chat_offline")
+        self.assertIn("doctor_onboarding_session", session["launch_plan"]["next_action_queue_ids"])
         self.assertIn("first_chat_offline", session["launch_plan"]["command_ids"])
+        self.assertEqual(
+            agent_warrent_registration_request["schema"],
+            "paideia-agent-warrent-registration-request/v1",
+        )
+        self.assertEqual(agent_warrent_registration_request["status"], "signature_required_owner_action")
+        self.assertFalse(agent_warrent_registration_request["submit_ready"])
+        self.assertEqual(
+            session["post_hire_extensions"]["agent_id_card"]["agent_warrent_registration_request_status"],
+            "signature_required_owner_action",
+        )
         self.assertFalse(provider_matrix["public_safe"]["network_call_performed"])
         self.assertEqual(session["onboarding_summary"]["llm_provider_matrix"]["schema"], provider_matrix["schema"])
         check_by_id = {item["id"]: item for item in doctor["checks"]}
@@ -4697,9 +4723,14 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(next_action["schema"], "paideia-onboarding-next-action/v1")
         self.assertEqual(next_action["status"], "ready")
         self.assertEqual(next_action["action_id"], "first_chat_offline")
+        self.assertEqual(next_action["stage"], "first_conversation")
+        self.assertEqual(next_action["queue_position"], 2)
+        self.assertTrue(next_action["runner_allowlisted"])
+        self.assertEqual(next_action["dashboard_primary_next_action_id"], "first_chat_offline")
         self.assertFalse(next_action["operator_policy"]["resolver_executes_command"])
         self.assertFalse(next_action["operator_policy"]["resolver_network_call_performed"])
         self.assertIn("doctor_onboarding_session", next_action["available_actions"])
+        self.assertIn("doctor_onboarding_session", next_action["next_action_queue_ids"])
         self.assertEqual(no_approval_report["schema"], "paideia-onboarding-action-run/v1")
         self.assertEqual(no_approval_report["status"], "needs_owner_approval")
         self.assertFalse(no_approval_report["executed"])

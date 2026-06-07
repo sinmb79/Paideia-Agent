@@ -126,11 +126,11 @@ ai22b-talent-foundry onboard
 
 이 wizard는 기존 설정 감지, QuickStart/Advanced, Model/Auth, Workspace, Gateway/Channels, Skills, Education Path, Runtime, Agent Identity, Health Check, Finish 순서로 진행합니다. 실행 결과에는 `llm_provider_matrix.json`, 선택 provider 체크리스트, `llm_connection_profile.json`, `llm_live_setup_guide.json`, `onboarding_launch_plan.json`이 함께 남습니다.
 
-온보딩이 끝나면 먼저 `onboarding_launch_plan.json`을 열어보면 됩니다. 이 파일은 선택한 LLM, 선택한 채팅 표면, 롤모델 교육 경로, Agent ID Card payload 상태, 첫 채팅 명령, live-readiness suite, chat runtime smoke, 다음 목표 cycle, onboarding doctor 명령을 순서대로 보여줍니다. API key, provider 원문 응답, 숨은 추론 trace는 저장하지 않습니다.
+온보딩이 끝나면 먼저 `onboarding_launch_plan.json`을 열어보면 됩니다. 이 파일은 `operator_dashboard`와 `next_action_queue`를 포함하며, Model/Auth, Chat Surface, Education Path, Agent Identity, Health Check, Learning Loop 카드를 통해 다음에 무엇을 해야 하는지 보여줍니다. 선택한 LLM, 선택한 채팅 표면, 롤모델 교육 경로, Agent ID Card payload 상태, Agent_warrent 등록 요청 초안, 첫 채팅 명령, live-readiness suite, chat runtime smoke, 다음 목표 cycle, onboarding doctor 명령을 순서대로 보여주며 API key, provider 원문 응답, 숨은 추론 trace는 저장하지 않습니다.
 
 또한 `start-console` 또는 `onboard`가 끝나면 터미널에 완료 요약이 바로 출력됩니다. 여기에는 console session 경로, launch plan 경로, 선택한 LLM/채팅 표면, onboarding doctor 명령, live-readiness 명령, 첫 채팅 명령, 추천 finish action이 포함됩니다.
 
-launch plan의 추천 다음 액션만 다시 확인할 수도 있습니다. 이 명령은 다음 명령문을 보여주기만 하고 실행하지 않습니다.
+launch plan의 추천 다음 액션만 다시 확인할 수도 있습니다. 이 명령은 다음 명령문을 보여주기만 하고 실행하지 않으며, queue stage, queue position, 안전 runner allowlist 여부, dashboard의 primary next action도 함께 보여줍니다.
 
 ```powershell
 ai22b-talent-foundry show-onboarding-next-action `

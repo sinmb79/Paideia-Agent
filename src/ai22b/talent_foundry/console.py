@@ -8,6 +8,7 @@ from typing import Any, Callable
 from ai22b.talent_foundry.agent_identity_card import (
     build_agent_id_card_payload,
     build_agent_identity_layer_envelope,
+    build_agent_warrent_registration_request,
 )
 from ai22b.talent_foundry.onboarding import run_agent_onboarding
 from ai22b.talent_foundry.llm_onboarding import build_llm_live_setup_guide, build_llm_provider_matrix
@@ -32,6 +33,7 @@ from ai22b.talent_foundry.simulation_rollouts import build_simulation_rollouts, 
 CONSOLE_SESSION_SCHEMA = "ai-talent-guided-console-session/v1"
 OPENCLAW_STYLE_WIZARD_SCHEMA = "ai22b-paideia-openclaw-style-onboarding/v1"
 ONBOARDING_LAUNCH_PLAN_SCHEMA = "paideia-onboarding-launch-plan/v1"
+ONBOARDING_DASHBOARD_SCHEMA = "paideia-openclaw-onboarding-dashboard/v1"
 ONBOARDING_NEXT_ACTION_SCHEMA = "paideia-onboarding-next-action/v1"
 ONBOARDING_ACTION_RUN_SCHEMA = "paideia-onboarding-action-run/v1"
 ONBOARDING_ACTION_ALLOWLIST = {
@@ -602,6 +604,154 @@ def _copy_command(
     return item
 
 
+def _action_entry(command_by_id: dict[str, dict[str, Any]], action_id: str, *, order: int, stage: str) -> dict[str, Any]:
+    action = command_by_id.get(action_id, {})
+    return {
+        "order": order,
+        "action_id": action_id,
+        "stage": stage,
+        "title": action.get("title"),
+        "command_or_path": _command_or_path(action),
+        "network_call_if_executed": bool(action.get("network_call", False)),
+        "required_before_agent_work": bool(action.get("required_before_agent_work", False)),
+        "required_before_daily_use": bool(action.get("required_before_daily_use", False)),
+        "approval_required": True,
+        "runner_allowlisted": action_id in ONBOARDING_ACTION_ALLOWLIST,
+        "expected": action.get("expected"),
+    }
+
+
+def _build_next_action_queue(
+    command_plan: list[dict[str, Any]],
+    *,
+    recommended_command_id: str,
+) -> list[dict[str, Any]]:
+    command_by_id = {str(item.get("id")): item for item in command_plan if isinstance(item, dict) and item.get("id")}
+    base_order = [
+        ("doctor_onboarding_session", "health_check"),
+        ("first_chat_offline", "first_conversation"),
+        ("llm_live_readiness_suite", "model_auth"),
+        ("chat_runtime_smoke", "chat_surface"),
+        ("next_goal_cycle", "learning_loop"),
+        ("record_hired_learning", "learning_loop"),
+        ("review_hiring_dossier", "dossier"),
+    ]
+    queue = [
+        _action_entry(command_by_id, action_id, order=index, stage=stage)
+        for index, (action_id, stage) in enumerate(base_order, start=1)
+        if action_id in command_by_id
+    ]
+    for item in queue:
+        item["recommended_by_finish_step"] = item["action_id"] == recommended_command_id
+    return queue
+
+
+def _build_operator_dashboard(
+    *,
+    normalized: dict[str, str],
+    selected_llm: dict[str, Any],
+    selected_chat: dict[str, Any],
+    artifacts: dict[str, str],
+    command_plan: list[dict[str, Any]],
+    next_action_queue: list[dict[str, Any]],
+    status: str,
+) -> dict[str, Any]:
+    command_ids = {str(item.get("id")) for item in command_plan if isinstance(item, dict)}
+    primary_next_action = next((item for item in next_action_queue if item.get("recommended_by_finish_step")), None)
+    primary_next_action = primary_next_action or (next_action_queue[0] if next_action_queue else {})
+    agent_identity_artifacts = {
+        "agent_id_card_payload": artifacts.get("agent_id_card_payload"),
+        "agent_identity_envelope": artifacts.get("agent_identity_envelope"),
+        "agent_warrent_registration_request": artifacts.get("agent_warrent_registration_request"),
+    }
+    return {
+        "schema": ONBOARDING_DASHBOARD_SCHEMA,
+        "status": "ready" if "hired" in status or status.endswith("completed") else "needs_review",
+        "primary_next_action_id": primary_next_action.get("action_id"),
+        "primary_next_action_title": primary_next_action.get("title"),
+        "cards": [
+            {
+                "id": "model_auth",
+                "title": "Model/Auth",
+                "status": "configured",
+                "selected_service": selected_llm.get("service_id"),
+                "selected_engine": selected_llm.get("engine"),
+                "setup_guide": artifacts.get("llm_live_setup_guide"),
+                "action_ids": [
+                    action_id
+                    for action_id in [
+                        "live_setup_guide",
+                        "provider_doctor_no_network",
+                        "llm_live_readiness_suite",
+                    ]
+                    if action_id in command_ids
+                ],
+            },
+            {
+                "id": "chat_surface",
+                "title": "Chat Surface",
+                "status": "ready_for_offline_first_turn",
+                "selected_chat_surface": selected_chat.get("id"),
+                "action_ids": [
+                    action_id
+                    for action_id in ["chat_runtime_smoke", "first_chat_offline"]
+                    if action_id in command_ids
+                ],
+            },
+            {
+                "id": "education_path",
+                "title": "Education Path",
+                "status": "raised_and_hired" if "hired" in status or status.endswith("completed") else "needs_review",
+                "talent_source": normalized.get("talent_source"),
+                "domain": normalized.get("domain"),
+                "role_model_id": normalized.get("role_model_id"),
+                "employment_record": artifacts.get("employment_record"),
+            },
+            {
+                "id": "agent_identity",
+                "title": "Agent Identity",
+                "status": "local_unregistered" if artifacts.get("agent_id_card_payload") else "skipped",
+                "external_registration_performed": False,
+                "manual_registration_only": True,
+                "artifacts": agent_identity_artifacts,
+            },
+            {
+                "id": "health_check",
+                "title": "Health Check",
+                "status": "ready",
+                "action_ids": [action_id for action_id in ["doctor_onboarding_session"] if action_id in command_ids],
+            },
+            {
+                "id": "learning_loop",
+                "title": "Learning Loop",
+                "status": "review_gated_ready",
+                "action_ids": [
+                    action_id
+                    for action_id in ["next_goal_cycle", "record_hired_learning"]
+                    if action_id in command_ids
+                ],
+            },
+        ],
+        "safety_posture": {
+            "llm_is_identity": False,
+            "network_call_performed_during_onboarding_plan_write": False,
+            "secret_values_exported": False,
+            "external_registration_performed": False,
+            "learning_promotion_review_gated": True,
+        },
+        "next_action_queue_preview": [
+            {
+                "order": item.get("order"),
+                "action_id": item.get("action_id"),
+                "title": item.get("title"),
+                "network_call_if_executed": item.get("network_call_if_executed"),
+                "runner_allowlisted": item.get("runner_allowlisted"),
+            }
+            for item in next_action_queue[:5]
+        ],
+    }
+
+
 def build_onboarding_launch_plan(
     *,
     normalized: dict[str, str],
@@ -711,6 +861,13 @@ def build_onboarding_launch_plan(
                 "expected": "opens the graduate dossier that explains academic record, assessments, and hire-ready evidence.",
             }
         )
+    recommended_command_id = {
+        "chat": "first_chat_offline",
+        "dossier": "review_hiring_dossier",
+        "job": "next_goal_cycle",
+        "later": "doctor_onboarding_session",
+    }.get(normalized.get("finish_action"), "first_chat_offline")
+    next_action_queue = _build_next_action_queue(command_plan, recommended_command_id=recommended_command_id)
     flow = [
         {
             "id": "existing_config",
@@ -768,6 +925,7 @@ def build_onboarding_launch_plan(
             "artifacts": {
                 "agent_id_card_payload": artifacts.get("agent_id_card_payload"),
                 "agent_identity_envelope": artifacts.get("agent_identity_envelope"),
+                "agent_warrent_registration_request": artifacts.get("agent_warrent_registration_request"),
             },
         },
         {
@@ -781,14 +939,18 @@ def build_onboarding_launch_plan(
             "title": "Finish",
             "status": "ready",
             "recommended_action": normalized.get("finish_action"),
-            "recommended_command_id": {
-                "chat": "first_chat_offline",
-                "dossier": "review_hiring_dossier",
-                "job": "next_goal_cycle",
-                "later": "doctor_onboarding_session",
-            }.get(normalized.get("finish_action"), "first_chat_offline"),
+            "recommended_command_id": recommended_command_id,
         },
     ]
+    operator_dashboard = _build_operator_dashboard(
+        normalized=normalized,
+        selected_llm=selected_llm,
+        selected_chat=selected_chat,
+        artifacts=artifacts,
+        command_plan=command_plan,
+        next_action_queue=next_action_queue,
+        status=status,
+    )
     return {
         "schema": ONBOARDING_LAUNCH_PLAN_SCHEMA,
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -799,6 +961,7 @@ def build_onboarding_launch_plan(
             "talent_name": normalized.get("talent_name"),
             "request": normalized.get("request"),
             "finish_action": normalized.get("finish_action"),
+            "primary_next_action_id": operator_dashboard.get("primary_next_action_id"),
             "wizard_step_count": len(wizard.get("steps", [])) if isinstance(wizard.get("steps"), list) else 0,
         },
         "selected_llm": selected_llm,
@@ -809,8 +972,11 @@ def build_onboarding_launch_plan(
             "role_model_id": normalized.get("role_model_id"),
             "private_curriculum_dir": normalized.get("private_curriculum_dir"),
         },
+        "operator_dashboard": operator_dashboard,
+        "recommended_next_action_id": recommended_command_id,
         "flow": flow,
         "command_plan": command_plan,
+        "next_action_queue": next_action_queue,
         "artifacts": {
             "console_session": str(output_path),
             "onboarding_launch_plan": str(output_dir / "onboarding_launch_plan.json"),
@@ -927,6 +1093,24 @@ def resolve_onboarding_next_action(
     finish_step = _launch_finish_step(launch_plan)
     selected_action_id = str(action_id or finish_step.get("recommended_command_id") or "first_chat_offline")
     selected = command_by_id.get(selected_action_id, {})
+    next_action_queue = (
+        launch_plan.get("next_action_queue", [])
+        if isinstance(launch_plan.get("next_action_queue"), list)
+        else []
+    )
+    queue_item = next(
+        (
+            item
+            for item in next_action_queue
+            if isinstance(item, dict) and str(item.get("action_id")) == selected_action_id
+        ),
+        {},
+    )
+    operator_dashboard = (
+        launch_plan.get("operator_dashboard", {})
+        if isinstance(launch_plan.get("operator_dashboard"), dict)
+        else {}
+    )
     command_or_path = _command_or_path(selected)
     public_safe = (
         launch_plan.get("public_safe", {}) if isinstance(launch_plan.get("public_safe"), dict) else {}
@@ -945,9 +1129,18 @@ def resolve_onboarding_next_action(
         "network_call_if_executed": bool(selected.get("network_call", False)),
         "required_before_agent_work": selected.get("required_before_agent_work"),
         "required_before_daily_use": selected.get("required_before_daily_use"),
+        "queue_position": queue_item.get("order"),
+        "stage": queue_item.get("stage"),
+        "runner_allowlisted": queue_item.get("runner_allowlisted"),
         "expected": selected.get("expected"),
         "recommended_by_finish_step": finish_step.get("recommended_command_id"),
         "available_actions": sorted(command_by_id),
+        "next_action_queue_ids": [
+            str(item.get("action_id"))
+            for item in next_action_queue
+            if isinstance(item, dict) and item.get("action_id")
+        ],
+        "dashboard_primary_next_action_id": operator_dashboard.get("primary_next_action_id"),
         "operator_policy": {
             "resolver_executes_command": False,
             "resolver_network_call_performed": False,
@@ -967,9 +1160,14 @@ def format_onboarding_next_action_summary(next_action: dict[str, Any]) -> str:
     ]
     if next_action.get("title"):
         lines.append(f"- Title: {next_action.get('title')}")
+    if next_action.get("stage"):
+        lines.append(f"- Stage: {next_action.get('stage')}")
+    if next_action.get("queue_position"):
+        lines.append(f"- Queue position: {next_action.get('queue_position')}")
     if next_action.get("command_or_path"):
         lines.append(f"- Command or path: {next_action.get('command_or_path')}")
     lines.append(f"- Network if executed: {next_action.get('network_call_if_executed')}")
+    lines.append(f"- Runner allowlisted: {next_action.get('runner_allowlisted')}")
     lines.append("- Resolver executed command: False")
     available = next_action.get("available_actions", [])
     if isinstance(available, list) and available:
@@ -1293,6 +1491,8 @@ def write_openclaw_style_config(
             "path": artifacts.get("onboarding_launch_plan"),
             "schema": ONBOARDING_LAUNCH_PLAN_SCHEMA,
             "recommended_finish_action": normalized.get("finish_action"),
+            "operator_dashboard": "embedded_in_launch_plan",
+            "next_action_queue": "embedded_in_launch_plan",
         },
         "artifacts": artifacts,
     }
@@ -1361,6 +1561,10 @@ def run_console_session(
         "employment_record": onboarding["artifacts"]["employment_record"],
         "employment_goal": onboarding["artifacts"]["employment_goal"],
         "first_goal_cycle": onboarding["artifacts"]["first_goal_cycle"],
+        "agent_id_card_payload": onboarding["artifacts"].get("agent_id_card_payload"),
+        "agent_identity_envelope": onboarding["artifacts"].get("agent_identity_envelope"),
+        "agent_identity_verification": onboarding["artifacts"].get("agent_identity_verification"),
+        "agent_warrent_registration_request": onboarding["artifacts"].get("agent_warrent_registration_request"),
     }
     status = onboarding["status"]
     if normalized.get("talent_source") == "owner_self_extension" and normalized.get("private_curriculum_dir"):
@@ -1387,6 +1591,7 @@ def run_console_session(
     if normalized.get("agent_id_card_mode") != "skip":
         agent_id_card_path = output_dir / "agent_id_card_payload.json"
         agent_identity_envelope_path = output_dir / "agent_identity_envelope.json"
+        agent_warrent_registration_request_path = output_dir / "agent_warrent_registration_request.json"
         payload = build_agent_id_card_payload(
             installed_manifest_path=Path(onboarding["artifacts"]["installed_agent_manifest"]),
             employment_record_path=Path(onboarding["artifacts"]["employment_record"]),
@@ -1399,8 +1604,15 @@ def run_console_session(
             surface="paideia_onboarding_console",
             task_ref="onboarding-agent-identity",
         )
+        registration_request = build_agent_warrent_registration_request(
+            installed_manifest_path=Path(onboarding["artifacts"]["installed_agent_manifest"]),
+            employment_record_path=Path(onboarding["artifacts"]["employment_record"]),
+            owner_key_id="OWNER_KEY_ID_REQUIRED",
+            output_path=agent_warrent_registration_request_path,
+        )
         artifacts["agent_id_card_payload"] = str(agent_id_card_path)
         artifacts["agent_identity_envelope"] = str(agent_identity_envelope_path)
+        artifacts["agent_warrent_registration_request"] = str(agent_warrent_registration_request_path)
         post_hire_extensions["agent_id_card"] = {
             "schema": payload["schema"],
             "status": payload["status"],
@@ -1408,6 +1620,9 @@ def run_console_session(
             "payload_fingerprint_sha256": payload["payload_fingerprint_sha256"],
             "agent_identity_layer_version": envelope["version"],
             "agent_warrent_repo": envelope["extensions"]["agent_warrent"]["repo_url"],
+            "agent_warrent_registration_request_schema": registration_request["schema"],
+            "agent_warrent_registration_request_status": registration_request["status"],
+            "agent_warrent_registration_request_submit_ready": registration_request["submit_ready"],
         }
     if normalized.get("simulation_rollouts_enabled", "yes") == "yes":
         simulation_path = output_dir / "simulation_rollouts.json"
@@ -1580,7 +1795,11 @@ def run_console_session(
             "status": launch_plan["status"],
             "path": str(launch_plan_path),
             "recommended_command_id": launch_plan["flow"][-1]["recommended_command_id"],
+            "recommended_next_action_id": launch_plan["recommended_next_action_id"],
+            "operator_dashboard_schema": launch_plan["operator_dashboard"]["schema"],
+            "primary_next_action_id": launch_plan["operator_dashboard"]["primary_next_action_id"],
             "command_ids": [item["id"] for item in launch_plan["command_plan"]],
+            "next_action_queue_ids": [item["action_id"] for item in launch_plan["next_action_queue"]],
         },
         "artifacts": artifacts,
         "next_commands": onboarding["next_commands"],
