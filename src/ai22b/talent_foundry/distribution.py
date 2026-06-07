@@ -49,6 +49,7 @@ GENERATED_FILES = set(REQUIRED_FILES) | {
     "developmental_ecology.json",
     "life_trace.jsonl",
     "growth_profile.json",
+    "grade_learning_records.json",
     "last_agent_run.json",
     "last_agent_job_run.json",
     "last_agent_job_cycle.json",
@@ -139,6 +140,9 @@ def _bundle_manifest(files: list[str], *, include_cohort: bool) -> dict[str, Any
             "developmental_ecology": "developmental_ecology.json" if "developmental_ecology.json" in files else None,
             "life_trace": "life_trace.jsonl" if "life_trace.jsonl" in files else None,
             "growth_profile": "growth_profile.json" if "growth_profile.json" in files else None,
+            "grade_learning_records": "grade_learning_records.json"
+            if "grade_learning_records.json" in files
+            else None,
             "memory_substrate": "memory_substrate.json" if "memory_substrate.json" in files else None,
             "hiring_dossier": "hiring_dossier.json",
             "hiring_dossier_markdown": "HIRING_DOSSIER.ko.md",
@@ -165,6 +169,9 @@ def _bundle_manifest(files: list[str], *, include_cohort: bool) -> dict[str, Any
             "developmental_ecology": "developmental_ecology.json" if "developmental_ecology.json" in files else None,
             "life_trace": "life_trace.jsonl" if "life_trace.jsonl" in files else None,
             "growth_profile": "growth_profile.json" if "growth_profile.json" in files else None,
+            "grade_learning_records": "grade_learning_records.json"
+            if "grade_learning_records.json" in files
+            else None,
         },
         "exclusion_policy": [
             ".env",
@@ -261,6 +268,8 @@ The LLM is treated as an application engine, not the identity. Identity comes fr
 `hiring_dossier.json` and `HIRING_DOSSIER.ko.md` summarize the academic record, resume, assessment gates, doctoral defense, reasoning profile, LLM contract, and hire-ready recommendation.
 
 `growth_profile.json` condenses developmental ecology and life trace events into relationship, emotion, meaning, aesthetic, and asymmetry memory for chat and work routing.
+
+`grade_learning_records.json` links each school year to coursework, assignments, exams, feedback, life-trace pressure, and Reasoning Ledger updates.
 
 Use `ai22b-talent-foundry build-graduate-package --training-run <training_run.json> --output-dir <graduate_package>` to export a resume, transcript, memory pack, runtime manifest, and onboarding prompt.
 
@@ -824,6 +833,7 @@ def create_agent_release_bundle(
     developmental_ecology_path: Path | None = None,
     life_trace_path: Path | None = None,
     growth_profile_path: Path | None = None,
+    grade_learning_records_path: Path | None = None,
     specialist_cohort_path: Path | None = None,
     hiring_dossier_path: Path | None = None,
     hiring_dossier_markdown_path: Path | None = None,
@@ -840,6 +850,7 @@ def create_agent_release_bundle(
         "developmental_ecology": output_dir / "developmental_ecology.json",
         "life_trace": output_dir / "life_trace.jsonl",
         "growth_profile": output_dir / "growth_profile.json",
+        "grade_learning_records": output_dir / "grade_learning_records.json",
         "hiring_dossier": output_dir / "hiring_dossier.json",
         "hiring_dossier_markdown": output_dir / "HIRING_DOSSIER.ko.md",
         "readme_ko": output_dir / "README.ko.md",
@@ -894,6 +905,10 @@ def create_agent_release_bundle(
         _copy_json(growth_profile_path, paths["growth_profile"])
     else:
         paths.pop("growth_profile")
+    if grade_learning_records_path is not None:
+        _copy_json(grade_learning_records_path, paths["grade_learning_records"])
+    else:
+        paths.pop("grade_learning_records")
     if hiring_dossier_path is not None:
         _copy_json(hiring_dossier_path, paths["hiring_dossier"])
         if hiring_dossier_markdown_path is not None:
@@ -1236,6 +1251,8 @@ def install_agent_release_package(
         entrypoints["life_trace"] = "life_trace.jsonl"
     if "growth_profile.json" in installed_files:
         entrypoints["growth_profile"] = "growth_profile.json"
+    if "grade_learning_records.json" in installed_files:
+        entrypoints["grade_learning_records"] = "grade_learning_records.json"
     manifest = {
         "schema": INSTALLED_SCHEMA,
         "installed_at_utc": datetime.now(timezone.utc).isoformat(),

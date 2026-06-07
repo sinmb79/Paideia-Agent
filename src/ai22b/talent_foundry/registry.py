@@ -348,6 +348,10 @@ def hire_installed_agent(
             ),
             "life_trace": installed_manifest["entrypoints"].get("life_trace", "life_trace.jsonl"),
             "growth_profile": installed_manifest["entrypoints"].get("growth_profile", "growth_profile.json"),
+            "grade_learning_records": installed_manifest["entrypoints"].get(
+                "grade_learning_records",
+                "grade_learning_records.json",
+            ),
             "llm_connection_profile": llm_connection_profile_entrypoint,
             "llm_live_setup_guide": llm_live_setup_guide_entrypoint,
             "agent_id_card_payload": "agent_id_card_payload.json",

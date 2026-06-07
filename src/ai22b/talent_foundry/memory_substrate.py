@@ -655,6 +655,69 @@ def _nodes_from_growth_profile(profile: dict[str, Any] | None) -> list[dict[str,
     return nodes
 
 
+def _nodes_from_grade_learning_records(records: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    if not records:
+        return []
+    nodes: list[dict[str, Any]] = []
+    for record in records:
+        year_id = str(record.get("year_id") or record.get("record_id") or "grade_learning_year")
+        assessment_count = len(record.get("observed_assessments", []))
+        ledger_update_count = len(record.get("reasoning_ledger_updates", []))
+        summary = _compact(
+            {
+                "education_stage": record.get("education_stage"),
+                "age_band": record.get("age_band"),
+                "learning_data": record.get("learning_data", []),
+                "required_exams": record.get("required_exams", []),
+                "assessment_count": assessment_count,
+                "feedback_loop": record.get("feedback_loop", {}),
+            },
+            limit=420,
+        )
+        tags = (
+            _tokens(record.get("learning_data", []))
+            | _tokens(record.get("required_exams", []))
+            | _tokens(record.get("education_stage"))
+            | {"grade_learning", "education_record", year_id}
+        )
+        nodes.append(
+            _node(
+                node_id=str(record.get("record_id") or _stable_id("grade-learning", year_id)),
+                layer="episodic_fast_store",
+                source="grade_learning_records",
+                title=f"{year_id} grade learning record",
+                summary=summary,
+                tags=tags,
+                stage=year_id,
+                strength=0.62 + min(assessment_count, 4) * 0.04,
+                metadata={
+                    "education_stage": record.get("education_stage"),
+                    "assessment_count": assessment_count,
+                    "ledger_update_count": ledger_update_count,
+                    "promotion_state": record.get("promotion_state"),
+                    "private_reasoning_trace": "not_stored",
+                },
+            )
+        )
+        nodes.append(
+            _node(
+                node_id=_stable_id("grade-feedback", record.get("record_id"), year_id),
+                layer="metacognitive_monitor",
+                source="grade_learning_records",
+                title=f"{year_id} feedback loop",
+                summary=_compact(record.get("feedback_loop", {}), limit=320),
+                tags=tags | {"exam", "assignment", "feedback", "revision"},
+                stage=year_id,
+                strength=0.6 + min(ledger_update_count, 4) * 0.03,
+                metadata={
+                    "derived_from": record.get("record_id"),
+                    "observed_assessment_count": assessment_count,
+                },
+            )
+        )
+    return nodes
+
+
 def _ensure_conversation_training(substrate: dict[str, Any]) -> dict[str, Any]:
     boards = substrate.setdefault("boards", {})
     boards.setdefault(
@@ -690,6 +753,13 @@ def _ensure_conversation_training(substrate: dict[str, Any]) -> dict[str, Any]:
         {
             "purpose": "Consolidate life-trace events into relationship, emotion, culture, aesthetic, and asymmetry memory.",
             "human_reference": "developmental ecology summarized into reviewable memory-pack scaffolds",
+        },
+    )
+    boards.setdefault(
+        "grade_learning_records",
+        {
+            "purpose": "Link each school year to assignments, exams, feedback, life pressure, and Reasoning Ledger updates.",
+            "human_reference": "test-enhanced learning and self-regulated yearly promotion checkpoints",
         },
     )
     substrate["conversation_method_training"] = CONVERSATION_METHOD_TRAINING
@@ -822,6 +892,7 @@ def build_memory_substrate(
     developmental_ecology: dict[str, Any] | None = None,
     life_trace_events: list[dict[str, Any]] | None = None,
     growth_profile: dict[str, Any] | None = None,
+    grade_learning_records: list[dict[str, Any]] | None = None,
     objective: str | None = None,
 ) -> dict[str, Any]:
     agent = agent_manifest.get("agent", {})
@@ -838,9 +909,11 @@ def build_memory_substrate(
     ecology_nodes = _nodes_from_developmental_ecology(developmental_ecology)
     life_trace_nodes = _nodes_from_life_trace(life_trace_events)
     growth_profile_nodes = _nodes_from_growth_profile(growth_profile)
+    grade_learning_nodes = _nodes_from_grade_learning_records(grade_learning_records)
     nodes.extend(ecology_nodes)
     nodes.extend(life_trace_nodes)
     nodes.extend(growth_profile_nodes)
+    nodes.extend(grade_learning_nodes)
     nodes.extend(_conversation_nodes(agent.get("name")))
     if process_plan:
         nodes.append(
@@ -899,6 +972,11 @@ def build_memory_substrate(
             "review_status": growth_profile.get("review_status") if growth_profile else None,
             "policy": growth_profile.get("policy", {}) if growth_profile else {},
         },
+        "grade_learning_records": {
+            "record_count": len(grade_learning_records or []),
+            "node_count": len(grade_learning_nodes),
+            "policy": "reviewable_yearly_learning_records_no_private_reasoning_trace",
+        },
         "source_counts": {
             "reasoning_kibo_entries": len(rows),
             "learning_ledger_promoted_experiences": len(learning_ledger.get("promoted_experiences", [])),
@@ -907,6 +985,8 @@ def build_memory_substrate(
             "life_trace_events": len(life_trace_events or []),
             "life_trace_nodes": len(life_trace_nodes),
             "growth_profile_nodes": len(growth_profile_nodes),
+            "grade_learning_records": len(grade_learning_records or []),
+            "grade_learning_nodes": len(grade_learning_nodes),
             "conversation_method_skills": len(CONVERSATION_METHOD_TRAINING["skills"]),
             "nodes": len(nodes),
             "edges": len(edges),
@@ -972,6 +1052,7 @@ def _load_or_build_substrate(
     developmental_ecology_path: Path | None = None,
     life_trace_path: Path | None = None,
     growth_profile_path: Path | None = None,
+    grade_learning_records_path: Path | None = None,
 ) -> tuple[dict[str, Any], Path]:
     entrypoints = employment_record.get("entrypoints", {})
     candidate = memory_substrate_path
@@ -1013,6 +1094,12 @@ def _load_or_build_substrate(
             growth_profile_path = target_root / entrypoint_name
         if growth_profile_path is None or not growth_profile_path.exists():
             growth_profile_path = _find_run_sidecar(target_root, "*_growth_profile.json")
+    if grade_learning_records_path is None:
+        entrypoint_name = employment_record.get("entrypoints", {}).get("grade_learning_records")
+        if entrypoint_name:
+            grade_learning_records_path = target_root / entrypoint_name
+        if grade_learning_records_path is None or not grade_learning_records_path.exists():
+            grade_learning_records_path = _find_run_sidecar(target_root, "*_grade_learning_records.json")
     if language_development_program_path is None:
         entrypoint_name = employment_record.get("entrypoints", {}).get("language_development_program")
         if entrypoint_name:
@@ -1030,6 +1117,11 @@ def _load_or_build_substrate(
         developmental_ecology=_maybe_read_json(developmental_ecology_path),
         life_trace_events=read_life_trace_jsonl(life_trace_path)["events"] if life_trace_path else [],
         growth_profile=read_growth_profile(growth_profile_path) if growth_profile_path else None,
+        grade_learning_records=(
+            (_maybe_read_json(grade_learning_records_path) or {}).get("records", [])
+            if grade_learning_records_path
+            else []
+        ),
         objective=objective,
     )
     write_memory_substrate(candidate, substrate)
@@ -1072,6 +1164,7 @@ def build_chat_context(
                 "learning_ledger",
                 substrate_path_name,
                 "growth_profile",
+                "grade_learning_records",
             ],
             "private_reasoning_trace": "do_not_store",
             "hidden_chain_of_thought": "forbidden",

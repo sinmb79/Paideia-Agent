@@ -812,6 +812,10 @@ def build_agent_program(
                 "developmental_ecology": entrypoints.get("developmental_ecology", "developmental_ecology.json"),
                 "life_trace": entrypoints.get("life_trace", "life_trace.jsonl"),
                 "growth_profile": entrypoints.get("growth_profile", "growth_profile.json"),
+                "grade_learning_records": entrypoints.get(
+                    "grade_learning_records",
+                    "grade_learning_records.json",
+                ),
                 "reasoning_kibo_sidecar": _first_matching_name(target_root, "*_reasoning_kibo.jsonl"),
             },
             "policy": {
@@ -1038,12 +1042,14 @@ def build_paideia_agent_install_kit(
         "*_reasoning_kibo.jsonl",
         "*_curriculum_manifest.json",
         "*_assessment_transcript.json",
+        "*_grade_learning_records.json",
         "*_developmental_ecology.json",
         "*_life_trace.jsonl",
         "*_growth_profile.json",
         "developmental_ecology.json",
         "life_trace.jsonl",
         "growth_profile.json",
+        "grade_learning_records.json",
     ]
     for pattern in optional_patterns:
         for source in sorted(source_root.glob(pattern)):
@@ -1055,9 +1061,19 @@ def build_paideia_agent_install_kit(
     if not memory_substrate_path.exists():
         agent_manifest = _read_json(output_dir / entrypoints.get("agent_manifest", "agent_manifest.json"))
         learning_ledger = _read_json(output_dir / entrypoints.get("learning_ledger", "learning_ledger.json"))
+        grade_learning_records_path = output_dir / entrypoints.get(
+            "grade_learning_records",
+            "grade_learning_records.json",
+        )
+        grade_learning_records = (
+            _read_json(grade_learning_records_path).get("records", [])
+            if grade_learning_records_path.exists()
+            else []
+        )
         substrate = build_memory_substrate(
             agent_manifest=agent_manifest,
             learning_ledger=learning_ledger,
+            grade_learning_records=grade_learning_records,
             objective="Paideia Agent install kit bootstrap",
         )
         write_memory_substrate(memory_substrate_path, substrate)

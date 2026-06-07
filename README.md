@@ -363,7 +363,7 @@ ai22b-talent-foundry raise `
   --blueprint "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\agent_training_blueprint.json"
 ```
 
-`raise` now also writes `developmental_ecology.json`, `life_trace.jsonl`, `growth_profile.json`, and a memory substrate that links those growth records to chat. See [docs/developmental_ecology_v04.ko.md](docs/developmental_ecology_v04.ko.md) and [docs/growth_profile_v05.ko.md](docs/growth_profile_v05.ko.md).
+`raise` now also writes `developmental_ecology.json`, `life_trace.jsonl`, `growth_profile.json`, `grade_learning_records.json`, and a memory substrate that links those growth records to chat. See [docs/developmental_ecology_v04.ko.md](docs/developmental_ecology_v04.ko.md) and [docs/growth_profile_v05.ko.md](docs/growth_profile_v05.ko.md).
 
 Build a graduate package for review before using the installed agent:
 
@@ -804,6 +804,7 @@ Key files:
 - `assessment_transcript.json`: exam/report scores and feedback.
 - `learning_ledger.json`: verified learning experiences.
 - `reasoning_kibo.jsonl`: internal compatibility file for the Reasoning Ledger.
+- `grade_learning_records.json`: yearly coursework, assignment, exam, life-pressure, feedback, and Reasoning Ledger links.
 
 The learning ledger carries a `memory_lifecycle` report. It records the write policy, promotion/quarantine criteria, manual deletion policy, recovery/migration posture, retrieval-quality status, and PII/secret/path hygiene checks. Active memory routes and hired chat turns also include a `memory_lifecycle_status_card`, a compact operator view showing selected memory counts, quarantine exclusion, route degradation, learning-write decisions, and hygiene checks. Quarantined experience is excluded from active context, and private reasoning traces remain forbidden.
 

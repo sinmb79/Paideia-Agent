@@ -58,6 +58,7 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             self.assertIn("--role-model", card["blueprint_command"])
             self.assertIn(role_model_id, card["blueprint_command"])
             self.assertIn("assessment_transcript.json", card["hiring_outputs"])
+            self.assertIn("grade_learning_records.json", card["hiring_outputs"])
             self.assertEqual(card["policy"]["impersonation"], "forbidden")
             self.assertEqual(card["policy"]["personality_injection"], "forbidden")
 
@@ -94,6 +95,7 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             {"role_model_profile", "saju_narrative_seed", "curriculum_manifest", "assessment_transcript", "reasoning_kibo"},
             {item["id"] for item in blueprint["artifact_plan"]},
         )
+        self.assertIn("grade_learning_records", {item["id"] for item in blueprint["artifact_plan"]})
 
     def test_developmental_ecology_and_life_trace_are_reviewable_records(self) -> None:
         from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
@@ -144,6 +146,7 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             run = materialize_training_blueprint(blueprint, output_dir=Path(tmp) / "graham")
             artifacts = {key: Path(value) for key, value in run["artifacts"].items()}
             transcript = json.loads(artifacts["assessment_transcript"].read_text(encoding="utf-8"))
+            grade_records = json.loads(artifacts["grade_learning_records"].read_text(encoding="utf-8"))
             manifest = json.loads(artifacts["agent_manifest"].read_text(encoding="utf-8"))
             substrate = json.loads(artifacts["memory_substrate"].read_text(encoding="utf-8"))
             life_trace_lines = artifacts["life_trace"].read_text(encoding="utf-8").splitlines()
@@ -152,6 +155,7 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             self.assertTrue(artifacts["saju_narrative_seed"].exists())
             self.assertTrue(artifacts["curriculum_manifest"].exists())
             self.assertTrue(artifacts["reasoning_kibo"].exists())
+            self.assertTrue(artifacts["grade_learning_records"].exists())
             self.assertTrue(artifacts["developmental_ecology"].exists())
             self.assertTrue(artifacts["life_trace"].exists())
             self.assertTrue(artifacts["growth_profile"].exists())
@@ -162,10 +166,16 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             self.assertTrue(run["verification"]["developmental_ecology_created"])
             self.assertTrue(run["verification"]["life_trace_created"])
             self.assertTrue(run["verification"]["growth_profile_created"])
+            self.assertTrue(run["verification"]["grade_learning_records_created"])
             self.assertTrue(run["verification"]["hired_llm_live_setup_guide_created"])
             self.assertTrue(run["verification"]["agent_warrent_registration_request_created"])
             self.assertEqual(len(life_trace_lines), 253)
             self.assertGreaterEqual(len(transcript["results"]), 9)
+            self.assertEqual(grade_records["schema"], "paideia-grade-learning-records/v1")
+            self.assertGreaterEqual(grade_records["summary"]["record_count"], 20)
+            self.assertGreater(grade_records["summary"]["assessment_link_count"], 0)
+            self.assertGreater(grade_records["summary"]["life_trace_link_count"], 0)
+            self.assertGreater(grade_records["summary"]["reasoning_ledger_link_count"], 0)
             self.assertTrue(transcript["graduation_ready"])
             self.assertTrue(transcript["v2_assessment"]["passed"])
             self.assertEqual(
@@ -181,9 +191,15 @@ class GrahamTalentFoundryTests(unittest.TestCase):
                 manifest["identity_source"]["growth_profile"]["schema"],
                 "ai22b-paideia-growth-profile/v1",
             )
+            self.assertEqual(
+                manifest["identity_source"]["grade_learning_records"]["schema"],
+                "paideia-grade-learning-records/v1",
+            )
             self.assertEqual(substrate["source_counts"]["life_trace_events"], 252)
             self.assertGreaterEqual(substrate["source_counts"]["developmental_ecology_layers"], 7)
             self.assertGreaterEqual(substrate["source_counts"]["growth_profile_nodes"], 5)
+            self.assertGreaterEqual(substrate["source_counts"]["grade_learning_records"], 20)
+            self.assertGreaterEqual(substrate["source_counts"]["grade_learning_nodes"], 40)
             self.assertIn("openclaw_style_agent_manifest", manifest["compatible_targets"])
 
     def test_cli_list_role_models_and_blueprint_alias(self) -> None:

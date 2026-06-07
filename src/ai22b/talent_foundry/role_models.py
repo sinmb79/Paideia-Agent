@@ -210,6 +210,7 @@ def summarize_role_model_curriculum(role_model: dict[str, Any]) -> dict[str, Any
         "hiring_outputs": [
             "assessment_transcript.json",
             "reasoning_kibo.jsonl",
+            "grade_learning_records.json",
             "hiring_dossier.json",
             "HIRING_DOSSIER.ko.md",
             "agent_identity_envelope.json",
