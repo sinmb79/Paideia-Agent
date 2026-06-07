@@ -1,0 +1,58 @@
+name: Optional Dependency Audit
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ matrix.extra }}
+  cancel-in-progress: false
+
+jobs:
+  optional-dependency-audit:
+    name: Audit ${{ matrix.extra }} extra
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        extra:
+          - live-llm
+          - local-llm
+          - rag
+          - fine-tune
+          - all
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install optional dependency group
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path runs | Out-Null
+          python -m pip install --upgrade pip
+          python -m pip install pip-audit
+          python -m pip install -e ".[${{ matrix.extra }}]"
+
+      - name: Audit installed environment
+        shell: pwsh
+        run: |
+          python -m pip_audit --local --format json --output "runs/pip_audit_${{ matrix.extra }}.json"
+
+      - name: Upload optional dependency audit report
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: optional-dependency-audit-${{ matrix.extra }}
+          path: runs/pip_audit_${{ matrix.extra }}.json

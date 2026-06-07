@@ -27,13 +27,16 @@ after `python -m pip install -e ".[security]"`. The package smoke test checks
 installed distribution metadata and exposed console script entry points, not
 only the static `pyproject.toml` file.
 
-The hygiene script now checks two classes of release risk:
+The hygiene script now checks release risks that should fail fast:
 
-- blocked paths and blocked content such as private folders, local owner paths, API keys, tokens, and generated runtime outputs;
+- blocked paths and blocked content such as private folders, local owner paths, API keys, tokens, generated build folders, and generated runtime outputs;
 - hidden bidirectional Unicode controls that can make reviewed text render differently from stored text;
 - required public-release files such as `README.md`, `README.ko.md`, `SECURITY.md`, `LICENSE`, `pyproject.toml`, and machine-readable files under `schemas/`.
 
 The Python readiness audit writes a reviewable `paideia-public-release-readiness/v1` report. It checks source repository metadata, CI gates, and public candidate files under roots such as `src`, `docs`, `tests`, `scripts`, `examples`, and `data/public`. It does not call the network, execute subprocesses, or inspect private generated runtime state.
+It also includes report-only observations for hidden Unicode control/format
+characters other than bidi controls, so GitHub hidden-text warnings can be
+diagnosed before a hard gate is added.
 
 The first-run smoke suite also writes `paideia-llm-provider-matrix/v1`, builds `paideia-llm-onboarding-checklist/v1`, and materializes `paideia-llm-connection-profile/v1` with the deterministic local engine. This proves the LLM/service selection path can list all selectable providers and produce setup requirements, provider doctor, live-check, application smoke, agent runtime smoke, and first chat commands without calling a provider by default or exporting secrets.
 
@@ -48,10 +51,25 @@ hidden/private reasoning trace retention, absolute artifact paths, unsafe
 network/subprocess flags, and malformed timestamps.
 
 GitHub Actions release readiness runs with `permissions: contents: read`,
-Node 24-capable official actions, and Dependabot monitoring for GitHub Actions.
-The security and release-gate jobs upload generated JSON reports as workflow
-artifacts so reviewers can inspect the exact Bandit, pip-audit, doctor, SBOM,
-and public hygiene evidence from the CI run.
+`actions/checkout@v6`, `persist-credentials: false`, Node 24-capable official
+actions, and Dependabot monitoring for GitHub Actions. The security and
+release-gate jobs upload generated JSON reports as workflow artifacts so
+reviewers can inspect the exact Bandit, pip-audit, doctor, SBOM, and public
+hygiene evidence from the CI run. The readiness audit checks CI structure
+instead of exact action-version strings, so Dependabot can update major versions
+without breaking the gate as long as the required jobs, commands, minimum action
+majors, matrix, artifacts, and checkout credential policy remain intact.
+
+Optional dependency vulnerability checks run in a separate scheduled/manual
+workflow (`.github/workflows/optional-dependency-audit.yml`). It installs and
+audits `live-llm`, `local-llm`, `rag`, `fine-tune`, and `all` extras with
+`pip-audit --local`, then uploads one JSON artifact per optional dependency
+group. These checks are intentionally outside the normal PR path because some
+LLM/RAG/fine-tuning dependency trees are large.
+
+The current preview policy uses official GitHub Action tags plus Dependabot for
+maintainability. Formal production releases should revisit full-length commit
+SHA pinning for actions after the release branch is frozen.
 
 The package install doctor writes `paideia-package-install-doctor/v1`. It checks that the current Python environment exposes the installed distribution metadata, console scripts, optional extras, and callable entrypoint targets without running subprocesses or exporting local paths.
 

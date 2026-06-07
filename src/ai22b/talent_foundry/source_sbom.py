@@ -87,6 +87,8 @@ def build_source_sbom(
 
     release_readiness = audit_public_release_readiness(root)
     license_text = read_text(root / "LICENSE") if (root / "LICENSE").is_file() else ""
+    license_metadata = project.get("license")
+    license_files = project.get("license-files", [])
 
     sbom = {
         "schema": SOURCE_SBOM_SCHEMA,
@@ -97,6 +99,8 @@ def build_source_sbom(
             "version": project.get("version"),
             "description": project.get("description"),
             "requires_python": project.get("requires-python"),
+            "license": license_metadata,
+            "license_files": license_files,
             "license_file": project.get("license", {}).get("file") if isinstance(project.get("license"), dict) else "LICENSE",
             "license_detected": "MIT" if "MIT License" in license_text else "unknown",
             "repository": project.get("urls", {}).get("Repository") if isinstance(project.get("urls"), dict) else None,

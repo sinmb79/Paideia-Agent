@@ -23,6 +23,7 @@ $pathBlocklist = @(
     '^runs/',
     '^apps/[^/]+/runs/',
     '(^|/)node_modules/',
+    '(^|/)build/',
     '(^|/)dist/',
     '(^|/)target/'
 )
@@ -108,11 +109,14 @@ foreach ($requiredFile in $requiredReleaseFiles) {
 $pyprojectPath = Join-Path $Root "pyproject.toml"
 if (Test-Path -LiteralPath $pyprojectPath -PathType Leaf) {
     $pyprojectText = Get-Content -LiteralPath $pyprojectPath -Raw -Encoding UTF8
-    if ($pyprojectText -notmatch 'license\s*=\s*\{\s*file\s*=\s*"LICENSE"\s*\}') {
+    $hasLegacyLicenseFile = $pyprojectText -match 'license\s*=\s*\{\s*file\s*=\s*"LICENSE"\s*\}'
+    $hasSpdxLicense = $pyprojectText -match '(?m)^license\s*=\s*"MIT"\s*$'
+    $hasLicenseFiles = $pyprojectText -match '(?m)^license-files\s*=\s*\[\s*"LICENSE"\s*\]\s*$'
+    if (-not ($hasLegacyLicenseFile -or ($hasSpdxLicense -and $hasLicenseFiles))) {
         $issues.Add([pscustomobject]@{
             type = "missing_package_license_metadata"
             file = "pyproject.toml"
-            rule = "project_license_file_must_reference_LICENSE"
+            rule = "project_license_must_be_MIT_and_include_LICENSE"
         })
     }
 }
@@ -181,8 +185,9 @@ $report = [ordered]@{
             "environment files"
         )
         hidden_unicode_policy = "Reject U+202A..U+202E and U+2066..U+2069 bidirectional controls in public text files"
+        hidden_control_character_observation = "Report other Cc/Cf controls without failing the public gate until reviewed"
         required_release_files = $requiredReleaseFiles
-        package_license_metadata = "pyproject.toml must reference LICENSE"
+        package_license_metadata = "pyproject.toml must declare MIT and include LICENSE"
     }
 }
 
