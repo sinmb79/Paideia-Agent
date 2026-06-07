@@ -31,6 +31,7 @@ from ai22b.talent_foundry.simulation_rollouts import build_simulation_rollouts, 
 
 CONSOLE_SESSION_SCHEMA = "ai-talent-guided-console-session/v1"
 OPENCLAW_STYLE_WIZARD_SCHEMA = "ai22b-paideia-openclaw-style-onboarding/v1"
+ONBOARDING_LAUNCH_PLAN_SCHEMA = "paideia-onboarding-launch-plan/v1"
 
 SPECIALIST_TEAM_ROLES = [
     ("macro", "거시경제 분석 에이전트"),
@@ -542,6 +543,280 @@ def build_openclaw_style_wizard(
     }
 
 
+def _read_json_if_exists(path: str | None) -> dict[str, Any]:
+    if not path:
+        return {}
+    candidate = Path(path)
+    if not candidate.exists():
+        return {}
+    try:
+        value = json.loads(candidate.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def _command_by_id(checklist: dict[str, Any], command_id: str) -> dict[str, Any]:
+    command_plan = checklist.get("command_plan", [])
+    if not isinstance(command_plan, list):
+        return {}
+    for item in command_plan:
+        if isinstance(item, dict) and item.get("id") == command_id:
+            return item
+    return {}
+
+
+def _copy_command(
+    *,
+    command_id: str,
+    title: str,
+    source: dict[str, Any],
+    fallback_command: str | None = None,
+    required_before_agent_work: bool | None = None,
+    required_before_daily_use: bool | None = None,
+) -> dict[str, Any]:
+    item: dict[str, Any] = {
+        "id": command_id,
+        "title": title,
+        "command": source.get("command") or fallback_command or "",
+        "network_call": bool(source.get("network_call", False)),
+    }
+    if required_before_agent_work is None and "required_before_agent_work" in source:
+        required_before_agent_work = bool(source.get("required_before_agent_work"))
+    if required_before_daily_use is None and "required_before_daily_use" in source:
+        required_before_daily_use = bool(source.get("required_before_daily_use"))
+    if required_before_agent_work is not None:
+        item["required_before_agent_work"] = required_before_agent_work
+    if required_before_daily_use is not None:
+        item["required_before_daily_use"] = required_before_daily_use
+    if source.get("expected"):
+        item["expected"] = source["expected"]
+    return item
+
+
+def build_onboarding_launch_plan(
+    *,
+    normalized: dict[str, str],
+    output_dir: Path,
+    output_path: Path,
+    onboarding: dict[str, Any],
+    artifacts: dict[str, str],
+    wizard: dict[str, Any],
+    status: str,
+) -> dict[str, Any]:
+    checklist = _read_json_if_exists(artifacts.get("llm_onboarding_checklist"))
+    selected_llm = (
+        onboarding.get("selected_llm_service")
+        if isinstance(onboarding.get("selected_llm_service"), dict)
+        else checklist.get("selected_llm_service", {})
+    )
+    selected_chat = (
+        onboarding.get("selected_chat_surface")
+        if isinstance(onboarding.get("selected_chat_surface"), dict)
+        else checklist.get("selected_chat_surface", {})
+    )
+    next_commands = onboarding.get("next_commands", [])
+    if not isinstance(next_commands, list):
+        next_commands = []
+    live_runtime = _command_by_id(checklist, "agent_runtime_live_smoke")
+    no_network_runtime = _command_by_id(checklist, "agent_runtime_no_network_smoke")
+    runtime_source = live_runtime if live_runtime.get("required_before_agent_work") else no_network_runtime
+    doctor_output = output_dir / "onboarding_doctor.json"
+    release_bundle = Path(artifacts["release_bundle"]) if artifacts.get("release_bundle") else None
+    dossier_markdown = release_bundle / "HIRING_DOSSIER.ko.md" if release_bundle is not None else None
+    command_plan = [
+        _copy_command(
+            command_id="connection_profile",
+            title="Write the selected LLM connection profile",
+            source={},
+            fallback_command=next_commands[0] if len(next_commands) > 0 else "",
+            required_before_agent_work=False,
+        ),
+        _copy_command(
+            command_id="provider_doctor_no_network",
+            title="Verify provider configuration without network transport",
+            source=_command_by_id(checklist, "provider_doctor_no_network"),
+            required_before_agent_work=False,
+        ),
+        _copy_command(
+            command_id="llm_live_readiness_suite",
+            title="Run the full live-readiness suite before daily live work",
+            source=_command_by_id(checklist, "llm_live_readiness_suite"),
+        ),
+        _copy_command(
+            command_id="agent_runtime_smoke",
+            title="Prove agent runtime policy, tools, verification, and memory gate",
+            source=runtime_source,
+        ),
+        _copy_command(
+            command_id="chat_runtime_smoke",
+            title="Prove the selected chat surface before daily conversation",
+            source=_command_by_id(checklist, "chat_runtime_smoke"),
+        ),
+        _copy_command(
+            command_id="first_chat_offline",
+            title="Open the first local chat turn",
+            source=_command_by_id(checklist, "chat_surface_first_turn"),
+            required_before_daily_use=False,
+        ),
+        _copy_command(
+            command_id="next_goal_cycle",
+            title="Run the next review-gated work cycle",
+            source={},
+            fallback_command=next_commands[3] if len(next_commands) > 3 else "",
+            required_before_agent_work=False,
+        ),
+        _copy_command(
+            command_id="record_hired_learning",
+            title="Record reviewed learning after a work run",
+            source={},
+            fallback_command=next_commands[4] if len(next_commands) > 4 else "",
+            required_before_agent_work=False,
+        ),
+        _copy_command(
+            command_id="doctor_onboarding_session",
+            title="Verify this onboarding bundle locally",
+            source={},
+            fallback_command=(
+                "ai22b-talent-foundry doctor-onboarding-session "
+                f"--session \"{output_path}\" --strict --output \"{doctor_output}\""
+            ),
+            required_before_daily_use=True,
+        ),
+    ]
+    if dossier_markdown is not None:
+        command_plan.append(
+            {
+                "id": "review_hiring_dossier",
+                "title": "Review the hiring dossier and resume-style record",
+                "path": str(dossier_markdown),
+                "network_call": False,
+                "required_before_agent_work": False,
+                "expected": "opens the graduate dossier that explains academic record, assessments, and hire-ready evidence.",
+            }
+        )
+    flow = [
+        {
+            "id": "existing_config",
+            "title": "Existing Config",
+            "status": "completed",
+            "artifact": str(output_dir / "paideia_onboarding_config.json"),
+        },
+        {
+            "id": "model_auth",
+            "title": "Model/Auth",
+            "status": "completed",
+            "selected_llm_service": selected_llm.get("service_id"),
+            "selected_engine": selected_llm.get("engine"),
+            "artifacts": [
+                artifacts.get("llm_provider_matrix"),
+                artifacts.get("llm_onboarding_checklist"),
+                artifacts.get("llm_connection_profile"),
+            ],
+        },
+        {
+            "id": "gateway_channels",
+            "title": "Gateway/Channels",
+            "status": "completed",
+            "selected_chat_surface": selected_chat.get("id"),
+            "gateway_mode": normalized.get("gateway_mode"),
+            "channel_mode": normalized.get("channel_mode"),
+        },
+        {
+            "id": "education_path",
+            "title": "Education Path",
+            "status": "completed",
+            "talent_source": normalized.get("talent_source"),
+            "domain": normalized.get("domain"),
+            "role_model_id": normalized.get("role_model_id"),
+            "talent_name": normalized.get("talent_name"),
+        },
+        {
+            "id": "raise_install_hire",
+            "title": "Raise, Install, Hire",
+            "status": "completed" if "hired" in status or status.endswith("completed") else "needs_review",
+            "artifacts": {
+                "onboarding_session": artifacts.get("onboarding_session"),
+                "release_bundle": artifacts.get("release_bundle"),
+                "installed_agent_manifest": artifacts.get("installed_agent_manifest"),
+                "employment_record": artifacts.get("employment_record"),
+            },
+        },
+        {
+            "id": "agent_identity",
+            "title": "Agent Identity",
+            "status": "completed" if artifacts.get("agent_id_card_payload") else "skipped",
+            "mode": normalized.get("agent_id_card_mode"),
+            "external_registration_performed": False,
+            "artifacts": {
+                "agent_id_card_payload": artifacts.get("agent_id_card_payload"),
+                "agent_identity_envelope": artifacts.get("agent_identity_envelope"),
+            },
+        },
+        {
+            "id": "health_check",
+            "title": "Health Check",
+            "status": "ready",
+            "command_id": "doctor_onboarding_session",
+        },
+        {
+            "id": "finish",
+            "title": "Finish",
+            "status": "ready",
+            "recommended_action": normalized.get("finish_action"),
+            "recommended_command_id": {
+                "chat": "first_chat_offline",
+                "dossier": "review_hiring_dossier",
+                "job": "next_goal_cycle",
+                "later": "doctor_onboarding_session",
+            }.get(normalized.get("finish_action"), "first_chat_offline"),
+        },
+    ]
+    return {
+        "schema": ONBOARDING_LAUNCH_PLAN_SCHEMA,
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "status": "ready_for_first_chat" if "hired" in status else "needs_owner_review",
+        "style_source": "OpenClaw-style sequential onboarding adapted for Paideia Agent",
+        "summary": {
+            "owner": normalized.get("owner"),
+            "talent_name": normalized.get("talent_name"),
+            "request": normalized.get("request"),
+            "finish_action": normalized.get("finish_action"),
+            "wizard_step_count": len(wizard.get("steps", [])) if isinstance(wizard.get("steps"), list) else 0,
+        },
+        "selected_llm": selected_llm,
+        "selected_chat_surface": selected_chat,
+        "selected_talent_path": {
+            "talent_source": normalized.get("talent_source"),
+            "domain": normalized.get("domain"),
+            "role_model_id": normalized.get("role_model_id"),
+            "private_curriculum_dir": normalized.get("private_curriculum_dir"),
+        },
+        "flow": flow,
+        "command_plan": command_plan,
+        "artifacts": {
+            "console_session": str(output_path),
+            "onboarding_launch_plan": str(output_dir / "onboarding_launch_plan.json"),
+            "paideia_onboarding_config": str(output_dir / "paideia_onboarding_config.json"),
+            **artifacts,
+        },
+        "operator_notes": [
+            "The chosen LLM is an execution engine, not the agent identity.",
+            "Run live-readiness before daily external-provider work.",
+            "Learning promotion remains review-gated; hidden reasoning traces are not stored.",
+            "Agent ID Card integration writes local payloads only unless the owner performs explicit registration.",
+        ],
+        "public_safe": {
+            "network_call_performed": False,
+            "secret_values_exported": False,
+            "raw_provider_payload_saved": False,
+            "private_reasoning_trace": "do_not_store",
+            "external_registration_performed": False,
+            "live_provider_call_performed": False,
+        },
+    }
+
+
 def write_openclaw_style_config(
     *,
     output_dir: Path,
@@ -596,6 +871,12 @@ def write_openclaw_style_config(
             "post_hire_mode": normalized.get("post_hire_mode"),
             "simulation_rollouts_enabled": normalized.get("simulation_rollouts_enabled"),
             "finish_action": normalized.get("finish_action"),
+            "onboarding_launch_plan": artifacts.get("onboarding_launch_plan"),
+        },
+        "launch_plan": {
+            "path": artifacts.get("onboarding_launch_plan"),
+            "schema": ONBOARDING_LAUNCH_PLAN_SCHEMA,
+            "recommended_finish_action": normalized.get("finish_action"),
         },
         "artifacts": artifacts,
     }
@@ -650,6 +931,8 @@ def run_console_session(
         "onboarding_session": onboarding["artifacts"]["onboarding_session"],
         "llm_onboarding_checklist": onboarding["artifacts"]["llm_onboarding_checklist"],
         "llm_connection_profile": onboarding["artifacts"]["llm_connection_profile"],
+        "release_bundle": onboarding["artifacts"]["release_bundle"],
+        "installed_agent_manifest": onboarding["artifacts"]["installed_agent_manifest"],
         "employment_record": onboarding["artifacts"]["employment_record"],
         "employment_goal": onboarding["artifacts"]["employment_goal"],
         "first_goal_cycle": onboarding["artifacts"]["first_goal_cycle"],
@@ -813,6 +1096,18 @@ def run_console_session(
         artifacts=artifacts,
         status=status,
     )
+    launch_plan_path = output_dir / "onboarding_launch_plan.json"
+    launch_plan = build_onboarding_launch_plan(
+        normalized=normalized,
+        output_dir=output_dir,
+        output_path=output_path,
+        onboarding=onboarding,
+        artifacts=artifacts,
+        wizard=wizard,
+        status=status,
+    )
+    _write_json(launch_plan_path, launch_plan)
+    artifacts["onboarding_launch_plan"] = str(launch_plan_path)
     config_path = write_openclaw_style_config(
         output_dir=output_dir,
         normalized=normalized,
@@ -847,6 +1142,13 @@ def run_console_session(
         },
         "local_policy": onboarding["local_policy"],
         "post_hire_extensions": post_hire_extensions,
+        "launch_plan": {
+            "schema": launch_plan["schema"],
+            "status": launch_plan["status"],
+            "path": str(launch_plan_path),
+            "recommended_command_id": launch_plan["flow"][-1]["recommended_command_id"],
+            "command_ids": [item["id"] for item in launch_plan["command_plan"]],
+        },
         "artifacts": artifacts,
         "next_commands": onboarding["next_commands"],
     }

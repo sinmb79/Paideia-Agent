@@ -363,6 +363,7 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             llm_connection_profile = json.loads(
                 Path(session["artifacts"]["llm_connection_profile"]).read_text(encoding="utf-8")
             )
+            launch_plan = json.loads(Path(session["artifacts"]["onboarding_launch_plan"]).read_text(encoding="utf-8"))
             doctor_path = output_dir / "onboarding_doctor.json"
             from ai22b.talent_foundry.onboarding_doctor import doctor_onboarding_session
 
@@ -381,6 +382,12 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertEqual(config["model_auth"]["llm_onboarding_checklist"], session["artifacts"]["llm_onboarding_checklist"])
         self.assertEqual(config["model_auth"]["llm_connection_profile"], session["artifacts"]["llm_connection_profile"])
         self.assertEqual(config["model_auth"]["default_provider_call"], "none_without_explicit_live_check")
+        self.assertEqual(config["launch_plan"]["path"], session["artifacts"]["onboarding_launch_plan"])
+        self.assertEqual(launch_plan["schema"], "paideia-onboarding-launch-plan/v1")
+        self.assertEqual(launch_plan["status"], "ready_for_first_chat")
+        self.assertEqual(launch_plan["selected_talent_path"]["role_model_id"], "graham_value_investing")
+        self.assertIn("doctor_onboarding_session", {item["id"] for item in launch_plan["command_plan"]})
+        self.assertFalse(launch_plan["public_safe"]["network_call_performed"])
         self.assertEqual(provider_matrix["schema"], "paideia-llm-provider-matrix/v1")
         self.assertFalse(provider_matrix["public_safe"]["network_call_performed"])
         self.assertEqual(llm_checklist["schema"], "paideia-llm-onboarding-checklist/v1")
@@ -401,6 +408,7 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertTrue(check_by_id["llm_onboarding_checklist_valid"]["passed"])
         self.assertTrue(check_by_id["llm_connection_profile_valid"]["passed"])
         self.assertTrue(check_by_id["config_links_llm_artifacts"]["passed"])
+        self.assertTrue(check_by_id["onboarding_launch_plan_valid"]["passed"])
         self.assertTrue(check_by_id["wizard_health_passed"]["passed"])
         self.assertEqual(config["gateway"]["mode"], "local_loopback")
         self.assertEqual(config["channels"]["external_channels"], "disabled_until_explicit_configuration")

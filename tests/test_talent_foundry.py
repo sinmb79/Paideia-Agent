@@ -4248,6 +4248,7 @@ class TalentFoundryTests(unittest.TestCase):
             llm_connection_profile = json.loads(
                 Path(session["artifacts"]["llm_connection_profile"]).read_text(encoding="utf-8")
             )
+            launch_plan = json.loads(Path(session["artifacts"]["onboarding_launch_plan"]).read_text(encoding="utf-8"))
             config = json.loads(Path(session["artifacts"]["paideia_onboarding_config"]).read_text(encoding="utf-8"))
             doctor = json.loads(doctor_path.read_text(encoding="utf-8"))
             artifact_exists = {
@@ -4258,6 +4259,7 @@ class TalentFoundryTests(unittest.TestCase):
                     "llm_provider_matrix",
                     "llm_onboarding_checklist",
                     "llm_connection_profile",
+                    "onboarding_launch_plan",
                     "onboarding_session",
                     "employment_record",
                     "first_goal_cycle",
@@ -4286,15 +4288,55 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(llm_checklist["schema"], "paideia-llm-onboarding-checklist/v1")
         self.assertEqual(llm_connection_profile["schema"], "paideia-llm-connection-profile/v1")
         self.assertFalse(llm_connection_profile["public_safe"]["network_call_performed"])
+        self.assertEqual(launch_plan["schema"], "paideia-onboarding-launch-plan/v1")
+        self.assertEqual(launch_plan["status"], "ready_for_first_chat")
+        self.assertEqual(launch_plan["selected_llm"]["engine"], "openai_chatgpt_codex")
+        self.assertEqual(launch_plan["selected_chat_surface"]["id"], "codex-bridge-chat")
+        self.assertFalse(launch_plan["public_safe"]["network_call_performed"])
+        self.assertFalse(launch_plan["public_safe"]["external_registration_performed"])
+        launch_flow_ids = {item["id"] for item in launch_plan["flow"]}
+        launch_command_ids = {item["id"] for item in launch_plan["command_plan"]}
+        self.assertLess(
+            [item["id"] for item in launch_plan["flow"]].index("model_auth"),
+            [item["id"] for item in launch_plan["flow"]].index("education_path"),
+        )
+        self.assertLessEqual(
+            {
+                "existing_config",
+                "model_auth",
+                "gateway_channels",
+                "education_path",
+                "raise_install_hire",
+                "health_check",
+                "finish",
+            },
+            launch_flow_ids,
+        )
+        self.assertLessEqual(
+            {
+                "connection_profile",
+                "provider_doctor_no_network",
+                "llm_live_readiness_suite",
+                "agent_runtime_smoke",
+                "chat_runtime_smoke",
+                "first_chat_offline",
+                "doctor_onboarding_session",
+            },
+            launch_command_ids,
+        )
         self.assertEqual(
             session["onboarding_summary"]["llm_connection_profile"]["path"],
             session["artifacts"]["llm_connection_profile"],
         )
         self.assertEqual(config["model_auth"]["llm_connection_profile"], session["artifacts"]["llm_connection_profile"])
+        self.assertEqual(config["launch_plan"]["path"], session["artifacts"]["onboarding_launch_plan"])
+        self.assertEqual(session["launch_plan"]["path"], session["artifacts"]["onboarding_launch_plan"])
+        self.assertIn("first_chat_offline", session["launch_plan"]["command_ids"])
         self.assertFalse(provider_matrix["public_safe"]["network_call_performed"])
         self.assertEqual(session["onboarding_summary"]["llm_provider_matrix"]["schema"], provider_matrix["schema"])
         check_by_id = {item["id"]: item for item in doctor["checks"]}
         self.assertTrue(check_by_id["llm_connection_profile_valid"]["passed"])
+        self.assertTrue(check_by_id["onboarding_launch_plan_valid"]["passed"])
         self.assertTrue(all(artifact_exists.values()))
 
     def test_guided_console_can_create_parent_controlled_projection_swarm(self) -> None:
