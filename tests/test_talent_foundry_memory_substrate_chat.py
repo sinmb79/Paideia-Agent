@@ -487,6 +487,11 @@ class TalentFoundryMemorySubstrateChatTests(unittest.TestCase):
         self.assertEqual(context["agent"]["name"], "grham-쥬니어")
         self.assertIn("identity_record", context)
         self.assertIn("learning_profile", context)
+        self.assertEqual(context["memory_bridge"]["schema"], "paideia-live-chat-memory-bridge/v1")
+        self.assertGreaterEqual(context["memory_bridge"]["source_counts"]["grade_learning_records"], 20)
+        self.assertTrue(context["memory_bridge"]["education_growth_context"]["grade_learning_tiles"])
+        self.assertTrue(context["memory_bridge"]["education_growth_context"]["reasoning_ledger_tiles"])
+        self.assertTrue(any(item["action"] == "memory_bridge_built" for item in chat["chat_execution_trace"]))
         self.assertEqual(chat["reply_generation_mode"], "live_openai_responses")
         self.assertEqual(chat["active_operator"], "llm.dynamic_context_conversation")
         self.assertIn("그때그때 맥락을 해석", chat["assistant_answer"])
@@ -600,6 +605,10 @@ class TalentFoundryMemorySubstrateChatTests(unittest.TestCase):
         self.assertNotIn("do not promote this private chat trace", serialized)
         self.assertNotIn("do not persist top-level private chat reasoning", serialized)
         self.assertTrue(captured["messages"])
+        live_payload = json.loads(captured["messages"][-1]["content"])
+        live_context = live_payload["local_talent_context"]
+        self.assertEqual(live_context["memory_bridge"]["schema"], "paideia-live-chat-memory-bridge/v1")
+        self.assertTrue(live_context["memory_bridge"]["education_growth_context"]["grade_learning_tiles"])
         self.assertEqual(captured["policy"]["response_format"], "json_object")
         self.assertTrue(
             any(
