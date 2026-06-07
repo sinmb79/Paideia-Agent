@@ -28,7 +28,7 @@ GitHub `main` 브랜치에는 설치해서 바로 검토할 수 있는 Paideia A
 - Agent_warrent / Agent ID Card 로컬 export를 지원합니다. Paideia는 검토용 connector 파일만 준비하며, 서명, 업로드, 외부 등록은 보스가 명시적으로 수행해야 합니다.
 - Hermes/OpenClaw/generic 스킬은 호환성 프로필로 격리 import됩니다. 필요한 권한과 테스트 근거를 검토하기 전에는 기본 비활성화 상태입니다.
 - 본체 제어 projection swarm을 지원합니다. 하나의 고용된 인재가 작업 분신을 나눠 실행하고, `projection_synthesis_board`에서 결과를 비교한 뒤, 검토된 본체 synthesis만 learning ledger로 승격합니다.
-- 공개 안전 release gate로 package install doctor, first-run doctor, public release readiness audit, source hygiene script, action-policy eval, LLM adapter contract, 전체 회귀 테스트를 제공합니다.
+- 공개 안전 release gate로 package install doctor, first-run doctor, public release readiness audit, source hygiene script, 보안 스캔, JSON Schema 계약, action-policy eval, LLM adapter contract, 전체 회귀 테스트를 제공합니다.
 
 ## 발단
 
@@ -795,7 +795,7 @@ ai22b-talent-foundry doctor-first-run `
   --output .\first_run_doctor.json
 ```
 
-readiness audit는 네트워크 호출이나 서브프로세스 실행 없이 공개 필수 파일, 패키지 라이선스 메타데이터, CI marker, 릴리스 준비도 문서, 보안 정책, 공개 hygiene 정책을 검사합니다. source SBOM은 패키지 메타데이터, optional dependency group, console entrypoint, 공개 후보 파일 hash, repository digest를 기록합니다. connection profile과 live setup guide는 선택한 LLM 연결 경로가 secret 유출이나 provider 호출 없이 파일로 구체화되는지 증명합니다. package install doctor는 현재 환경의 설치된 distribution metadata, console script, optional extras, callable target을 확인합니다. runtime contract doctor는 외부 provider 호출 없이 live-like agent loop, 등록 도구 경계, memory review gate, fail-closed live provider 동작을 확인합니다. first-run doctor는 no-network LLM live readiness suite를 포함해 설치 직후 확인해야 할 공개 안전 점검을 하나의 보고서로 묶습니다. SBOM은 인벤토리이며 취약점 스캔은 아닙니다.
+readiness audit는 네트워크 호출이나 서브프로세스 실행 없이 공개 필수 파일, 패키지 라이선스 메타데이터, CI marker, 릴리스 준비도 문서, 보안 정책, schema inventory, 공개 hygiene 정책을 검사합니다. source SBOM은 패키지 메타데이터, optional dependency group, console entrypoint, 공개 후보 파일 hash, repository digest를 기록합니다. connection profile과 live setup guide는 선택한 LLM 연결 경로가 secret 유출이나 provider 호출 없이 파일로 구체화되는지 증명합니다. package install doctor는 현재 환경의 설치된 distribution metadata, console script, optional extras, callable target을 확인합니다. runtime contract doctor는 외부 provider 호출 없이 live-like agent loop, 등록 도구 경계, memory review gate, fail-closed live provider 동작을 확인합니다. first-run doctor는 no-network LLM live readiness suite를 포함해 설치 직후 확인해야 할 공개 안전 점검을 하나의 보고서로 묶습니다. SBOM은 인벤토리이며 취약점 스캔은 별도의 `security` extra에서 Bandit과 pip-audit로 실행합니다.
 
 P0 action policy 회귀 평가:
 

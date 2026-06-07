@@ -1,12 +1,21 @@
 from __future__ import annotations
 
 import json
-import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from ai22b.config import PROJECT_ROOT
+from ai22b.talent_foundry.public_inventory import (
+    PUBLIC_SCAN_DIRS,
+    PUBLIC_SCAN_ROOT_FILES,
+    load_pyproject,
+    optional_dependency_groups,
+    public_candidate_files,
+    read_text,
+    safe_rel,
+    scan_public_candidate_files,
+)
 
 
 PUBLIC_RELEASE_READINESS_SCHEMA = "paideia-public-release-readiness/v1"
@@ -28,13 +37,21 @@ REQUIRED_PUBLIC_FILES = [
     "docs/public_release_readiness.md",
     "docs/public_release_readiness.ko.md",
     "schemas/README.md",
+    "schemas/first_run_doctor.v1.schema.json",
+    "schemas/llm_client_result.v1.schema.json",
+    "schemas/tool_execution_artifact_manifest.v1.schema.json",
+    "schemas/reasoning_ledger_candidate.v1.schema.json",
+    "schemas/hiring_dossier.v1.schema.json",
 ]
 
 REQUIRED_CI_MARKERS = [
     'python -m pip install -e ".[dev]"',
+    'python -m pip install -e ".[security]"',
     "python -m compileall src/ai22b/talent_foundry",
     "python -B -m pytest tests -q",
     "python -m build",
+    "python -m bandit -q -r src",
+    "python -m pip_audit . --skip-editable",
     "ruff check src tests",
     ".\\scripts\\check_public_repo_hygiene.ps1",
     "ai22b-talent-foundry build-llm-connection-profile",
@@ -52,6 +69,7 @@ REQUIRED_HYGIENE_MARKERS = [
     "local_windows_user_path",
     "generic_openai_secret",
     "private_key",
+    "hidden_unicode_bidi_control",
 ]
 
 REQUIRED_README_LINKS = [
@@ -77,87 +95,8 @@ REQUIRED_SECURITY_FRAGMENTS = [
     "docs/security_threat_model.md",
 ]
 
-PUBLIC_SCAN_DIRS = [
-    ".github",
-    "data/public",
-    "docs",
-    "evals",
-    "examples",
-    "schemas",
-    "scripts",
-    "src",
-    "tests",
-]
-
-PUBLIC_SCAN_ROOT_FILES = [
-    "LICENSE",
-    "README.md",
-    "README.ko.md",
-    "ROADMAP.md",
-    "ROADMAP.ko.md",
-    "CONTRIBUTING.md",
-    "CONTRIBUTING.ko.md",
-    "SECURITY.md",
-    "pyproject.toml",
-]
-
-PUBLIC_SCAN_EXCLUDED_DIR_NAMES = {
-    ".git",
-    ".mypy_cache",
-    ".pytest_cache",
-    "__pycache__",
-    "node_modules",
-    "dist",
-    "target",
-}
-
-PUBLIC_SCAN_TEXT_SUFFIXES = {
-    "",
-    ".cfg",
-    ".csv",
-    ".ini",
-    ".json",
-    ".jsonl",
-    ".md",
-    ".ps1",
-    ".py",
-    ".toml",
-    ".txt",
-    ".yml",
-    ".yaml",
-}
-
-PATH_BLOCKLIST_PATTERNS = [
-    re.compile(r"^AGENTS\.md$"),
-    re.compile(r"^docs/log\.md$"),
-    re.compile(r"^data/private/"),
-    re.compile(r"^data/processed/"),
-    re.compile(r"^models/"),
-    re.compile(r"^runs/"),
-    re.compile(r"^apps/[^/]+/runs/"),
-    re.compile(r"(^|/)node_modules/"),
-    re.compile(r"(^|/)dist/"),
-    re.compile(r"(^|/)target/"),
-]
-
-_PRIVATE_USER = "sin" + "mb"
-CONTENT_BLOCKLIST_PATTERNS = [
-    ("local_windows_user_path", re.compile(r"C:[\\/]+Users[\\/]+" + re.escape(_PRIVATE_USER), re.I)),
-    ("local_posix_user_path", re.compile(r"[\\/]Users[\\/]+" + re.escape(_PRIVATE_USER), re.I)),
-    ("openai_key_assignment", re.compile(r"OPENAI_API_KEY\s*=\s*['\"]?[^'\",\s]{8,}", re.I)),
-    ("generic_openai_secret", re.compile(r"sk-[A-Za-z0-9_-]{32,}")),
-    ("github_pat", re.compile(r"gh[pousr]_[A-Za-z0-9_]{20,}")),
-    ("private_key", re.compile(r"BEGIN (RSA |OPENSSH |EC |DSA )?PRIVATE KEY")),
-    ("refresh_token", re.compile(r"refresh_token\s*[:=]", re.I)),
-    ("auth_token", re.compile(r"auth_token\s*[:=]", re.I)),
-]
-
-
 def _read_text(path: Path) -> str:
-    try:
-        return path.read_text(encoding="utf-8")
-    except UnicodeDecodeError:
-        return path.read_text(encoding="utf-8-sig")
+    return read_text(path)
 
 
 def _missing_files(repo_root: Path) -> list[str]:
@@ -169,91 +108,16 @@ def _line_has(text: str, needle: str) -> bool:
     return needle in normalized
 
 
-def _optional_dependency_groups(pyproject_text: str) -> list[str]:
-    groups: list[str] = []
-    in_optional = False
-    for raw_line in pyproject_text.splitlines():
-        line = raw_line.strip()
-        if line == "[project.optional-dependencies]":
-            in_optional = True
-            continue
-        if in_optional and line.startswith("[") and line.endswith("]"):
-            break
-        if in_optional:
-            match = re.match(r"([A-Za-z0-9_-]+)\s*=", line)
-            if match:
-                groups.append(match.group(1))
-    return groups
-
-
 def _safe_rel(path: Path, root: Path) -> str:
-    try:
-        return path.resolve().relative_to(root).as_posix()
-    except ValueError:
-        return path.as_posix()
-
-
-def _is_excluded_scan_path(path: Path) -> bool:
-    return any(part in PUBLIC_SCAN_EXCLUDED_DIR_NAMES for part in path.parts)
+    return safe_rel(path, root)
 
 
 def _public_candidate_files(root: Path) -> list[Path]:
-    candidates: list[Path] = []
-    for root_file in PUBLIC_SCAN_ROOT_FILES:
-        path = root / root_file
-        if path.is_file():
-            candidates.append(path)
-    for scan_dir in PUBLIC_SCAN_DIRS:
-        directory = root / scan_dir
-        if not directory.is_dir():
-            continue
-        for path in directory.rglob("*"):
-            if not path.is_file() or _is_excluded_scan_path(path.relative_to(root)):
-                continue
-            if path.suffix.casefold() not in PUBLIC_SCAN_TEXT_SUFFIXES:
-                continue
-            candidates.append(path)
-    return sorted(set(candidates), key=lambda item: _safe_rel(item, root))
+    return public_candidate_files(root)
 
 
 def _scan_public_candidate_files(root: Path) -> dict[str, Any]:
-    candidate_files = _public_candidate_files(root)
-    issues: list[dict[str, Any]] = []
-
-    for path in candidate_files:
-        rel = _safe_rel(path, root)
-        normalized = rel.replace("\\", "/")
-        for pattern in PATH_BLOCKLIST_PATTERNS:
-            if pattern.search(normalized):
-                issues.append(
-                    {
-                        "type": "blocked_path",
-                        "file": rel,
-                        "rule": pattern.pattern,
-                    }
-                )
-
-        try:
-            text = _read_text(path)
-        except (OSError, UnicodeDecodeError):
-            continue
-
-        for name, pattern in CONTENT_BLOCKLIST_PATTERNS:
-            if pattern.search(text):
-                issues.append(
-                    {
-                        "type": "blocked_content",
-                        "file": rel,
-                        "rule": name,
-                    }
-                )
-
-    return {
-        "candidate_file_count": len(candidate_files),
-        "candidate_roots": PUBLIC_SCAN_ROOT_FILES + PUBLIC_SCAN_DIRS,
-        "issue_count": len(issues),
-        "issues": issues,
-    }
+    return scan_public_candidate_files(root)
 
 
 def _check(
@@ -303,22 +167,30 @@ def audit_public_release_readiness(
 
     pyproject_path = root / "pyproject.toml"
     pyproject_text = _read_text(pyproject_path) if pyproject_path.is_file() else ""
-    optional_groups = _optional_dependency_groups(pyproject_text)
+    pyproject = load_pyproject(pyproject_path) if pyproject_path.is_file() else {}
+    project = pyproject.get("project", {}) if isinstance(pyproject.get("project"), dict) else {}
+    license_field = project.get("license", {}) if isinstance(project.get("license"), dict) else {}
+    dependencies = project.get("dependencies", [])
+    classifiers = project.get("classifiers", [])
+    optional_groups = optional_dependency_groups(pyproject)
+    required_optional_groups = {"dev", "security", "live-llm", "local-llm", "rag", "fine-tune", "all"}
     _check(
         checks,
         issues,
         check_id="package_metadata",
         passed=(
-            'name = "paideia-agent"' in pyproject_text
-            and 'license = { file = "LICENSE" }' in pyproject_text
-            and "License :: OSI Approved :: MIT License" in pyproject_text
-            and "dependencies = []" in pyproject_text
-            and {"dev", "live-llm", "local-llm", "rag", "fine-tune", "all"} <= set(optional_groups)
+            project.get("name") == "paideia-agent"
+            and license_field.get("file") == "LICENSE"
+            and "License :: OSI Approved :: MIT License" in classifiers
+            and dependencies == []
+            and required_optional_groups <= set(optional_groups)
         ),
         details={
-            "license_file_declared": 'license = { file = "LICENSE" }' in pyproject_text,
-            "direct_dependencies_empty": "dependencies = []" in pyproject_text,
+            "package_name": project.get("name"),
+            "license_file_declared": license_field.get("file") == "LICENSE",
+            "direct_dependencies_empty": dependencies == [],
             "optional_dependency_groups": optional_groups,
+            "missing_optional_dependency_groups": sorted(required_optional_groups - set(optional_groups)),
         },
         issue="package_metadata_not_release_ready",
     )

@@ -8,6 +8,9 @@ Before publishing or merging a release branch, run:
 
 ```powershell
 python -m compileall src\ai22b\talent_foundry
+python -m pip install -e ".[security]"
+python -m bandit -q -r src -c pyproject.toml
+python -m pip_audit . --skip-editable
 $env:PYTHONPATH = "src"
 python -B -m pytest tests\test_package_smoke.py tests\test_cli_smoke.py -q
 .\scripts\check_public_repo_hygiene.ps1
@@ -19,18 +22,27 @@ ai22b-talent-foundry doctor-runtime-contract --repo-root . --strict --output .\r
 ai22b-talent-foundry doctor-first-run --repo-root . --strict --output .\first_run_doctor.json
 ```
 
-Run the tests after `python -m pip install -e ".[dev]"`. The package smoke test checks installed distribution metadata and exposed console script entry points, not only the static `pyproject.toml` file.
+Run the tests after `python -m pip install -e ".[dev]"`. Run the security gate
+after `python -m pip install -e ".[security]"`. The package smoke test checks
+installed distribution metadata and exposed console script entry points, not
+only the static `pyproject.toml` file.
 
 The hygiene script now checks two classes of release risk:
 
 - blocked paths and blocked content such as private folders, local owner paths, API keys, tokens, and generated runtime outputs;
-- required public-release files such as `README.md`, `README.ko.md`, `SECURITY.md`, `LICENSE`, and `pyproject.toml` with package license metadata.
+- hidden bidirectional Unicode controls that can make reviewed text render differently from stored text;
+- required public-release files such as `README.md`, `README.ko.md`, `SECURITY.md`, `LICENSE`, `pyproject.toml`, and machine-readable files under `schemas/`.
 
 The Python readiness audit writes a reviewable `paideia-public-release-readiness/v1` report. It checks source repository metadata, CI gates, and public candidate files under roots such as `src`, `docs`, `tests`, `scripts`, `examples`, and `data/public`. It does not call the network, execute subprocesses, or inspect private generated runtime state.
 
 The first-run smoke suite also writes `paideia-llm-provider-matrix/v1`, builds `paideia-llm-onboarding-checklist/v1`, and materializes `paideia-llm-connection-profile/v1` with the deterministic local engine. This proves the LLM/service selection path can list all selectable providers and produce setup requirements, provider doctor, live-check, application smoke, agent runtime smoke, and first chat commands without calling a provider by default or exporting secrets.
 
 The source SBOM writes `paideia-source-sbom/v1`. It records package metadata, optional dependency groups, console scripts, public candidate file SHA-256 values, and a repository public-candidate digest. It is a reproducible inventory for review; it is not a vulnerability scan.
+
+The JSON Schema suite under `schemas/` now publishes v1 contracts for the
+first-run doctor, LLM client result, tool artifact manifest, Reasoning Ledger
+candidate, and hiring dossier. Regression tests validate both the schema files
+and representative generated artifacts.
 
 The package install doctor writes `paideia-package-install-doctor/v1`. It checks that the current Python environment exposes the installed distribution metadata, console scripts, optional extras, and callable entrypoint targets without running subprocesses or exporting local paths.
 

@@ -9,11 +9,11 @@ from pathlib import Path
 from typing import Any
 
 from ai22b.config import PROJECT_ROOT
-from ai22b.talent_foundry.source_sbom import _load_pyproject
+from ai22b.talent_foundry.public_inventory import load_pyproject
 
 
 PACKAGE_INSTALL_DOCTOR_SCHEMA = "paideia-package-install-doctor/v1"
-REQUIRED_OPTIONAL_GROUPS = {"dev", "live-llm", "local-llm", "rag", "fine-tune", "all"}
+REQUIRED_OPTIONAL_GROUPS = {"dev", "security", "live-llm", "local-llm", "rag", "fine-tune", "all"}
 FORBIDDEN_METADATA_FRAGMENTS = (
     "C:\\Users\\",
     "/Users/",
@@ -58,7 +58,7 @@ def _project(root: Path) -> dict[str, Any]:
     pyproject_path = root / "pyproject.toml"
     if not pyproject_path.exists():
         return {}
-    return _load_pyproject(pyproject_path).get("project", {})
+    return load_pyproject(pyproject_path).get("project", {})
 
 
 def _entry_points_for_distribution(distribution: metadata.Distribution | None) -> dict[str, str]:
