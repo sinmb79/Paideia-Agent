@@ -4521,12 +4521,37 @@ class TalentFoundryTests(unittest.TestCase):
             run_cli_output = run_stdout.getvalue()
             run_report = json.loads(run_report_path.read_text(encoding="utf-8"))
             run_doctor = json.loads(run_doctor_path.read_text(encoding="utf-8"))
+            chat_run_report_path = tmp_path / "run_first_chat_action.json"
+            chat_output_path = tmp_path / "first_chat_offline.json"
+            chat_stdout = io.StringIO()
+            with redirect_stdout(chat_stdout):
+                chat_run_exit_code = cli_main(
+                    [
+                        "run-onboarding-next-action",
+                        "--launch-plan",
+                        session["artifacts"]["onboarding_launch_plan"],
+                        "--action",
+                        "first_chat_offline",
+                        "--message",
+                        "안녕, 오늘 온보딩 상태를 같이 확인해보자.",
+                        "--approve",
+                        "--action-output",
+                        str(chat_output_path),
+                        "--output",
+                        str(chat_run_report_path),
+                        "--strict",
+                    ]
+                )
+            chat_run_output = chat_stdout.getvalue()
+            chat_run_report = json.loads(chat_run_report_path.read_text(encoding="utf-8"))
+            chat_turn = json.loads(chat_output_path.read_text(encoding="utf-8"))
 
         self.assertEqual(exit_code, 0)
         self.assertEqual(next_exit_code, 0)
         self.assertEqual(doctor_action_exit_code, 0)
         self.assertEqual(no_approval_exit_code, 1)
         self.assertEqual(run_exit_code, 0)
+        self.assertEqual(chat_run_exit_code, 0)
         self.assertIn("Paideia Agent onboarding complete", cli_output)
         self.assertIn("Launch plan:", cli_output)
         self.assertIn("onboarding_launch_plan.json", cli_output)
@@ -4559,6 +4584,19 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertTrue(run_report["doctor_passed"])
         self.assertEqual(run_doctor["schema"], "paideia-onboarding-session-doctor/v1")
         self.assertTrue(run_doctor["passed"])
+        self.assertIn("Chat output:", chat_run_output)
+        self.assertEqual(chat_run_report["schema"], "paideia-onboarding-action-run/v1")
+        self.assertEqual(chat_run_report["status"], "completed")
+        self.assertEqual(chat_run_report["action_id"], "first_chat_offline")
+        self.assertTrue(chat_run_report["executed"])
+        self.assertFalse(chat_run_report["shell_command_executed"])
+        self.assertFalse(chat_run_report["network_call_performed"])
+        self.assertEqual(chat_run_report["execution_adapter"], "internal_run_chat_turn_from_employment")
+        self.assertEqual(chat_run_report["llm_mode"], "offline")
+        self.assertFalse(chat_run_report["learn_from_chat"])
+        self.assertEqual(chat_turn["schema"], "ai-talent-chat-run/v1")
+        self.assertEqual(chat_turn["chat_status"], "completed")
+        self.assertEqual(chat_turn["llm_mode"], "offline")
         self.assertEqual(session["schema"], "ai-talent-guided-console-session/v1")
         self.assertEqual(session["status"], "hired_agent_first_goal_cycle_completed")
         self.assertEqual(session["answers"]["llm_service"], "openai_chatgpt_codex")

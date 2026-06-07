@@ -34,7 +34,7 @@ OPENCLAW_STYLE_WIZARD_SCHEMA = "ai22b-paideia-openclaw-style-onboarding/v1"
 ONBOARDING_LAUNCH_PLAN_SCHEMA = "paideia-onboarding-launch-plan/v1"
 ONBOARDING_NEXT_ACTION_SCHEMA = "paideia-onboarding-next-action/v1"
 ONBOARDING_ACTION_RUN_SCHEMA = "paideia-onboarding-action-run/v1"
-ONBOARDING_ACTION_ALLOWLIST = {"doctor_onboarding_session"}
+ONBOARDING_ACTION_ALLOWLIST = {"doctor_onboarding_session", "first_chat_offline"}
 
 SPECIALIST_TEAM_ROLES = [
     ("macro", "거시경제 분석 에이전트"),
@@ -971,6 +971,7 @@ def run_onboarding_next_action(
     action_id: str | None = None,
     approved: bool = False,
     action_output_path: Path | None = None,
+    message: str | None = None,
 ) -> dict[str, Any]:
     next_action = resolve_onboarding_next_action(launch_plan_path, action_id=action_id)
     selected_action_id = str(next_action.get("action_id") or "")
@@ -1051,6 +1052,38 @@ def run_onboarding_next_action(
             if isinstance(doctor_report.get("summary"), dict)
             else None,
         }
+    if selected_action_id == "first_chat_offline":
+        from ai22b.talent_foundry.memory_substrate import run_chat_turn_from_employment
+
+        employment_record_value = artifacts.get("employment_record")
+        if not employment_record_value:
+            return {
+                **base_report,
+                "status": "blocked_missing_artifact",
+                "executed": False,
+                "reason": "employment_record_artifact_missing_from_launch_plan",
+            }
+        chat_output = action_output_path or launch_plan_path.parent / "first_chat_offline.json"
+        chat_message = message or "안녕, 오늘 맡길 업무를 같이 정리해보자."
+        chat_run = run_chat_turn_from_employment(
+            Path(str(employment_record_value)),
+            message=chat_message,
+            output_path=chat_output,
+            llm_mode="offline",
+            learn_from_chat=False,
+        )
+        return {
+            **base_report,
+            "status": "completed" if chat_run.get("chat_status") == "completed" else "completed_with_chat_review",
+            "executed": True,
+            "execution_adapter": "internal_run_chat_turn_from_employment",
+            "command_or_path": next_action.get("command_or_path"),
+            "chat_output_path": str(chat_output),
+            "chat_status": chat_run.get("chat_status"),
+            "llm_mode": chat_run.get("llm_mode"),
+            "reply_generation_mode": chat_run.get("reply_generation_mode"),
+            "learn_from_chat": False,
+        }
     return {
         **base_report,
         "status": "blocked_not_implemented",
@@ -1073,6 +1106,9 @@ def format_onboarding_action_run_summary(report: dict[str, Any]) -> str:
     if report.get("doctor_report_path"):
         lines.append(f"- Doctor report: {report.get('doctor_report_path')}")
         lines.append(f"- Doctor passed: {report.get('doctor_passed')}")
+    if report.get("chat_output_path"):
+        lines.append(f"- Chat output: {report.get('chat_output_path')}")
+        lines.append(f"- Chat status: {report.get('chat_status')}")
     return "\n".join(lines)
 
 
