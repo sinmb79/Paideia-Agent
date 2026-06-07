@@ -246,7 +246,10 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     onboarding_run_next.add_argument("--launch-plan", required=True)
     onboarding_run_next.add_argument("--action", help="Action id to run. Defaults to the launch plan finish recommendation.")
-    onboarding_run_next.add_argument("--message", help="Message for first_chat_offline when that action is selected.")
+    onboarding_run_next.add_argument(
+        "--message",
+        help="Message for first_chat_offline, or cycle note for next_goal_cycle.",
+    )
     onboarding_run_next.add_argument(
         "--approve",
         action="store_true",

@@ -192,7 +192,7 @@ ai22b-talent-foundry show-onboarding-next-action `
   --launch-plan .\onboarding_launch_plan.json
 ```
 
-To run a safe allowlisted local action from the launch plan, use explicit approval. Supported runner actions start with `doctor_onboarding_session`, `llm_live_readiness_suite`, and `first_chat_offline`; Paideia calls internal functions rather than executing the launch-plan shell string. The readiness runner always forces no-network mode; live provider checks remain manual:
+To run a safe allowlisted local action from the launch plan, use explicit approval. Supported runner actions start with `doctor_onboarding_session`, `llm_live_readiness_suite`, `first_chat_offline`, and `next_goal_cycle`; Paideia calls internal functions rather than executing the launch-plan shell string. The readiness runner always forces no-network mode; live provider checks remain manual:
 
 ```powershell
 ai22b-talent-foundry run-onboarding-next-action `
@@ -217,6 +217,15 @@ ai22b-talent-foundry run-onboarding-next-action `
   --message "안녕, 오늘 맡길 업무를 같이 정리해보자." `
   --approve `
   --action-output .\first_chat_offline.json
+```
+
+```powershell
+ai22b-talent-foundry run-onboarding-next-action `
+  --launch-plan .\onboarding_launch_plan.json `
+  --action next_goal_cycle `
+  --message "다음 주 업무를 진행한다." `
+  --approve `
+  --action-output .\next_employment_goal_cycle.json
 ```
 
 Verify a generated wizard session and its health artifacts, including the launch plan:

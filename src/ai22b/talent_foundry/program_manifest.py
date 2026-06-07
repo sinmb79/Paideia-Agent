@@ -135,7 +135,7 @@ def _commands() -> list[dict[str, str]]:
         "blueprint": "Create a growth-to-employment blueprint from an owner request.",
         "onboard": "Run the OpenClaw-style wizard for model, workspace, channel, skills, education path, identity, and health setup.",
         "show-onboarding-next-action": "Read an onboarding launch plan and show the recommended next action without executing commands.",
-        "run-onboarding-next-action": "Run an allowlisted local onboarding launch-plan action, such as onboarding doctor, no-network LLM readiness, or first offline chat, only after explicit owner approval.",
+        "run-onboarding-next-action": "Run an allowlisted local onboarding launch-plan action, such as onboarding doctor, no-network LLM readiness, first offline chat, or next goal cycle, only after explicit owner approval.",
         "doctor-onboarding-session": "Verify a generated onboarding session, LLM matrix, selected checklist, config links, and local policy.",
         "doctor-first-run": "Run the public-safe first-run verification pack for role models, LLM onboarding, runtime smoke, policy, release readiness, and SBOM.",
         "doctor-package-install": "Verify installed package metadata, console scripts, optional extras, and callable entrypoint targets.",
