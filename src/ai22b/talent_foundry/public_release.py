@@ -30,6 +30,7 @@ REQUIRED_PUBLIC_FILES = [
     "SECURITY.md",
     "LICENSE",
     "pyproject.toml",
+    ".github/dependabot.yml",
     ".github/workflows/ci.yml",
     "scripts/check_public_repo_hygiene.ps1",
     "docs/security_threat_model.md",
@@ -45,6 +46,11 @@ REQUIRED_PUBLIC_FILES = [
 ]
 
 REQUIRED_CI_MARKERS = [
+    "permissions:",
+    "contents: read",
+    "uses: actions/checkout@v5",
+    "uses: actions/setup-python@v6",
+    "uses: actions/upload-artifact@v6",
     'python -m pip install -e ".[dev]"',
     'python -m pip install -e ".[security]"',
     "python -m compileall src/ai22b/talent_foundry",
@@ -52,6 +58,8 @@ REQUIRED_CI_MARKERS = [
     "python -m build",
     "python -m bandit -q -r src",
     "python -m pip_audit . --skip-editable",
+    "public-release-gate-reports",
+    "security-reports",
     "ruff check src tests",
     ".\\scripts\\check_public_repo_hygiene.ps1",
     "ai22b-talent-foundry build-llm-connection-profile",
@@ -67,6 +75,9 @@ REQUIRED_HYGIENE_MARKERS = [
     "missing_required_release_file",
     "missing_package_license_metadata",
     "local_windows_user_path",
+    "generic_local_windows_user_path",
+    "generic_local_posix_user_path",
+    "provider_secret_assignment",
     "generic_openai_secret",
     "private_key",
     "hidden_unicode_bidi_control",

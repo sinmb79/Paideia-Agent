@@ -9,8 +9,8 @@ Before publishing or merging a release branch, run:
 ```powershell
 python -m compileall src\ai22b\talent_foundry
 python -m pip install -e ".[security]"
-python -m bandit -q -r src -c pyproject.toml
-python -m pip_audit . --skip-editable
+python -m bandit -q -r src -c pyproject.toml -f json -o .\runs\bandit_report.json
+python -m pip_audit . --skip-editable --format json --output .\runs\pip_audit_report.json
 $env:PYTHONPATH = "src"
 python -B -m pytest tests\test_package_smoke.py tests\test_cli_smoke.py -q
 .\scripts\check_public_repo_hygiene.ps1
@@ -42,7 +42,16 @@ The source SBOM writes `paideia-source-sbom/v1`. It records package metadata, op
 The JSON Schema suite under `schemas/` now publishes v1 contracts for the
 first-run doctor, LLM client result, tool artifact manifest, Reasoning Ledger
 candidate, and hiring dossier. Regression tests validate both the schema files
-and representative generated artifacts.
+and representative generated artifacts. The suite also includes negative
+tests proving unsafe mutations fail validation: raw provider output retention,
+hidden/private reasoning trace retention, absolute artifact paths, unsafe
+network/subprocess flags, and malformed timestamps.
+
+GitHub Actions release readiness runs with `permissions: contents: read`,
+Node 24-capable official actions, and Dependabot monitoring for GitHub Actions.
+The security and release-gate jobs upload generated JSON reports as workflow
+artifacts so reviewers can inspect the exact Bandit, pip-audit, doctor, SBOM,
+and public hygiene evidence from the CI run.
 
 The package install doctor writes `paideia-package-install-doctor/v1`. It checks that the current Python environment exposes the installed distribution metadata, console scripts, optional extras, and callable entrypoint targets without running subprocesses or exporting local paths.
 

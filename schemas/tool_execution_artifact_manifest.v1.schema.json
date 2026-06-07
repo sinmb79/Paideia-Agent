@@ -6,11 +6,21 @@
   "required": ["schema", "status", "artifact_count", "artifacts", "public_safe"],
   "properties": {
     "schema": { "const": "paideia-tool-execution-artifact-manifest/v1" },
-    "created_at_utc": { "type": "string" },
+    "created_at_utc": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$"
+    },
     "status": { "enum": ["materialized", "no_tool_results", "not_requested"] },
-    "artifact_root": { "type": "string" },
+    "artifact_root": {
+      "type": "string",
+      "not": { "pattern": "^(?:[A-Za-z]:|/|.*\\.\\..*)" }
+    },
     "artifact_count": { "type": "integer", "minimum": 0 },
-    "manifest_file": { "type": "string" },
+    "manifest_file": {
+      "type": "string",
+      "not": { "pattern": "^(?:[A-Za-z]:|/|.*\\.\\..*)" }
+    },
     "manifest_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "artifacts": {
       "type": "array",
@@ -29,7 +39,7 @@
           "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
           "output_digest_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
         },
-        "additionalProperties": true
+        "additionalProperties": false
       }
     },
     "public_safe": {
@@ -50,7 +60,7 @@
         "private_reasoning_trace": { "const": "do_not_store" },
         "absolute_paths_exported": { "const": false }
       },
-      "additionalProperties": true
+      "additionalProperties": false
     }
   },
   "additionalProperties": true
