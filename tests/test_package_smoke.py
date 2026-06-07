@@ -2,9 +2,13 @@ from __future__ import annotations
 
 import importlib
 from importlib import metadata
-import tomllib
 import unittest
 from pathlib import Path
+
+try:
+    import tomllib
+except ModuleNotFoundError:  # pragma: no cover - Python 3.10 compatibility path
+    import tomli as tomllib
 
 
 class PackageSmokeTests(unittest.TestCase):
@@ -96,6 +100,11 @@ class PackageSmokeTests(unittest.TestCase):
         self.assertEqual(project["requires-python"], ">=3.10")
         self.assertEqual(project.get("dependencies", []), [])
         self.assertIn("pytest", optional["dev"])
+        self.assertIn("pytest-cov", optional["dev"])
+        self.assertIn("ruff", optional["dev"])
+        self.assertIn("build", optional["dev"])
+        self.assertIn("bandit", optional["security"])
+        self.assertIn("pip-audit", optional["security"])
         self.assertIn("openai>=1.0.0", optional["live-llm"])
         self.assertIn("transformers", optional["local-llm"])
         self.assertIn("chromadb", optional["rag"])
@@ -135,6 +144,13 @@ class PackageSmokeTests(unittest.TestCase):
         self.assertEqual(project.get("urls", {}).get("Repository"), "https://github.com/sinmb79/Paideia-Agent")
         self.assertTrue(Path("SECURITY.md").exists())
         self.assertTrue(Path("README.ko.md").exists())
+        self.assertTrue(Path("ROADMAP.md").exists())
+        self.assertTrue(Path("ROADMAP.ko.md").exists())
+        self.assertTrue(Path("CONTRIBUTING.md").exists())
+        self.assertTrue(Path("CONTRIBUTING.ko.md").exists())
+        self.assertTrue(Path("docs/security_threat_model.md").exists())
+        self.assertTrue(Path("docs/security_threat_model.ko.md").exists())
+        self.assertTrue(Path("schemas/README.md").exists())
         self.assertTrue(Path("docs/public_release_readiness.md").exists())
         self.assertTrue(Path("docs/public_release_readiness.ko.md").exists())
 

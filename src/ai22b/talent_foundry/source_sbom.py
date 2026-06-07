@@ -21,10 +21,12 @@ SOURCE_SBOM_SCHEMA = "paideia-source-sbom/v1"
 def _load_pyproject(path: Path) -> dict[str, Any]:
     try:
         import tomllib  # Python 3.11+
-
-        return tomllib.loads(path.read_text(encoding="utf-8"))
     except ModuleNotFoundError:
-        return _load_pyproject_minimal(path)
+        try:
+            import tomli as tomllib  # type: ignore[no-redef]
+        except ModuleNotFoundError:
+            return _load_pyproject_minimal(path)
+    return tomllib.loads(path.read_text(encoding="utf-8"))
 
 
 def _load_pyproject_minimal(path: Path) -> dict[str, Any]:

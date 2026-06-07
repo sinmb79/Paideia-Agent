@@ -44,9 +44,16 @@ $issues = New-Object System.Collections.Generic.List[object]
 $requiredReleaseFiles = @(
     "README.md",
     "README.ko.md",
+    "ROADMAP.md",
+    "ROADMAP.ko.md",
+    "CONTRIBUTING.md",
+    "CONTRIBUTING.ko.md",
     "SECURITY.md",
     "LICENSE",
-    "pyproject.toml"
+    "pyproject.toml",
+    "docs/security_threat_model.md",
+    "docs/security_threat_model.ko.md",
+    "schemas/README.md"
 )
 
 foreach ($requiredFile in $requiredReleaseFiles) {

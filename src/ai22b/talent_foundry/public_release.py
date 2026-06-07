@@ -14,20 +14,28 @@ PUBLIC_RELEASE_READINESS_SCHEMA = "paideia-public-release-readiness/v1"
 REQUIRED_PUBLIC_FILES = [
     "README.md",
     "README.ko.md",
+    "ROADMAP.md",
+    "ROADMAP.ko.md",
+    "CONTRIBUTING.md",
+    "CONTRIBUTING.ko.md",
     "SECURITY.md",
     "LICENSE",
     "pyproject.toml",
     ".github/workflows/ci.yml",
     "scripts/check_public_repo_hygiene.ps1",
+    "docs/security_threat_model.md",
+    "docs/security_threat_model.ko.md",
     "docs/public_release_readiness.md",
     "docs/public_release_readiness.ko.md",
+    "schemas/README.md",
 ]
 
 REQUIRED_CI_MARKERS = [
     'python -m pip install -e ".[dev]"',
-    "python -m compileall src\\ai22b\\talent_foundry",
-    "tests\\test_cli_smoke.py",
-    "tests\\test_package_smoke.py",
+    "python -m compileall src/ai22b/talent_foundry",
+    "python -B -m pytest tests -q",
+    "python -m build",
+    "ruff check src tests",
     ".\\scripts\\check_public_repo_hygiene.ps1",
     "ai22b-talent-foundry build-llm-connection-profile",
     "ai22b-talent-foundry doctor-llm-adapters",
@@ -50,6 +58,10 @@ REQUIRED_README_LINKS = [
     "docs/public_release_readiness.md",
     "docs/public_release_readiness.ko.md",
     "README.ko.md",
+    "ROADMAP.md",
+    "CONTRIBUTING.md",
+    "docs/security_threat_model.md",
+    "schemas/README.md",
 ]
 
 REQUIRED_PACKAGE_SMOKE_MARKERS = [
@@ -62,6 +74,7 @@ REQUIRED_SECURITY_FRAGMENTS = [
     "runs/**",
     ".env*",
     "check_public_repo_hygiene.ps1",
+    "docs/security_threat_model.md",
 ]
 
 PUBLIC_SCAN_DIRS = [
@@ -70,6 +83,7 @@ PUBLIC_SCAN_DIRS = [
     "docs",
     "evals",
     "examples",
+    "schemas",
     "scripts",
     "src",
     "tests",
@@ -79,6 +93,10 @@ PUBLIC_SCAN_ROOT_FILES = [
     "LICENSE",
     "README.md",
     "README.ko.md",
+    "ROADMAP.md",
+    "ROADMAP.ko.md",
+    "CONTRIBUTING.md",
+    "CONTRIBUTING.ko.md",
     "SECURITY.md",
     "pyproject.toml",
 ]

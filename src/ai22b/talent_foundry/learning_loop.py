@@ -14,7 +14,7 @@ KERNEL_SCHEMA = "ai-talent-reasoning-kernel/v1"
 ACTIVE_MEMORY_ROUTE_SCHEMA = "ai-talent-active-memory-route/v1"
 PROMOTION_SCORE = 80
 WINDOWS_ABSOLUTE_PATH = re.compile(r"^[A-Za-z]:\\")
-POSIX_HOME_PATH_PREFIXES = ("/home/", "/Users/")
+POSIX_LOCAL_PATH_PREFIXES = ("/home/", "/Users/", "/tmp/", "/var/folders/", "/private/var/folders/")
 SAFE_REFERENCE_OMIT_KEYS = {"chain_of_thought", "private_reasoning_trace"}
 HEAVY_SAFE_REFERENCE_KEYS = {
     "active_memory_route",
@@ -130,7 +130,7 @@ def _sanitize_for_public_reference(value: Any) -> Any:
     if isinstance(value, list):
         return [_sanitize_for_public_reference(item) for item in value]
     if isinstance(value, str):
-        if WINDOWS_ABSOLUTE_PATH.match(value) or value.startswith(POSIX_HOME_PATH_PREFIXES):
+        if WINDOWS_ABSOLUTE_PATH.match(value) or value.startswith(POSIX_LOCAL_PATH_PREFIXES):
             return "[local_path_redacted]"
     return value
 
@@ -149,7 +149,7 @@ def _public_file_reference(value: Any) -> Any:
         return [_public_file_reference(item) for item in value[:MAX_SAFE_REFERENCE_LIST_ITEMS]]
     if isinstance(value, str):
         normalized = value.replace("\\", "/").rstrip("/")
-        if WINDOWS_ABSOLUTE_PATH.match(value) or value.startswith(POSIX_HOME_PATH_PREFIXES):
+        if WINDOWS_ABSOLUTE_PATH.match(value) or value.startswith(POSIX_LOCAL_PATH_PREFIXES):
             return {
                 "file_name": normalized.split("/")[-1],
                 "path_fingerprint_sha256": hashlib.sha256(value.encode("utf-8")).hexdigest(),

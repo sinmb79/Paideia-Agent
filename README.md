@@ -8,6 +8,19 @@ The project takes inspiration from modern agent systems such as [Hermes Agent](h
 
 > Research preview: this repository contains program code, public metadata, test fixtures, and documentation. Private training outputs, local memories, personal data, model checkpoints, and generated run artifacts stay outside the source tree.
 
+## 3-Minute Offline Demo
+
+Use this path when you want to verify the current MVP without API keys, private files, or network calls:
+
+```powershell
+python -m pip install -e ".[dev]"
+$env:PYTHONPATH = "src"
+ai22b-talent-foundry doctor-first-run --repo-root . --strict --output runs/first_run_doctor.json
+ai22b-talent-foundry start-console --answers examples/graham_junior_onboarding.answers.json
+```
+
+The expected first-run result is a public-safe doctor report plus a Graham Junior onboarding session. This verifies the current core path: LLM/service choice, Graham-inspired curriculum selection, assessment and Reasoning Ledger packaging, hiring dossier/agent-kit readiness checks, and local runtime smoke tests. The demo uses the deterministic local engine unless you explicitly configure a live provider later.
+
 ## Current Public Preview
 
 The GitHub `main` branch now contains the installable Paideia Agent preview:
@@ -29,6 +42,13 @@ Read the longer manifesto:
 
 - [Project Manifesto](docs/project_manifesto.md)
 - [프로젝트 선언문](docs/project_manifesto.ko.md)
+
+Planning and contribution documents:
+
+- [Roadmap](ROADMAP.md)
+- [Contributing](CONTRIBUTING.md)
+- [Security Threat Model](docs/security_threat_model.md)
+- [Artifact Schema Inventory](schemas/README.md)
 
 ## What Makes It Different
 
