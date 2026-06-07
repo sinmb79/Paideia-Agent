@@ -32,8 +32,10 @@ from ai22b.talent_foundry.cohort import create_specialist_cohort
 from ai22b.talent_foundry.console import (
     collect_console_answers,
     format_onboarding_action_run_summary,
+    format_onboarding_dashboard_summary,
     format_onboarding_finish_summary,
     format_onboarding_next_action_summary,
+    resolve_onboarding_dashboard,
     resolve_onboarding_next_action,
     run_onboarding_next_action,
     run_console_session,
@@ -227,6 +229,18 @@ def _build_parser() -> argparse.ArgumentParser:
     onboard_wizard.add_argument("--answers", help="JSON file with console answers for non-interactive runs.")
     onboard_wizard.add_argument("--output-dir", default=str(DEFAULT_RUN_DIR / "console_onboarding"))
     onboard_wizard.add_argument("--output")
+
+    onboarding_dashboard = subparsers.add_parser(
+        "show-onboarding-dashboard",
+        help="Read an onboarding launch plan and print its OpenClaw-style dashboard without executing actions.",
+    )
+    onboarding_dashboard.add_argument("--launch-plan", required=True)
+    onboarding_dashboard.add_argument("--output", help="Optional JSON dashboard report path.")
+    onboarding_dashboard.add_argument(
+        "--strict",
+        action="store_true",
+        help="Return exit code 2 when the dashboard cannot be rendered as ready.",
+    )
 
     onboarding_next = subparsers.add_parser(
         "show-onboarding-next-action",
@@ -1117,6 +1131,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             mode=mode,
         )
         print(format_onboarding_finish_summary(session))
+        return 0
+
+    if args.command == "show-onboarding-dashboard":
+        dashboard = resolve_onboarding_dashboard(Path(args.launch_plan))
+        if args.output:
+            output_path = Path(args.output)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(json.dumps(dashboard, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(format_onboarding_dashboard_summary(dashboard))
+        if args.strict and dashboard.get("status") != "ready":
+            return 2
         return 0
 
     if args.command == "show-onboarding-next-action":
