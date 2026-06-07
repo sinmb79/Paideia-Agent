@@ -26,6 +26,7 @@ LLM_ONBOARDING_CHECKLIST_SCHEMA = "paideia-llm-onboarding-checklist/v1"
 LLM_PROVIDER_MATRIX_SCHEMA = "paideia-llm-provider-matrix/v1"
 LLM_CONNECTION_PROFILE_SCHEMA = "paideia-llm-connection-profile/v1"
 LLM_LIVE_SETUP_GUIDE_SCHEMA = "paideia-llm-live-setup-guide/v1"
+LLM_CONNECTION_STATUS_CARD_SCHEMA = "paideia-llm-connection-status-card/v1"
 
 ENV_REQUIREMENTS: dict[str, list[list[str]]] = {
     "openai_chatgpt_codex": [["OPENAI_API_KEY"]],
@@ -554,6 +555,272 @@ def build_llm_live_setup_guide(
     if output_path is not None:
         _write_json(output_path, guide)
     return guide
+
+
+def _card_status_for_setup(card: dict[str, Any]) -> str:
+    if card.get("status") in {"owner_action_required", "required_before_provider_call"}:
+        return "needs_owner_action"
+    if card.get("status") in {"ready", "ready_for_owner_live_check"}:
+        return "ready"
+    return str(card.get("status") or "unknown")
+
+
+def build_llm_connection_status_card(
+    *,
+    llm_service: str | None = DEFAULT_LLM_SERVICE_ID,
+    llm_engine: str | None = None,
+    llm_model: str | None = None,
+    llm_model_path: str | None = None,
+    chat_surface: str | None = DEFAULT_CHAT_SURFACE_ID,
+    output_path: Path | None = None,
+) -> dict[str, Any]:
+    """Build a one-screen, no-network status card for the selected LLM connection."""
+
+    checklist = build_llm_onboarding_checklist(
+        llm_service=llm_service,
+        llm_engine=llm_engine,
+        llm_model=llm_model,
+        llm_model_path=llm_model_path,
+        chat_surface=chat_surface,
+    )
+    profile = build_llm_connection_profile(
+        llm_service=llm_service,
+        llm_engine=llm_engine,
+        llm_model=llm_model,
+        llm_model_path=llm_model_path,
+        chat_surface=chat_surface,
+    )
+    guide = build_llm_live_setup_guide(
+        llm_service=llm_service,
+        llm_engine=llm_engine,
+        llm_model=llm_model,
+        llm_model_path=llm_model_path,
+        chat_surface=chat_surface,
+    )
+    selected_llm = profile["selected_llm_service"]
+    selected_chat = profile["selected_chat_surface"]
+    engine = selected_llm["engine"]
+    setup = profile.get("setup_requirements", {}) if isinstance(profile.get("setup_requirements"), dict) else {}
+    readiness = profile.get("readiness", {}) if isinstance(profile.get("readiness"), dict) else {}
+    command_by_id = {item["id"]: item for item in checklist.get("command_plan", []) if isinstance(item, dict)}
+    setup_cards = guide.get("setup_cards", []) if isinstance(guide.get("setup_cards"), list) else []
+    setup_card_statuses = {
+        str(card.get("id")): _card_status_for_setup(card)
+        for card in setup_cards
+        if isinstance(card, dict) and card.get("id")
+    }
+    needs_live = bool(setup.get("requires_live_check_before_agent_work"))
+    owner_setup_required = any(status == "needs_owner_action" for status in setup_card_statuses.values())
+    if not needs_live and not owner_setup_required:
+        status = "offline_ready"
+        primary_next_action_id = "offline_first_chat"
+    elif owner_setup_required:
+        status = "needs_owner_configuration"
+        primary_next_action_id = "configure_required_inputs"
+    else:
+        status = "ready_for_explicit_live_check"
+        primary_next_action_id = "explicit_live_readiness_suite"
+
+    next_action_queue = [
+        {
+            "order": 1,
+            "action_id": "review_connection_profile",
+            "stage": "review",
+            "title": "Review selected LLM setup profile",
+            "command_or_path": "<llm_connection_profile.json>",
+            "network_call_if_executed": False,
+            "owner_action_required": False,
+        },
+        {
+            "order": 2,
+            "action_id": "no_network_provider_doctor",
+            "stage": "static_doctor",
+            "title": "Check static provider configuration without transport",
+            "command_or_path": command_by_id.get("provider_doctor_no_network", {}).get("command"),
+            "network_call_if_executed": False,
+            "owner_action_required": False,
+        },
+    ]
+    if owner_setup_required:
+        next_action_queue.append(
+            {
+                "order": len(next_action_queue) + 1,
+                "action_id": "configure_required_inputs",
+                "stage": "owner_setup",
+                "title": "Configure required key, model, localhost server, or local model path",
+                "command_or_path": None,
+                "network_call_if_executed": False,
+                "owner_action_required": True,
+                "blocking_setup_cards": [
+                    card_id for card_id, card_status in setup_card_statuses.items() if card_status == "needs_owner_action"
+                ],
+            }
+        )
+    next_action_queue.extend(
+        [
+            {
+                "order": len(next_action_queue) + 1,
+                "action_id": "explicit_live_readiness_suite",
+                "stage": "live_readiness",
+                "title": "Run full readiness suite only when live provider use is intended",
+                "command_or_path": command_by_id.get("llm_live_readiness_suite", {}).get("command"),
+                "network_call_if_executed": needs_live,
+                "owner_action_required": needs_live,
+            },
+            {
+                "order": len(next_action_queue) + 2,
+                "action_id": "chat_runtime_smoke",
+                "stage": "chat_surface",
+                "title": "Verify selected chat surface before daily conversation",
+                "command_or_path": command_by_id.get("chat_runtime_smoke", {}).get("command"),
+                "network_call_if_executed": needs_live,
+                "owner_action_required": needs_live,
+            },
+            {
+                "order": len(next_action_queue) + 3,
+                "action_id": "offline_first_chat",
+                "stage": "first_conversation",
+                "title": "Run first offline chat turn from local memory and education records",
+                "command_or_path": command_by_id.get("chat_surface_first_turn", {}).get("command"),
+                "network_call_if_executed": False,
+                "owner_action_required": False,
+            },
+        ]
+    )
+    for item in next_action_queue:
+        item["recommended"] = item["action_id"] == primary_next_action_id
+
+    card = {
+        "schema": LLM_CONNECTION_STATUS_CARD_SCHEMA,
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "status": status,
+        "primary_next_action_id": primary_next_action_id,
+        "selected_llm_service": selected_llm,
+        "selected_chat_surface": selected_chat,
+        "setup_summary": {
+            "requires_live_check_before_agent_work": needs_live,
+            "requires_model_argument": setup.get("requires_model_argument"),
+            "requires_model_path": setup.get("requires_model_path"),
+            "requires_localhost_endpoint": setup.get("requires_localhost_endpoint"),
+            "required_env_groups": setup.get("required_env", []),
+            "setup_card_statuses": setup_card_statuses,
+        },
+        "readiness_summary": {
+            "checklist_status": checklist.get("status"),
+            "connection_profile_status": profile.get("status"),
+            "setup_guide_status": guide.get("status"),
+            "doctor_status": readiness.get("doctor_status"),
+            "doctor_passed": readiness.get("doctor_passed"),
+            "live_preflight_status": readiness.get("live_preflight_status"),
+            "blocking_checks": readiness.get("blocking_checks", []),
+            "next_actions": readiness.get("next_actions", []),
+        },
+        "cards": [
+            {
+                "id": "provider",
+                "title": "Provider",
+                "status": status,
+                "engine": engine,
+                "service_id": selected_llm.get("service_id"),
+                "network_access": selected_llm.get("network_access"),
+                "llm_is_identity": False,
+            },
+            {
+                "id": "setup",
+                "title": "Setup",
+                "status": "needs_owner_action" if owner_setup_required else "ready",
+                "setup_cards": setup_cards,
+            },
+            {
+                "id": "readiness",
+                "title": "Readiness",
+                "status": readiness.get("live_preflight_status"),
+                "blocking_checks": readiness.get("blocking_checks", []),
+                "next_actions": readiness.get("next_actions", []),
+            },
+            {
+                "id": "chat_surface",
+                "title": "Chat Surface",
+                "status": "ready_for_smoke",
+                "chat_surface": selected_chat.get("id"),
+                "smoke_command": command_by_id.get("chat_runtime_smoke", {}).get("command"),
+            },
+        ],
+        "next_action_queue": next_action_queue,
+        "owner_visible_summary": {
+            "ko": (
+                "선택한 LLM은 오프라인 경로로 바로 확인할 수 있습니다."
+                if status == "offline_ready"
+                else "선택한 LLM은 보스가 키, 모델, localhost 서버, 또는 로컬 모델 경로를 먼저 설정해야 합니다."
+                if status == "needs_owner_configuration"
+                else "선택한 LLM은 명시적인 --live-check로 실제 연결 확인을 진행할 수 있습니다."
+            ),
+            "en": (
+                "The selected LLM is ready for the offline path."
+                if status == "offline_ready"
+                else "The selected LLM needs owner configuration before live use."
+                if status == "needs_owner_configuration"
+                else "The selected LLM is ready for an explicit --live-check."
+            ),
+        },
+        "public_safe": {
+            "network_call_performed": False,
+            "live_check_performed": False,
+            "subprocess_executed": False,
+            "secret_values_exported": False,
+            "raw_provider_payload_saved": False,
+            "private_reasoning_trace": "do_not_store",
+        },
+    }
+    if output_path is not None:
+        _write_json(output_path, card)
+    return card
+
+
+def format_llm_connection_status_card(card: dict[str, Any]) -> str:
+    selected = card.get("selected_llm_service", {}) if isinstance(card.get("selected_llm_service"), dict) else {}
+    chat = card.get("selected_chat_surface", {}) if isinstance(card.get("selected_chat_surface"), dict) else {}
+    setup = card.get("setup_summary", {}) if isinstance(card.get("setup_summary"), dict) else {}
+    lines = [
+        "Paideia LLM connection status",
+        f"- Status: {card.get('status')}",
+        f"- Engine: {selected.get('engine')}",
+        f"- Service: {selected.get('service_id')}",
+        f"- Chat surface: {chat.get('id')}",
+        f"- Primary next action: {card.get('primary_next_action_id')}",
+        f"- Requires live check before agent work: {setup.get('requires_live_check_before_agent_work')}",
+        f"- Secret values exported: {card.get('public_safe', {}).get('secret_values_exported') if isinstance(card.get('public_safe'), dict) else None}",
+        "",
+        "Cards",
+    ]
+    for item in card.get("cards", []) if isinstance(card.get("cards"), list) else []:
+        if not isinstance(item, dict):
+            continue
+        lines.append(f"- [{item.get('status')}] {item.get('title')} ({item.get('id')})")
+    lines.extend(["", "Next action queue"])
+    for item in card.get("next_action_queue", []) if isinstance(card.get("next_action_queue"), list) else []:
+        if not isinstance(item, dict):
+            continue
+        marker = "recommended" if item.get("recommended") else "available"
+        lines.append(
+            f"{item.get('order')}. {item.get('action_id')} ({item.get('stage')}) - {item.get('title')} [{marker}]"
+        )
+        if item.get("command_or_path"):
+            lines.append(f"   command/path: {item.get('command_or_path')}")
+        lines.append(
+            f"   network_if_executed={item.get('network_call_if_executed')}; "
+            f"owner_action_required={item.get('owner_action_required')}"
+        )
+    lines.extend(
+        [
+            "",
+            "Safety",
+            "- Status renderer executed command: False",
+            "- Status renderer network call: False",
+            "- Hidden reasoning trace: do_not_store",
+        ]
+    )
+    return "\n".join(lines)
 
 
 def _readiness_status(doctor: dict[str, Any], live_preflight: dict[str, Any], *, engine: str) -> str:
