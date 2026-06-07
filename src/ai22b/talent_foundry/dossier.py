@@ -104,6 +104,11 @@ def build_hiring_dossier(
     growth_profile = hiring_packet.get("growth_profile") or agent_manifest.get("identity_source", {}).get(
         "growth_profile"
     )
+    private_reasoning_trace_policy = (
+        learning_ledger.get("policy", {}).get("private_reasoning_trace")
+        or llm_policy.get("private_reasoning_trace")
+        or "do_not_store"
+    )
 
     return {
         "schema": SCHEMA,
@@ -137,8 +142,7 @@ def build_hiring_dossier(
             or academic_record.get("reasoning_style", {}).get("signature"),
             "procedural_skills": reasoning_kernel.get("procedural_skills", []),
             "quality_controls": reasoning_kernel.get("quality_controls", []),
-            "private_reasoning_trace": learning_ledger.get("policy", {}).get("private_reasoning_trace")
-            or llm_policy.get("private_reasoning_trace"),
+            "private_reasoning_trace": private_reasoning_trace_policy,
             "experience_counts": reasoning_kernel.get("experience_counts", {}),
         },
         "growth_profile_summary": {
@@ -156,7 +160,7 @@ def build_hiring_dossier(
         },
         "llm_contract": {
             "role": llm_policy.get("role"),
-            "private_reasoning_trace": llm_policy.get("private_reasoning_trace"),
+            "private_reasoning_trace": private_reasoning_trace_policy,
             "description": llm_policy.get("description"),
         },
         "employment_recommendation": {

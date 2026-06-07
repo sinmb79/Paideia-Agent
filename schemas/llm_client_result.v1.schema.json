@@ -3,7 +3,14 @@
   "$id": "https://github.com/sinmb79/Paideia-Agent/schemas/llm_client_result.v1.schema.json",
   "title": "Paideia LLM Client Result",
   "type": "object",
-  "required": ["schema", "engine", "status", "identity_policy"],
+  "required": [
+    "schema",
+    "engine",
+    "status",
+    "identity_policy",
+    "raw_output_saved",
+    "private_reasoning_trace"
+  ],
   "properties": {
     "schema": { "const": "paideia-llm-client-result/v1" },
     "engine": { "type": "string", "minLength": 1 },
@@ -18,9 +25,9 @@
     "text": { "type": "string" },
     "reason": { "type": "string" },
     "identity_policy": { "const": "application_engine_not_identity" },
-    "raw_output_saved": { "type": "boolean" },
+    "raw_output_saved": { "const": false },
     "network_access": { "type": "string" },
-    "private_reasoning_trace": { "enum": ["do_not_store", "omitted"] }
+    "private_reasoning_trace": { "const": "do_not_store" }
   },
   "additionalProperties": true
 }

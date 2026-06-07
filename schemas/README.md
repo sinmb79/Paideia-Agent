@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-Paideia artifacts already carry schema names such as `paideia-first-run-doctor/v1`, `paideia-llm-client-result/v1`, and `paideia-tool-execution-artifact-manifest/v1`. This folder is the public inventory for those artifact contracts before stricter JSON Schema validation is introduced.
+Paideia artifacts carry schema names such as `paideia-first-run-doctor/v1`, `paideia-llm-client-result/v1`, and `paideia-tool-execution-artifact-manifest/v1`. This folder is the public inventory for those artifact contracts and the machine-readable JSON Schema validators used by release gates.
 
 ## Current Policy
 
@@ -23,9 +23,11 @@ Paideia artifacts already carry schema names such as `paideia-first-run-doctor/v
 
 ## Machine-Readable v1 Schemas
 
-The first machine-readable contracts are intentionally conservative. They
-validate stable top-level identifiers, pass/fail status, public-safe flags, and
-core nested records while leaving room for future fields.
+The v1 contracts validate stable identifiers, pass/fail status, public-safe
+flags, relative artifact paths, timestamp shape, and the policy fields that
+must never permit raw provider payloads or hidden reasoning traces. General
+metadata sections may still allow future fields, but public-safety and policy
+blocks are intentionally narrow.
 
 | File | Artifact schema |
 | --- | --- |
@@ -35,5 +37,6 @@ core nested records while leaving room for future fields.
 | `reasoning_ledger_candidate.v1.schema.json` | `paideia-reasoning-ledger-candidate/v1` |
 | `hiring_dossier.v1.schema.json` | `ai-talent-hiring-dossier/v1` |
 
-Future schema work should tighten field-level constraints only after current
-public artifacts and release fixtures are covered by regression tests.
+Regression tests cover both accepted generated artifacts and rejected unsafe
+mutations, including raw output retention, private reasoning trace retention,
+absolute artifact paths, side-effect flags, and malformed timestamps.

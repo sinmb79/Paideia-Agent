@@ -44,6 +44,7 @@ SAFE_PRIVATE_REASONING_METADATA_KEYS = {
     "privatereasoningfieldsomitted",
     "privatereasoningfieldvaluesstored",
 }
+SAFE_PRIVATE_REASONING_POLICY_VALUES = {"do_not_store", "not_stored", "omitted"}
 
 
 class LLMClient(Protocol):
@@ -149,6 +150,8 @@ def count_private_reasoning_fields(value: Any) -> int:
         total = 0
         for key, item in value.items():
             if _is_private_reasoning_key(key):
+                if str(item) in SAFE_PRIVATE_REASONING_POLICY_VALUES:
+                    continue
                 total += 1
                 continue
             total += count_private_reasoning_fields(item)
@@ -188,6 +191,7 @@ def _ok(engine: str, text: str, **fields: Any) -> dict[str, Any]:
         "text": _redact_secret_text(text.strip()),
         "identity_policy": "application_engine_not_identity",
         "raw_output_saved": False,
+        "private_reasoning_trace": "do_not_store",
         **_sanitize_value(fields),
     }
 
@@ -199,6 +203,8 @@ def _unavailable(engine: str, reason: str, **fields: Any) -> dict[str, Any]:
         "status": "unavailable",
         "reason": reason,
         "identity_policy": "application_engine_not_identity",
+        "raw_output_saved": False,
+        "private_reasoning_trace": "do_not_store",
         **_sanitize_value(fields),
     }
 

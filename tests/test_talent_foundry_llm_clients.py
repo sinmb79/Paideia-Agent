@@ -27,6 +27,15 @@ def _headers(request) -> dict[str, str]:
 
 
 class TalentFoundryLlmClientTests(unittest.TestCase):
+    def test_private_reasoning_policy_marker_is_not_counted_as_hidden_trace(self) -> None:
+        from ai22b.talent_foundry.llm_clients import count_private_reasoning_fields
+
+        safe = {"private_reasoning_trace": "do_not_store"}
+        unsafe = {"private_reasoning_trace": "full chain-of-thought text"}
+
+        self.assertEqual(count_private_reasoning_fields(safe), 0)
+        self.assertEqual(count_private_reasoning_fields(unsafe), 1)
+
     def test_llm_adapter_contract_doctor_public_safe_no_network(self) -> None:
         from ai22b.talent_foundry.llm_adapter_contracts import run_llm_adapter_contracts
 

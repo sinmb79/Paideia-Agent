@@ -69,10 +69,41 @@ PATH_BLOCKLIST_PATTERNS = [
 ]
 
 _PRIVATE_USER = "sin" + "mb"
+_PLACEHOLDER_USER_SEGMENTS = r"(?:<[^\\/]+>|your[-_ ]?(?:user|name)|user|username|example|sample|placeholder)"
+_REAL_WINDOWS_USER_HOME_RE = r"C:[\\/]+Users[\\/]+(?!" + _PLACEHOLDER_USER_SEGMENTS + r"(?:[\\/]|$))[^\\/\s\"'<>]+"
+_REAL_POSIX_USER_HOME_RE = (
+    r"(?:^|[\s=:\"'])(?:[\\/]Users|[\\/]home)[\\/]+(?!"
+    + _PLACEHOLDER_USER_SEGMENTS
+    + r"(?:[\\/]|$))[^\\/\s\"'<>]+"
+)
+_PROVIDER_SECRET_ENV_KEYS = (
+    "ANTHROPIC_API_KEY",
+    "GOOGLE_API_KEY",
+    "GEMINI_API_KEY",
+    "MISTRAL_API_KEY",
+    "OPENROUTER_API_KEY",
+    "HF_TOKEN",
+    "HUGGINGFACE_TOKEN",
+    "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY",
+    "AZURE_OPENAI_API_KEY",
+)
+_SECRET_VALUE_PREFIX_ALLOWLIST = r"(?:<|\$\{|your|example|sample|placeholder|changeme|replace_me|test_|fixture_)"
+_PROVIDER_SECRET_ASSIGNMENT_RE = re.compile(
+    r"\b("
+    + "|".join(re.escape(key) for key in _PROVIDER_SECRET_ENV_KEYS)
+    + r")\b\s*[:=]\s*['\"]?(?!"
+    + _SECRET_VALUE_PREFIX_ALLOWLIST
+    + r")[^'\",\s]{12,}",
+    re.I,
+)
 CONTENT_BLOCKLIST_PATTERNS = [
     ("local_windows_user_path", re.compile(r"C:[\\/]+Users[\\/]+" + re.escape(_PRIVATE_USER), re.I)),
     ("local_posix_user_path", re.compile(r"[\\/]Users[\\/]+" + re.escape(_PRIVATE_USER), re.I)),
+    ("generic_local_windows_user_path", re.compile(_REAL_WINDOWS_USER_HOME_RE, re.I)),
+    ("generic_local_posix_user_path", re.compile(_REAL_POSIX_USER_HOME_RE, re.I)),
     ("openai_key_assignment", re.compile(r"OPENAI_API_KEY\s*=\s*['\"]?[^'\",\s]{8,}", re.I)),
+    ("provider_secret_assignment", _PROVIDER_SECRET_ASSIGNMENT_RE),
     ("generic_openai_secret", re.compile(r"sk-[A-Za-z0-9_-]{32,}")),
     ("github_pat", re.compile(r"gh[pousr]_[A-Za-z0-9_]{20,}")),
     ("private_key", re.compile(r"BEGIN (RSA |OPENSSH |EC |DSA )?PRIVATE KEY")),

@@ -15,7 +15,11 @@
   ],
   "properties": {
     "schema": { "const": "paideia-reasoning-ledger-candidate/v1" },
-    "created_at_utc": { "type": "string" },
+    "created_at_utc": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$"
+    },
     "candidate_type": { "type": "string", "minLength": 1 },
     "source_experience_id": { "type": ["string", "null"] },
     "employment_id": { "type": "string", "minLength": 1 },
@@ -47,7 +51,7 @@
         "full_rollout_replay_stored": { "type": "boolean" },
         "separate_consciousness_created": { "type": "boolean" }
       },
-      "additionalProperties": true
+      "additionalProperties": false
     }
   },
   "additionalProperties": true

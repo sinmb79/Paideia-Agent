@@ -16,7 +16,11 @@
   ],
   "properties": {
     "schema": { "const": "ai-talent-hiring-dossier/v1" },
-    "created_at_utc": { "type": "string" },
+    "created_at_utc": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$"
+    },
     "candidate": {
       "type": "object",
       "required": ["name", "target_role"],
@@ -62,12 +66,18 @@
         "style_signature": { "type": ["string", "null"] },
         "procedural_skills": { "type": "array" },
         "quality_controls": { "type": "array" },
-        "private_reasoning_trace": { "enum": ["do_not_store", null] },
+        "private_reasoning_trace": { "const": "do_not_store" },
         "experience_counts": { "type": "object" }
       },
       "additionalProperties": true
     },
-    "llm_contract": { "type": "object" },
+    "llm_contract": {
+      "type": "object",
+      "properties": {
+        "private_reasoning_trace": { "const": "do_not_store" }
+      },
+      "additionalProperties": true
+    },
     "employment_recommendation": {
       "type": "object",
       "required": ["status"],

@@ -28,6 +28,22 @@ $pathBlocklist = @(
 )
 
 $privateUser = "sin" + "mb"
+$placeholderUserSegments = "(?:<[^\\/]+>|your[-_ ]?(?:user|name)|user|username|example|sample|placeholder)"
+$realWindowsUserHomePattern = "C:[\\/]+Users[\\/]+(?!" + $placeholderUserSegments + "(?:[\\/]|$))[^\\/`"'<>\s]+"
+$realPosixUserHomePattern = "(?:^|[\s=:`"'])(?:[\\/]Users|[\\/]home)[\\/]+(?!" + $placeholderUserSegments + "(?:[\\/]|$))[^\\/`"'<>\s]+"
+$providerSecretKeys = @(
+    "ANTHROPIC_API_KEY",
+    "GOOGLE_API_KEY",
+    "GEMINI_API_KEY",
+    "MISTRAL_API_KEY",
+    "OPENROUTER_API_KEY",
+    "HF_TOKEN",
+    "HUGGINGFACE_TOKEN",
+    "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY",
+    "AZURE_OPENAI_API_KEY"
+)
+$providerSecretPattern = "\b(" + (($providerSecretKeys | ForEach-Object { [regex]::Escape($_) }) -join "|") + ")\b\s*[:=]\s*['""]?(?!(?:<|\$\{|your|example|sample|placeholder|changeme|replace_me|test_|fixture_))[^'"",\s]{12,}"
 $hiddenUnicodeBidiChars = -join @(
     [char]0x202A,
     [char]0x202B,
@@ -43,7 +59,10 @@ $hiddenUnicodeBidiPattern = "[" + [regex]::Escape($hiddenUnicodeBidiChars) + "]"
 $contentPatterns = @(
     @{ Name = "local_windows_user_path"; Pattern = "C:[\\/]+Users[\\/]+" + [regex]::Escape($privateUser) },
     @{ Name = "local_posix_user_path"; Pattern = "[\\/]Users[\\/]+" + [regex]::Escape($privateUser) },
+    @{ Name = "generic_local_windows_user_path"; Pattern = $realWindowsUserHomePattern },
+    @{ Name = "generic_local_posix_user_path"; Pattern = $realPosixUserHomePattern },
     @{ Name = "openai_key_assignment"; Pattern = 'OPENAI_API_KEY\s*=\s*[''"]?[^''",\s]{8,}' },
+    @{ Name = "provider_secret_assignment"; Pattern = $providerSecretPattern },
     @{ Name = "generic_openai_secret"; Pattern = "sk-[A-Za-z0-9_-]{32,}" },
     @{ Name = "github_pat"; Pattern = "gh[pousr]_[A-Za-z0-9_]{20,}" },
     @{ Name = "private_key"; Pattern = "BEGIN (RSA |OPENSSH |EC |DSA )?PRIVATE KEY" },
@@ -64,6 +83,7 @@ $requiredReleaseFiles = @(
     "SECURITY.md",
     "LICENSE",
     "pyproject.toml",
+    ".github/dependabot.yml",
     "docs/security_threat_model.md",
     "docs/security_threat_model.ko.md",
     "schemas/README.md",
