@@ -30,6 +30,7 @@ Issues = "https://github.com/sinmb79/Paideia-Agent/issues"
 [project.optional-dependencies]
 dev = [
   "build",
+  "jsonschema",
   "pytest",
   "pytest-cov",
   "ruff",
@@ -50,6 +51,7 @@ all = [
   "accelerate",
   "chromadb",
   "datasets",
+  "jsonschema",
   "peft",
   "pip-audit",
   "pytest",
@@ -68,3 +70,12 @@ ai22b-talent-foundry = "ai22b.talent_foundry.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.bandit]
+skips = [
+  "B105", # Public-safe boolean/status fixture names trigger hardcoded-password false positives.
+  "B108", # Local path hygiene patterns intentionally list temp path prefixes.
+  "B311", # Educational from-scratch model sampling is deterministic/non-cryptographic.
+  "B608", # Long generated markdown templates are misread as SQL construction.
+  "B615", # Local-only Hugging Face loading uses local_files_only=True.
+]

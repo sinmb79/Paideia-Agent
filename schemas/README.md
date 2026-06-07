@@ -21,4 +21,19 @@ Paideia artifacts already carry schema names such as `paideia-first-run-doctor/v
 | Reasoning Ledger candidate | `paideia-reasoning-ledger-candidate/v1` | Review-gated summary, no private reasoning trace. |
 | Hiring dossier | `ai-talent-hiring-dossier/v1` | Identity, transcript, readiness, public-safe metadata. |
 
-The next schema work should add machine-readable JSON Schema files without breaking existing artifact names.
+## Machine-Readable v1 Schemas
+
+The first machine-readable contracts are intentionally conservative. They
+validate stable top-level identifiers, pass/fail status, public-safe flags, and
+core nested records while leaving room for future fields.
+
+| File | Artifact schema |
+| --- | --- |
+| `first_run_doctor.v1.schema.json` | `paideia-first-run-doctor/v1` |
+| `llm_client_result.v1.schema.json` | `paideia-llm-client-result/v1` |
+| `tool_execution_artifact_manifest.v1.schema.json` | `paideia-tool-execution-artifact-manifest/v1` |
+| `reasoning_ledger_candidate.v1.schema.json` | `paideia-reasoning-ledger-candidate/v1` |
+| `hiring_dossier.v1.schema.json` | `ai-talent-hiring-dossier/v1` |
+
+Future schema work should tighten field-level constraints only after current
+public artifacts and release fixtures are covered by regression tests.

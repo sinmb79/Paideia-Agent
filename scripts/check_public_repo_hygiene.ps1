@@ -28,6 +28,18 @@ $pathBlocklist = @(
 )
 
 $privateUser = "sin" + "mb"
+$hiddenUnicodeBidiChars = -join @(
+    [char]0x202A,
+    [char]0x202B,
+    [char]0x202C,
+    [char]0x202D,
+    [char]0x202E,
+    [char]0x2066,
+    [char]0x2067,
+    [char]0x2068,
+    [char]0x2069
+)
+$hiddenUnicodeBidiPattern = "[" + [regex]::Escape($hiddenUnicodeBidiChars) + "]"
 $contentPatterns = @(
     @{ Name = "local_windows_user_path"; Pattern = "C:[\\/]+Users[\\/]+" + [regex]::Escape($privateUser) },
     @{ Name = "local_posix_user_path"; Pattern = "[\\/]Users[\\/]+" + [regex]::Escape($privateUser) },
@@ -36,7 +48,8 @@ $contentPatterns = @(
     @{ Name = "github_pat"; Pattern = "gh[pousr]_[A-Za-z0-9_]{20,}" },
     @{ Name = "private_key"; Pattern = "BEGIN (RSA |OPENSSH |EC |DSA )?PRIVATE KEY" },
     @{ Name = "refresh_token"; Pattern = "refresh_token\s*[:=]" },
-    @{ Name = "auth_token"; Pattern = "auth_token\s*[:=]" }
+    @{ Name = "auth_token"; Pattern = "auth_token\s*[:=]" },
+    @{ Name = "hidden_unicode_bidi_control"; Pattern = $hiddenUnicodeBidiPattern }
 )
 
 $issues = New-Object System.Collections.Generic.List[object]
@@ -53,7 +66,12 @@ $requiredReleaseFiles = @(
     "pyproject.toml",
     "docs/security_threat_model.md",
     "docs/security_threat_model.ko.md",
-    "schemas/README.md"
+    "schemas/README.md",
+    "schemas/first_run_doctor.v1.schema.json",
+    "schemas/llm_client_result.v1.schema.json",
+    "schemas/tool_execution_artifact_manifest.v1.schema.json",
+    "schemas/reasoning_ledger_candidate.v1.schema.json",
+    "schemas/hiring_dossier.v1.schema.json"
 )
 
 foreach ($requiredFile in $requiredReleaseFiles) {
@@ -142,6 +160,7 @@ $report = [ordered]@{
             "session logs",
             "environment files"
         )
+        hidden_unicode_policy = "Reject U+202A..U+202E and U+2066..U+2069 bidirectional controls in public text files"
         required_release_files = $requiredReleaseFiles
         package_license_metadata = "pyproject.toml must reference LICENSE"
     }

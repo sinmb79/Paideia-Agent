@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/sinmb79/Paideia-Agent/schemas/hiring_dossier.v1.schema.json",
+  "title": "Paideia Hiring Dossier",
+  "type": "object",
+  "required": [
+    "schema",
+    "created_at_utc",
+    "candidate",
+    "academic_record",
+    "assessment_summary",
+    "doctoral_defense",
+    "reasoning_profile",
+    "llm_contract",
+    "employment_recommendation"
+  ],
+  "properties": {
+    "schema": { "const": "ai-talent-hiring-dossier/v1" },
+    "created_at_utc": { "type": "string" },
+    "candidate": {
+      "type": "object",
+      "required": ["name", "target_role"],
+      "properties": {
+        "name": { "type": ["string", "null"] },
+        "gender": { "type": ["string", "null"] },
+        "birth": { "type": ["object", "null"] },
+        "major_goal": { "type": ["string", "null"] },
+        "target_role": { "type": ["string", "null"] },
+        "role_model_id": { "type": ["string", "null"] },
+        "curriculum_id": { "type": ["string", "null"] }
+      },
+      "additionalProperties": true
+    },
+    "academic_record": { "type": "object" },
+    "resume": { "type": "string" },
+    "assessment_summary": {
+      "type": "object",
+      "required": ["major_gates"],
+      "properties": {
+        "major_gates": { "type": "array" },
+        "graduation_ready": { "type": ["boolean", "null"] },
+        "education_committee_status": { "type": ["string", "null"] },
+        "oversight_committee_status": { "type": ["string", "null"] }
+      },
+      "additionalProperties": true
+    },
+    "doctoral_defense": {
+      "type": "object",
+      "required": ["gate_id", "status"],
+      "properties": {
+        "gate_id": { "type": "string" },
+        "status": { "enum": ["passed", "failed", "unknown"] },
+        "score": { "type": ["number", "integer", "null"] },
+        "pass_score": { "type": ["number", "integer", "null"] }
+      },
+      "additionalProperties": true
+    },
+    "reasoning_profile": {
+      "type": "object",
+      "required": ["private_reasoning_trace"],
+      "properties": {
+        "style_signature": { "type": ["string", "null"] },
+        "procedural_skills": { "type": "array" },
+        "quality_controls": { "type": "array" },
+        "private_reasoning_trace": { "enum": ["do_not_store", null] },
+        "experience_counts": { "type": "object" }
+      },
+      "additionalProperties": true
+    },
+    "llm_contract": { "type": "object" },
+    "employment_recommendation": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": { "enum": ["hire_ready", "review_required"] },
+        "relationship": { "type": ["string", "null"] },
+        "scope": { "type": "array" },
+        "guardrails": { "type": "array" }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

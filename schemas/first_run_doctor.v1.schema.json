@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/sinmb79/Paideia-Agent/schemas/first_run_doctor.v1.schema.json",
+  "title": "Paideia First-Run Doctor",
+  "type": "object",
+  "required": [
+    "schema",
+    "created_at_utc",
+    "status",
+    "passed",
+    "checks",
+    "summary",
+    "artifacts",
+    "public_safe"
+  ],
+  "properties": {
+    "schema": { "const": "paideia-first-run-doctor/v1" },
+    "created_at_utc": { "type": "string" },
+    "status": { "enum": ["passed", "failed"] },
+    "passed": { "type": "boolean" },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "status", "passed", "severity", "details"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "status": { "enum": ["passed", "failed"] },
+          "passed": { "type": "boolean" },
+          "severity": { "enum": ["error", "warning", "info"] },
+          "details": { "type": "object" }
+        },
+        "additionalProperties": true
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": [
+        "check_count",
+        "failed_count",
+        "network_call_performed",
+        "subprocess_executed",
+        "live_provider_called"
+      ],
+      "properties": {
+        "check_count": { "type": "integer", "minimum": 0 },
+        "failed_count": { "type": "integer", "minimum": 0 },
+        "network_call_performed": { "type": "boolean" },
+        "subprocess_executed": { "type": "boolean" },
+        "live_provider_called": { "type": "boolean" }
+      },
+      "additionalProperties": true
+    },
+    "artifacts": { "type": "object" },
+    "public_safe": {
+      "type": "object",
+      "required": ["private_reasoning_trace"],
+      "properties": {
+        "private_reasoning_trace": { "const": "do_not_store" }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

@@ -4,6 +4,7 @@ import json
 import os
 import re
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
@@ -209,10 +210,19 @@ def _post_json(
     headers: dict[str, str],
     timeout: int = 60,
 ) -> dict[str, Any]:
+    safe_url = _validated_http_url(url)
     data = json.dumps(body, ensure_ascii=False).encode("utf-8")
-    request = urllib.request.Request(url, data=data, headers={**headers, "Content-Type": "application/json"}, method="POST")
-    with urllib.request.urlopen(request, timeout=timeout) as response:
+    request = urllib.request.Request(safe_url, data=data, headers={**headers, "Content-Type": "application/json"}, method="POST")
+    # URL scheme is validated before the request is built.
+    with urllib.request.urlopen(request, timeout=timeout) as response:  # nosec B310
         return json.loads(response.read().decode("utf-8"))
+
+
+def _validated_http_url(url: str) -> str:
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise ValueError("Only http/https LLM endpoints are supported")
+    return url
 
 
 def _extract_openai_compatible_text(data: dict[str, Any]) -> str:
@@ -497,9 +507,11 @@ class OllamaClient:
             },
             ensure_ascii=False,
         ).encode("utf-8")
-        request = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"}, method="POST")
+        safe_url = _validated_http_url(url)
+        request = urllib.request.Request(safe_url, data=body, headers={"Content-Type": "application/json"}, method="POST")
         try:
-            with urllib.request.urlopen(request, timeout=60) as response:
+            # URL scheme is validated before the request is built.
+            with urllib.request.urlopen(request, timeout=60) as response:  # nosec B310
                 data = json.loads(response.read().decode("utf-8"))
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
             return _unavailable(
@@ -541,9 +553,11 @@ class LMStudioClient:
             },
             ensure_ascii=False,
         ).encode("utf-8")
-        request = urllib.request.Request(self.endpoint, data=body, headers={"Content-Type": "application/json"}, method="POST")
+        safe_url = _validated_http_url(self.endpoint)
+        request = urllib.request.Request(safe_url, data=body, headers={"Content-Type": "application/json"}, method="POST")
         try:
-            with urllib.request.urlopen(request, timeout=60) as response:
+            # URL scheme is validated before the request is built.
+            with urllib.request.urlopen(request, timeout=60) as response:  # nosec B310
                 data = json.loads(response.read().decode("utf-8"))
             text = data.get("choices", [{}])[0].get("message", {}).get("content", "")
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, KeyError, IndexError) as exc:

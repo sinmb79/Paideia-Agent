@@ -7,94 +7,13 @@ from pathlib import Path
 from typing import Any
 
 from ai22b.config import PROJECT_ROOT
+from ai22b.talent_foundry.public_inventory import load_pyproject, public_candidate_files, read_text, safe_rel
 from ai22b.talent_foundry.public_release import (
-    _public_candidate_files,
-    _read_text,
-    _safe_rel,
     audit_public_release_readiness,
 )
 
 
 SOURCE_SBOM_SCHEMA = "paideia-source-sbom/v1"
-
-
-def _load_pyproject(path: Path) -> dict[str, Any]:
-    try:
-        import tomllib  # Python 3.11+
-    except ModuleNotFoundError:
-        try:
-            import tomli as tomllib  # type: ignore[no-redef]
-        except ModuleNotFoundError:
-            return _load_pyproject_minimal(path)
-    return tomllib.loads(path.read_text(encoding="utf-8"))
-
-
-def _load_pyproject_minimal(path: Path) -> dict[str, Any]:
-    """Fallback parser for the small pyproject subset Paideia publishes."""
-
-    text = path.read_text(encoding="utf-8")
-    data: dict[str, Any] = {"project": {"optional-dependencies": {}, "scripts": {}, "urls": {}}}
-    section = ""
-    current_array: tuple[str, str] | None = None
-    array_items: list[str] = []
-
-    def commit_array() -> None:
-        nonlocal current_array, array_items
-        if current_array is None:
-            return
-        group, key = current_array
-        if group == "project":
-            data["project"][key] = array_items
-        elif group == "optional":
-            data["project"]["optional-dependencies"][key] = array_items
-        current_array = None
-        array_items = []
-
-    for raw in text.splitlines():
-        line = raw.strip()
-        if not line or line.startswith("#"):
-            continue
-        if line.startswith("[") and line.endswith("]"):
-            commit_array()
-            section = line.strip("[]")
-            continue
-        if current_array is not None:
-            if line == "]":
-                commit_array()
-                continue
-            value = line.rstrip(",").strip().strip('"').strip("'")
-            if value:
-                array_items.append(value)
-            continue
-        if "=" not in line:
-            continue
-        key, value = [part.strip() for part in line.split("=", 1)]
-        if value == "[":
-            if section == "project.optional-dependencies":
-                current_array = ("optional", key)
-            elif section == "project":
-                current_array = ("project", key)
-            array_items = []
-            continue
-        value = value.rstrip(",")
-        if value == "[]":
-            parsed: Any = []
-        elif value.startswith('"') and value.endswith('"'):
-            parsed = value.strip('"')
-        elif value.startswith("{") and value.endswith("}"):
-            parsed = {"raw": value}
-        else:
-            parsed = value
-        if section == "project":
-            data["project"][key] = parsed
-        elif section == "project.scripts":
-            data["project"]["scripts"][key] = str(parsed)
-        elif section == "project.urls":
-            data["project"]["urls"][key] = str(parsed)
-        elif section == "project.optional-dependencies":
-            data["project"]["optional-dependencies"][key] = parsed if isinstance(parsed, list) else [str(parsed)]
-    commit_array()
-    return data
 
 
 def _sha256(path: Path) -> str:
@@ -143,14 +62,14 @@ def build_source_sbom(
     """Build a public-safe source SBOM/inventory without network access."""
 
     root = (repo_root or PROJECT_ROOT).resolve()
-    pyproject = _load_pyproject(root / "pyproject.toml")
+    pyproject = load_pyproject(root / "pyproject.toml")
     project = pyproject.get("project", {})
     optional = project.get("optional-dependencies", {})
     scripts = project.get("scripts", {})
 
     components: list[dict[str, Any]] = []
-    for path in _public_candidate_files(root):
-        rel = _safe_rel(path, root)
+    for path in public_candidate_files(root):
+        rel = safe_rel(path, root)
         components.append(
             {
                 "path": rel,
@@ -167,7 +86,7 @@ def build_source_sbom(
         by_type[item["type"]] = by_type.get(item["type"], 0) + 1
 
     release_readiness = audit_public_release_readiness(root)
-    license_text = _read_text(root / "LICENSE") if (root / "LICENSE").is_file() else ""
+    license_text = read_text(root / "LICENSE") if (root / "LICENSE").is_file() else ""
 
     sbom = {
         "schema": SOURCE_SBOM_SCHEMA,

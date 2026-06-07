@@ -30,7 +30,7 @@ The GitHub `main` branch now contains the installable Paideia Agent preview:
 - Agent_warrent / Agent ID Card local export support, with manual owner-controlled registration only. Paideia prepares reviewed connector files but does not sign, upload, or register by itself.
 - Hermes/OpenClaw/generic skill migration into a quarantined compatibility profile. Imported skills stay disabled until the owner reviews required capabilities and test evidence.
 - Parent-controlled projection swarm cycles. A hired talent can split work into task projections, compare them on `projection_synthesis_board`, and promote only the reviewed parent synthesis into the learning ledger.
-- Public-safe release gates: package install doctor, first-run doctor, public release readiness audit, source hygiene script, action-policy eval, LLM adapter contracts, and the full regression suite.
+- Public-safe release gates: package install doctor, first-run doctor, public release readiness audit, source hygiene script, security scans, JSON Schema contracts, action-policy eval, LLM adapter contracts, and the full regression suite.
 
 ## Origin
 
@@ -909,7 +909,7 @@ Run the public-release hygiene check before publishing:
 .\scripts\check_public_repo_hygiene.ps1
 ```
 
-The hygiene check blocks private data, local absolute paths, generated runs, model checkpoints, API keys, tokens, `node_modules`, build outputs, and owner-specific instructions.
+The hygiene check blocks private data, local absolute paths, generated runs, model checkpoints, API keys, tokens, hidden bidirectional Unicode controls, `node_modules`, build outputs, and owner-specific instructions.
 
 Run the Python release-readiness audit when you want the same source-repository gate as a reviewable JSON artifact:
 
@@ -947,7 +947,7 @@ ai22b-talent-foundry doctor-first-run `
   --output .\first_run_doctor.json
 ```
 
-The readiness audit checks required public files, package license metadata, CI markers, release-readiness docs, the security policy, and the public hygiene policy without network calls or subprocess execution. The source SBOM records package metadata, optional dependency groups, console entrypoints, public candidate file hashes, and a repository digest. The connection profile and live setup guide prove the selected LLM setup path can be materialized without exporting secrets or calling a provider. The package install doctor verifies the current environment's installed distribution metadata, console scripts, optional extras, and callable targets. The runtime contract doctor verifies the live-like agent loop, registered tool boundary, memory review gate, and fail-closed live provider behavior without external provider calls. The first-run doctor bundles the public-safe install-time checks, including the no-network LLM live readiness suite, into a single report for new users. The SBOM is an inventory, not a vulnerability scan.
+The readiness audit checks required public files, package license metadata, CI markers, release-readiness docs, the security policy, schema inventory, and the public hygiene policy without network calls or subprocess execution. The source SBOM records package metadata, optional dependency groups, console entrypoints, public candidate file hashes, and a repository digest. The connection profile and live setup guide prove the selected LLM setup path can be materialized without exporting secrets or calling a provider. The package install doctor verifies the current environment's installed distribution metadata, console scripts, optional extras, and callable targets. The runtime contract doctor verifies the live-like agent loop, registered tool boundary, memory review gate, and fail-closed live provider behavior without external provider calls. The first-run doctor bundles the public-safe install-time checks, including the no-network LLM live readiness suite, into a single report for new users. The SBOM is an inventory, not a vulnerability scan; vulnerability checks run through the separate `security` extra with Bandit and pip-audit.
 
 Run the P0 action-policy safety corpus before trusting a runtime change:
 
