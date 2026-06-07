@@ -246,6 +246,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     onboarding_run_next.add_argument("--launch-plan", required=True)
     onboarding_run_next.add_argument("--action", help="Action id to run. Defaults to the launch plan finish recommendation.")
+    onboarding_run_next.add_argument("--message", help="Message for first_chat_offline when that action is selected.")
     onboarding_run_next.add_argument(
         "--approve",
         action="store_true",
@@ -1123,6 +1124,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             action_id=args.action,
             approved=args.approve,
             action_output_path=Path(args.action_output) if args.action_output else None,
+            message=args.message,
         )
         if args.output:
             output_path = Path(args.output)
