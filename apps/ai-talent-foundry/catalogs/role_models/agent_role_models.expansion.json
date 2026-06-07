@@ -242,6 +242,61 @@
       "historical_education_evidence": [{"claim": "Mathematics, circuits, and communication-theory anchors are public.", "evidence_level": "verified_public_source", "source": "IEEE / MIT"}],
       "education_process_template": {"verified_strengths_to_simulate_as_exams": ["probability", "circuits", "communication theory", "compression and coding"], "modern_ai_replacement_policy": "Use open information theory, probability, and systems courses."},
       "copyright_policy": {"public_repo_policy": "metadata_and_reading_plan_only", "restricted_titles": []}
+    },
+    {
+      "schema": "ai-talent-role-model/v1",
+      "role_model_id": "hamilton_reliability_incident_response",
+      "domain": "devops_sre_incident_response",
+      "display_name": "Margaret Hamilton process-replication software reliability and incident response track",
+      "catalog_status": "ready_public_metadata",
+      "primary_agent_use_case": "DevOps on-call assistant, SRE incident reviewer, reliability engineering workflow agent",
+      "inspiration_mode": "learning_process_replication_not_personality_injection",
+      "public_identity": {"name": "Margaret Hamilton", "birth_date": "1936-08-17", "birth_time": null, "birth_place": "Paoli, Indiana, United States", "date_only_confidence": "high", "notes": ["Process seed only.", "No identity claim or personality injection."]},
+      "emulation_policy": {"mode": "reliability_engineering_process_replication", "purpose": "Build rigorous software reliability, priority handling, incident review, and human-in-the-loop operational safety curriculum.", "saju_role": "symbolic_initial_condition_generator_only", "forbidden_preloads": ["personality_keywords", "worldview_keywords", "identity_claim"]},
+      "source_facts": [
+        {"fact": "NASA summarizes Hamilton's leadership of the MIT Instrumentation Laboratory software team for Apollo guidance software.", "source": "NASA Science", "url": "https://science.nasa.gov/people/margaret-hamilton/"},
+        {"fact": "Britannica summarizes Hamilton's role in early software engineering and Apollo software work.", "source": "Encyclopaedia Britannica", "url": "https://www.britannica.com/biography/Margaret-Hamilton-American-computer-scientist"}
+      ],
+      "historical_education_evidence": [{"claim": "Mathematics, software engineering, and mission-critical reliability anchors are public.", "evidence_level": "verified_public_source", "source": "NASA / Britannica"}],
+      "education_process_template": {"verified_strengths_to_simulate_as_exams": ["fault handling", "priority scheduling", "incident review", "software reliability"], "modern_ai_replacement_policy": "Use open SRE, distributed systems, testing, observability, and incident-response materials."},
+      "copyright_policy": {"public_repo_policy": "metadata_and_reading_plan_only", "restricted_titles": []}
+    },
+    {
+      "schema": "ai-talent-role-model/v1",
+      "role_model_id": "bush_deep_research_memex",
+      "domain": "deep_research_knowledge_work",
+      "display_name": "Vannevar Bush process-replication deep research and Memex knowledge-work track",
+      "catalog_status": "ready_public_metadata",
+      "primary_agent_use_case": "deep research agent, knowledge synthesis assistant, citation trail and literature review agent",
+      "inspiration_mode": "learning_process_replication_not_personality_injection",
+      "public_identity": {"name": "Vannevar Bush", "birth_date": "1890-03-11", "birth_time": null, "birth_place": "Everett, Massachusetts, United States", "date_only_confidence": "high", "notes": ["Process seed only.", "No identity claim or personality injection."]},
+      "emulation_policy": {"mode": "research_trail_process_replication", "purpose": "Build source discovery, evidence trails, analog-computing history, research administration, and associative knowledge-routing curriculum.", "saju_role": "symbolic_initial_condition_generator_only", "forbidden_preloads": ["personality_keywords", "worldview_keywords", "identity_claim"]},
+      "source_facts": [
+        {"fact": "Britannica summarizes Bush's engineering, differential analyzer, and wartime scientific administration roles.", "source": "Encyclopaedia Britannica", "url": "https://www.britannica.com/biography/Vannevar-Bush"},
+        {"fact": "The Computer History Museum notes Bush's Memex concept as an information-retrieval and associative-linking precursor.", "source": "Computer History Museum", "url": "https://www.computerhistory.org/tdih/march/11/"},
+        {"fact": "MIT Lemelson resources describe Bush's differential analyzer and Memex idea.", "source": "MIT Lemelson", "url": "https://lemelson.mit.edu/resources/vannevar-bush"}
+      ],
+      "historical_education_evidence": [{"claim": "Engineering, research administration, analog computing, and information-retrieval anchors are public.", "evidence_level": "verified_public_source", "source": "Britannica / CHM / MIT"}],
+      "education_process_template": {"verified_strengths_to_simulate_as_exams": ["source trail building", "research synthesis", "citation hygiene", "associative knowledge mapping"], "modern_ai_replacement_policy": "Use open research-methods, information retrieval, RAG evaluation, and literature-review materials."},
+      "copyright_policy": {"public_repo_policy": "metadata_and_reading_plan_only", "restricted_titles": [{"title": "As We May Think", "authors": ["Vannevar Bush"], "policy": "metadata_or_public_link_only_no_full_text_ingest"}]}
+    },
+    {
+      "schema": "ai-talent-role-model/v1",
+      "role_model_id": "washington_wylie_accounting_controls",
+      "domain": "finance_accounting_operations",
+      "display_name": "Mary T. Washington Wylie process-replication accounting controls track",
+      "catalog_status": "ready_public_metadata",
+      "primary_agent_use_case": "accounting operations assistant, reconciliations reviewer, audit-control and bookkeeping workflow agent",
+      "inspiration_mode": "learning_process_replication_not_personality_injection",
+      "public_identity": {"name": "Mary T. Washington Wylie", "birth_date": "1906-04-21", "birth_time": null, "birth_place": "Chicago, Illinois, United States", "date_only_confidence": "medium", "notes": ["Process seed only.", "No identity claim or personality injection."]},
+      "emulation_policy": {"mode": "accounting_controls_process_replication", "purpose": "Build bookkeeping, accounting, reconciliation, audit-control, client-service, and professional-ethics curriculum.", "saju_role": "symbolic_initial_condition_generator_only", "forbidden_preloads": ["personality_keywords", "worldview_keywords", "identity_claim", "financial_advice_claim"]},
+      "source_facts": [
+        {"fact": "The American Accounting Association lists Mary Thelma Washington Wylie in The Accounting Hall of Fame.", "source": "American Accounting Association", "url": "https://aaahq.org/Accounting-Hall-of-Fame/Members/2025/Mary-T-Washington-Wylie"},
+        {"fact": "Illinois CPA Society materials summarize the Mary T. Washington Wylie Opportunity Fund and accounting profession context.", "source": "Illinois CPA Society", "url": "https://www.icpas.org/docs/default-source/default-document-library/future-cpa/mtww-program-impact-report-2023.pdf"}
+      ],
+      "historical_education_evidence": [{"claim": "Accounting practice, CPA professionalization, client service, and controls anchors are public.", "evidence_level": "verified_public_source", "source": "AAA / Illinois CPA Society"}],
+      "education_process_template": {"verified_strengths_to_simulate_as_exams": ["bookkeeping accuracy", "reconciliation", "internal controls", "audit evidence", "professional ethics"], "modern_ai_replacement_policy": "Use open accounting, audit, spreadsheet, tax-boundary, and ERP-control materials; never provide regulated financial advice."},
+      "copyright_policy": {"public_repo_policy": "metadata_and_reading_plan_only", "restricted_titles": []}
     }
   ]
 }
