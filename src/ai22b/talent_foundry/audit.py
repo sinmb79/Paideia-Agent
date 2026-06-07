@@ -71,7 +71,7 @@ WORKSPACE_EXECUTION_PROOF_SAFETY_SCHEMA = "paideia-workspace-execution-proof-saf
 MAX_AUDITED_SAFE_REFERENCE_CHARS = 12000
 MAX_AUDITED_SAFE_REFERENCE_TEXT_CHARS = 900
 WINDOWS_ABSOLUTE_PATH = re.compile(r"[A-Za-z]:\\")
-POSIX_HOME_PATH = re.compile(r"(/home/|/Users/)[^\s\"']+")
+POSIX_LOCAL_PATH = re.compile(r"(/home/|/Users/|/tmp/|/var/folders/|/private/var/folders/)[^\s\"']+")
 SECRET_RE = re.compile(r"(sk-[A-Za-z0-9_-]{16,}|Bearer\s+[A-Za-z0-9._-]+|api[_-]?key\s*[:=])", re.I)
 PRIVATE_REASONING_KEYS = {
     "chain_of_thought",
@@ -569,7 +569,7 @@ def _scan_safe_reference_value(value: Any, *, path: str = "$") -> list[dict[str,
         for index, item in enumerate(value):
             issues.extend(_scan_safe_reference_value(item, path=f"{path}[{index}]"))
     elif isinstance(value, str):
-        if WINDOWS_ABSOLUTE_PATH.search(value) or POSIX_HOME_PATH.search(value):
+        if WINDOWS_ABSOLUTE_PATH.search(value) or POSIX_LOCAL_PATH.search(value):
             issues.append(
                 {
                     "id": "local_absolute_path_in_safe_reference",

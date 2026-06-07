@@ -10,7 +10,7 @@ MEMORY_LIFECYCLE_SCHEMA = "paideia-memory-lifecycle/v1"
 MEMORY_LIFECYCLE_STATUS_CARD_SCHEMA = "paideia-memory-lifecycle-status-card/v1"
 
 WINDOWS_ABSOLUTE_PATH = re.compile(r"[A-Za-z]:\\")
-POSIX_HOME_PATH = re.compile(r"(/home/|/Users/)[^\s\"']+")
+POSIX_LOCAL_PATH = re.compile(r"(/home/|/Users/|/tmp/|/var/folders/|/private/var/folders/)[^\s\"']+")
 EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 PHONE_RE = re.compile(r"(?<!\d)(?:\+?\d{1,3}[-.\s])?(?:\d{2,4}[-.\s]){2,3}\d{3,4}(?!\d)")
 SECRET_RE = re.compile(r"(sk-[A-Za-z0-9_-]{16,}|Bearer\s+[A-Za-z0-9._-]+|api[_-]?key\s*[:=])", re.I)
@@ -95,7 +95,7 @@ def audit_learning_ledger(ledger: dict[str, Any], *, objective: str | None = Non
                 "message": "safe_reference must not store hidden chain-of-thought or private reasoning traces.",
             }
         )
-    if WINDOWS_ABSOLUTE_PATH.search(safe_reference_blob) or POSIX_HOME_PATH.search(safe_reference_blob):
+    if WINDOWS_ABSOLUTE_PATH.search(safe_reference_blob) or POSIX_LOCAL_PATH.search(safe_reference_blob):
         issues.append(
             {
                 "id": "local_absolute_path_unredacted",
@@ -172,7 +172,7 @@ def audit_learning_ledger(ledger: dict[str, Any], *, objective: str | None = Non
         "retrieval_quality": _retrieval_quality(ledger, objective),
         "checks": {
             "private_reasoning_trace_not_stored": not _contains_private_reasoning(_safe_references(promoted + quarantined)),
-            "local_absolute_paths_redacted": not (WINDOWS_ABSOLUTE_PATH.search(safe_reference_blob) or POSIX_HOME_PATH.search(safe_reference_blob)),
+            "local_absolute_paths_redacted": not (WINDOWS_ABSOLUTE_PATH.search(safe_reference_blob) or POSIX_LOCAL_PATH.search(safe_reference_blob)),
             "secret_like_values_absent": not bool(SECRET_RE.search(safe_reference_blob)),
             "quarantined_excluded_from_active_context": True,
             "deletion_requires_manual_audit": True,
