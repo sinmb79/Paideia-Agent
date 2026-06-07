@@ -32,6 +32,7 @@ from ai22b.talent_foundry.simulation_rollouts import build_simulation_rollouts, 
 CONSOLE_SESSION_SCHEMA = "ai-talent-guided-console-session/v1"
 OPENCLAW_STYLE_WIZARD_SCHEMA = "ai22b-paideia-openclaw-style-onboarding/v1"
 ONBOARDING_LAUNCH_PLAN_SCHEMA = "paideia-onboarding-launch-plan/v1"
+ONBOARDING_NEXT_ACTION_SCHEMA = "paideia-onboarding-next-action/v1"
 
 SPECIALIST_TEAM_ROLES = [
     ("macro", "거시경제 분석 에이전트"),
@@ -896,6 +897,70 @@ def format_onboarding_finish_summary(session: dict[str, Any]) -> str:
         lines.append(f"Recommended command: {recommended_command}")
     lines.append("Public-safe note: no API keys, raw provider payloads, or hidden reasoning traces were saved.")
     return "\n".join(line for line in lines if line is not None)
+
+
+def resolve_onboarding_next_action(
+    launch_plan_path: Path,
+    *,
+    action_id: str | None = None,
+) -> dict[str, Any]:
+    launch_plan = json.loads(launch_plan_path.read_text(encoding="utf-8"))
+    if launch_plan.get("schema") != ONBOARDING_LAUNCH_PLAN_SCHEMA:
+        raise ValueError("Unsupported onboarding launch plan schema")
+    command_by_id = _command_lookup(launch_plan)
+    finish_step = _launch_finish_step(launch_plan)
+    selected_action_id = str(action_id or finish_step.get("recommended_command_id") or "first_chat_offline")
+    selected = command_by_id.get(selected_action_id, {})
+    command_or_path = _command_or_path(selected)
+    public_safe = (
+        launch_plan.get("public_safe", {}) if isinstance(launch_plan.get("public_safe"), dict) else {}
+    )
+    return {
+        "schema": ONBOARDING_NEXT_ACTION_SCHEMA,
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "launch_plan_path": str(launch_plan_path),
+        "launch_plan_schema": launch_plan.get("schema"),
+        "status": "ready" if selected else "not_found",
+        "action_id": selected_action_id,
+        "title": selected.get("title"),
+        "command": selected.get("command"),
+        "path": selected.get("path"),
+        "command_or_path": command_or_path,
+        "network_call_if_executed": bool(selected.get("network_call", False)),
+        "required_before_agent_work": selected.get("required_before_agent_work"),
+        "required_before_daily_use": selected.get("required_before_daily_use"),
+        "expected": selected.get("expected"),
+        "recommended_by_finish_step": finish_step.get("recommended_command_id"),
+        "available_actions": sorted(command_by_id),
+        "operator_policy": {
+            "resolver_executes_command": False,
+            "resolver_network_call_performed": False,
+            "owner_review_required_before_execution": True,
+            "external_registration_performed": public_safe.get("external_registration_performed"),
+            "private_reasoning_trace": public_safe.get("private_reasoning_trace"),
+        },
+    }
+
+
+def format_onboarding_next_action_summary(next_action: dict[str, Any]) -> str:
+    lines = [
+        "Paideia onboarding next action",
+        f"- Status: {next_action.get('status')}",
+        f"- Launch plan: {next_action.get('launch_plan_path')}",
+        f"- Action: {next_action.get('action_id')}",
+    ]
+    if next_action.get("title"):
+        lines.append(f"- Title: {next_action.get('title')}")
+    if next_action.get("command_or_path"):
+        lines.append(f"- Command or path: {next_action.get('command_or_path')}")
+    lines.append(f"- Network if executed: {next_action.get('network_call_if_executed')}")
+    lines.append("- Resolver executed command: False")
+    available = next_action.get("available_actions", [])
+    if isinstance(available, list) and available:
+        lines.append("- Available actions: " + ", ".join(str(item) for item in available))
+    if next_action.get("status") != "ready":
+        lines.append("No matching action was found in the launch plan.")
+    return "\n".join(lines)
 
 
 def write_openclaw_style_config(

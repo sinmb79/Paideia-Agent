@@ -130,6 +130,13 @@ ai22b-talent-foundry onboard
 
 또한 `start-console` 또는 `onboard`가 끝나면 터미널에 완료 요약이 바로 출력됩니다. 여기에는 console session 경로, launch plan 경로, 선택한 LLM/채팅 표면, onboarding doctor 명령, live-readiness 명령, 첫 채팅 명령, 추천 finish action이 포함됩니다.
 
+launch plan의 추천 다음 액션만 다시 확인할 수도 있습니다. 이 명령은 다음 명령문을 보여주기만 하고 실행하지 않습니다.
+
+```powershell
+ai22b-talent-foundry show-onboarding-next-action `
+  --launch-plan .\onboarding_launch_plan.json
+```
+
 생성된 wizard 세션과 health artifact, launch plan은 다음 명령으로 다시 검증할 수 있습니다.
 
 ```powershell

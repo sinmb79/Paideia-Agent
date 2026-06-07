@@ -29,7 +29,13 @@ from ai22b.talent_foundry.audit import audit_foundry_release
 from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
 from ai22b.talent_foundry.cli_llm_commands import handle_llm_runtime_command, register_llm_runtime_commands
 from ai22b.talent_foundry.cohort import create_specialist_cohort
-from ai22b.talent_foundry.console import collect_console_answers, format_onboarding_finish_summary, run_console_session
+from ai22b.talent_foundry.console import (
+    collect_console_answers,
+    format_onboarding_finish_summary,
+    format_onboarding_next_action_summary,
+    resolve_onboarding_next_action,
+    run_console_session,
+)
 from ai22b.talent_foundry.developmental_ecology import build_developmental_ecology
 from ai22b.talent_foundry.distribution import (
     create_agent_release_bundle,
@@ -218,6 +224,19 @@ def _build_parser() -> argparse.ArgumentParser:
     onboard_wizard.add_argument("--answers", help="JSON file with console answers for non-interactive runs.")
     onboard_wizard.add_argument("--output-dir", default=str(DEFAULT_RUN_DIR / "console_onboarding"))
     onboard_wizard.add_argument("--output")
+
+    onboarding_next = subparsers.add_parser(
+        "show-onboarding-next-action",
+        help="Read an onboarding launch plan and print the recommended next command without executing it.",
+    )
+    onboarding_next.add_argument("--launch-plan", required=True)
+    onboarding_next.add_argument("--action", help="Action id to show. Defaults to the launch plan finish recommendation.")
+    onboarding_next.add_argument("--output", help="Optional JSON report path.")
+    onboarding_next.add_argument(
+        "--strict",
+        action="store_true",
+        help="Return exit code 2 when the requested action is not found.",
+    )
 
     onboarding_doctor = subparsers.add_parser(
         "doctor-onboarding-session",
@@ -1061,6 +1080,20 @@ def main(argv: Sequence[str] | None = None) -> int:
             mode=mode,
         )
         print(format_onboarding_finish_summary(session))
+        return 0
+
+    if args.command == "show-onboarding-next-action":
+        next_action = resolve_onboarding_next_action(
+            Path(args.launch_plan),
+            action_id=args.action,
+        )
+        if args.output:
+            output_path = Path(args.output)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(json.dumps(next_action, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(format_onboarding_next_action_summary(next_action))
+        if args.strict and next_action.get("status") != "ready":
+            return 2
         return 0
 
     if args.command == "doctor-onboarding-session":
