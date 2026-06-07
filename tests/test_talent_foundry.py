@@ -6772,10 +6772,45 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertTrue(all(item["command_source"] == "parent_body_directive" for item in cycle["contributions"]))
         self.assertTrue(all(item["execution_mode"] == "role_split" for item in cycle["contributions"]))
         self.assertTrue(all(contribution_outputs_exist))
-        self.assertTrue(all(item["learning_update"]["decision"] == "promoted" for item in cycle["contributions"]))
+        self.assertTrue(
+            all(
+                item["projection_learning_candidate"]["decision"] == "candidate_for_parent_synthesis"
+                for item in cycle["contributions"]
+            )
+        )
+        self.assertTrue(
+            all(
+                item["projection_learning_candidate"]["memory_policy"]["durable_memory_written"] is False
+                for item in cycle["contributions"]
+            )
+        )
+        self.assertEqual(
+            cycle["projection_synthesis_board"]["schema"],
+            "paideia-parent-controlled-projection-synthesis-board/v1",
+        )
+        self.assertEqual(cycle["projection_synthesis_board"]["row_count"], len(cycle["contributions"]))
+        self.assertTrue(cycle["projection_synthesis_board"]["synthesis_quality_gates"]["single_parent_identity"])
+        self.assertTrue(
+            cycle["projection_synthesis_board"]["synthesis_quality_gates"][
+                "projection_direct_memory_write_blocked"
+            ]
+        )
+        self.assertEqual(
+            set(cycle["projection_synthesis_board"]["arbitration"]["accepted_projection_ids"]),
+            {item["projection_id"] for item in cycle["contributions"]},
+        )
+        self.assertFalse(cycle["projection_synthesis_board"]["arbitration"]["automatic_projection_memory_write"])
+        self.assertEqual(cycle["parent_learning_update"]["decision"], "promoted")
+        self.assertIn(
+            "parent_controlled_projection_synthesis",
+            cycle["parent_learning_update"]["latest_promoted_skills"],
+        )
         self.assertFalse(cycle["parent_synthesis"]["separate_consciousness_created"])
         self.assertTrue(cycle["parent_synthesis"]["joint_collaboration_allowed"])
+        self.assertEqual(cycle["parent_synthesis"]["projection_memory_write"], "blocked_until_parent_synthesis")
         self.assertEqual(cycle["parent_growth_merge"]["merge_target"], "parent_growth_log")
+        self.assertEqual(cycle["parent_growth_merge"]["projection_candidate_count"], len(cycle["contributions"]))
+        self.assertEqual(cycle["parent_growth_merge"]["parent_learning_update_count"], 1)
         self.assertEqual(saved_cycle["cycle_id"], cycle["cycle_id"])
 
     def test_cli_hired_projection_swarm_commands_assemble_and_run_cycle(self) -> None:
@@ -6825,6 +6860,11 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(assemble_exit, 0)
         self.assertEqual(cycle_exit, 0)
         self.assertEqual(cycle["schema"], "ai-talent-hired-projection-swarm-cycle/v1")
+        self.assertEqual(
+            cycle["projection_synthesis_board"]["schema"],
+            "paideia-parent-controlled-projection-synthesis-board/v1",
+        )
+        self.assertEqual(cycle["parent_learning_update"]["source"], "hired_projection_swarm_cycle")
         self.assertFalse(cycle["parent_synthesis"]["separate_consciousness_created"])
 
     def test_demo_runner_writes_hired_projection_swarm_cycle(self) -> None:
@@ -6839,6 +6879,8 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(swarm["schema"], "ai-talent-hired-projection-swarm/v1")
         self.assertEqual(cycle["schema"], "ai-talent-hired-projection-swarm-cycle/v1")
         self.assertEqual(cycle["employment_context"]["employment_id"], swarm["parent"]["employment_context"]["employment_id"])
+        self.assertEqual(cycle["projection_synthesis_board"]["arbitration"]["parent_decision"], "ready_for_parent_learning_update")
+        self.assertEqual(cycle["parent_growth_merge"]["merge_status"], "parent_synthesis_promoted_to_learning_ledger")
         self.assertFalse(cycle["parent_synthesis"]["separate_consciousness_created"])
         self.assertTrue(swarm_workspace_exists)
 

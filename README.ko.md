@@ -526,6 +526,25 @@ ai22b-talent-foundry verify-workspace-execution `
 본체 제어 분신/군체 실험은 병렬 episode rollout 평가로 다룹니다.
 
 ```powershell
+ai22b-talent-foundry assemble-hired-projection-swarm `
+  --employment-record .\employment_record.json `
+  --swarm-name "Graham Junior projection swarm" `
+  --domain securities_research `
+  --output .\hired_projection_swarm.json
+
+ai22b-talent-foundry run-hired-projection-swarm-cycle `
+  --swarm .\hired_projection_swarm.json `
+  --objective "Review a quarterly research routine as one controlled swarm." `
+  --workspace .\projection_swarm_workspace `
+  --score 94 `
+  --reviewed-by Boss `
+  --status verified `
+  --output .\hired_projection_swarm_cycle.json
+```
+
+본체 제어 군체 사이클은 각 분신의 결과를 곧바로 장기 기억에 쓰지 않습니다. 각 결과는 `projection_learning_candidate`로만 남고, 본체가 `projection_synthesis_board`에서 채택/보류를 판단한 뒤, 검토된 `parent_learning_update` 한 건만 학습 ledger와 Reasoning Ledger 후보 경로로 들어갑니다.
+
+```powershell
 ai22b-talent-foundry evaluate-simulation-rollouts `
   --rollouts .\simulation_rollouts.json `
   --output .\simulation_rollout_evaluation.json
