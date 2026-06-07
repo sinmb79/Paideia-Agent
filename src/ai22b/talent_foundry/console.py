@@ -10,7 +10,7 @@ from ai22b.talent_foundry.agent_identity_card import (
     build_agent_identity_layer_envelope,
 )
 from ai22b.talent_foundry.onboarding import run_agent_onboarding
-from ai22b.talent_foundry.llm_onboarding import build_llm_provider_matrix
+from ai22b.talent_foundry.llm_onboarding import build_llm_live_setup_guide, build_llm_provider_matrix
 from ai22b.talent_foundry.onboarding_choices import (
     CHAT_SURFACE_CATALOG,
     DEFAULT_CHAT_SURFACE_ID,
@@ -640,6 +640,14 @@ def build_onboarding_launch_plan(
             fallback_command=next_commands[0] if len(next_commands) > 0 else "",
             required_before_agent_work=False,
         ),
+        {
+            "id": "live_setup_guide",
+            "title": "Review the selected LLM live setup guide",
+            "path": artifacts.get("llm_live_setup_guide", ""),
+            "network_call": False,
+            "required_before_agent_work": False,
+            "expected": "shows required model, key, localhost, explicit live-check, and daily chat steps without storing secrets.",
+        },
         _copy_command(
             command_id="provider_doctor_no_network",
             title="Verify provider configuration without network transport",
@@ -720,6 +728,7 @@ def build_onboarding_launch_plan(
                 artifacts.get("llm_provider_matrix"),
                 artifacts.get("llm_onboarding_checklist"),
                 artifacts.get("llm_connection_profile"),
+                artifacts.get("llm_live_setup_guide"),
             ],
         },
         {
@@ -1245,6 +1254,7 @@ def write_openclaw_style_config(
             "llm_provider_matrix": artifacts.get("llm_provider_matrix"),
             "llm_onboarding_checklist": artifacts.get("llm_onboarding_checklist"),
             "llm_connection_profile": artifacts.get("llm_connection_profile"),
+            "llm_live_setup_guide": artifacts.get("llm_live_setup_guide"),
             "secret_storage": "env_or_user_managed_no_plaintext_saved",
             "default_provider_call": "none_without_explicit_live_check",
         },
@@ -1310,6 +1320,14 @@ def run_console_session(
         chat_surface=normalized.get("chat_surface") or DEFAULT_CHAT_SURFACE_ID,
         output_path=llm_provider_matrix_path,
     )
+    llm_live_setup_guide_path = output_dir / "llm_live_setup_guide.json"
+    llm_live_setup_guide = build_llm_live_setup_guide(
+        llm_service=normalized.get("llm_service") or None,
+        llm_model=normalized.get("llm_model") or None,
+        llm_model_path=normalized.get("llm_model_path") or None,
+        chat_surface=normalized.get("chat_surface") or DEFAULT_CHAT_SURFACE_ID,
+        output_path=llm_live_setup_guide_path,
+    )
     onboarding = run_agent_onboarding(
         owner=normalized["owner"],
         request=normalized["request"],
@@ -1334,6 +1352,7 @@ def run_console_session(
         "console_session": str(output_path),
         "answers": str(answers_path),
         "llm_provider_matrix": str(llm_provider_matrix_path),
+        "llm_live_setup_guide": str(llm_live_setup_guide_path),
         "onboarding_session": onboarding["artifacts"]["onboarding_session"],
         "llm_onboarding_checklist": onboarding["artifacts"]["llm_onboarding_checklist"],
         "llm_connection_profile": onboarding["artifacts"]["llm_connection_profile"],
@@ -1545,6 +1564,14 @@ def run_console_session(
             },
             "llm_onboarding_checklist": onboarding["llm_onboarding_checklist"],
             "llm_connection_profile": onboarding["llm_connection_profile"],
+            "llm_live_setup_guide": {
+                "schema": llm_live_setup_guide["schema"],
+                "status": llm_live_setup_guide["status"],
+                "requires_explicit_live_check": llm_live_setup_guide["readiness_gate"][
+                    "requires_explicit_live_check"
+                ],
+                "network_call_performed": llm_live_setup_guide["public_safe"]["network_call_performed"],
+            },
         },
         "local_policy": onboarding["local_policy"],
         "post_hire_extensions": post_hire_extensions,

@@ -11,6 +11,7 @@ from ai22b.talent_foundry.chat_runtime_smoke import run_chat_runtime_smoke
 from ai22b.talent_foundry.llm_adapter_contracts import run_llm_adapter_contracts
 from ai22b.talent_foundry.llm_onboarding import (
     build_llm_connection_profile,
+    build_llm_live_setup_guide,
     build_llm_onboarding_checklist,
     build_llm_provider_matrix,
 )
@@ -339,6 +340,23 @@ def _connection_profile_summary(profile: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _live_setup_guide_summary(guide: dict[str, Any]) -> dict[str, Any]:
+    public_safe = _public_safe(guide)
+    readiness_gate = _as_dict(guide.get("readiness_gate"))
+    setup_cards = guide.get("setup_cards", [])
+    return {
+        "schema": guide.get("schema"),
+        "status": guide.get("status"),
+        "selected_engine": _as_dict(guide.get("selected_llm_service")).get("engine"),
+        "setup_card_count": len(setup_cards) if isinstance(setup_cards, list) else 0,
+        "requires_explicit_live_check": readiness_gate.get("requires_explicit_live_check"),
+        "network_call_performed": public_safe.get("network_call_performed"),
+        "subprocess_executed": public_safe.get("subprocess_executed"),
+        "secret_values_exported": public_safe.get("secret_values_exported"),
+        "private_reasoning_trace": public_safe.get("private_reasoning_trace"),
+    }
+
+
 def doctor_first_run(
     *,
     repo_root: Path | None = None,
@@ -358,6 +376,11 @@ def doctor_first_run(
         chat_surface="codex-bridge-chat",
     )
     llm_connection_profile = build_llm_connection_profile(
+        llm_service="deterministic_local",
+        llm_engine="deterministic_local",
+        chat_surface="codex-bridge-chat",
+    )
+    llm_live_setup_guide = build_llm_live_setup_guide(
         llm_service="deterministic_local",
         llm_engine="deterministic_local",
         chat_surface="codex-bridge-chat",
@@ -401,6 +424,7 @@ def doctor_first_run(
     provider_matrix_public = _public_safe(provider_matrix)
     checklist_public = _public_safe(llm_checklist)
     connection_public = _public_safe(llm_connection_profile)
+    live_setup_public = _public_safe(llm_live_setup_guide)
     adapter_public = _public_safe(adapter_contracts)
     application_runtime = _as_dict(application_smoke.get("runtime_result"))
     application_policy = _as_dict(application_smoke.get("data_policy"))
@@ -455,6 +479,15 @@ def doctor_first_run(
         and connection_public.get("network_call_performed") is False
         and connection_public.get("secret_values_exported") is False,
         details=_connection_profile_summary(llm_connection_profile),
+    )
+    _check(
+        checks,
+        "llm_live_setup_guide_public_safe",
+        llm_live_setup_guide.get("schema") == "paideia-llm-live-setup-guide/v1"
+        and llm_live_setup_guide.get("status") == "offline_ready_no_live_setup_required"
+        and live_setup_public.get("network_call_performed") is False
+        and live_setup_public.get("secret_values_exported") is False,
+        details=_live_setup_guide_summary(llm_live_setup_guide),
     )
     _check(
         checks,
@@ -657,6 +690,8 @@ def doctor_first_run(
         and provider_doctor.get("live_check_requested") is False
         and connection_public.get("network_call_performed") is False
         and connection_public.get("secret_values_exported") is False
+        and live_setup_public.get("network_call_performed") is False
+        and live_setup_public.get("secret_values_exported") is False
         and adapter_public.get("network_call_performed") is False
         and adapter_public.get("localhost_call_performed") is False
         and adapter_public.get("external_provider_called") is False
@@ -742,6 +777,7 @@ def doctor_first_run(
                 else 0,
             },
             "llm_connection_profile": _connection_profile_summary(llm_connection_profile),
+            "llm_live_setup_guide": _live_setup_guide_summary(llm_live_setup_guide),
             "llm_provider_doctor": {
                 "schema": provider_doctor.get("schema"),
                 "status": provider_doctor.get("status"),

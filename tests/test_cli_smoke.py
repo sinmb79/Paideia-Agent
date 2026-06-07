@@ -55,6 +55,7 @@ class CliSmokeTests(unittest.TestCase):
             llm_services_path = tmp_path / "llm_services.json"
             llm_onboarding_path = tmp_path / "llm_onboarding_checklist.json"
             llm_connection_profile_path = tmp_path / "llm_connection_profile.json"
+            llm_live_setup_guide_path = tmp_path / "llm_live_setup_guide.json"
             doctor_path = tmp_path / "llm_provider_doctor.json"
             adapter_contracts_path = tmp_path / "llm_adapter_contracts.json"
             llm_smoke_path = tmp_path / "llm_application_smoke.json"
@@ -101,6 +102,15 @@ class CliSmokeTests(unittest.TestCase):
                     "deterministic_local",
                     "--output",
                     str(llm_connection_profile_path),
+                ]
+            )
+            llm_live_setup_guide_code = cli_main(
+                [
+                    "build-llm-live-setup-guide",
+                    "--llm-engine",
+                    "deterministic_local",
+                    "--output",
+                    str(llm_live_setup_guide_path),
                 ]
             )
             doctor_code = cli_main(
@@ -224,6 +234,7 @@ class CliSmokeTests(unittest.TestCase):
             llm_services = json.loads(llm_services_path.read_text(encoding="utf-8"))
             llm_onboarding = json.loads(llm_onboarding_path.read_text(encoding="utf-8"))
             llm_connection_profile = json.loads(llm_connection_profile_path.read_text(encoding="utf-8"))
+            llm_live_setup_guide = json.loads(llm_live_setup_guide_path.read_text(encoding="utf-8"))
             doctor = json.loads(doctor_path.read_text(encoding="utf-8"))
             adapter_contracts = json.loads(adapter_contracts_path.read_text(encoding="utf-8"))
             llm_smoke = json.loads(llm_smoke_path.read_text(encoding="utf-8"))
@@ -252,6 +263,7 @@ class CliSmokeTests(unittest.TestCase):
         self.assertEqual(llm_services_code, 0)
         self.assertEqual(llm_onboarding_code, 0)
         self.assertEqual(llm_connection_profile_code, 0)
+        self.assertEqual(llm_live_setup_guide_code, 0)
         self.assertEqual(doctor_code, 0)
         self.assertEqual(adapter_contracts_code, 0)
         self.assertEqual(llm_smoke_code, 0)
@@ -333,6 +345,23 @@ class CliSmokeTests(unittest.TestCase):
             profile_sequence_ids,
         )
         self.assertIn("run-chat-runtime-smoke", llm_connection_profile["daily_use_commands"]["chat_runtime_smoke"])
+
+        self.assertEqual(llm_live_setup_guide["schema"], "paideia-llm-live-setup-guide/v1")
+        self.assertEqual(llm_live_setup_guide["status"], "offline_ready_no_live_setup_required")
+        self.assertEqual(llm_live_setup_guide["selected_llm_service"]["engine"], "deterministic_local")
+        self.assertFalse(llm_live_setup_guide["readiness_gate"]["requires_explicit_live_check"])
+        self.assertFalse(llm_live_setup_guide["public_safe"]["network_call_performed"])
+        self.assertFalse(llm_live_setup_guide["public_safe"]["secret_values_exported"])
+        runbook_ids = {item["id"] for item in llm_live_setup_guide["safe_runbook"]}
+        self.assertLessEqual(
+            {
+                "review_connection_profile",
+                "no_network_provider_doctor",
+                "explicit_live_readiness_suite",
+                "first_live_chat_template",
+            },
+            runbook_ids,
+        )
 
         self.assertEqual(doctor["schema"], "paideia-llm-provider-doctor/v1")
         self.assertEqual(doctor["engine"], "deterministic_local")
@@ -740,6 +769,7 @@ class CliSmokeTests(unittest.TestCase):
             "llm_provider_matrix_public_safe",
             "llm_onboarding_checklist_public_safe",
             "llm_connection_profile_public_safe",
+            "llm_live_setup_guide_public_safe",
             "deterministic_provider_doctor_ready",
             "llm_adapter_contracts_passed",
             "application_engine_smoke_passed",
@@ -756,6 +786,15 @@ class CliSmokeTests(unittest.TestCase):
         }:
             self.assertTrue(first_run_checks[check_id]["passed"], check_id)
         self.assertIn("graham_value_investing", first_run_doctor["artifacts"]["role_models"]["role_model_ids"])
+        self.assertEqual(
+            first_run_doctor["artifacts"]["llm_live_setup_guide"]["schema"],
+            "paideia-llm-live-setup-guide/v1",
+        )
+        self.assertEqual(
+            first_run_doctor["artifacts"]["llm_live_setup_guide"]["status"],
+            "offline_ready_no_live_setup_required",
+        )
+        self.assertFalse(first_run_doctor["artifacts"]["llm_live_setup_guide"]["network_call_performed"])
         self.assertEqual(first_run_doctor["artifacts"]["llm_provider_doctor"]["network_access"], "blocked")
         self.assertEqual(first_run_doctor["artifacts"]["llm_adapter_contracts"]["schema"], "paideia-llm-adapter-contracts/v1")
         self.assertTrue(first_run_doctor["artifacts"]["llm_adapter_contracts"]["passed"])

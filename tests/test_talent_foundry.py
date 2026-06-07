@@ -2015,6 +2015,41 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertFalse(profile["public_safe"]["live_check_performed"])
         self.assertEqual(profile["public_safe"]["private_reasoning_trace"], "do_not_store")
 
+    def test_llm_live_setup_guide_explains_openai_owner_configuration(self) -> None:
+        import os
+
+        from ai22b.talent_foundry.llm_onboarding import build_llm_live_setup_guide
+
+        old_key = os.environ.pop("OPENAI_API_KEY", None)
+        try:
+            guide = build_llm_live_setup_guide(
+                llm_service="openai_chatgpt_codex",
+                llm_model="gpt-4.1-mini",
+            )
+        finally:
+            if old_key is not None:
+                os.environ["OPENAI_API_KEY"] = old_key
+
+        cards = {item["id"]: item for item in guide["setup_cards"]}
+        runbook = {item["id"]: item for item in guide["safe_runbook"]}
+        serialized = json.dumps(guide, ensure_ascii=False)
+
+        self.assertEqual(guide["schema"], "paideia-llm-live-setup-guide/v1")
+        self.assertEqual(guide["status"], "needs_owner_configuration_before_live")
+        self.assertEqual(guide["selected_llm_service"]["engine"], "openai_chatgpt_codex")
+        self.assertTrue(guide["readiness_gate"]["requires_explicit_live_check"])
+        self.assertEqual(cards["api_credentials"]["required_env"][0]["preferred"], "OPENAI_API_KEY")
+        self.assertFalse(cards["api_credentials"]["required_env"][0]["stores_secret_in_profile"])
+        self.assertEqual(cards["model_argument"]["recommended_value"], "gpt-4.1-mini")
+        self.assertTrue(runbook["explicit_live_readiness_suite"]["network_call"])
+        self.assertIn("doctor-llm-live-readiness", runbook["explicit_live_readiness_suite"]["command"])
+        self.assertIn("--live-check", runbook["explicit_live_readiness_suite"]["command"])
+        self.assertFalse(guide["public_safe"]["network_call_performed"])
+        self.assertFalse(guide["public_safe"]["secret_values_exported"])
+        self.assertFalse(guide["data_policy"]["llm_is_identity"])
+        self.assertNotIn("sk-", serialized)
+        self.assertNotIn("fixture_value_should_not_be_exported", serialized)
+
     def test_llm_application_smoke_uses_runtime_path_without_raw_provider_storage(self) -> None:
         import os
 
@@ -4250,6 +4285,9 @@ class TalentFoundryTests(unittest.TestCase):
             llm_connection_profile = json.loads(
                 Path(session["artifacts"]["llm_connection_profile"]).read_text(encoding="utf-8")
             )
+            llm_live_setup_guide = json.loads(
+                Path(session["artifacts"]["llm_live_setup_guide"]).read_text(encoding="utf-8")
+            )
             launch_plan = json.loads(Path(session["artifacts"]["onboarding_launch_plan"]).read_text(encoding="utf-8"))
             config = json.loads(Path(session["artifacts"]["paideia_onboarding_config"]).read_text(encoding="utf-8"))
             doctor = json.loads(doctor_path.read_text(encoding="utf-8"))
@@ -4261,6 +4299,7 @@ class TalentFoundryTests(unittest.TestCase):
                     "llm_provider_matrix",
                     "llm_onboarding_checklist",
                     "llm_connection_profile",
+                    "llm_live_setup_guide",
                     "onboarding_launch_plan",
                     "onboarding_session",
                     "employment_record",
@@ -4290,6 +4329,8 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(llm_checklist["schema"], "paideia-llm-onboarding-checklist/v1")
         self.assertEqual(llm_connection_profile["schema"], "paideia-llm-connection-profile/v1")
         self.assertFalse(llm_connection_profile["public_safe"]["network_call_performed"])
+        self.assertEqual(llm_live_setup_guide["schema"], "paideia-llm-live-setup-guide/v1")
+        self.assertFalse(llm_live_setup_guide["public_safe"]["network_call_performed"])
         self.assertEqual(launch_plan["schema"], "paideia-onboarding-launch-plan/v1")
         self.assertEqual(launch_plan["status"], "ready_for_first_chat")
         self.assertEqual(launch_plan["selected_llm"]["engine"], "openai_chatgpt_codex")
@@ -4317,6 +4358,7 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertLessEqual(
             {
                 "connection_profile",
+                "live_setup_guide",
                 "provider_doctor_no_network",
                 "llm_live_readiness_suite",
                 "agent_runtime_smoke",
@@ -4330,7 +4372,12 @@ class TalentFoundryTests(unittest.TestCase):
             session["onboarding_summary"]["llm_connection_profile"]["path"],
             session["artifacts"]["llm_connection_profile"],
         )
+        self.assertEqual(
+            session["onboarding_summary"]["llm_live_setup_guide"]["schema"],
+            "paideia-llm-live-setup-guide/v1",
+        )
         self.assertEqual(config["model_auth"]["llm_connection_profile"], session["artifacts"]["llm_connection_profile"])
+        self.assertEqual(config["model_auth"]["llm_live_setup_guide"], session["artifacts"]["llm_live_setup_guide"])
         self.assertEqual(config["launch_plan"]["path"], session["artifacts"]["onboarding_launch_plan"])
         self.assertEqual(session["launch_plan"]["path"], session["artifacts"]["onboarding_launch_plan"])
         self.assertIn("first_chat_offline", session["launch_plan"]["command_ids"])
@@ -4338,6 +4385,7 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(session["onboarding_summary"]["llm_provider_matrix"]["schema"], provider_matrix["schema"])
         check_by_id = {item["id"]: item for item in doctor["checks"]}
         self.assertTrue(check_by_id["llm_connection_profile_valid"]["passed"])
+        self.assertTrue(check_by_id["llm_live_setup_guide_valid"]["passed"])
         self.assertTrue(check_by_id["onboarding_launch_plan_valid"]["passed"])
         self.assertTrue(all(artifact_exists.values()))
 
