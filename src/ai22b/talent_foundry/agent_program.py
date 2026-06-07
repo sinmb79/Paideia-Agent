@@ -838,6 +838,7 @@ def build_agent_program(
                 "choose_talent_source",
                 "role_model_and_curriculum_selection",
                 "researcher_intake",
+                "onboarding_choice_manifest",
                 "education_to_hiring",
                 "hiring_dossier_review",
                 "agent_id_card_payload_export",
@@ -847,6 +848,16 @@ def build_agent_program(
             "llm_service_catalog": LLM_SERVICE_CATALOG,
             "chat_surface_catalog": CHAT_SURFACE_CATALOG,
             "role_model_catalog": [summarize_role_model(item) for item in list_role_models()],
+            "choice_manifest": {
+                "schema": "paideia-onboarding-choice-manifest/v1",
+                "default_filename": "onboarding_choice_manifest.json",
+                "purpose": "records selected LLM, chat surface, curriculum, storage, runtime, and Agent ID policy",
+                "privacy": {
+                    "raw_local_model_path_saved": False,
+                    "raw_private_curriculum_dir_saved": False,
+                    "external_registration_performed": False,
+                },
+            },
             "selected_llm_service": employment.get("llm_service") or resolve_llm_service(
                 llm_engine=employment.get("llm_runtime", {}).get("engine"),
                 llm_model=employment.get("llm_runtime", {}).get("model"),

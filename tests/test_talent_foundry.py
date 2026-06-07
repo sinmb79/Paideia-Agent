@@ -4327,6 +4327,9 @@ class TalentFoundryTests(unittest.TestCase):
             )
             saved_session = json.loads(Path(session["artifacts"]["console_session"]).read_text(encoding="utf-8"))
             onboarding = json.loads(Path(session["artifacts"]["onboarding_session"]).read_text(encoding="utf-8"))
+            choice_manifest = json.loads(
+                Path(session["artifacts"]["onboarding_choice_manifest"]).read_text(encoding="utf-8")
+            )
             provider_matrix = json.loads(Path(session["artifacts"]["llm_provider_matrix"]).read_text(encoding="utf-8"))
             llm_checklist = json.loads(Path(session["artifacts"]["llm_onboarding_checklist"]).read_text(encoding="utf-8"))
             llm_connection_profile = json.loads(
@@ -4347,6 +4350,7 @@ class TalentFoundryTests(unittest.TestCase):
                     "console_session",
                     "answers",
                     "llm_provider_matrix",
+                    "onboarding_choice_manifest",
                     "llm_onboarding_checklist",
                     "llm_connection_profile",
                     "llm_live_setup_guide",
@@ -4384,6 +4388,13 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertFalse(llm_live_setup_guide["public_safe"]["network_call_performed"])
         self.assertEqual(launch_plan["schema"], "paideia-onboarding-launch-plan/v1")
         self.assertEqual(launch_plan["status"], "ready_for_first_chat")
+        self.assertEqual(choice_manifest["schema"], "paideia-onboarding-choice-manifest/v1")
+        self.assertEqual(choice_manifest["selected"]["llm_service"]["service_id"], "openai_chatgpt_codex")
+        self.assertEqual(choice_manifest["selected"]["chat_surface"]["id"], "codex-bridge-chat")
+        self.assertEqual(choice_manifest["selected"]["education_path"]["role_model_curriculum"]["status"], "connected")
+        self.assertFalse(choice_manifest["selected"]["llm_service"]["raw_model_path_saved_in_choice_manifest"])
+        self.assertFalse(choice_manifest["selected"]["storage"]["raw_private_curriculum_dir_saved_in_choice_manifest"])
+        self.assertFalse(choice_manifest["selected"]["agent_identity"]["external_registration_performed"])
         self.assertEqual(launch_plan["selected_llm"]["engine"], "openai_chatgpt_codex")
         self.assertEqual(launch_plan["selected_chat_surface"]["id"], "codex-bridge-chat")
         self.assertEqual(launch_plan["operator_dashboard"]["schema"], "paideia-openclaw-onboarding-dashboard/v1")
@@ -4397,6 +4408,8 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertFalse(launch_plan["public_safe"]["external_registration_performed"])
         launch_flow_ids = {item["id"] for item in launch_plan["flow"]}
         launch_command_ids = {item["id"] for item in launch_plan["command_plan"]}
+        self.assertIn("choice_manifest", launch_flow_ids)
+        self.assertIn("review_onboarding_choices", launch_command_ids)
         self.assertLess(
             [item["id"] for item in launch_plan["flow"]].index("model_auth"),
             [item["id"] for item in launch_plan["flow"]].index("education_path"),
@@ -4437,6 +4450,7 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(config["model_auth"]["llm_connection_profile"], session["artifacts"]["llm_connection_profile"])
         self.assertEqual(config["model_auth"]["llm_live_setup_guide"], session["artifacts"]["llm_live_setup_guide"])
         self.assertEqual(config["launch_plan"]["path"], session["artifacts"]["onboarding_launch_plan"])
+        self.assertEqual(config["choice_manifest"]["path"], session["artifacts"]["onboarding_choice_manifest"])
         self.assertEqual(config["launch_plan"]["operator_dashboard"], "embedded_in_launch_plan")
         self.assertEqual(config["launch_plan"]["next_action_queue"], "embedded_in_launch_plan")
         self.assertEqual(session["launch_plan"]["path"], session["artifacts"]["onboarding_launch_plan"])
@@ -4444,6 +4458,10 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(session["launch_plan"]["primary_next_action_id"], "first_chat_offline")
         self.assertIn("doctor_onboarding_session", session["launch_plan"]["next_action_queue_ids"])
         self.assertIn("first_chat_offline", session["launch_plan"]["command_ids"])
+        self.assertEqual(
+            session["onboarding_choice_manifest"]["path"],
+            session["artifacts"]["onboarding_choice_manifest"],
+        )
         self.assertEqual(
             agent_warrent_registration_request["schema"],
             "paideia-agent-warrent-registration-request/v1",
@@ -4460,6 +4478,7 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertTrue(check_by_id["llm_connection_profile_valid"]["passed"])
         self.assertTrue(check_by_id["llm_live_setup_guide_valid"]["passed"])
         self.assertTrue(check_by_id["onboarding_launch_plan_valid"]["passed"])
+        self.assertTrue(check_by_id["onboarding_choice_manifest_valid"]["passed"])
         self.assertTrue(all(artifact_exists.values()))
 
     def test_guided_console_can_create_parent_controlled_projection_swarm(self) -> None:

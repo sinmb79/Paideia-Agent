@@ -418,6 +418,9 @@ class GrahamTalentFoundryTests(unittest.TestCase):
                 output_path=output_dir / "console_session.json",
             )
             config = json.loads(Path(session["artifacts"]["paideia_onboarding_config"]).read_text(encoding="utf-8"))
+            choice_manifest = json.loads(
+                Path(session["artifacts"]["onboarding_choice_manifest"]).read_text(encoding="utf-8")
+            )
             provider_matrix = json.loads(Path(session["artifacts"]["llm_provider_matrix"]).read_text(encoding="utf-8"))
             llm_checklist = json.loads(Path(session["artifacts"]["llm_onboarding_checklist"]).read_text(encoding="utf-8"))
             llm_connection_profile = json.loads(
@@ -441,16 +444,39 @@ class GrahamTalentFoundryTests(unittest.TestCase):
 
         self.assertEqual(session["wizard"]["schema"], "ai22b-paideia-openclaw-style-onboarding/v1")
         self.assertEqual(config["schema"], "ai22b-paideia-openclaw-style-config/v1")
+        self.assertEqual(choice_manifest["schema"], "paideia-onboarding-choice-manifest/v1")
+        self.assertEqual(
+            session["onboarding_choice_manifest"]["path"],
+            session["artifacts"]["onboarding_choice_manifest"],
+        )
+        self.assertFalse(choice_manifest["flow_contract"]["llm_is_identity"])
+        self.assertTrue(choice_manifest["flow_contract"]["llm_selected_before_research_request"])
+        self.assertEqual(choice_manifest["selected"]["llm_service"]["service_id"], "openai_chatgpt_codex")
+        self.assertEqual(choice_manifest["selected"]["chat_surface"]["id"], "codex-bridge-chat")
+        self.assertEqual(choice_manifest["selected"]["education_path"]["role_model_id"], "graham_value_investing")
+        self.assertEqual(choice_manifest["selected"]["education_path"]["role_model_curriculum"]["status"], "connected")
+        self.assertFalse(choice_manifest["selected"]["llm_service"]["raw_model_path_saved_in_choice_manifest"])
+        self.assertFalse(choice_manifest["selected"]["storage"]["raw_private_curriculum_dir_saved_in_choice_manifest"])
+        self.assertEqual(
+            choice_manifest["selected"]["agent_identity"]["external_registration"],
+            "manual_owner_action_only",
+        )
+        self.assertFalse(choice_manifest["public_safe"]["network_call_performed"])
+        self.assertFalse(choice_manifest["public_safe"]["raw_model_path_saved"])
         self.assertEqual(config["model_auth"]["llm_provider_matrix"], session["artifacts"]["llm_provider_matrix"])
         self.assertEqual(config["model_auth"]["llm_onboarding_checklist"], session["artifacts"]["llm_onboarding_checklist"])
         self.assertEqual(config["model_auth"]["llm_connection_profile"], session["artifacts"]["llm_connection_profile"])
         self.assertEqual(config["model_auth"]["default_provider_call"], "none_without_explicit_live_check")
         self.assertEqual(config["launch_plan"]["path"], session["artifacts"]["onboarding_launch_plan"])
+        self.assertEqual(config["choice_manifest"]["path"], session["artifacts"]["onboarding_choice_manifest"])
         self.assertEqual(launch_plan["schema"], "paideia-onboarding-launch-plan/v1")
         self.assertEqual(launch_plan["status"], "ready_for_first_chat")
+        self.assertEqual(launch_plan["summary"]["choice_manifest"], session["artifacts"]["onboarding_choice_manifest"])
         self.assertEqual(launch_plan["selected_talent_path"]["role_model_id"], "graham_value_investing")
         self.assertEqual(launch_plan["operator_dashboard"]["schema"], "paideia-openclaw-onboarding-dashboard/v1")
         self.assertEqual(launch_plan["operator_dashboard"]["primary_next_action_id"], "first_chat_offline")
+        self.assertIn("choice_manifest", {item["id"] for item in launch_plan["flow"]})
+        self.assertIn("review_onboarding_choices", {item["id"] for item in launch_plan["command_plan"]})
         self.assertIn("first_chat_offline", {item["action_id"] for item in launch_plan["next_action_queue"]})
         self.assertIn("doctor_onboarding_session", {item["action_id"] for item in launch_plan["next_action_queue"]})
         self.assertEqual(launch_plan["recommended_next_action_id"], "first_chat_offline")
@@ -476,6 +502,7 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertTrue(check_by_id["llm_onboarding_checklist_valid"]["passed"])
         self.assertTrue(check_by_id["llm_connection_profile_valid"]["passed"])
         self.assertTrue(check_by_id["config_links_llm_artifacts"]["passed"])
+        self.assertTrue(check_by_id["onboarding_choice_manifest_valid"]["passed"])
         self.assertTrue(check_by_id["onboarding_launch_plan_valid"]["passed"])
         self.assertTrue(check_by_id["wizard_health_passed"]["passed"])
         self.assertEqual(config["gateway"]["mode"], "local_loopback")

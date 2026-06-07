@@ -133,11 +133,13 @@ ai22b-talent-foundry start-console `
 ai22b-talent-foundry onboard
 ```
 
-이 wizard는 기존 설정 감지, QuickStart/Advanced, Model/Auth, Workspace, Gateway/Channels, Skills, Education Path, Runtime, Agent Identity, Health Check, Finish 순서로 진행합니다. 실행 결과에는 `llm_provider_matrix.json`, 선택 provider 체크리스트, `llm_connection_profile.json`, `llm_live_setup_guide.json`, `onboarding_launch_plan.json`이 함께 남습니다.
+이 wizard는 기존 설정 감지, QuickStart/Advanced, Model/Auth, Workspace, Gateway/Channels, Skills, Education Path, Runtime, Agent Identity, Health Check, Finish 순서로 진행합니다. 실행 결과에는 `llm_provider_matrix.json`, 선택 provider 체크리스트, `llm_connection_profile.json`, `llm_live_setup_guide.json`, `onboarding_choice_manifest.json`, `onboarding_launch_plan.json`이 함께 남습니다.
 
-온보딩이 끝나면 먼저 `onboarding_launch_plan.json`을 열어보면 됩니다. 이 파일은 `operator_dashboard`와 `next_action_queue`를 포함하며, Model/Auth, Chat Surface, Education Path, Agent Identity, Health Check, Learning Loop 카드를 통해 다음에 무엇을 해야 하는지 보여줍니다. 선택한 LLM, 선택한 채팅 표면, 롤모델 교육 경로, Agent ID Card payload 상태, Agent_warrent 등록 요청 초안, 첫 채팅 명령, live-readiness suite, chat runtime smoke, 다음 목표 cycle, onboarding doctor 명령을 순서대로 보여주며 API key, provider 원문 응답, 숨은 추론 trace는 저장하지 않습니다.
+`onboarding_choice_manifest.json`은 선택 영수증입니다. 선택한 LLM 서비스, 채팅 표면, 게이트웨이/채널 정책, 스킬 마이그레이션 모드, 롤모델 커리큘럼, 저장소 정책, 런타임 모드, Agent ID/Agent_warrent 정책을 한 문서에 남깁니다. 로컬 모델 경로나 비공개 교재 폴더가 입력되었는지는 기록하지만, 원문 경로는 이 매니페스트에 저장하지 않습니다.
 
-또한 `start-console` 또는 `onboard`가 끝나면 터미널에 완료 요약이 바로 출력됩니다. 여기에는 console session 경로, launch plan 경로, 선택한 LLM/채팅 표면, onboarding doctor 명령, live-readiness 명령, 첫 채팅 명령, 추천 finish action이 포함됩니다.
+온보딩이 끝나면 먼저 `onboarding_launch_plan.json`을 열어보면 됩니다. 이 파일은 `operator_dashboard`와 `next_action_queue`를 포함하며, Model/Auth, Onboarding Choices, Chat Surface, Education Path, Agent Identity, Health Check, Learning Loop 카드를 통해 다음에 무엇을 해야 하는지 보여줍니다. 선택한 LLM, 선택한 채팅 표면, 롤모델 교육 경로, Agent ID Card payload 상태, Agent_warrent 등록 요청 초안, 첫 채팅 명령, live-readiness suite, chat runtime smoke, 다음 목표 cycle, onboarding doctor 명령을 순서대로 보여주며 API key, provider 원문 응답, 숨은 추론 trace는 저장하지 않습니다.
+
+또한 `start-console` 또는 `onboard`가 끝나면 터미널에 완료 요약이 바로 출력됩니다. 여기에는 console session 경로, choice manifest 경로, launch plan 경로, 선택한 LLM/채팅 표면, onboarding doctor 명령, live-readiness 명령, 첫 채팅 명령, 추천 finish action이 포함됩니다.
 
 launch plan의 dashboard view를 바로 출력할 수도 있습니다. 이 명령은 카드와 다음 액션 큐를 보여주지만, 명령 실행이나 provider 호출은 하지 않습니다.
 
