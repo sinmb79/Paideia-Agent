@@ -4566,6 +4566,21 @@ class TalentFoundryTests(unittest.TestCase):
             cli_output = stdout.getvalue()
             session = json.loads(output_path.read_text(encoding="utf-8"))
             onboarding_exists = Path(session["artifacts"]["onboarding_session"]).exists()
+            dashboard_path = tmp_path / "onboarding_dashboard.json"
+            dashboard_stdout = io.StringIO()
+            with redirect_stdout(dashboard_stdout):
+                dashboard_exit_code = cli_main(
+                    [
+                        "show-onboarding-dashboard",
+                        "--launch-plan",
+                        session["artifacts"]["onboarding_launch_plan"],
+                        "--output",
+                        str(dashboard_path),
+                        "--strict",
+                    ]
+                )
+            dashboard_cli_output = dashboard_stdout.getvalue()
+            dashboard = json.loads(dashboard_path.read_text(encoding="utf-8"))
             next_action_path = tmp_path / "next_action.json"
             next_stdout = io.StringIO()
             with redirect_stdout(next_stdout):
@@ -4702,6 +4717,7 @@ class TalentFoundryTests(unittest.TestCase):
             goal_cycle_task_plan_exists = Path(goal_cycle_run_report["workspace_outputs"]["task_plan"]).exists()
 
         self.assertEqual(exit_code, 0)
+        self.assertEqual(dashboard_exit_code, 0)
         self.assertEqual(next_exit_code, 0)
         self.assertEqual(doctor_action_exit_code, 0)
         self.assertEqual(no_approval_exit_code, 1)
@@ -4716,6 +4732,18 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("first_chat_offline", cli_output)
         self.assertIn("openai_chatgpt_codex", cli_output)
         self.assertIn("codex-bridge-chat", cli_output)
+        self.assertIn("Paideia onboarding dashboard", dashboard_cli_output)
+        self.assertIn("Cards", dashboard_cli_output)
+        self.assertIn("Next action queue", dashboard_cli_output)
+        self.assertIn("first_chat_offline", dashboard_cli_output)
+        self.assertIn("Dashboard renderer executed command: False", dashboard_cli_output)
+        self.assertEqual(dashboard["schema"], "paideia-onboarding-dashboard-view/v1")
+        self.assertEqual(dashboard["status"], "ready")
+        self.assertEqual(dashboard["dashboard_schema"], "paideia-openclaw-onboarding-dashboard/v1")
+        self.assertEqual(dashboard["summary"]["primary_next_action_id"], "first_chat_offline")
+        self.assertFalse(dashboard["operator_policy"]["dashboard_renderer_executes_command"])
+        self.assertFalse(dashboard["operator_policy"]["dashboard_renderer_network_call_performed"])
+        self.assertIn("first_chat_offline", {item["action_id"] for item in dashboard["next_action_queue"]})
         self.assertIn("Paideia onboarding next action", next_cli_output)
         self.assertIn("first_chat_offline", next_cli_output)
         self.assertIn("Resolver executed command: False", next_cli_output)

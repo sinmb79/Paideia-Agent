@@ -34,6 +34,7 @@ CONSOLE_SESSION_SCHEMA = "ai-talent-guided-console-session/v1"
 OPENCLAW_STYLE_WIZARD_SCHEMA = "ai22b-paideia-openclaw-style-onboarding/v1"
 ONBOARDING_LAUNCH_PLAN_SCHEMA = "paideia-onboarding-launch-plan/v1"
 ONBOARDING_DASHBOARD_SCHEMA = "paideia-openclaw-onboarding-dashboard/v1"
+ONBOARDING_DASHBOARD_VIEW_SCHEMA = "paideia-onboarding-dashboard-view/v1"
 ONBOARDING_NEXT_ACTION_SCHEMA = "paideia-onboarding-next-action/v1"
 ONBOARDING_ACTION_RUN_SCHEMA = "paideia-onboarding-action-run/v1"
 ONBOARDING_ACTION_ALLOWLIST = {
@@ -1079,6 +1080,187 @@ def format_onboarding_finish_summary(session: dict[str, Any]) -> str:
         lines.append(f"Recommended command: {recommended_command}")
     lines.append("Public-safe note: no API keys, raw provider payloads, or hidden reasoning traces were saved.")
     return "\n".join(line for line in lines if line is not None)
+
+
+def resolve_onboarding_dashboard(launch_plan_path: Path) -> dict[str, Any]:
+    launch_plan = json.loads(launch_plan_path.read_text(encoding="utf-8"))
+    if launch_plan.get("schema") != ONBOARDING_LAUNCH_PLAN_SCHEMA:
+        raise ValueError("Unsupported onboarding launch plan schema")
+    operator_dashboard = (
+        launch_plan.get("operator_dashboard", {})
+        if isinstance(launch_plan.get("operator_dashboard"), dict)
+        else {}
+    )
+    next_action_queue = (
+        launch_plan.get("next_action_queue", [])
+        if isinstance(launch_plan.get("next_action_queue"), list)
+        else []
+    )
+    command_by_id = _command_lookup(launch_plan)
+    selected_llm = (
+        launch_plan.get("selected_llm", {})
+        if isinstance(launch_plan.get("selected_llm"), dict)
+        else {}
+    )
+    selected_chat = (
+        launch_plan.get("selected_chat_surface", {})
+        if isinstance(launch_plan.get("selected_chat_surface"), dict)
+        else {}
+    )
+    summary = (
+        launch_plan.get("summary", {})
+        if isinstance(launch_plan.get("summary"), dict)
+        else {}
+    )
+    public_safe = (
+        launch_plan.get("public_safe", {}) if isinstance(launch_plan.get("public_safe"), dict) else {}
+    )
+    dashboard_cards = (
+        operator_dashboard.get("cards", [])
+        if isinstance(operator_dashboard.get("cards"), list)
+        else []
+    )
+    queue = []
+    for item in next_action_queue:
+        if not isinstance(item, dict) or not item.get("action_id"):
+            continue
+        action_id = str(item["action_id"])
+        command = command_by_id.get(action_id, {})
+        queue.append(
+            {
+                "order": item.get("order"),
+                "action_id": action_id,
+                "stage": item.get("stage"),
+                "title": item.get("title") or command.get("title"),
+                "command_or_path": item.get("command_or_path") or _command_or_path(command),
+                "network_call_if_executed": bool(item.get("network_call_if_executed")),
+                "runner_allowlisted": bool(item.get("runner_allowlisted")),
+                "recommended_by_finish_step": bool(item.get("recommended_by_finish_step")),
+                "approval_required": item.get("approval_required", True),
+                "expected": item.get("expected") or command.get("expected"),
+            }
+        )
+    safety_posture = (
+        operator_dashboard.get("safety_posture", {})
+        if isinstance(operator_dashboard.get("safety_posture"), dict)
+        else {}
+    )
+    ready = (
+        operator_dashboard.get("schema") == ONBOARDING_DASHBOARD_SCHEMA
+        and bool(operator_dashboard.get("primary_next_action_id"))
+        and bool(queue)
+        and public_safe.get("network_call_performed") is False
+        and public_safe.get("secret_values_exported") is False
+        and safety_posture.get("secret_values_exported") is False
+        and safety_posture.get("external_registration_performed") is False
+    )
+    return {
+        "schema": ONBOARDING_DASHBOARD_VIEW_SCHEMA,
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "launch_plan_path": str(launch_plan_path),
+        "launch_plan_schema": launch_plan.get("schema"),
+        "dashboard_schema": operator_dashboard.get("schema"),
+        "status": "ready" if ready else "needs_review",
+        "summary": {
+            "owner": summary.get("owner"),
+            "talent_name": summary.get("talent_name"),
+            "finish_action": summary.get("finish_action"),
+            "primary_next_action_id": operator_dashboard.get("primary_next_action_id"),
+            "selected_llm_service": selected_llm.get("service_id"),
+            "selected_engine": selected_llm.get("engine"),
+            "selected_chat_surface": selected_chat.get("id"),
+        },
+        "cards": dashboard_cards,
+        "next_action_queue": queue,
+        "safety_posture": safety_posture,
+        "public_safe": {
+            "network_call_performed": public_safe.get("network_call_performed"),
+            "secret_values_exported": public_safe.get("secret_values_exported"),
+            "raw_provider_payload_saved": public_safe.get("raw_provider_payload_saved"),
+            "private_reasoning_trace": public_safe.get("private_reasoning_trace"),
+            "external_registration_performed": public_safe.get("external_registration_performed"),
+        },
+        "operator_policy": {
+            "dashboard_renderer_executes_command": False,
+            "dashboard_renderer_network_call_performed": False,
+            "owner_review_required_before_execution": True,
+            "safe_runner_allowlist": sorted(ONBOARDING_ACTION_ALLOWLIST),
+        },
+    }
+
+
+def _dashboard_card_line(card: dict[str, Any]) -> str:
+    title = card.get("title") or card.get("id") or "Card"
+    status = card.get("status") or "unknown"
+    fragments = []
+    if card.get("selected_engine"):
+        fragments.append(f"engine={card.get('selected_engine')}")
+    if card.get("selected_chat_surface"):
+        fragments.append(f"chat={card.get('selected_chat_surface')}")
+    if card.get("role_model_id"):
+        fragments.append(f"role_model={card.get('role_model_id')}")
+    if card.get("manual_registration_only") is True:
+        fragments.append("manual_registration_only=True")
+    if card.get("action_ids"):
+        fragments.append("actions=" + ",".join(str(item) for item in card.get("action_ids", [])))
+    detail = f" | {'; '.join(fragments)}" if fragments else ""
+    return f"- [{status}] {title}{detail}"
+
+
+def format_onboarding_dashboard_summary(dashboard: dict[str, Any]) -> str:
+    summary = dashboard.get("summary", {}) if isinstance(dashboard.get("summary"), dict) else {}
+    safety = dashboard.get("safety_posture", {}) if isinstance(dashboard.get("safety_posture"), dict) else {}
+    lines = [
+        "Paideia onboarding dashboard",
+        f"- Status: {dashboard.get('status')}",
+        f"- Launch plan: {dashboard.get('launch_plan_path')}",
+        f"- Talent: {summary.get('talent_name')}",
+        f"- LLM engine: {summary.get('selected_engine')}",
+        f"- Chat surface: {summary.get('selected_chat_surface')}",
+        f"- Primary next action: {summary.get('primary_next_action_id')}",
+        "",
+        "Cards",
+    ]
+    cards = dashboard.get("cards", [])
+    if isinstance(cards, list) and cards:
+        for card in cards:
+            if isinstance(card, dict):
+                lines.append(_dashboard_card_line(card))
+    else:
+        lines.append("- No dashboard cards found.")
+    lines.extend(["", "Next action queue"])
+    queue = dashboard.get("next_action_queue", [])
+    if isinstance(queue, list) and queue:
+        for item in queue:
+            if not isinstance(item, dict):
+                continue
+            marker = "recommended" if item.get("recommended_by_finish_step") else "available"
+            lines.append(
+                f"{item.get('order')}. {item.get('action_id')} ({item.get('stage')}) - "
+                f"{item.get('title')} [{marker}]"
+            )
+            if item.get("command_or_path"):
+                lines.append(f"   command/path: {item.get('command_or_path')}")
+            lines.append(
+                "   "
+                f"runner_allowlisted={item.get('runner_allowlisted')}; "
+                f"network_if_executed={item.get('network_call_if_executed')}; "
+                f"approval_required={item.get('approval_required')}"
+            )
+    else:
+        lines.append("- No next actions found.")
+    lines.extend(
+        [
+            "",
+            "Safety",
+            f"- secret_values_exported: {safety.get('secret_values_exported')}",
+            f"- external_registration_performed: {safety.get('external_registration_performed')}",
+            f"- learning_promotion_review_gated: {safety.get('learning_promotion_review_gated')}",
+            "- Dashboard renderer executed command: False",
+            "- Dashboard renderer network call: False",
+        ]
+    )
+    return "\n".join(lines)
 
 
 def resolve_onboarding_next_action(

@@ -185,6 +185,13 @@ Open `onboarding_launch_plan.json` after the wizard if you want the OpenClaw-sty
 
 The CLI also prints a finish summary after `start-console` or `onboard`: console session path, launch plan path, selected LLM/chat surface, onboarding doctor command, live-readiness command, first chat command, and the recommended finish action.
 
+You can print the dashboard view directly from the launch plan. This renders the cards and next-action queue, but does not execute commands or call providers:
+
+```powershell
+ai22b-talent-foundry show-onboarding-dashboard `
+  --launch-plan .\onboarding_launch_plan.json
+```
+
 You can also ask Paideia to read the launch plan and show the next action without executing it. The result includes the queue stage, queue position, safe-runner allowlist status, and the dashboard's primary next action:
 
 ```powershell

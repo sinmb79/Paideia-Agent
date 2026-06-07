@@ -56,6 +56,13 @@ ai22b-talent-foundry doctor-onboarding-session `
   --output onboarding_doctor.json
 ```
 
+생성된 launch plan은 dashboard view로 바로 확인할 수 있습니다. 이 명령은 카드와 다음 액션 큐를 출력만 하며, launch plan 안의 shell 문자열을 실행하지 않습니다.
+
+```powershell
+ai22b-talent-foundry show-onboarding-dashboard `
+  --launch-plan onboarding_launch_plan.json
+```
+
 ## 산출물
 
 - `console_session.json`: 전체 온보딩 세션과 health 요약
