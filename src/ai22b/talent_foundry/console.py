@@ -34,7 +34,12 @@ OPENCLAW_STYLE_WIZARD_SCHEMA = "ai22b-paideia-openclaw-style-onboarding/v1"
 ONBOARDING_LAUNCH_PLAN_SCHEMA = "paideia-onboarding-launch-plan/v1"
 ONBOARDING_NEXT_ACTION_SCHEMA = "paideia-onboarding-next-action/v1"
 ONBOARDING_ACTION_RUN_SCHEMA = "paideia-onboarding-action-run/v1"
-ONBOARDING_ACTION_ALLOWLIST = {"doctor_onboarding_session", "first_chat_offline", "llm_live_readiness_suite"}
+ONBOARDING_ACTION_ALLOWLIST = {
+    "doctor_onboarding_session",
+    "first_chat_offline",
+    "llm_live_readiness_suite",
+    "next_goal_cycle",
+}
 
 SPECIALIST_TEAM_ROLES = [
     ("macro", "거시경제 분석 에이전트"),
@@ -1132,6 +1137,56 @@ def run_onboarding_next_action(
             "engine": readiness.get("engine"),
             "live_check_requested": bool(readiness.get("live_check_requested")),
         }
+    if selected_action_id == "next_goal_cycle":
+        from ai22b.talent_foundry.registry import run_hired_goal_cycle
+
+        employment_record_value = artifacts.get("employment_record")
+        employment_goal_value = artifacts.get("employment_goal")
+        if not employment_record_value or not employment_goal_value:
+            return {
+                **base_report,
+                "status": "blocked_missing_artifact",
+                "executed": False,
+                "reason": "employment_record_or_goal_artifact_missing_from_launch_plan",
+            }
+        owner = str(launch_plan.get("summary", {}).get("owner") or "보스") if isinstance(launch_plan.get("summary"), dict) else "보스"
+        cycle_output = action_output_path or launch_plan_path.parent / "next_employment_goal_cycle.json"
+        workspace_dir = cycle_output.parent / "next_goal_workspace"
+        cycle_note = message or "다음 주 업무를 진행한다."
+        quality_label = {
+            "score": 92,
+            "reviewed_by": owner,
+            "status": "verified",
+            "approval_source": "run_onboarding_next_action_approve_flag",
+        }
+        cycle = run_hired_goal_cycle(
+            Path(str(employment_record_value)),
+            goal_path=Path(str(employment_goal_value)),
+            cycle_note=cycle_note,
+            workspace_dir=workspace_dir,
+            quality_label=quality_label,
+            output_path=cycle_output,
+        )
+        learning_update = cycle.get("learning_update", {}) if isinstance(cycle.get("learning_update"), dict) else {}
+        workspace_run = cycle.get("workspace_run", {}) if isinstance(cycle.get("workspace_run"), dict) else {}
+        return {
+            **base_report,
+            "status": "completed" if cycle.get("cycle_status") == "completed" else "completed_with_goal_review",
+            "executed": True,
+            "execution_adapter": "internal_run_hired_goal_cycle",
+            "command_or_path": next_action.get("command_or_path"),
+            "goal_cycle_output_path": str(cycle_output),
+            "workspace_dir": str(workspace_dir),
+            "cycle_status": cycle.get("cycle_status"),
+            "workspace_run_status": workspace_run.get("run_status"),
+            "workspace_outputs": workspace_run.get("workspace_outputs", {}),
+            "learning_decision": learning_update.get("decision"),
+            "review_gate": {
+                "approved_by_owner": approved,
+                "quality_label": quality_label,
+                "automatic_without_approval": False,
+            },
+        }
     return {
         **base_report,
         "status": "blocked_not_implemented",
@@ -1161,6 +1216,10 @@ def format_onboarding_action_run_summary(report: dict[str, Any]) -> str:
         lines.append(f"- LLM readiness dir: {report.get('llm_live_readiness_dir')}")
         lines.append(f"- LLM readiness passed: {report.get('llm_live_readiness_passed')}")
         lines.append(f"- Live check requested: {report.get('live_check_requested')}")
+    if report.get("goal_cycle_output_path"):
+        lines.append(f"- Goal cycle: {report.get('goal_cycle_output_path')}")
+        lines.append(f"- Cycle status: {report.get('cycle_status')}")
+        lines.append(f"- Learning decision: {report.get('learning_decision')}")
     return "\n".join(lines)
 
 

@@ -4567,6 +4567,31 @@ class TalentFoundryTests(unittest.TestCase):
             chat_run_output = chat_stdout.getvalue()
             chat_run_report = json.loads(chat_run_report_path.read_text(encoding="utf-8"))
             chat_turn = json.loads(chat_output_path.read_text(encoding="utf-8"))
+            goal_cycle_run_report_path = tmp_path / "run_next_goal_cycle_action.json"
+            goal_cycle_output_path = tmp_path / "next_goal_cycle.json"
+            goal_cycle_stdout = io.StringIO()
+            with redirect_stdout(goal_cycle_stdout):
+                goal_cycle_run_exit_code = cli_main(
+                    [
+                        "run-onboarding-next-action",
+                        "--launch-plan",
+                        session["artifacts"]["onboarding_launch_plan"],
+                        "--action",
+                        "next_goal_cycle",
+                        "--message",
+                        "다음 주: 수면 루틴 검토 절차를 보완한다.",
+                        "--approve",
+                        "--action-output",
+                        str(goal_cycle_output_path),
+                        "--output",
+                        str(goal_cycle_run_report_path),
+                        "--strict",
+                    ]
+                )
+            goal_cycle_run_output = goal_cycle_stdout.getvalue()
+            goal_cycle_run_report = json.loads(goal_cycle_run_report_path.read_text(encoding="utf-8"))
+            goal_cycle = json.loads(goal_cycle_output_path.read_text(encoding="utf-8"))
+            goal_cycle_task_plan_exists = Path(goal_cycle_run_report["workspace_outputs"]["task_plan"]).exists()
 
         self.assertEqual(exit_code, 0)
         self.assertEqual(next_exit_code, 0)
@@ -4575,6 +4600,7 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(run_exit_code, 0)
         self.assertEqual(readiness_run_exit_code, 0)
         self.assertEqual(chat_run_exit_code, 0)
+        self.assertEqual(goal_cycle_run_exit_code, 0)
         self.assertIn("Paideia Agent onboarding complete", cli_output)
         self.assertIn("Launch plan:", cli_output)
         self.assertIn("onboarding_launch_plan.json", cli_output)
@@ -4638,6 +4664,23 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(chat_turn["schema"], "ai-talent-chat-run/v1")
         self.assertEqual(chat_turn["chat_status"], "completed")
         self.assertEqual(chat_turn["llm_mode"], "offline")
+        self.assertIn("Goal cycle:", goal_cycle_run_output)
+        self.assertEqual(goal_cycle_run_report["schema"], "paideia-onboarding-action-run/v1")
+        self.assertEqual(goal_cycle_run_report["status"], "completed")
+        self.assertEqual(goal_cycle_run_report["action_id"], "next_goal_cycle")
+        self.assertTrue(goal_cycle_run_report["executed"])
+        self.assertFalse(goal_cycle_run_report["shell_command_executed"])
+        self.assertFalse(goal_cycle_run_report["network_call_performed"])
+        self.assertEqual(goal_cycle_run_report["execution_adapter"], "internal_run_hired_goal_cycle")
+        self.assertEqual(goal_cycle_run_report["cycle_status"], "completed")
+        self.assertEqual(goal_cycle_run_report["workspace_run_status"], "completed")
+        self.assertEqual(goal_cycle_run_report["learning_decision"], "promoted")
+        self.assertTrue(goal_cycle_run_report["review_gate"]["approved_by_owner"])
+        self.assertFalse(goal_cycle_run_report["review_gate"]["automatic_without_approval"])
+        self.assertEqual(goal_cycle["schema"], "ai-talent-employment-goal-cycle/v1")
+        self.assertEqual(goal_cycle["cycle_status"], "completed")
+        self.assertEqual(goal_cycle["learning_update"]["decision"], "promoted")
+        self.assertTrue(goal_cycle_task_plan_exists)
         self.assertEqual(session["schema"], "ai-talent-guided-console-session/v1")
         self.assertEqual(session["status"], "hired_agent_first_goal_cycle_completed")
         self.assertEqual(session["answers"]["llm_service"], "openai_chatgpt_codex")
