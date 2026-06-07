@@ -2,6 +2,8 @@
 
 Paideia Agent is local-first. Private data, local memories, generated agent kits, model checkpoints, voice assets, credentials, and personal runtime artifacts must not be committed to this repository.
 
+For the full attacker model, trust boundaries, permission policy, memory-promotion policy, and incident process, see [Security Threat Model](docs/security_threat_model.md).
+
 ## Private By Default
 
 Ignored by default:

@@ -18,6 +18,7 @@ classifiers = [
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
   "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 
@@ -27,19 +28,33 @@ Repository = "https://github.com/sinmb79/Paideia-Agent"
 Issues = "https://github.com/sinmb79/Paideia-Agent/issues"
 
 [project.optional-dependencies]
-dev = ["pytest"]
+dev = [
+  "build",
+  "pytest",
+  "pytest-cov",
+  "ruff",
+]
+security = [
+  "bandit",
+  "pip-audit",
+]
 live-llm = ["openai>=1.0.0"]
 local-llm = ["accelerate", "sentence-transformers", "transformers"]
 rag = ["chromadb", "ragas"]
 fine-tune = ["datasets", "peft"]
 all = [
+  "bandit",
+  "build",
   "openai>=1.0.0",
   "accelerate",
   "chromadb",
   "datasets",
   "peft",
+  "pip-audit",
   "pytest",
+  "pytest-cov",
   "ragas",
+  "ruff",
   "sentence-transformers",
   "transformers",
 ]
