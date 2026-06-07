@@ -4132,7 +4132,11 @@ class TalentFoundryTests(unittest.TestCase):
             )
             copied_env_path = imported_manifest_path.parent / "source" / ".env"
             copied_key_path = imported_manifest_path.parent / "source" / "id_rsa"
+            compatibility_path = imported_manifest_path.parent / "paideia_compatibility_profile.json"
+            review_card_path = imported_manifest_path.parent / "paideia_skill_review.md"
             imported = json.loads(imported_manifest_path.read_text(encoding="utf-8"))
+            compatibility = json.loads(compatibility_path.read_text(encoding="utf-8"))
+            review_card = review_card_path.read_text(encoding="utf-8")
             doctor = doctor_agent_program(kit_dir / "22b_paideia_agent_program.json")
 
         self.assertEqual(report["schema"], "ai22b-paideia-external-skill-migration/v1")
@@ -4141,6 +4145,10 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertFalse(report["safety_contract"]["imported_code_executed"])
         self.assertFalse(report["safety_contract"]["sensitive_files_copied"])
         self.assertTrue(report["safety_contract"]["all_imported_skills_disabled"])
+        self.assertEqual(report["compatibility_summary"]["schema"], "paideia-skill-migration-compatibility-summary/v1")
+        self.assertTrue(report["compatibility_summary"]["all_activation_gates_locked"])
+        self.assertIn("network_access", report["compatibility_summary"]["capability_request_ids"])
+        self.assertIn("subprocess_execution", report["compatibility_summary"]["capability_request_ids"])
         self.assertEqual(imported["status"], "quarantined_pending_boss_review")
         self.assertEqual(imported["activation"]["status"], "disabled")
         self.assertIn("remote_shell_pipe", imported["risk_flags"])
@@ -4152,6 +4160,15 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertFalse(imported["safety_contract"]["execute_imported_code"])
         self.assertFalse(imported["safety_contract"]["sensitive_files_copied"])
         self.assertGreaterEqual(imported["safety_contract"]["sensitive_file_skip_count"], 2)
+        self.assertEqual(imported["compatibility_profile"]["schema"], "paideia-imported-skill-compatibility-profile/v1")
+        self.assertEqual(compatibility["schema"], "paideia-imported-skill-compatibility-profile/v1")
+        self.assertEqual(compatibility["activation_gate"]["status"], "locked_pending_owner_allowlist")
+        self.assertFalse(compatibility["activation_gate"]["activation_allowed"])
+        capability_ids = {item["id"] for item in compatibility["capability_requests"]}
+        self.assertIn("destructive_filesystem", capability_ids)
+        self.assertIn("credential_access", capability_ids)
+        self.assertIn("disposable_workspace_test_result.json", compatibility["activation_gate"]["required_artifacts"])
+        self.assertIn("Schema: `paideia-imported-skill-review-card/v1`", review_card)
         self.assertFalse(copied_env_path.exists())
         self.assertFalse(copied_key_path.exists())
         self.assertTrue(doctor["passed"])
@@ -4160,6 +4177,12 @@ class TalentFoundryTests(unittest.TestCase):
             doctor["checks"]["imported_skills"]["details"]["contract_schema"],
             "paideia-imported-skill-safety-contract/v1",
         )
+        doctor_skill = doctor["checks"]["imported_skills"]["details"]["skills"][0]
+        self.assertEqual(
+            doctor_skill["compatibility_profile_schema"],
+            "paideia-imported-skill-compatibility-profile/v1",
+        )
+        self.assertEqual(doctor_skill["compatibility_activation_gate"], "locked_pending_owner_allowlist")
 
     def test_cli_migrate_agent_assets_imports_hermes_skill_without_enabling_it(self) -> None:
         from ai22b.talent_foundry.agent_program import build_paideia_agent_install_kit
@@ -4199,11 +4222,17 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(report["migration_policy"]["default_activation"], "disabled")
         self.assertEqual(report["safety_contract"]["status"], "quarantined_pending_boss_review")
         self.assertFalse(report["safety_contract"]["imported_code_executed"])
+        self.assertEqual(report["compatibility_summary"]["schema"], "paideia-skill-migration-compatibility-summary/v1")
+        self.assertTrue(report["compatibility_summary"]["all_activation_gates_locked"])
         self.assertEqual(install_manifest["imported_skill_count"], 1)
         self.assertEqual(install_manifest["imported_skill_policy"]["execute_imported_code"], False)
         self.assertEqual(
             install_manifest["imported_skill_safety_contract"]["schema"],
             "paideia-skill-migration-safety-contract/v1",
+        )
+        self.assertEqual(
+            install_manifest["imported_skill_compatibility_summary"]["schema"],
+            "paideia-skill-migration-compatibility-summary/v1",
         )
 
     def test_cli_agent_program_chat_routes_through_paideia_manifest(self) -> None:

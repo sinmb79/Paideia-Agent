@@ -67,7 +67,7 @@ ai22b-talent-foundry migrate-agent-assets `
   --source-runtime hermes
 ```
 
-The migration layer detects `SKILL.md`, `skill.yaml`, `skill.yml`, `hermes.yaml`, `hermes.yml`, and README-based generic skill folders. It copies source files into the Paideia kit, writes a wrapper `SKILL.md`, and creates `paideia_skill_manifest.json`.
+The migration layer detects `SKILL.md`, `skill.yaml`, `skill.yml`, `hermes.yaml`, `hermes.yml`, and README-based generic skill folders. It copies source files into the Paideia kit, writes a wrapper `SKILL.md`, and creates `paideia_skill_manifest.json`, `paideia_compatibility_profile.json`, and `paideia_skill_review.md`.
 
 Default policy:
 
@@ -76,6 +76,7 @@ Default policy:
 - `boss_review_required = true`
 - `third_party_skills_trusted = false`
 - `migration_mode = wrap_quarantine_doctor_then_allowlist`
+- activation gate remains locked until owner allowlist and disposable workspace test evidence exist
 
 Risk scanning currently flags:
 
