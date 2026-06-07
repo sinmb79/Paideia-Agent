@@ -4458,8 +4458,36 @@ class TalentFoundryTests(unittest.TestCase):
             cli_output = stdout.getvalue()
             session = json.loads(output_path.read_text(encoding="utf-8"))
             onboarding_exists = Path(session["artifacts"]["onboarding_session"]).exists()
+            next_action_path = tmp_path / "next_action.json"
+            next_stdout = io.StringIO()
+            with redirect_stdout(next_stdout):
+                next_exit_code = cli_main(
+                    [
+                        "show-onboarding-next-action",
+                        "--launch-plan",
+                        session["artifacts"]["onboarding_launch_plan"],
+                        "--output",
+                        str(next_action_path),
+                    ]
+                )
+            next_cli_output = next_stdout.getvalue()
+            next_action = json.loads(next_action_path.read_text(encoding="utf-8"))
+            doctor_stdout = io.StringIO()
+            with redirect_stdout(doctor_stdout):
+                doctor_action_exit_code = cli_main(
+                    [
+                        "show-onboarding-next-action",
+                        "--launch-plan",
+                        session["artifacts"]["onboarding_launch_plan"],
+                        "--action",
+                        "doctor_onboarding_session",
+                    ]
+                )
+            doctor_action_output = doctor_stdout.getvalue()
 
         self.assertEqual(exit_code, 0)
+        self.assertEqual(next_exit_code, 0)
+        self.assertEqual(doctor_action_exit_code, 0)
         self.assertIn("Paideia Agent onboarding complete", cli_output)
         self.assertIn("Launch plan:", cli_output)
         self.assertIn("onboarding_launch_plan.json", cli_output)
@@ -4467,6 +4495,16 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("first_chat_offline", cli_output)
         self.assertIn("openai_chatgpt_codex", cli_output)
         self.assertIn("codex-bridge-chat", cli_output)
+        self.assertIn("Paideia onboarding next action", next_cli_output)
+        self.assertIn("first_chat_offline", next_cli_output)
+        self.assertIn("Resolver executed command: False", next_cli_output)
+        self.assertIn("doctor-onboarding-session", doctor_action_output)
+        self.assertEqual(next_action["schema"], "paideia-onboarding-next-action/v1")
+        self.assertEqual(next_action["status"], "ready")
+        self.assertEqual(next_action["action_id"], "first_chat_offline")
+        self.assertFalse(next_action["operator_policy"]["resolver_executes_command"])
+        self.assertFalse(next_action["operator_policy"]["resolver_network_call_performed"])
+        self.assertIn("doctor_onboarding_session", next_action["available_actions"])
         self.assertEqual(session["schema"], "ai-talent-guided-console-session/v1")
         self.assertEqual(session["status"], "hired_agent_first_goal_cycle_completed")
         self.assertEqual(session["answers"]["llm_service"], "openai_chatgpt_codex")
