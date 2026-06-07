@@ -97,3 +97,12 @@ v0.4는 기본 골격입니다. 다음 개발에서는 다음을 보강합니다
 - 채팅 답변에서 life trace 사건 검색 결과를 더 자연스럽게 요약하는 live LLM 브리지
 - Graham 외 롤모델별 전용 생애/학습 사건 템플릿
 - 사용자 제공 로컬 교재와 공개 자료를 구분하는 curriculum ingest 정책 강화
+
+## v0.8 보완: grade learning records
+
+`grade_learning_records.json`은 위의 다음 단계 중 "시험/과제 결과가 life trace와 Reasoning Ledger를 함께 갱신하는 학년별 루프"를 구현한 산출물입니다.
+
+- 초등학교부터 대학원/박사급 연구, 고용 후 성장까지 각 `year_id`별 기록을 만듭니다.
+- 각 기록은 `learning_data`, `assignments`, `required_exams`, `observed_assessments`, `life_trace_links`, `reasoning_ledger_updates`, `feedback_loop`를 가집니다.
+- 숨은 chain-of-thought는 저장하지 않고, 시험 결과와 생활 스트레스가 다음 학습 습관을 어떻게 수정했는지 검토 가능한 요약만 남깁니다.
+- `raise` 실행 시 release bundle, installed manifest, employment record, `memory_substrate.json`에 함께 연결됩니다.

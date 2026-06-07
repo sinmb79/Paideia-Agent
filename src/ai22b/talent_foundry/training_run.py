@@ -16,6 +16,7 @@ from ai22b.talent_foundry.distribution import (
 )
 from ai22b.talent_foundry.employment import create_employment_contract
 from ai22b.talent_foundry.exam_engine_v2 import augment_assessment_transcript_v2
+from ai22b.talent_foundry.grade_learning import build_grade_learning_records, write_grade_learning_records
 from ai22b.talent_foundry.growth_profile import build_growth_profile
 from ai22b.talent_foundry.institutions import run_institutional_review
 from ai22b.talent_foundry.learning_loop import (
@@ -226,6 +227,7 @@ def materialize_training_blueprint(
         "curriculum_manifest": output_dir / f"{name_slug}_curriculum_manifest.json",
         "assessment_transcript": output_dir / f"{name_slug}_assessment_transcript.json",
         "reasoning_kibo": output_dir / f"{name_slug}_reasoning_kibo.jsonl",
+        "grade_learning_records": output_dir / f"{name_slug}_grade_learning_records.json",
         "language_development_program": output_dir / f"{name_slug}_language_development_program.json",
         "developmental_ecology": output_dir / f"{name_slug}_developmental_ecology.json",
         "life_trace": output_dir / f"{name_slug}_life_trace.jsonl",
@@ -250,6 +252,7 @@ def materialize_training_blueprint(
         "curriculum_manifest",
         "assessment_transcript",
         "reasoning_kibo",
+        "grade_learning_records",
     ]
     if not blueprint.get("role_model"):
         for key in role_artifact_keys:
@@ -320,6 +323,7 @@ def materialize_training_blueprint(
     institutional_review = run_institutional_review(packet, submissions=submissions)
     _write_json(artifacts["institutional_review"], institutional_review)
     reasoning_kibo: dict[str, Any] | None = None
+    grade_learning_records: dict[str, Any] | None = None
     if blueprint.get("role_model"):
         assessment_transcript = institutional_review.get("assessment_transcript") or build_assessment_transcript(
             packet,
@@ -345,6 +349,23 @@ def materialize_training_blueprint(
             "yearly_learning_ladder_count": len(reasoning_kibo.get("yearly_learning_ladder", [])),
             "path_hint": "[AI22B_STORAGE_ROOT]/talent-foundry/runs/<talent>_reasoning_kibo.jsonl",
             "policy": reasoning_kibo.get("policy", {}),
+        }
+        grade_learning_records = build_grade_learning_records(
+            talent_name=packet["talent"]["name"],
+            curriculum_manifest=blueprint.get("curriculum_manifest"),
+            assessment_transcript=assessment_transcript,
+            reasoning_kibo=reasoning_kibo,
+            life_trace_events=life_trace["events"],
+        )
+        write_grade_learning_records(artifacts["grade_learning_records"], grade_learning_records)
+        packet["grade_learning_records"] = {
+            "schema": grade_learning_records["schema"],
+            "record_count": grade_learning_records["summary"]["record_count"],
+            "assessment_link_count": grade_learning_records["summary"]["assessment_link_count"],
+            "life_trace_link_count": grade_learning_records["summary"]["life_trace_link_count"],
+            "reasoning_ledger_link_count": grade_learning_records["summary"]["reasoning_ledger_link_count"],
+            "path_hint": "[AI22B_STORAGE_ROOT]/talent-foundry/runs/<talent>_grade_learning_records.json",
+            "policy": grade_learning_records.get("policy", {}),
         }
         _write_json(artifacts["talent_plan"], packet)
 
@@ -375,6 +396,7 @@ def materialize_training_blueprint(
         developmental_ecology=developmental_ecology,
         life_trace_events=life_trace["events"],
         growth_profile=growth_profile,
+        grade_learning_records=grade_learning_records.get("records", []) if grade_learning_records else [],
     )
     write_memory_substrate(artifacts["memory_substrate"], memory_substrate)
 
@@ -387,6 +409,7 @@ def materialize_training_blueprint(
         developmental_ecology_path=artifacts["developmental_ecology"],
         life_trace_path=artifacts["life_trace"],
         growth_profile_path=artifacts["growth_profile"],
+        grade_learning_records_path=artifacts.get("grade_learning_records"),
     )
     package = package_agent_release_bundle(
         artifacts["release_bundle"],
@@ -480,6 +503,9 @@ def materialize_training_blueprint(
             "developmental_ecology_created": artifacts["developmental_ecology"].exists(),
             "life_trace_created": artifacts["life_trace"].exists(),
             "growth_profile_created": artifacts["growth_profile"].exists(),
+            "grade_learning_records_created": (
+                artifacts["grade_learning_records"].exists() if "grade_learning_records" in artifacts else False
+            ),
             "hired_agent_run_created": artifacts["hired_agent_run"].exists(),
             "hired_dataflow_run_created": artifacts["hired_dataflow_run"].exists(),
             "runtime_observability_comparison_created": artifacts["runtime_observability_comparison"].exists(),

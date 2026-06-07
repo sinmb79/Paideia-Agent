@@ -248,6 +248,11 @@ def _artifact_plan(*, include_role_model_artifacts: bool = False) -> list[dict[s
                 "path_hint": "[AI22B_STORAGE_ROOT]/talent-foundry/runs/<talent>_reasoning_kibo.jsonl",
                 "producer": "ai22b-talent-foundry raise",
             },
+            {
+                "id": "grade_learning_records",
+                "path_hint": "[AI22B_STORAGE_ROOT]/talent-foundry/runs/<talent>_grade_learning_records.json",
+                "producer": "ai22b-talent-foundry raise",
+            },
         ]
     return artifacts
 

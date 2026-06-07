@@ -51,6 +51,7 @@ Detailed note: [Tesla-style dataflow board benchmark](tesla_board_benchmark.md).
 - Onboarding is now explicit: choose LLM service, choose chat surface, choose role model, then raise and review the talent.
 - Role models are now a selectable public-metadata catalog for common agent roles such as software engineering, data/BI, support quality, cybersecurity, marketing, healthcare operations, education, management, legal/compliance, blockchain, and information systems.
 - New role-model curricula use `role_model_foundation_core` plus university, graduate, doctoral, and assessment-ladder stages so non-Graham talents also produce transcripts, dossiers, and Reasoning Ledger entries.
+- `grade_learning_records.json` now makes the yearly loop explicit: coursework and assignments lead to exams, feedback, life-trace pressure, and reviewable Reasoning Ledger updates.
 - The bundled first test path is `examples/graham_junior_onboarding.answers.json`.
 - Additional public onboarding samples live in `examples/role_model_onboarding_samples.json`.
 - `Reasoning kibo` remains an internal file name for compatibility, but the public term is **Reasoning Ledger / Ariadne Thread**.

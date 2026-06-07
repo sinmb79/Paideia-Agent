@@ -585,6 +585,7 @@ ai22b-talent-foundry onboard-agent `
 - `curriculum_manifest.json`
 - `assessment_transcript.json`
 - `reasoning_kibo.jsonl`
+- `grade_learning_records.json`: 학년별 수업, 과제, 시험, 생활 스트레스, 피드백, Reasoning Ledger 연결 기록
 - `developmental_ecology.json`: 가정/또래/환경/감정회복/미감/문화 경험을 담은 성장 환경 seed
 - `life_trace.jsonl`: 0세부터 20세까지의 월별 성장 사건 기록
 - `growth_profile.json`: 관계/감정/문화/미감/비대칭 성장 메모리 요약
