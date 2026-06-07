@@ -29,7 +29,7 @@ from ai22b.talent_foundry.audit import audit_foundry_release
 from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
 from ai22b.talent_foundry.cli_llm_commands import handle_llm_runtime_command, register_llm_runtime_commands
 from ai22b.talent_foundry.cohort import create_specialist_cohort
-from ai22b.talent_foundry.console import collect_console_answers, run_console_session
+from ai22b.talent_foundry.console import collect_console_answers, format_onboarding_finish_summary, run_console_session
 from ai22b.talent_foundry.developmental_ecology import build_developmental_ecology
 from ai22b.talent_foundry.distribution import (
     create_agent_release_bundle,
@@ -1054,13 +1054,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             answers = collect_console_answers()
             mode = "interactive_prompt"
-        run_console_session(
+        session = run_console_session(
             answers=answers,
             output_dir=output_dir,
             output_path=output_path,
             mode=mode,
         )
-        print(str(output_path))
+        print(format_onboarding_finish_summary(session))
         return 0
 
     if args.command == "doctor-onboarding-session":
