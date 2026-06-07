@@ -33,6 +33,7 @@ dev = [
   "pytest",
   "pytest-cov",
   "ruff",
+  "tomli; python_version < '3.11'",
 ]
 security = [
   "bandit",
@@ -56,6 +57,7 @@ all = [
   "ragas",
   "ruff",
   "sentence-transformers",
+  "tomli; python_version < '3.11'",
   "transformers",
 ]
 

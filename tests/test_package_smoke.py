@@ -2,9 +2,13 @@ from __future__ import annotations
 
 import importlib
 from importlib import metadata
-import tomllib
 import unittest
 from pathlib import Path
+
+try:
+    import tomllib
+except ModuleNotFoundError:  # pragma: no cover - Python 3.10 compatibility path
+    import tomli as tomllib
 
 
 class PackageSmokeTests(unittest.TestCase):
