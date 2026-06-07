@@ -137,7 +137,7 @@ ai22b-talent-foundry show-onboarding-next-action `
   --launch-plan .\onboarding_launch_plan.json
 ```
 
-launch plan의 안전한 로컬 액션은 명시적 승인 후 실행할 수 있습니다. 첫 allowlist 실행 대상은 `doctor_onboarding_session`과 `first_chat_offline`이며, Paideia는 launch plan의 shell 문자열을 그대로 실행하지 않고 내부 함수를 호출합니다.
+launch plan의 안전한 로컬 액션은 명시적 승인 후 실행할 수 있습니다. 첫 allowlist 실행 대상은 `doctor_onboarding_session`, `llm_live_readiness_suite`, `first_chat_offline`이며, Paideia는 launch plan의 shell 문자열을 그대로 실행하지 않고 내부 함수를 호출합니다. readiness runner는 항상 no-network 모드로 강제되며 live provider check는 사용자가 직접 실행해야 합니다.
 
 ```powershell
 ai22b-talent-foundry run-onboarding-next-action `
@@ -145,6 +145,14 @@ ai22b-talent-foundry run-onboarding-next-action `
   --action doctor_onboarding_session `
   --approve `
   --output .\onboarding_action_run.json
+```
+
+```powershell
+ai22b-talent-foundry run-onboarding-next-action `
+  --launch-plan .\onboarding_launch_plan.json `
+  --action llm_live_readiness_suite `
+  --approve `
+  --action-output .\llm_live_readiness
 ```
 
 ```powershell

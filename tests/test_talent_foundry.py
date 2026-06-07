@@ -4521,6 +4521,28 @@ class TalentFoundryTests(unittest.TestCase):
             run_cli_output = run_stdout.getvalue()
             run_report = json.loads(run_report_path.read_text(encoding="utf-8"))
             run_doctor = json.loads(run_doctor_path.read_text(encoding="utf-8"))
+            readiness_run_report_path = tmp_path / "run_readiness_action.json"
+            readiness_dir = tmp_path / "runner_llm_live_readiness"
+            readiness_stdout = io.StringIO()
+            with redirect_stdout(readiness_stdout):
+                readiness_run_exit_code = cli_main(
+                    [
+                        "run-onboarding-next-action",
+                        "--launch-plan",
+                        session["artifacts"]["onboarding_launch_plan"],
+                        "--action",
+                        "llm_live_readiness_suite",
+                        "--approve",
+                        "--action-output",
+                        str(readiness_dir),
+                        "--output",
+                        str(readiness_run_report_path),
+                        "--strict",
+                    ]
+                )
+            readiness_run_output = readiness_stdout.getvalue()
+            readiness_run_report = json.loads(readiness_run_report_path.read_text(encoding="utf-8"))
+            readiness_summary = json.loads((readiness_dir / "llm_live_readiness_suite.json").read_text(encoding="utf-8"))
             chat_run_report_path = tmp_path / "run_first_chat_action.json"
             chat_output_path = tmp_path / "first_chat_offline.json"
             chat_stdout = io.StringIO()
@@ -4551,6 +4573,7 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(doctor_action_exit_code, 0)
         self.assertEqual(no_approval_exit_code, 1)
         self.assertEqual(run_exit_code, 0)
+        self.assertEqual(readiness_run_exit_code, 0)
         self.assertEqual(chat_run_exit_code, 0)
         self.assertIn("Paideia Agent onboarding complete", cli_output)
         self.assertIn("Launch plan:", cli_output)
@@ -4584,6 +4607,24 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertTrue(run_report["doctor_passed"])
         self.assertEqual(run_doctor["schema"], "paideia-onboarding-session-doctor/v1")
         self.assertTrue(run_doctor["passed"])
+        self.assertIn("LLM readiness dir:", readiness_run_output)
+        self.assertEqual(readiness_run_report["schema"], "paideia-onboarding-action-run/v1")
+        self.assertEqual(readiness_run_report["status"], "completed")
+        self.assertEqual(readiness_run_report["action_id"], "llm_live_readiness_suite")
+        self.assertTrue(readiness_run_report["executed"])
+        self.assertFalse(readiness_run_report["shell_command_executed"])
+        self.assertFalse(readiness_run_report["network_call_performed"])
+        self.assertTrue(readiness_run_report["launch_plan_command_would_call_network"])
+        self.assertFalse(readiness_run_report["runner_forced_live_check"])
+        self.assertFalse(readiness_run_report["live_check_requested"])
+        self.assertEqual(readiness_run_report["execution_adapter"], "internal_llm_live_readiness_suite_no_network")
+        self.assertFalse(readiness_run_report["llm_live_readiness_passed"])
+        self.assertTrue(readiness_run_report["llm_live_readiness_review_required"])
+        self.assertEqual(readiness_summary["schema"], "paideia-llm-live-readiness-suite/v1")
+        self.assertEqual(readiness_summary["llm_mode"], "offline")
+        self.assertFalse(readiness_summary["live_check_requested"])
+        self.assertFalse(readiness_summary["passed"])
+        self.assertFalse(readiness_summary["data_policy"]["live_provider_call_requested"])
         self.assertIn("Chat output:", chat_run_output)
         self.assertEqual(chat_run_report["schema"], "paideia-onboarding-action-run/v1")
         self.assertEqual(chat_run_report["status"], "completed")
