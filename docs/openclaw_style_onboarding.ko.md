@@ -109,6 +109,15 @@ ai22b-talent-foundry export-agent-warrent-registration-request `
   --output agent_warrent_registration_request.json
 ```
 
+Agent_warrent / Agent ID Card SDK로 이어지는 connector kit도 만들 수 있습니다. 이 kit는 서명 템플릿과 manifest만 만들며, Paideia가 자동으로 외부 등록을 실행하지 않습니다.
+
+```powershell
+ai22b-talent-foundry build-agent-warrent-connector-kit `
+  --registration-request agent_warrent_registration_request.json `
+  --output-dir agent_warrent_connector `
+  --server-url https://api.agentidcard.org
+```
+
 외부 등록 전에는 두 산출물을 함께 검증합니다. 이 명령은 네트워크를 사용하지 않고, 필수 필드, credential-like 값, 원문 이메일, 로컬 절대경로, 수동 등록 정책을 검사합니다.
 
 ```powershell

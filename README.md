@@ -991,6 +991,11 @@ ai22b-talent-foundry export-agent-warrent-registration-request `
   --owner-key-id owk_your_owner_key `
   --output .\agent_warrent_registration_request.json
 
+ai22b-talent-foundry build-agent-warrent-connector-kit `
+  --registration-request .\agent_warrent_registration_request.json `
+  --output-dir .\agent_warrent_connector `
+  --server-url https://api.agentidcard.org
+
 ai22b-talent-foundry verify-agent-id-card `
   --payload .\agent_id_card_payload.json `
   --envelope .\agent_identity_envelope.json `
@@ -1003,7 +1008,7 @@ ai22b-talent-foundry import-agent-id-card-registration `
   --updated-envelope .\agent_identity_envelope.registered.json
 ```
 
-Every `hire-installed` run now creates `agent_id_card_payload.json`, `agent_identity_envelope.json`, `agent_identity_verification.json`, and an unsigned `agent_warrent_registration_request.json` next to the `employment_record.json`, then links them through `entrypoints` and an `agent_identity` summary. The same commands below can regenerate or inspect the artifacts manually. The generated identity artifacts are local-unregistered by default. `export-agent-warrent-registration-request` builds the Agent_warrent `POST /agents/register` body draft from the local envelope, including canonical payload JSON and signing instructions, but it does not sign, register, upload, or call the network. The automatically generated request uses owner-key and signature placeholders, so `submit_ready=false` until the owner signs it outside Paideia. `verify-agent-id-card` performs no network call and fails if required identity fields are missing, if credential-like values, raw owner emails, or local absolute paths leak into the artifacts, or if the external registration policy is not manual-owner-action-only. After the owner manually registers outside Paideia, `import-agent-id-card-registration` can bind the returned AIL ID, signed credential metadata, signal glyph, behavior fingerprint, and verification status back into a local envelope. It stores only a credential fingerprint by default; raw credential tokens require the explicit `--include-credential-token` flag.
+Every `hire-installed` run now creates `agent_id_card_payload.json`, `agent_identity_envelope.json`, `agent_identity_verification.json`, and an unsigned `agent_warrent_registration_request.json` next to the `employment_record.json`, then links them through `entrypoints` and an `agent_identity` summary. Paideia Agent install kits also include `agent_warrent_connector/`, which contains a connector manifest, the copied registration request, a registration-body template, and `agent_warrent_submit_template.py` for owner-controlled signing and optional submission through the Agent_warrent Python SDK. The same commands below can regenerate or inspect the artifacts manually. The generated identity artifacts are local-unregistered by default. `export-agent-warrent-registration-request` builds the Agent_warrent `POST /agents/register` body draft from the local envelope, including canonical payload JSON and signing instructions, but it does not sign, register, upload, or call the network. `build-agent-warrent-connector-kit` also performs no signing or network call; it only prepares the reviewed bridge files. The automatically generated request uses owner-key and signature placeholders, so `submit_ready=false` until the owner signs it outside Paideia. `verify-agent-id-card` performs no network call and fails if required identity fields are missing, if credential-like values, raw owner emails, or local absolute paths leak into the artifacts, or if the external registration policy is not manual-owner-action-only. After the owner manually registers outside Paideia, `import-agent-id-card-registration` can bind the returned AIL ID, signed credential metadata, signal glyph, behavior fingerprint, and verification status back into a local envelope. It stores only a credential fingerprint by default; raw credential tokens require the explicit `--include-credential-token` flag.
 
 Primary references:
 

@@ -714,6 +714,7 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             output = Path(tmp) / "agent_identity_envelope.json"
             verify_output = Path(tmp) / "agent_identity_verification.json"
             registration_request_output = Path(tmp) / "agent_warrent_registration_request.json"
+            connector_dir = Path(tmp) / "agent_warrent_connector"
             registration_result_output = Path(tmp) / "agent_id_card_registration_result.json"
             registration_receipt_output = Path(tmp) / "agent_identity_registration_receipt.json"
             registered_envelope_output = Path(tmp) / "agent_identity_envelope.registered.json"
@@ -767,6 +768,17 @@ class GrahamTalentFoundryTests(unittest.TestCase):
                     str(registration_request_output),
                 ]
             )
+            connector_exit = cli_main(
+                [
+                    "build-agent-warrent-connector-kit",
+                    "--registration-request",
+                    str(registration_request_output),
+                    "--output-dir",
+                    str(connector_dir),
+                    "--server-url",
+                    "http://127.0.0.1:4317",
+                ]
+            )
             registration_result_output.write_text(
                 json.dumps(
                     {
@@ -811,6 +823,10 @@ class GrahamTalentFoundryTests(unittest.TestCase):
             envelope = json.loads(output.read_text(encoding="utf-8"))
             verification = json.loads(verify_output.read_text(encoding="utf-8"))
             registration_request = json.loads(registration_request_output.read_text(encoding="utf-8"))
+            connector_manifest = json.loads(
+                (connector_dir / "agent_warrent_connector_manifest.json").read_text(encoding="utf-8")
+            )
+            connector_script = (connector_dir / "agent_warrent_submit_template.py").read_text(encoding="utf-8")
             registration_receipt = json.loads(registration_receipt_output.read_text(encoding="utf-8"))
             registered_envelope = json.loads(registered_envelope_output.read_text(encoding="utf-8"))
 
@@ -818,6 +834,7 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertEqual(verify_exit, 0)
         self.assertEqual(registration_request_exit, 0)
+        self.assertEqual(connector_exit, 0)
         self.assertEqual(import_exit, 0)
         self.assertEqual(payload["schema"], "ai-talent-agent-id-card-payload/v1")
         self.assertEqual(envelope["version"], "ail.v1")
@@ -843,6 +860,17 @@ class GrahamTalentFoundryTests(unittest.TestCase):
         self.assertFalse(registration_request["validation"]["submit_ready"])
         self.assertFalse(registration_request["network_action_performed"])
         self.assertNotIn("C:\\Users\\", json.dumps(registration_request, ensure_ascii=False))
+        self.assertEqual(connector_manifest["schema"], "paideia-agent-warrent-connector-kit/v1")
+        self.assertEqual(connector_manifest["agent_warrent"]["endpoint"], "POST /agents/register")
+        self.assertEqual(connector_manifest["agent_warrent"]["server_url"], "http://127.0.0.1:4317")
+        self.assertEqual(connector_manifest["source_request"]["canonical_payload_sha256"], registration_request["canonical_payload_sha256"])
+        self.assertFalse(connector_manifest["network_action_performed"])
+        self.assertEqual(connector_manifest["external_registration"], "manual_owner_action_only")
+        self.assertTrue(connector_manifest["validation"]["valid"])
+        self.assertFalse(connector_manifest["public_safe"]["raw_owner_private_key_stored"])
+        self.assertIn("AGENTIDCARD_SDK_PATH", connector_script)
+        self.assertIn("/agents/register", connector_script)
+        self.assertNotIn("C:\\Users\\", json.dumps(connector_manifest, ensure_ascii=False))
         self.assertEqual(registration_receipt["schema"], "paideia-agent-id-card-registration-import/v1")
         self.assertTrue(registration_receipt["valid"])
         self.assertEqual(registration_receipt["status"], "imported")

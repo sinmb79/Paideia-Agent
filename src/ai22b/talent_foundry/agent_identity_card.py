@@ -13,8 +13,10 @@ AGENT_IDENTITY_LAYER_ENVELOPE_SCHEMA = "agent-identity-layer-envelope/ail.v1"
 AGENT_ID_CARD_VERIFICATION_SCHEMA = "paideia-agent-id-card-verification/v1"
 AGENT_ID_CARD_REGISTRATION_IMPORT_SCHEMA = "paideia-agent-id-card-registration-import/v1"
 AGENT_WARRENT_REGISTRATION_REQUEST_SCHEMA = "paideia-agent-warrent-registration-request/v1"
+AGENT_WARRENT_CONNECTOR_KIT_SCHEMA = "paideia-agent-warrent-connector-kit/v1"
 AGENT_WARRENT_REPO_URL = "https://github.com/sinmb79/Agent_warrent"
 AGENT_WARRENT_REGISTER_ENDPOINT = "POST /agents/register"
+AGENT_WARRENT_DEFAULT_SERVER_URL = "https://api.agentidcard.org"
 AGENT_WARRENT_EXTERNAL_REGISTRATION_STATES = {
     "manual_owner_action_only",
     "owner_completed_outside_paideia",
@@ -32,6 +34,11 @@ def _read_json(path: Path) -> dict[str, Any]:
 def _write_json(path: Path, data: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _write_text(path: Path, data: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(data, encoding="utf-8", newline="\n")
 
 
 def _fingerprint(*parts: str) -> str:
@@ -588,6 +595,255 @@ def build_agent_warrent_registration_request(
     if output_path is not None:
         _write_json(output_path, request)
     return request
+
+
+def _agent_warrent_submit_template() -> str:
+    return '''#!/usr/bin/env python
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+from pathlib import Path
+
+
+def _load_sdk(sdk_path: str | None):
+    if sdk_path:
+        sys.path.insert(0, str(Path(sdk_path).resolve()))
+    try:
+        from agentidcard.client import AilClient
+        from agentidcard.crypto import sign_payload
+    except Exception as exc:
+        raise SystemExit(
+            "Agent ID Card SDK is required. Install the Agent_warrent Python SDK "
+            "or set AGENTIDCARD_SDK_PATH to the repo's sdk/python directory. "
+            f"Import error: {exc}"
+        ) from exc
+    return AilClient, sign_payload
+
+
+def _read_json(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _write_json(path: Path, data: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description="Sign a Paideia Agent_warrent registration request and optionally submit it."
+    )
+    parser.add_argument("--request", default="agent_warrent_registration_request.json")
+    parser.add_argument("--private-key-jwk", required=True)
+    parser.add_argument("--owner-key-id")
+    parser.add_argument("--signed-output", default="signed_agent_warrent_registration_body.json")
+    parser.add_argument("--result-output", default="agent_id_card_registration_result.json")
+    parser.add_argument("--server-url", default="https://api.agentidcard.org")
+    parser.add_argument("--sdk-path", default=os.environ.get("AGENTIDCARD_SDK_PATH"))
+    parser.add_argument("--submit", action="store_true")
+    args = parser.parse_args(argv)
+
+    request = _read_json(Path(args.request))
+    private_key_jwk = _read_json(Path(args.private_key_jwk))
+    owner_key_id = args.owner_key_id or request.get("owner_key_id")
+    if not owner_key_id or owner_key_id == "OWNER_KEY_ID_REQUIRED":
+        raise SystemExit("Provide --owner-key-id or regenerate the request with a real owner key id.")
+
+    AilClient, sign_payload = _load_sdk(args.sdk_path)
+    payload = request["payload"]
+    owner_signature = sign_payload(payload, private_key_jwk)
+    registration_body = {
+        "owner_key_id": owner_key_id,
+        "payload": payload,
+        "owner_signature": owner_signature,
+    }
+    _write_json(Path(args.signed_output), registration_body)
+
+    summary = {
+        "signed_output": args.signed_output,
+        "submit": bool(args.submit),
+        "server_url": args.server_url,
+        "network_action_performed": bool(args.submit),
+    }
+    if args.submit:
+        client = AilClient(server_url=args.server_url)
+        result = client._post("/agents/register", registration_body)
+        _write_json(Path(args.result_output), result)
+        summary["result_output"] = args.result_output
+        summary["ail_id"] = result.get("ail_id")
+    print(json.dumps(summary, ensure_ascii=False, indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+'''
+
+
+def _agent_warrent_connector_readme(server_url: str) -> str:
+    return f"""# Agent_warrent Connector Kit
+
+This folder connects a Paideia-grown local agent to Agent_warrent / Agent ID Card.
+
+Paideia already prepared a public-safe registration request. This connector kit adds
+the final owner-controlled bridge:
+
+1. Review `agent_warrent_registration_request.json`.
+2. Keep the Agent_warrent owner private key outside this repository.
+3. Run `agent_warrent_submit_template.py` in sign-only mode first.
+4. Submit only after owner review by adding `--submit`.
+5. Import the returned `agent_id_card_registration_result.json` back into Paideia with
+   `ai22b-talent-foundry import-agent-id-card-registration`.
+
+Default server URL: `{server_url}`
+
+Sign-only example:
+
+```powershell
+py -3.12 .\\agent_warrent_submit_template.py `
+  --request .\\agent_warrent_registration_request.json `
+  --private-key-jwk <PRIVATE_KEY_JWK.json> `
+  --owner-key-id owk_your_owner_key_id `
+  --signed-output .\\signed_agent_warrent_registration_body.json
+```
+
+Manual submit example:
+
+```powershell
+py -3.12 .\\agent_warrent_submit_template.py `
+  --request .\\agent_warrent_registration_request.json `
+  --private-key-jwk <PRIVATE_KEY_JWK.json> `
+  --owner-key-id owk_your_owner_key_id `
+  --server-url {server_url} `
+  --submit `
+  --result-output .\\agent_id_card_registration_result.json
+```
+
+Safety notes:
+
+- Paideia does not submit this request automatically.
+- The generated manifest stores no private key, raw owner email, or credential token.
+- Do not commit `signed_agent_warrent_registration_body.json`,
+  `agent_id_card_registration_result.json`, or raw private keys to a public repo.
+"""
+
+
+def build_agent_warrent_connector_kit(
+    *,
+    registration_request_path: Path,
+    output_dir: Path,
+    server_url: str = AGENT_WARRENT_DEFAULT_SERVER_URL,
+) -> dict[str, Any]:
+    """Build an owner-controlled connector kit for Agent_warrent registration.
+
+    The kit contains a copied registration request, a sign/submit template, and
+    a manifest. It does not sign, register, upload, or call the network.
+    """
+
+    request = _read_json(registration_request_path)
+    validation = validate_agent_warrent_registration_request(request)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    request_copy_path = output_dir / "agent_warrent_registration_request.json"
+    registration_body_path = output_dir / "agent_warrent_registration_body.template.json"
+    submit_template_path = output_dir / "agent_warrent_submit_template.py"
+    readme_path = output_dir / "AGENT_WARRENT_CONNECTOR.md"
+    manifest_path = output_dir / "agent_warrent_connector_manifest.json"
+
+    registration_body = request.get("registration_body", {})
+    _write_json(request_copy_path, request)
+    _write_json(registration_body_path, registration_body if isinstance(registration_body, dict) else {})
+    _write_text(submit_template_path, _agent_warrent_submit_template())
+    _write_text(readme_path, _agent_warrent_connector_readme(server_url))
+
+    manifest = {
+        "schema": AGENT_WARRENT_CONNECTOR_KIT_SCHEMA,
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "status": "ready_for_owner_review" if validation["valid"] else "blocked_invalid_registration_request",
+        "network_action_performed": False,
+        "external_registration": "manual_owner_action_only",
+        "agent_warrent": {
+            "repo_url": AGENT_WARRENT_REPO_URL,
+            "server_url": server_url,
+            "endpoint": AGENT_WARRENT_REGISTER_ENDPOINT,
+            "sdk": {
+                "python_package": "agentidcard",
+                "optional_sdk_path_env": "AGENTIDCARD_SDK_PATH",
+                "source_repo_hint": "Agent_warrent/sdk/python",
+            },
+        },
+        "source_request": {
+            "file": registration_request_path.name,
+            "copied_as": request_copy_path.name,
+            "schema": request.get("schema"),
+            "canonical_payload_sha256": request.get("canonical_payload_sha256"),
+            "owner_key_id": request.get("owner_key_id"),
+            "submit_ready": bool(request.get("submit_ready")),
+            "validation_valid": bool(validation.get("valid")),
+        },
+        "files": {
+            "registration_request": request_copy_path.name,
+            "registration_body_template": registration_body_path.name,
+            "submit_template": submit_template_path.name,
+            "readme": readme_path.name,
+        },
+        "owner_actions": [
+            "Register or log in through Agent ID Card / Agent_warrent outside Paideia.",
+            "Keep private_key_jwk outside public source control.",
+            "Run the submit template without --submit first and inspect the signed registration body.",
+            "Use --submit only after explicit owner review.",
+            "Import the registration result back into Paideia after external registration.",
+        ],
+        "commands": [
+            {
+                "id": "help",
+                "command": "py -3.12 .\\agent_warrent_submit_template.py --help",
+            },
+            {
+                "id": "sign_only",
+                "command": (
+                    "py -3.12 .\\agent_warrent_submit_template.py "
+                    "--request .\\agent_warrent_registration_request.json "
+                    "--private-key-jwk <PRIVATE_KEY_JWK.json> "
+                    "--owner-key-id <OWNER_KEY_ID> "
+                    "--signed-output .\\signed_agent_warrent_registration_body.json"
+                ),
+            },
+            {
+                "id": "submit_after_review",
+                "command": (
+                    "py -3.12 .\\agent_warrent_submit_template.py "
+                    "--request .\\agent_warrent_registration_request.json "
+                    "--private-key-jwk <PRIVATE_KEY_JWK.json> "
+                    "--owner-key-id <OWNER_KEY_ID> "
+                    f"--server-url {server_url} "
+                    "--submit "
+                    "--result-output .\\agent_id_card_registration_result.json"
+                ),
+            },
+        ],
+        "public_safe": {
+            "no_network_call": True,
+            "raw_owner_private_key_stored": False,
+            "raw_owner_email_exported": False,
+            "credential_token_exported": False,
+            "local_absolute_paths_exported": False,
+        },
+        "validation": validation,
+    }
+    _write_json(manifest_path, manifest)
+    return {
+        "schema": AGENT_WARRENT_CONNECTOR_KIT_SCHEMA,
+        "output_dir": str(output_dir),
+        "manifest": str(manifest_path),
+        "files": {key: str(output_dir / value) for key, value in manifest["files"].items()},
+        "status": manifest["status"],
+        "network_action_performed": False,
+        "validation": validation,
+    }
 
 
 def validate_agent_id_card_payload(payload: dict[str, Any]) -> dict[str, Any]:
