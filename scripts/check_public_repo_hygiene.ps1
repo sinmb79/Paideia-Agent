@@ -45,6 +45,7 @@ $providerSecretKeys = @(
     "AZURE_OPENAI_API_KEY"
 )
 $providerSecretPattern = "\b(" + (($providerSecretKeys | ForEach-Object { [regex]::Escape($_) }) -join "|") + ")\b\s*[:=]\s*['""]?(?!(?:<|\$\{|your|example|sample|placeholder|changeme|replace_me|test_|fixture_))[^'"",\s]{12,}"
+$passwordAssignmentPattern = "['""]?\b[A-Za-z0-9_]*(?:password|passwd|pwd)\b['""]?\s*[:=]\s*['""]?(?!(?:<|\$\{|your|example|sample|placeholder|changeme|replace_me|test_|fixture_|false\b|true\b|none\b|null\b))[^'"",\s]{8,}"
 $hiddenUnicodeBidiChars = -join @(
     [char]0x202A,
     [char]0x202B,
@@ -64,6 +65,7 @@ $contentPatterns = @(
     @{ Name = "generic_local_posix_user_path"; Pattern = $realPosixUserHomePattern },
     @{ Name = "openai_key_assignment"; Pattern = 'OPENAI_API_KEY\s*=\s*[''"]?[^''",\s]{8,}' },
     @{ Name = "provider_secret_assignment"; Pattern = $providerSecretPattern },
+    @{ Name = "hardcoded_password_assignment"; Pattern = $passwordAssignmentPattern },
     @{ Name = "generic_openai_secret"; Pattern = "sk-[A-Za-z0-9_-]{32,}" },
     @{ Name = "github_pat"; Pattern = "gh[pousr]_[A-Za-z0-9_]{20,}" },
     @{ Name = "private_key"; Pattern = "BEGIN (RSA |OPENSSH |EC |DSA )?PRIVATE KEY" },
@@ -185,7 +187,8 @@ $report = [ordered]@{
             "environment files"
         )
         hidden_unicode_policy = "Reject U+202A..U+202E and U+2066..U+2069 bidirectional controls in public text files"
-        hidden_control_character_observation = "Report other Cc/Cf controls without failing the public gate until reviewed"
+        hidden_control_character_observation = "Python release-readiness audit reports other Cc/Cf controls without failing the public gate until reviewed"
+        hardcoded_password_assignment = "Block concrete password/passwd/pwd assignments in public candidate files"
         required_release_files = $requiredReleaseFiles
         package_license_metadata = "pyproject.toml must declare MIT and include LICENSE"
     }

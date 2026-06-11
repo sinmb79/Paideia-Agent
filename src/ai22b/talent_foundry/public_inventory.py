@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import unicodedata
 import re
 from pathlib import Path
@@ -100,6 +101,12 @@ _PROVIDER_SECRET_ASSIGNMENT_RE = re.compile(
     + r")[^'\",\s]{12,}",
     re.I,
 )
+_PASSWORD_ASSIGNMENT_RE = re.compile(
+    r"['\"]?\b[A-Za-z0-9_]*(?:password|passwd|pwd)\b['\"]?\s*[:=]\s*['\"]?(?!"
+    + _SECRET_VALUE_PREFIX_ALLOWLIST
+    + r"|false\b|true\b|none\b|null\b)[^'\",\s]{8,}",
+    re.I,
+)
 CONTENT_BLOCKLIST_PATTERNS = [
     ("local_windows_user_path", re.compile(r"C:[\\/]+Users[\\/]+" + re.escape(_PRIVATE_USER), re.I)),
     ("local_posix_user_path", re.compile(r"[\\/]Users[\\/]+" + re.escape(_PRIVATE_USER), re.I)),
@@ -107,6 +114,7 @@ CONTENT_BLOCKLIST_PATTERNS = [
     ("generic_local_posix_user_path", re.compile(_REAL_POSIX_USER_HOME_RE, re.I)),
     ("openai_key_assignment", re.compile(r"OPENAI_API_KEY\s*=\s*['\"]?[^'\",\s]{8,}", re.I)),
     ("provider_secret_assignment", _PROVIDER_SECRET_ASSIGNMENT_RE),
+    ("hardcoded_password_assignment", _PASSWORD_ASSIGNMENT_RE),
     ("generic_openai_secret", re.compile(r"sk-[A-Za-z0-9_-]{32,}")),
     ("github_pat", re.compile(r"gh[pousr]_[A-Za-z0-9_]{20,}")),
     ("private_key", re.compile(r"BEGIN (RSA |OPENSSH |EC |DSA )?PRIVATE KEY")),
@@ -141,7 +149,21 @@ def _line_column(text: str, index: int) -> tuple[int, int]:
 def _escaped_surrounding_snippet(text: str, index: int, *, radius: int = 24) -> str:
     start = max(0, index - radius)
     end = min(len(text), index + radius + 1)
-    return text[start:end].encode("unicode_escape").decode("ascii")
+    snippet = text[start:end]
+    escaped: list[str] = []
+    for character in snippet:
+        category = unicodedata.category(character)
+        if character in ALLOWED_CONTROL_CHARACTERS or category in {"Cc", "Cf"}:
+            escaped.append(character.encode("unicode_escape").decode("ascii"))
+        else:
+            escaped.append("*")
+    return "".join(escaped)
+
+
+def _surrounding_snippet_sha256(text: str, index: int, *, radius: int = 24) -> str:
+    start = max(0, index - radius)
+    end = min(len(text), index + radius + 1)
+    return hashlib.sha256(text[start:end].encode("utf-8")).hexdigest()
 
 
 def read_text(path: Path) -> str:
@@ -195,6 +217,7 @@ def hidden_unicode_bidi_matches(text: str) -> list[dict[str, Any]]:
                 "name": unicodedata.name(match.group(0), "UNKNOWN"),
                 "category": unicodedata.category(match.group(0)),
                 "escaped_surrounding_snippet": _escaped_surrounding_snippet(text, match.start()),
+                "surrounding_snippet_sha256": _surrounding_snippet_sha256(text, match.start()),
                 "rule": "hidden_unicode_bidi_control",
             }
         )
@@ -226,6 +249,7 @@ def hidden_control_character_matches(text: str) -> list[dict[str, Any]]:
                 "name": unicodedata.name(character, "UNKNOWN"),
                 "category": category,
                 "escaped_surrounding_snippet": _escaped_surrounding_snippet(text, index),
+                "surrounding_snippet_sha256": _surrounding_snippet_sha256(text, index),
                 "rule": "hidden_control_character_observation",
             }
         )

@@ -1581,6 +1581,64 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertNotIn("nested private reasoning", serialized)
         self.assertNotIn("fallback private reasoning", serialized)
 
+    def test_llm_runtime_prefers_typed_generate_result_for_injected_client(self) -> None:
+        from ai22b.talent_foundry.llm_clients import LLMResult
+        from ai22b.talent_foundry.llm_runtime import build_llm_runtime_config, invoke_llm_application_engine
+
+        class TypedFakeClient:
+            def __init__(self) -> None:
+                self.generate_result_called = False
+                self.generate_called = False
+
+            def generate_result(self, messages, *, tools=None, policy=None):
+                self.generate_result_called = True
+                return LLMResult(
+                    schema="paideia-llm-client-result/v1",
+                    engine="typed_fake_live_llm",
+                    status="completed",
+                    text="typed result answer",
+                    fields={
+                        "model": "typed-fixture-model",
+                        "endpoint": "http://localhost:11434",
+                        "usage": {"input_tokens": 1, "output_tokens": 2},
+                        "response_id": "typed-response-1",
+                        "local_files_only": True,
+                        "network_access": "injected_test_only",
+                        "provider_payload": {"raw": "must not be exported"},
+                    },
+                )
+
+            def generate(self, messages, *, tools=None, policy=None):
+                self.generate_called = True
+                raise AssertionError("generate() should not be used when generate_result() exists")
+
+        config = build_llm_runtime_config(engine="openai_chatgpt_codex", model="typed-fixture-model")
+        client = TypedFakeClient()
+        manifest = {
+            "agent": {"name": "Typed Fixture", "role": "test analyst", "major_goal": "contract verification"},
+            "memory_profile": {"procedural_principles": ["verify"], "semantic_themes": ["contract"]},
+        }
+
+        result = invoke_llm_application_engine(
+            config,
+            manifest=manifest,
+            task="contract smoke",
+            llm_mode="live",
+            client=client,
+        )
+
+        self.assertTrue(client.generate_result_called)
+        self.assertFalse(client.generate_called)
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["draft"], "typed result answer")
+        self.assertTrue(result["llm_client_contract"]["typed_result_contract_used"])
+        self.assertEqual(result["client_result"]["model"], "typed-fixture-model")
+        self.assertEqual(result["client_result"]["endpoint"], "http://localhost:11434")
+        self.assertEqual(result["client_result"]["usage"], {"input_tokens": 1, "output_tokens": 2})
+        self.assertEqual(result["client_result"]["response_id"], "typed-response-1")
+        self.assertTrue(result["client_result"]["local_files_only"])
+        self.assertNotIn("provider_payload", result["client_result"])
+
     def test_llm_provider_preflight_explains_missing_live_configuration(self) -> None:
         import os
 

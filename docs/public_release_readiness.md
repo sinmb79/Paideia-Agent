@@ -33,12 +33,14 @@ The hygiene script now checks release risks that should fail fast:
 - hidden bidirectional Unicode controls that can make reviewed text render differently from stored text;
 - required public-release files such as `README.md`, `README.ko.md`, `SECURITY.md`, `LICENSE`, `pyproject.toml`, and machine-readable files under `schemas/`.
 
-The Python readiness audit writes a reviewable `paideia-public-release-readiness/v1` report. It checks source repository metadata, CI gates, and public candidate files under roots such as `src`, `docs`, `tests`, `scripts`, `examples`, and `data/public`. It parses GitHub workflow files with `PyYAML` for job, matrix, `needs`, action, checkout credential, and artifact retention policy checks; command strings are still checked as command markers because they are shell payloads. The audit does not call the network, execute subprocesses, or inspect private generated runtime state.
+The Python readiness audit writes a reviewable `paideia-public-release-readiness/v1` report. It checks source repository metadata, CI gates, and public candidate files under roots such as `src`, `docs`, `tests`, `scripts`, `examples`, and `data/public`. It parses GitHub workflow files with `PyYAML` for job, matrix, `needs`, action, checkout credential, artifact retention, job-level permission override, trigger, job-scoped command, and job-scoped artifact policy checks; command strings are scoped to their required jobs because they are shell payloads. The audit does not call the network, execute subprocesses, or inspect private generated runtime state.
 It also includes report-only observations for hidden Unicode control/format
 characters other than bidi controls, so GitHub hidden-text warnings can be
 diagnosed before a hard gate is added. Each observation includes the file,
-codepoint, Unicode name/category, line, column, and an escaped surrounding
-snippet.
+codepoint, Unicode name/category, line, column, a masked escaped surrounding
+snippet, and a surrounding-snippet SHA-256. The masked snippet preserves hidden
+control codepoints but replaces ordinary text with `*`, so split secrets or
+private local text are not copied into public reports.
 
 The first-run smoke suite also writes `paideia-llm-provider-matrix/v1`, builds `paideia-llm-onboarding-checklist/v1`, and materializes `paideia-llm-connection-profile/v1` with the deterministic local engine. This proves the LLM/service selection path can list all selectable providers and produce setup requirements, provider doctor, live-check, application smoke, agent runtime smoke, and first chat commands without calling a provider by default or exporting secrets.
 

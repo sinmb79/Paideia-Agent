@@ -47,28 +47,52 @@ REQUIRED_PUBLIC_FILES = [
     "schemas/hiring_dossier.v1.schema.json",
 ]
 
-REQUIRED_CI_MARKERS = [
-    'python -m pip install -e ".[dev]"',
-    'python -m pip install -e ".[security]"',
-    "python -m compileall src/ai22b/talent_foundry",
-    "python -B -m pytest tests -q",
-    "python -m build",
-    "python -m bandit -q -r src",
-    "python -m pip_audit . --skip-editable",
-    "public-release-gate-reports",
-    "security-reports",
-    "ruff check src tests",
-    ".\\scripts\\check_public_repo_hygiene.ps1",
-    "ai22b-talent-foundry build-llm-connection-profile",
-    "ai22b-talent-foundry doctor-llm-adapters",
-    "ai22b-talent-foundry run-chat-runtime-smoke",
-    "ai22b-talent-foundry doctor-llm-live-readiness",
-    "ai22b-talent-foundry doctor-package-install",
-    "ai22b-talent-foundry doctor-first-run",
-    "ai22b-talent-foundry doctor-runtime-contract",
-]
-
 REQUIRED_CI_JOBS = {"test", "security", "release-gates"}
+REQUIRED_CI_JOB_COMMAND_MARKERS = {
+    "test": [
+        'python -m pip install -e ".[dev]"',
+        "python -m compileall src/ai22b/talent_foundry",
+        "ruff check src tests",
+        "python -B -m pytest tests -q",
+    ],
+    "security": [
+        'python -m pip install -e ".[security]"',
+        "python -m bandit -q -r src",
+        "python -m pip_audit . --skip-editable",
+    ],
+    "release-gates": [
+        'python -m pip install -e ".[dev]"',
+        "python -m build",
+        "python -m compileall src/ai22b/talent_foundry",
+        "ruff check src tests",
+        ".\\scripts\\check_public_repo_hygiene.ps1",
+        "ai22b-talent-foundry build-llm-connection-profile",
+        "ai22b-talent-foundry doctor-llm-adapters",
+        "ai22b-talent-foundry run-chat-runtime-smoke",
+        "ai22b-talent-foundry doctor-llm-live-readiness",
+        "ai22b-talent-foundry audit-public-release-readiness",
+        "ai22b-talent-foundry build-source-sbom",
+        "ai22b-talent-foundry doctor-package-install",
+        "ai22b-talent-foundry doctor-first-run",
+        "ai22b-talent-foundry doctor-runtime-contract",
+    ],
+}
+REQUIRED_CI_JOB_ARTIFACT_NAMES = {
+    "security": ["security-reports"],
+    "release-gates": ["public-release-gate-reports"],
+}
+REQUIRED_CI_MARKERS = sorted(
+    {
+        marker
+        for markers in REQUIRED_CI_JOB_COMMAND_MARKERS.values()
+        for marker in markers
+    }
+    | {
+        artifact
+        for artifacts in REQUIRED_CI_JOB_ARTIFACT_NAMES.values()
+        for artifact in artifacts
+    }
+)
 REQUIRED_CI_ACTION_MAJOR_MINIMUMS = {
     "actions/checkout": 6,
     "actions/setup-python": 6,
@@ -79,14 +103,21 @@ REQUIRED_RELEASE_GATE_OS = {"windows-latest", "ubuntu-latest"}
 REQUIRED_RELEASE_GATE_PYTHON = {"3.11", "3.12"}
 REQUIRED_OPTIONAL_AUDIT_EXTRAS = {"live-llm", "local-llm", "rag", "fine-tune", "all"}
 REQUIRED_ARTIFACT_RETENTION_DAYS = 14
-REQUIRED_OPTIONAL_AUDIT_MARKERS = [
-    "workflow_dispatch:",
-    "schedule:",
+REQUIRED_OPTIONAL_AUDIT_TRIGGERS = {"workflow_dispatch", "schedule"}
+REQUIRED_OPTIONAL_AUDIT_JOB = "optional-dependency-audit"
+REQUIRED_OPTIONAL_AUDIT_COMMAND_MARKERS = [
     'python -m pip install pip-audit',
     'python -m pip install -e ".[${{ matrix.extra }}]"',
     "python -m pip_audit --local --format json",
+]
+REQUIRED_OPTIONAL_AUDIT_ARTIFACT_NAMES = [
     "optional-dependency-audit-${{ matrix.extra }}",
 ]
+REQUIRED_OPTIONAL_AUDIT_MARKERS = sorted(
+    REQUIRED_OPTIONAL_AUDIT_COMMAND_MARKERS
+    + REQUIRED_OPTIONAL_AUDIT_ARTIFACT_NAMES
+    + [f"{trigger}:" for trigger in REQUIRED_OPTIONAL_AUDIT_TRIGGERS]
+)
 
 REQUIRED_HYGIENE_MARKERS = [
     "missing_required_release_file",
@@ -96,6 +127,7 @@ REQUIRED_HYGIENE_MARKERS = [
     "generic_local_posix_user_path",
     "(^|/)build/",
     "provider_secret_assignment",
+    "hardcoded_password_assignment",
     "generic_openai_secret",
     "private_key",
     "hidden_unicode_bidi_control",
@@ -133,9 +165,48 @@ def _missing_files(repo_root: Path) -> list[str]:
     return [path for path in REQUIRED_PUBLIC_FILES if not (repo_root / path).is_file()]
 
 
-def _line_has(text: str, needle: str) -> bool:
-    normalized = text.replace("/", "\\") if "\\" in needle else text
-    return needle in normalized
+def _text_has_marker(text: str, needle: str) -> bool:
+    return needle.replace("\\", "/") in text.replace("\\", "/")
+
+
+def _strip_inline_shell_comment(line: str) -> str:
+    in_single = False
+    in_double = False
+    escaped = False
+    result: list[str] = []
+    for character in line:
+        if escaped:
+            result.append(character)
+            escaped = False
+            continue
+        if character == "`" and not in_single:
+            result.append(character)
+            escaped = True
+            continue
+        if character == "'" and not in_double:
+            in_single = not in_single
+            result.append(character)
+            continue
+        if character == '"' and not in_single:
+            in_double = not in_double
+            result.append(character)
+            continue
+        if character == "#" and not in_single and not in_double:
+            break
+        result.append(character)
+    return "".join(result).strip()
+
+
+def _line_matches_command_marker(line: str, marker: str) -> bool:
+    command = _strip_inline_shell_comment(line).replace("\\", "/").strip()
+    required = marker.replace("\\", "/").strip()
+    if not command:
+        return False
+    return command == required or command.startswith(f"{required} ")
+
+
+def _run_text_has_command_marker(run_text: str, marker: str) -> bool:
+    return any(_line_matches_command_marker(line, marker) for line in run_text.splitlines())
 
 
 def _load_workflow_document(text: str) -> tuple[dict[str, Any], str | None]:
@@ -145,8 +216,20 @@ def _load_workflow_document(text: str) -> tuple[dict[str, Any], str | None]:
         import yaml
     except ModuleNotFoundError:
         return {}, "pyyaml_not_installed"
+    class GithubActionsLoader(yaml.SafeLoader):
+        pass
+
+    GithubActionsLoader.yaml_implicit_resolvers = {
+        first: [
+            (tag, regexp)
+            for tag, regexp in resolvers
+            if tag != "tag:yaml.org,2002:bool"
+        ]
+        for first, resolvers in yaml.SafeLoader.yaml_implicit_resolvers.items()
+    }
     try:
-        loaded = yaml.safe_load(text)
+        # Custom SafeLoader preserves the GitHub Actions "on" key without enabling arbitrary object loading.
+        loaded = yaml.load(text, Loader=GithubActionsLoader)  # nosec B506
     except Exception as exc:
         return {}, f"workflow_yaml_parse_failed:{type(exc).__name__}"
     if loaded is None:
@@ -161,9 +244,14 @@ def _workflow_jobs(workflow: dict[str, Any]) -> dict[str, Any]:
     return jobs if isinstance(jobs, dict) else {}
 
 
-def _workflow_steps(workflow: dict[str, Any]) -> list[dict[str, Any]]:
+def _workflow_steps(workflow: dict[str, Any], job_id: str | None = None) -> list[dict[str, Any]]:
     steps: list[dict[str, Any]] = []
-    for job in _workflow_jobs(workflow).values():
+    if job_id is None:
+        jobs = list(_workflow_jobs(workflow).values())
+    else:
+        job = _workflow_jobs(workflow).get(job_id)
+        jobs = [job] if isinstance(job, dict) else []
+    for job in jobs:
         if not isinstance(job, dict):
             continue
         job_steps = job.get("steps", [])
@@ -192,6 +280,62 @@ def _workflow_uses_entries(workflow: dict[str, Any] | str) -> list[str]:
         if isinstance(uses, str):
             entries.append(uses.strip("'\""))
     return entries
+
+
+def _workflow_job_run_text(workflow: dict[str, Any], job_id: str) -> str:
+    lines: list[str] = []
+    for step in _workflow_steps(workflow, job_id):
+        run = step.get("run")
+        if not isinstance(run, str):
+            continue
+        for raw in run.splitlines():
+            if raw.strip().startswith("#"):
+                continue
+            lines.append(raw)
+    return "\n".join(lines)
+
+
+def _workflow_job_upload_artifact_names(workflow: dict[str, Any], job_id: str) -> list[str]:
+    names = []
+    for step in _workflow_steps(workflow, job_id):
+        uses = str(step.get("uses", ""))
+        if not uses.startswith("actions/upload-artifact@"):
+            continue
+        with_block = step.get("with", {})
+        if not isinstance(with_block, dict):
+            continue
+        name = with_block.get("name")
+        if name is not None:
+            names.append(str(name))
+    return names
+
+
+def _artifact_name_matches(actual: str, required: str) -> bool:
+    return actual == required or actual.startswith(f"{required}-")
+
+
+def _missing_job_command_markers(workflow: dict[str, Any], required: dict[str, list[str]]) -> dict[str, list[str]]:
+    missing: dict[str, list[str]] = {}
+    for job_id, markers in required.items():
+        run_text = _workflow_job_run_text(workflow, job_id)
+        job_missing = [marker for marker in markers if not _run_text_has_command_marker(run_text, marker)]
+        if job_missing:
+            missing[job_id] = job_missing
+    return missing
+
+
+def _missing_job_artifact_names(workflow: dict[str, Any], required: dict[str, list[str]]) -> dict[str, list[str]]:
+    missing: dict[str, list[str]] = {}
+    for job_id, artifacts in required.items():
+        names = _workflow_job_upload_artifact_names(workflow, job_id)
+        job_missing = [
+            artifact
+            for artifact in artifacts
+            if not any(_artifact_name_matches(name, artifact) for name in names)
+        ]
+        if job_missing:
+            missing[job_id] = job_missing
+    return missing
 
 
 def _workflow_upload_artifact_retention(workflow: dict[str, Any]) -> dict[str, Any]:
@@ -230,6 +374,62 @@ def _workflow_permissions_contents_read_yaml(workflow: dict[str, Any]) -> bool:
     if not isinstance(permissions, dict):
         return False
     return str(permissions.get("contents", "")).casefold() == "read"
+
+
+def _workflow_job_permission_issues(workflow: dict[str, Any]) -> list[dict[str, str]]:
+    issues: list[dict[str, str]] = []
+    for job_id, job in _workflow_jobs(workflow).items():
+        if not isinstance(job, dict) or "permissions" not in job:
+            continue
+        permissions = job.get("permissions")
+        if not isinstance(permissions, dict):
+            issues.append({"job": str(job_id), "issue": "job_permissions_not_mapping"})
+            continue
+        for permission, value in permissions.items():
+            permission_name = str(permission)
+            value_text = str(value).casefold()
+            if permission_name == "contents" and value_text == "read":
+                continue
+            if value_text in {"none", ""}:
+                continue
+            issues.append(
+                {
+                    "job": str(job_id),
+                    "permission": permission_name,
+                    "value": str(value),
+                    "issue": "job_permission_grants_more_than_read",
+                }
+            )
+    return issues
+
+
+def _workflow_checkout_status(workflow: dict[str, Any], required_jobs: set[str]) -> dict[str, Any]:
+    missing_checkout_jobs: list[str] = []
+    jobs_missing_persist_credentials_false: list[str] = []
+    checkout_steps_without_persist_credentials_false = 0
+    for job_id in sorted(required_jobs):
+        checkout_steps = [
+            step
+            for step in _workflow_steps(workflow, job_id)
+            if str(step.get("uses", "")).startswith("actions/checkout@")
+        ]
+        if not checkout_steps:
+            missing_checkout_jobs.append(job_id)
+            continue
+        for step in checkout_steps:
+            with_block = step.get("with", {})
+            if not isinstance(with_block, dict):
+                with_block = {}
+            value = with_block.get("persist-credentials")
+            if value is not False and str(value).casefold() != "false":
+                checkout_steps_without_persist_credentials_false += 1
+                if job_id not in jobs_missing_persist_credentials_false:
+                    jobs_missing_persist_credentials_false.append(job_id)
+    return {
+        "missing_checkout_jobs": missing_checkout_jobs,
+        "jobs_missing_checkout_persist_credentials_false": jobs_missing_persist_credentials_false,
+        "checkout_steps_without_persist_credentials_false": checkout_steps_without_persist_credentials_false,
+    }
 
 
 def _workflow_checkout_steps_missing_persist_credentials_false(workflow: dict[str, Any]) -> int:
@@ -344,6 +544,17 @@ def _workflow_values(block: str, *, key: str) -> set[str]:
     return values
 
 
+def _workflow_triggers(workflow: dict[str, Any]) -> set[str]:
+    on_block = workflow.get("on")
+    if isinstance(on_block, dict):
+        return {str(key) for key in on_block}
+    if isinstance(on_block, list):
+        return {str(item) for item in on_block}
+    if isinstance(on_block, str):
+        return {on_block}
+    return set()
+
+
 def _workflow_marker_check(text: str) -> dict[str, Any]:
     workflow, parse_error = _load_workflow_document(text)
     uses_entries = _workflow_uses_entries(workflow) if not parse_error else _workflow_legacy_uses_entries(text)
@@ -371,25 +582,41 @@ def _workflow_marker_check(text: str) -> dict[str, Any]:
         if release_job
         else _workflow_values(release_block, key="python-version")
     )
-    missing_commands = [marker for marker in REQUIRED_CI_MARKERS if not _line_has(text, marker)]
-    checkout_steps_without_credential_opt_out = (
-        _workflow_checkout_steps_missing_persist_credentials_false(workflow)
+    missing_job_command_markers = (
+        _missing_job_command_markers(workflow, REQUIRED_CI_JOB_COMMAND_MARKERS)
         if not parse_error
-        else _checkout_steps_missing_persist_credentials_false(text)
+        else {"workflow": REQUIRED_CI_MARKERS}
     )
+    missing_job_artifact_names = (
+        _missing_job_artifact_names(workflow, REQUIRED_CI_JOB_ARTIFACT_NAMES)
+        if not parse_error
+        else {"workflow": [artifact for artifacts in REQUIRED_CI_JOB_ARTIFACT_NAMES.values() for artifact in artifacts]}
+    )
+    checkout_status = (
+        _workflow_checkout_status(workflow, REQUIRED_CI_JOBS)
+        if not parse_error
+        else {
+            "missing_checkout_jobs": [],
+            "jobs_missing_checkout_persist_credentials_false": [],
+            "checkout_steps_without_persist_credentials_false": _checkout_steps_missing_persist_credentials_false(text),
+        }
+    )
+    job_permission_issues = _workflow_job_permission_issues(workflow) if not parse_error else []
     retention = _workflow_upload_artifact_retention(workflow) if not parse_error else {
         "upload_artifact_steps": [],
         "upload_artifact_steps_missing_retention_days": ["workflow_yaml_unavailable"],
     }
     details = {
         "workflow_yaml_parse_error": parse_error,
+        "workflow_yaml_top_level_keys": sorted(str(key) for key in workflow),
         "missing_jobs": sorted(REQUIRED_CI_JOBS - jobs),
         "permissions_contents_read": _workflow_permissions_contents_read_yaml(workflow)
         if not parse_error
         else _workflow_permissions_contents_read(text),
+        "job_permission_issues": job_permission_issues,
         "action_major_versions": action_versions,
         "missing_or_old_actions": missing_or_old_actions,
-        "checkout_steps_without_persist_credentials_false": checkout_steps_without_credential_opt_out,
+        **checkout_status,
         **retention,
         "release_gates_needs": sorted(release_needs),
         "missing_release_gates_needs": sorted(REQUIRED_RELEASE_GATE_NEEDS - release_needs),
@@ -397,19 +624,23 @@ def _workflow_marker_check(text: str) -> dict[str, Any]:
         "missing_release_gates_os": sorted(REQUIRED_RELEASE_GATE_OS - release_os),
         "release_gates_python": sorted(release_python),
         "missing_release_gates_python": sorted(REQUIRED_RELEASE_GATE_PYTHON - release_python),
-        "missing_command_markers": missing_commands,
+        "missing_job_command_markers": missing_job_command_markers,
+        "missing_job_artifact_names": missing_job_artifact_names,
     }
     passed = (
         not parse_error
         and not details["missing_jobs"]
         and details["permissions_contents_read"]
+        and not job_permission_issues
         and not missing_or_old_actions
-        and checkout_steps_without_credential_opt_out == 0
+        and not details["missing_checkout_jobs"]
+        and details["checkout_steps_without_persist_credentials_false"] == 0
         and not details["upload_artifact_steps_missing_retention_days"]
         and not details["missing_release_gates_needs"]
         and not details["missing_release_gates_os"]
         and not details["missing_release_gates_python"]
-        and not missing_commands
+        and not missing_job_command_markers
+        and not missing_job_artifact_names
     )
     return {"passed": passed, "details": details}
 
@@ -432,41 +663,72 @@ def _optional_dependency_audit_check(text: str) -> dict[str, Any]:
     ]
     jobs_map = _workflow_jobs(workflow)
     optional_job = (
-        jobs_map.get("optional-dependency-audit", {})
-        if isinstance(jobs_map.get("optional-dependency-audit"), dict)
+        jobs_map.get(REQUIRED_OPTIONAL_AUDIT_JOB, {})
+        if isinstance(jobs_map.get(REQUIRED_OPTIONAL_AUDIT_JOB), dict)
         else {}
     )
     extras = _workflow_matrix_values(optional_job, "extra") if optional_job else _workflow_values(text, key="extra")
-    missing_markers = [marker for marker in REQUIRED_OPTIONAL_AUDIT_MARKERS if not _line_has(text, marker)]
-    checkout_steps_without_credential_opt_out = (
-        _workflow_checkout_steps_missing_persist_credentials_false(workflow)
+    triggers = _workflow_triggers(workflow) if not parse_error else set()
+    missing_triggers = sorted(REQUIRED_OPTIONAL_AUDIT_TRIGGERS - triggers)
+    optional_run_text = _workflow_job_run_text(workflow, REQUIRED_OPTIONAL_AUDIT_JOB) if not parse_error else ""
+    missing_command_markers = [
+        marker
+        for marker in REQUIRED_OPTIONAL_AUDIT_COMMAND_MARKERS
+        if not _run_text_has_command_marker(optional_run_text, marker)
+    ] if not parse_error else REQUIRED_OPTIONAL_AUDIT_COMMAND_MARKERS
+    artifact_names = (
+        _workflow_job_upload_artifact_names(workflow, REQUIRED_OPTIONAL_AUDIT_JOB)
         if not parse_error
-        else _checkout_steps_missing_persist_credentials_false(text)
+        else []
     )
+    missing_artifact_names = [
+        artifact
+        for artifact in REQUIRED_OPTIONAL_AUDIT_ARTIFACT_NAMES
+        if not any(_artifact_name_matches(name, artifact) for name in artifact_names)
+    ]
+    checkout_status = (
+        _workflow_checkout_status(workflow, {REQUIRED_OPTIONAL_AUDIT_JOB})
+        if not parse_error
+        else {
+            "missing_checkout_jobs": [],
+            "jobs_missing_checkout_persist_credentials_false": [],
+            "checkout_steps_without_persist_credentials_false": _checkout_steps_missing_persist_credentials_false(text),
+        }
+    )
+    job_permission_issues = _workflow_job_permission_issues(workflow) if not parse_error else []
     retention = _workflow_upload_artifact_retention(workflow) if not parse_error else {
         "upload_artifact_steps": [],
         "upload_artifact_steps_missing_retention_days": ["workflow_yaml_unavailable"],
     }
     details = {
         "workflow_yaml_parse_error": parse_error,
+        "workflow_yaml_top_level_keys": sorted(str(key) for key in workflow),
         "permissions_contents_read": _workflow_permissions_contents_read_yaml(workflow)
         if not parse_error
         else _workflow_permissions_contents_read(text),
+        "job_permission_issues": job_permission_issues,
         "action_major_versions": action_versions,
         "missing_or_old_actions": missing_or_old_actions,
+        "triggers": sorted(triggers),
+        "missing_triggers": missing_triggers,
         "extras": sorted(extras),
         "missing_extras": sorted(REQUIRED_OPTIONAL_AUDIT_EXTRAS - extras),
-        "missing_markers": missing_markers,
-        "checkout_steps_without_persist_credentials_false": checkout_steps_without_credential_opt_out,
+        "missing_command_markers": missing_command_markers,
+        "missing_artifact_names": missing_artifact_names,
+        **checkout_status,
         **retention,
     }
     passed = (
         not parse_error
         and details["permissions_contents_read"]
+        and not job_permission_issues
         and not missing_or_old_actions
+        and not missing_triggers
         and not details["missing_extras"]
-        and not missing_markers
-        and checkout_steps_without_credential_opt_out == 0
+        and not missing_command_markers
+        and not missing_artifact_names
+        and not details["missing_checkout_jobs"]
+        and details["checkout_steps_without_persist_credentials_false"] == 0
         and not details["upload_artifact_steps_missing_retention_days"]
     )
     return {"passed": passed, "details": details}
@@ -610,6 +872,8 @@ def audit_public_release_readiness(
             "required_action_major_minimums": REQUIRED_CI_ACTION_MAJOR_MINIMUMS,
             "required_artifact_retention_days": REQUIRED_ARTIFACT_RETENTION_DAYS,
             "required_command_markers": REQUIRED_CI_MARKERS,
+            "required_job_command_markers": REQUIRED_CI_JOB_COMMAND_MARKERS,
+            "required_job_artifact_names": REQUIRED_CI_JOB_ARTIFACT_NAMES,
         },
         issue="ci_release_gate_missing",
     )
@@ -625,8 +889,11 @@ def audit_public_release_readiness(
         details={
             **optional_audit_check["details"],
             "required_extras": sorted(REQUIRED_OPTIONAL_AUDIT_EXTRAS),
+            "required_triggers": sorted(REQUIRED_OPTIONAL_AUDIT_TRIGGERS),
             "required_artifact_retention_days": REQUIRED_ARTIFACT_RETENTION_DAYS,
             "required_markers": REQUIRED_OPTIONAL_AUDIT_MARKERS,
+            "required_command_markers": REQUIRED_OPTIONAL_AUDIT_COMMAND_MARKERS,
+            "required_artifact_names": REQUIRED_OPTIONAL_AUDIT_ARTIFACT_NAMES,
         },
         issue="optional_dependency_audit_workflow_missing",
     )

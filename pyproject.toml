@@ -40,6 +40,7 @@ dev = [
 security = [
   "bandit",
   "pip-audit",
+  "pyyaml",
 ]
 live-llm = ["openai>=1.0.0"]
 local-llm = ["accelerate", "sentence-transformers", "transformers"]
@@ -75,7 +76,7 @@ where = ["src"]
 
 [tool.bandit]
 skips = [
-  "B105", # Public-safe boolean/status fixture names trigger hardcoded-password false positives.
+  "B105", # Noisy for public-safe status/score fixtures; public_inventory blocks real password assignments.
   "B311", # Educational from-scratch model sampling is deterministic/non-cryptographic.
   "B608", # Long generated markdown templates are misread as SQL construction.
   "B615", # Local-only Hugging Face loading uses local_files_only=True.

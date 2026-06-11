@@ -40,11 +40,38 @@ PRIVATE_REASONING_KEY_MARKERS = (
     "privatereasoning",
     "reasoningtrace",
 )
+RAW_PROVIDER_PAYLOAD_KEY_MARKERS = (
+    "body",
+    "debugbody",
+    "debugheader",
+    "headers",
+    "providerbody",
+    "providerdebug",
+    "providerpacket",
+    "providerpayload",
+    "rawbody",
+    "rawoutput",
+    "rawprovider",
+    "rawresponse",
+    "requestbody",
+    "responsebody",
+)
 SAFE_PRIVATE_REASONING_METADATA_KEYS = {
     "privatereasoningfieldsomitted",
     "privatereasoningfieldvaluesstored",
 }
 SAFE_PRIVATE_REASONING_POLICY_VALUES = {"do_not_store", "not_stored", "omitted"}
+PUBLIC_LLM_RESULT_FIELD_ALLOWLIST = {
+    "endpoint",
+    "error",
+    "error_type",
+    "local_files_only",
+    "model",
+    "model_path",
+    "network_access",
+    "response_id",
+    "usage",
+}
 
 
 @dataclass(frozen=True)
@@ -67,23 +94,14 @@ class LLMResult:
         if self.text is not None:
             artifact["text"] = _redact_secret_text(self.text.strip())
         if self.reason is not None:
-            artifact["reason"] = self.reason
-        artifact.update(_sanitize_value(dict(self.fields)))
+            artifact["reason"] = _redact_secret_text(self.reason.strip())
+        artifact.update(_public_llm_result_fields(self.fields))
         artifact["raw_output_saved"] = False
         artifact["private_reasoning_trace"] = "do_not_store"
         return artifact
 
 
 class LLMClient(Protocol):
-    def generate_result(
-        self,
-        messages: list[dict[str, str]],
-        *,
-        tools: list[dict[str, Any]] | None = None,
-        policy: dict[str, Any] | None = None,
-    ) -> LLMResult:
-        """Generate a typed language result before public artifact conversion."""
-
     def generate(
         self,
         messages: list[dict[str, str]],
@@ -92,6 +110,26 @@ class LLMClient(Protocol):
         policy: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Generate a language result without becoming the agent identity."""
+
+
+class TypedLLMClient(LLMClient, Protocol):
+    def generate(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        tools: list[dict[str, Any]] | None = None,
+        policy: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Generate a language result without becoming the agent identity."""
+
+    def generate_result(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        tools: list[dict[str, Any]] | None = None,
+        policy: dict[str, Any] | None = None,
+    ) -> LLMResult:
+        """Generate a typed language result before public artifact conversion."""
 
 
 class PublicArtifactLLMClient:
@@ -201,6 +239,11 @@ def _is_private_reasoning_key(key: Any) -> bool:
     return any(marker in normalized for marker in PRIVATE_REASONING_KEY_MARKERS)
 
 
+def _is_raw_provider_payload_key(key: Any) -> bool:
+    normalized = _normalized_key(key)
+    return any(marker in normalized for marker in RAW_PROVIDER_PAYLOAD_KEY_MARKERS)
+
+
 def count_private_reasoning_fields(value: Any) -> int:
     if isinstance(value, dict):
         total = 0
@@ -224,13 +267,21 @@ def _sanitize_value(value: Any) -> Any:
         return {
             str(key): _sanitize_value(item)
             for key, item in value.items()
-            if not _is_private_reasoning_key(key)
+            if not _is_private_reasoning_key(key) and not _is_raw_provider_payload_key(key)
         }
     if isinstance(value, list):
         return [_sanitize_value(item) for item in value]
     if isinstance(value, tuple):
         return tuple(_sanitize_value(item) for item in value)
     return value
+
+
+def _public_llm_result_fields(fields: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        str(key): _sanitize_value(value)
+        for key, value in fields.items()
+        if str(key) in PUBLIC_LLM_RESULT_FIELD_ALLOWLIST and not _is_private_reasoning_key(key)
+    }
 
 
 def sanitize_llm_result_packet(value: Any) -> Any:

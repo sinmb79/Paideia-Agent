@@ -25,6 +25,7 @@ CLIENT_RESULT_RUNTIME_SUMMARY_KEYS = (
     "status",
     "reason",
     "model",
+    "endpoint",
     "error_type",
     "network_access",
     "local_files_only",
@@ -668,10 +669,12 @@ def _invoke_live_client(
     else:
         client_result = llm_client.generate(messages, tools=tools or [], policy=policy_context or {})
         typed_result_contract_used = False
+    original_client_result_keys = set(client_result)
     private_reasoning_fields_omitted = count_private_reasoning_fields(client_result)
     client_result = sanitize_llm_result_packet(client_result)
     client_result_summary = _client_result_for_runtime_storage(
         client_result,
+        original_keys=original_client_result_keys,
         private_reasoning_fields_omitted=private_reasoning_fields_omitted,
     )
     engine = runtime_config["engine"]
@@ -725,6 +728,7 @@ def _invoke_live_client(
 def _client_result_for_runtime_storage(
     client_result: dict[str, Any],
     *,
+    original_keys: set[str] | None = None,
     private_reasoning_fields_omitted: int = 0,
 ) -> dict[str, Any]:
     summary = {
@@ -732,13 +736,19 @@ def _client_result_for_runtime_storage(
         for key in CLIENT_RESULT_RUNTIME_SUMMARY_KEYS
         if key in client_result
     }
+    private_reasoning_omitted_keys = {
+        key
+        for key in original_keys or set()
+        if count_private_reasoning_fields({key: "omitted_private_reasoning"}) > 0
+    }
     omitted_keys = sorted(
         key
-        for key in client_result
-        if key not in CLIENT_RESULT_RUNTIME_SUMMARY_KEYS
+        for key in (original_keys or set(client_result))
+        if key not in CLIENT_RESULT_RUNTIME_SUMMARY_KEYS and key not in private_reasoning_omitted_keys
     )
     if "text" in client_result:
         summary["text_omitted"] = True
+    summary.setdefault("raw_output_saved", False)
     if omitted_keys:
         summary["omitted_keys"] = omitted_keys
     if private_reasoning_fields_omitted:
@@ -1327,6 +1337,7 @@ def _sanitize_runtime_result(result: dict[str, Any] | None) -> dict[str, Any] | 
                 "status",
                 "reason",
                 "model",
+                "endpoint",
                 "error_type",
                 "network_access",
                 "local_files_only",
@@ -1354,6 +1365,7 @@ def _sanitize_runtime_result(result: dict[str, Any] | None) -> dict[str, Any] | 
                 "client_result_status",
                 "client_executor",
                 "client_override_used",
+                "typed_result_contract_used",
                 "application_engine_only",
                 "network_access",
                 "client_result_summary_only",

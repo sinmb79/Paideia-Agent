@@ -33,13 +33,13 @@ ai22b-talent-foundry doctor-first-run --repo-root . --strict --output .\first_ru
 - GitHub diff에서 실제 내용과 다르게 보일 수 있는 bidirectional Unicode 제어문자
 - `README.md`, `README.ko.md`, `SECURITY.md`, `LICENSE`, `pyproject.toml`, `schemas/**` 같은 공개 릴리스 필수 파일
 
-Bidi 제어문자는 차단 대상입니다. 그 외 `Cc` 또는 `Cf` 범주의 숨은 제어/서식 문자는 Python release readiness audit의 JSON 리포트에 report-only 관찰값으로 남깁니다. 관찰값에는 파일, codepoint, Unicode 이름과 category, 줄/열, escaped surrounding snippet이 포함되어 GitHub hidden-text warning 원인을 추적할 수 있습니다.
+Bidi 제어문자는 차단 대상입니다. 그 외 `Cc` 또는 `Cf` 범주의 숨은 제어/서식 문자는 Python release readiness audit의 JSON 리포트에 report-only 관찰값으로 남깁니다. 관찰값에는 파일, codepoint, Unicode 이름과 category, 줄/열, masked escaped surrounding snippet, surrounding-snippet SHA-256이 포함됩니다. masked snippet은 숨은 제어문자 codepoint는 보존하되 일반 텍스트를 `*`로 대체하므로 split secret이나 private text가 공개 리포트에 복사되지 않습니다.
 
 ## CI와 보안 증거
 
 GitHub Actions는 `permissions: contents: read`로 실행합니다. `actions/checkout@v6`에는 `persist-credentials: false`를 명시해 CI가 저장소 credential을 불필요하게 보존하지 않도록 합니다. `setup-python`과 `upload-artifact`도 Node 24 대응 공식 action 계열을 사용합니다.
 
-릴리스 준비도 감사는 더 이상 `actions/checkout@v5` 같은 정확한 문자열만 찾지 않습니다. `PyYAML`로 workflow를 파싱해서 job, `needs`, OS/Python matrix, 최소 action major version, artifact retention, checkout credential 정책을 구조적으로 확인합니다. 명령어 본문은 shell payload이므로 command marker 방식으로 계속 확인합니다.
+릴리스 준비도 감사는 더 이상 `actions/checkout@v5` 같은 정확한 문자열만 찾지 않습니다. `PyYAML`로 workflow를 파싱해서 job, `needs`, OS/Python matrix, 최소 action major version, artifact retention, checkout credential, job-level permission override, trigger 정책을 구조적으로 확인합니다. 명령어와 artifact 이름은 shell payload이므로 필요한 job 안에서만 marker를 확인합니다.
 
 Security job, release-gates job, optional dependency audit job은 JSON 리포트를 workflow artifact로 업로드합니다. 이 artifact들은 검토 증거이지 장기 보관 데이터가 아니므로 `retention-days: 14` 정책을 사용합니다.
 
