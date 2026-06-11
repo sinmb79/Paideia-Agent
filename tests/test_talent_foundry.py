@@ -1675,6 +1675,25 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(result["reason"], "model_required_for_live_provider")
         self.assertEqual(result["llm_provider_preflight"]["status"], "needs_configuration")
 
+    def test_llm_provider_preflight_rejects_non_loopback_local_http_endpoint(self) -> None:
+        from ai22b.talent_foundry.llm_runtime import build_llm_provider_preflight, build_llm_runtime_config
+
+        config = build_llm_runtime_config(
+            engine="ollama_local_http",
+            model="llama3.1",
+            model_path="http://192.168.1.5:11434",
+        )
+        preflight = build_llm_provider_preflight(config, llm_mode="live")
+        blocking_checks = {item["id"]: item for item in preflight["blocking_checks"]}
+
+        self.assertEqual(preflight["schema"], "paideia-llm-provider-preflight/v1")
+        self.assertEqual(preflight["status"], "needs_configuration")
+        self.assertIn("local_http_endpoint", blocking_checks)
+        self.assertEqual(blocking_checks["local_http_endpoint"]["status"], "failed")
+        self.assertEqual(blocking_checks["local_http_endpoint"]["severity"], "error")
+        self.assertTrue(blocking_checks["local_http_endpoint"]["details"]["localhost_only_enforced"])
+        self.assertFalse(blocking_checks["local_http_endpoint"]["details"]["loopback_endpoint"])
+
     def test_external_live_clients_fail_closed_without_required_keys_or_models(self) -> None:
         import os
 
@@ -4175,6 +4194,13 @@ class TalentFoundryTests(unittest.TestCase):
             (source / ".env").write_text("PAIDEIA_TEST_PLACEHOLDER=do-not-copy", encoding="utf-8")
             (source / "id_rsa").write_text("placeholder ssh identity fixture; do not copy", encoding="utf-8")
             (source / "helper.py").write_text("print('reference only')", encoding="utf-8")
+            (source / ".git").mkdir()
+            (source / ".git" / "config").write_text("[remote]\nurl=https://secret.invalid/repo", encoding="utf-8")
+            (source / ".venv").mkdir()
+            (source / ".venv" / "pyvenv.cfg").write_text("home=C:\\private-python", encoding="utf-8")
+            nested_dependency = source / "node_modules" / "fixture-package"
+            nested_dependency.mkdir(parents=True)
+            (nested_dependency / "index.js").write_text("console.log(process.env.SECRET_TOKEN)", encoding="utf-8")
             report = migrate_external_agent_assets(
                 source,
                 paideia_kit_dir=kit_dir,
@@ -4192,6 +4218,9 @@ class TalentFoundryTests(unittest.TestCase):
             copied_key_path = imported_manifest_path.parent / "source" / "id_rsa"
             compatibility_path = imported_manifest_path.parent / "paideia_compatibility_profile.json"
             review_card_path = imported_manifest_path.parent / "paideia_skill_review.md"
+            copied_git_path = imported_manifest_path.parent / "source" / ".git" / "config"
+            copied_venv_path = imported_manifest_path.parent / "source" / ".venv" / "pyvenv.cfg"
+            copied_dependency_path = imported_manifest_path.parent / "source" / "node_modules" / "fixture-package" / "index.js"
             imported = json.loads(imported_manifest_path.read_text(encoding="utf-8"))
             compatibility = json.loads(compatibility_path.read_text(encoding="utf-8"))
             review_card = review_card_path.read_text(encoding="utf-8")
@@ -4229,6 +4258,15 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("Schema: `paideia-imported-skill-review-card/v1`", review_card)
         self.assertFalse(copied_env_path.exists())
         self.assertFalse(copied_key_path.exists())
+        self.assertFalse(copied_git_path.exists())
+        self.assertFalse(copied_venv_path.exists())
+        self.assertFalse(copied_dependency_path.exists())
+        skipped_dirs = {
+            item["path"].replace("\\", "/")
+            for item in imported["skipped_files"]
+            if item.get("reason") == "skipped_directory"
+        }
+        self.assertTrue({".git", ".venv", "node_modules"} <= skipped_dirs)
         self.assertTrue(doctor["passed"])
         self.assertEqual(doctor["checks"]["imported_skills"]["details"]["imported_count"], 1)
         self.assertEqual(
@@ -4241,6 +4279,78 @@ class TalentFoundryTests(unittest.TestCase):
             "paideia-imported-skill-compatibility-profile/v1",
         )
         self.assertEqual(doctor_skill["compatibility_activation_gate"], "locked_pending_owner_allowlist")
+
+    def test_discover_external_agent_assets_skips_dependency_and_vcs_dirs(self) -> None:
+        from ai22b.talent_foundry.skill_migration import discover_external_agent_assets
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "external_agent"
+            valid = root / "valid_skill"
+            dependency = root / "node_modules" / "copied-package"
+            vcs = root / ".git" / "hooks"
+            venv = root / ".venv" / "site-packages" / "fixture"
+            for path in [valid, dependency, vcs, venv]:
+                path.mkdir(parents=True)
+                (path / "SKILL.md").write_text(
+                    f"---\nname: {path.name}\ndescription: should be discovered only when safe.\n---\n",
+                    encoding="utf-8",
+                )
+
+            assets = discover_external_agent_assets(root, source_runtime="openclaw")
+
+        self.assertEqual([asset["slug"] for asset in assets], ["valid_skill"])
+
+    def test_discover_external_agent_assets_rejects_skip_dir_source_roots(self) -> None:
+        from ai22b.talent_foundry.skill_migration import discover_external_agent_assets
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "external_agent"
+            skip_sources = [
+                root / ".git",
+                root / ".venv",
+                root / "node_modules",
+                root / "node_modules" / "copied-package",
+            ]
+            for path in skip_sources:
+                path.mkdir(parents=True, exist_ok=True)
+                (path / "SKILL.md").write_text(
+                    f"---\nname: {path.name}\ndescription: should never be imported from skipped roots.\n---\n",
+                    encoding="utf-8",
+                )
+
+                self.assertEqual(discover_external_agent_assets(path, source_runtime="openclaw"), [])
+
+    def test_migrate_external_agent_assets_rejects_skip_dir_source_root(self) -> None:
+        from ai22b.talent_foundry.skill_migration import migrate_external_agent_assets
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "external_agent"
+            skip_sources = [
+                root / ".git",
+                root / ".venv",
+                root / ".venv" / "site-packages" / "fixture",
+                root / "node_modules",
+                root / "node_modules" / "fixture-package",
+            ]
+            for path in skip_sources:
+                path.mkdir(parents=True, exist_ok=True)
+                (path / "SKILL.md").write_text(
+                    "---\nname: skipped-root\ndescription: must not be imported.\n---\n",
+                    encoding="utf-8",
+                )
+                (path / "local_secret.txt").write_text("should not be copied", encoding="utf-8")
+
+            for index, source in enumerate(skip_sources, start=1):
+                kit_dir = Path(tmp) / f"kit-{index}"
+                report = migrate_external_agent_assets(
+                    source,
+                    paideia_kit_dir=kit_dir,
+                    source_runtime="openclaw",
+                )
+
+                self.assertEqual(report["imported_count"], 0)
+                self.assertEqual(report["imported_skills"], [])
+                self.assertFalse((kit_dir / "skills" / "imported" / "openclaw").exists())
 
     def test_cli_migrate_agent_assets_imports_hermes_skill_without_enabling_it(self) -> None:
         from ai22b.talent_foundry.agent_program import build_paideia_agent_install_kit

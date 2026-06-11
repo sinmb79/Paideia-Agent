@@ -280,6 +280,8 @@ class TalentFoundryLlmClientTests(unittest.TestCase):
         self.assertEqual(gemini["text"], "gemini adapter ok")
         self.assertFalse(gemini["raw_output_saved"])
         self.assertIn("models/gemini-test:generateContent", calls[1]["url"])
+        self.assertNotIn("?key=", calls[1]["url"])
+        self.assertEqual(calls[1]["headers"]["x-goog-api-key"], env["GEMINI_API_KEY"])
         self.assertIn("systemInstruction", calls[1]["body"])
 
         self.assertEqual(mistral["status"], "completed")
@@ -334,6 +336,28 @@ class TalentFoundryLlmClientTests(unittest.TestCase):
         self.assertEqual(calls[1]["url"], "http://localhost:1234/v1/chat/completions")
         self.assertEqual(calls[1]["body"]["model"], "local-model-test")
         self.assertFalse(calls[1]["body"]["stream"])
+
+    def test_local_http_clients_reject_non_loopback_endpoints_without_calling_network(self) -> None:
+        from ai22b.talent_foundry.llm_clients import LMStudioClient, OllamaClient
+
+        def fail_if_called(request, timeout=60):
+            raise AssertionError(f"network should not be called for {request.full_url}")
+
+        with patch("urllib.request.urlopen", side_effect=fail_if_called):
+            ollama = OllamaClient(model="llama-test", endpoint="http://192.168.1.5:11434").generate(
+                [{"role": "user", "content": "hello"}]
+            )
+            lm_studio = LMStudioClient(
+                model="local-model-test",
+                endpoint="http://example.invalid:1234/v1/chat/completions",
+            ).generate([{"role": "user", "content": "hello"}])
+
+        self.assertEqual(ollama["status"], "unavailable")
+        self.assertEqual(ollama["reason"], "local_http_endpoint_not_loopback")
+        self.assertEqual(ollama["network_access"], "localhost_only")
+        self.assertEqual(lm_studio["status"], "unavailable")
+        self.assertEqual(lm_studio["reason"], "local_http_endpoint_not_loopback")
+        self.assertEqual(lm_studio["network_access"], "localhost_only")
 
 
 if __name__ == "__main__":

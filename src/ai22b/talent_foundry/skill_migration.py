@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 from datetime import datetime, timezone
@@ -14,6 +15,7 @@ COMPATIBILITY_PROFILE_SCHEMA = "paideia-imported-skill-compatibility-profile/v1"
 SKILL_REVIEW_CARD_SCHEMA = "paideia-imported-skill-review-card/v1"
 MAX_COPY_BYTES = 5 * 1024 * 1024
 SKIP_DIRS = {".git", ".hg", ".svn", "node_modules", ".venv", "venv", "__pycache__", "dist", "build"}
+SKIP_DIRS_CASEFOLD = {name.casefold() for name in SKIP_DIRS}
 SENSITIVE_FILE_NAMES = {
     ".env",
     ".env.local",
@@ -79,6 +81,18 @@ def _frontmatter(markdown: str) -> dict[str, str]:
     return parsed
 
 
+def _is_skipped_dir_name(name: str) -> bool:
+    return name.casefold() in SKIP_DIRS_CASEFOLD
+
+
+def _has_skipped_path_component(path: Path) -> bool:
+    return any(_is_skipped_dir_name(part) for part in path.parts)
+
+
+def _relative_child_path(parent_rel: Path, name: str) -> str:
+    return (parent_rel / name).as_posix() if parent_rel.parts else name
+
+
 def _detect_format(skill_dir: Path) -> tuple[str, Path]:
     for name in ["SKILL.md", "skill.md"]:
         path = skill_dir / name
@@ -97,32 +111,42 @@ def _detect_format(skill_dir: Path) -> tuple[str, Path]:
 
 def discover_external_agent_assets(source_path: Path, *, source_runtime: str = "generic") -> list[dict[str, Any]]:
     source_path = source_path.resolve()
+    if _has_skipped_path_component(source_path):
+        return []
     if source_path.is_file():
         source_path = source_path.parent
+    if _has_skipped_path_component(source_path):
+        return []
     candidates: dict[Path, dict[str, Any]] = {}
     marker_names = {"skill.md", "skill.yaml", "skill.yml", "hermes.yaml", "hermes.yml"}
-    for path in source_path.rglob("*"):
-        if not path.is_file():
+    for current_dir, dir_names, file_names in os.walk(source_path):
+        current_path = Path(current_dir)
+        try:
+            current_path.relative_to(source_path)
+        except ValueError:
             continue
-        if path.name.casefold() not in marker_names:
-            continue
-        skill_dir = path.parent.resolve()
-        if skill_dir in candidates:
-            continue
-        source_format, entry = _detect_format(skill_dir)
-        text = _read_text_limited(entry) if entry.is_file() else ""
-        meta = _frontmatter(text)
-        title = meta.get("name") or meta.get("title") or skill_dir.name
-        description = meta.get("description") or meta.get("summary") or ""
-        candidates[skill_dir] = {
-            "source_runtime": source_runtime,
-            "source_dir": str(skill_dir),
-            "source_format": source_format,
-            "entry_file": entry.name if entry.is_file() else None,
-            "name": title,
-            "slug": _slugify(title, skill_dir.name),
-            "description": description,
-        }
+        dir_names[:] = [name for name in dir_names if not _is_skipped_dir_name(name)]
+        for file_name in file_names:
+            if file_name.casefold() not in marker_names:
+                continue
+            path = current_path / file_name
+            skill_dir = path.parent.resolve()
+            if skill_dir in candidates:
+                continue
+            source_format, entry = _detect_format(skill_dir)
+            text = _read_text_limited(entry) if entry.is_file() else ""
+            meta = _frontmatter(text)
+            title = meta.get("name") or meta.get("title") or skill_dir.name
+            description = meta.get("description") or meta.get("summary") or ""
+            candidates[skill_dir] = {
+                "source_runtime": source_runtime,
+                "source_dir": str(skill_dir),
+                "source_format": source_format,
+                "entry_file": entry.name if entry.is_file() else None,
+                "name": title,
+                "slug": _slugify(title, skill_dir.name),
+                "description": description,
+            }
     if not candidates and source_path.exists():
         source_format, entry = _detect_format(source_path)
         text = _read_text_limited(entry) if entry.is_file() else ""
@@ -172,46 +196,64 @@ def _copy_skill_tree(source_dir: Path, target_dir: Path) -> tuple[list[str], lis
     skipped: list[dict[str, str]] = []
     risks: list[dict[str, str]] = []
     source_dir = source_dir.resolve()
-    source_root = source_dir
-    for path in source_dir.rglob("*"):
-        if any(part in SKIP_DIRS for part in path.relative_to(source_root).parts):
-            if path.is_dir():
-                skipped.append({"path": str(path.relative_to(source_root)), "reason": "skipped_directory"})
-            continue
-        if not path.is_file():
-            continue
-        try:
-            resolved = path.resolve()
-        except OSError:
-            skipped.append({"path": str(path), "reason": "resolve_failed"})
-            continue
-        if source_root not in [resolved, *resolved.parents]:
-            skipped.append({"path": str(path), "reason": "symlink_or_realpath_outside_skill"})
-            continue
-        try:
-            size = path.stat().st_size
-        except OSError:
-            skipped.append({"path": str(path.relative_to(source_root)), "reason": "stat_failed"})
-            continue
-        rel = path.relative_to(source_root)
-        if _is_sensitive_file(rel):
-            skipped.append({"path": rel.as_posix(), "reason": "sensitive_file_not_copied"})
-            risks.append(
+    if _has_skipped_path_component(source_dir):
+        return (
+            copied,
+            [{"path": source_dir.name or ".", "reason": "skipped_source_directory"}],
+            [
                 {
-                    "risk_id": "sensitive_file_name",
-                    "file": rel.as_posix(),
-                    "excerpt": "filename indicates credentials, tokens, private keys, or local secrets",
+                    "risk_id": "skipped_source_directory",
+                    "file": source_dir.name or ".",
+                    "excerpt": "source path is inside a skipped VCS, virtualenv, build, or dependency directory",
                 }
-            )
+            ],
+        )
+    source_root = source_dir
+    for current_dir, dir_names, file_names in os.walk(source_dir):
+        current_path = Path(current_dir)
+        try:
+            parent_rel = current_path.relative_to(source_root)
+        except ValueError:
+            skipped.append({"path": str(current_path), "reason": "outside_source_root"})
             continue
-        if size > MAX_COPY_BYTES:
-            skipped.append({"path": rel.as_posix(), "reason": "file_too_large"})
-            continue
-        destination = target_dir / "source" / rel
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(path, destination)
-        copied.append(rel.as_posix())
-        risks.extend(_scan_file(path))
+        skipped_dirs = [name for name in dir_names if _is_skipped_dir_name(name)]
+        for name in skipped_dirs:
+            skipped.append({"path": _relative_child_path(parent_rel, name), "reason": "skipped_directory"})
+        dir_names[:] = [name for name in dir_names if not _is_skipped_dir_name(name)]
+        for file_name in file_names:
+            path = current_path / file_name
+            rel = path.relative_to(source_root)
+            try:
+                resolved = path.resolve()
+            except OSError:
+                skipped.append({"path": str(path), "reason": "resolve_failed"})
+                continue
+            if source_root not in [resolved, *resolved.parents]:
+                skipped.append({"path": str(path), "reason": "symlink_or_realpath_outside_skill"})
+                continue
+            try:
+                size = path.stat().st_size
+            except OSError:
+                skipped.append({"path": str(path.relative_to(source_root)), "reason": "stat_failed"})
+                continue
+            if _is_sensitive_file(rel):
+                skipped.append({"path": rel.as_posix(), "reason": "sensitive_file_not_copied"})
+                risks.append(
+                    {
+                        "risk_id": "sensitive_file_name",
+                        "file": rel.as_posix(),
+                        "excerpt": "filename indicates credentials, tokens, private keys, or local secrets",
+                    }
+                )
+                continue
+            if size > MAX_COPY_BYTES:
+                skipped.append({"path": rel.as_posix(), "reason": "file_too_large"})
+                continue
+            destination = target_dir / "source" / rel
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, destination)
+            copied.append(rel.as_posix())
+            risks.extend(_scan_file(path))
     return copied, skipped, risks
 
 

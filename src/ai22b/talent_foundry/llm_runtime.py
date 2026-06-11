@@ -13,6 +13,7 @@ from ai22b.talent_foundry.llm_clients import (
     build_llm_client,
     build_runtime_messages,
     count_private_reasoning_fields,
+    is_loopback_http_endpoint,
     sanitize_llm_result_packet,
 )
 
@@ -203,12 +204,17 @@ def doctor_llm_provider(
 
     if engine in LOCAL_HTTP_ENGINES:
         default_endpoint = "http://localhost:11434" if engine == "ollama_local_http" else "http://localhost:1234/v1/chat/completions"
+        endpoint = model_path or default_endpoint
+        loopback_endpoint = is_loopback_http_endpoint(endpoint)
         add_check(
             "local_http_endpoint",
-            True,
-            severity="warning",
+            loopback_endpoint,
+            severity="warning" if loopback_endpoint else "error",
             details={
-                "endpoint": model_path or default_endpoint,
+                "endpoint": endpoint,
+                "loopback_endpoint": loopback_endpoint,
+                "allowed_hosts": ["localhost", "127.0.0.0/8", "::1"],
+                "localhost_only_enforced": True,
                 "server_reachability_requires_live_check": True,
             },
         )
@@ -448,7 +454,6 @@ def invoke_llm_application_engine(
 
     engine = effective_config["engine"]
     model_path = effective_config.get("model_path")
-    model = effective_config.get("model")
     preflight = build_llm_provider_preflight(effective_config, llm_mode=llm_mode, llm_model=llm_model)
     if engine in {"bigram_local", "transformers_local", "llama_cpp_local"} and not model_path:
         return _attach_provider_preflight({
