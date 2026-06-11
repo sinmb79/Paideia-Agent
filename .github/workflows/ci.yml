@@ -100,6 +100,7 @@ jobs:
         with:
           name: security-reports
           path: runs/*.json
+          retention-days: 14
 
   release-gates:
     name: Public release gates (${{ matrix.os }}, Python ${{ matrix.python-version }})
@@ -171,3 +172,4 @@ jobs:
           path: |
             runs/*.json
             runs/llm_live_readiness/**/*.json
+          retention-days: 14

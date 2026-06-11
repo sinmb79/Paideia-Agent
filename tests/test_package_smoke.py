@@ -101,10 +101,12 @@ class PackageSmokeTests(unittest.TestCase):
         self.assertEqual(project.get("dependencies", []), [])
         self.assertIn("pytest", optional["dev"])
         self.assertIn("pytest-cov", optional["dev"])
+        self.assertIn("pyyaml", optional["dev"])
         self.assertIn("ruff", optional["dev"])
         self.assertIn("build", optional["dev"])
         self.assertIn("bandit", optional["security"])
         self.assertIn("pip-audit", optional["security"])
+        self.assertIn("pyyaml", optional["security"])
         self.assertIn("openai>=1.0.0", optional["live-llm"])
         self.assertIn("transformers", optional["local-llm"])
         self.assertIn("chromadb", optional["rag"])
@@ -132,6 +134,13 @@ class PackageSmokeTests(unittest.TestCase):
         ]
         for fragment in forbidden_fragments:
             self.assertNotIn(fragment, pyproject_text)
+
+    def test_bandit_global_skip_policy_is_narrowed(self) -> None:
+        bandit = self._pyproject().get("tool", {}).get("bandit", {})
+        skips = set(bandit.get("skips", []))
+
+        self.assertNotIn("B108", skips)
+        self.assertTrue({"B105", "B311", "B608", "B615"} <= skips)
 
     def test_public_release_license_and_metadata_are_declared(self) -> None:
         project = self._pyproject()["project"]
@@ -176,13 +185,229 @@ class PackageSmokeTests(unittest.TestCase):
         self.assertTrue(check_by_id["ci_release_gates"]["passed"])
         self.assertTrue(check_by_id["optional_dependency_audit_workflow"]["passed"])
         ci_details = check_by_id["ci_release_gates"]["details"]
+        optional_details = check_by_id["optional_dependency_audit_workflow"]["details"]
         self.assertEqual(ci_details["missing_or_old_actions"], [])
         self.assertEqual(ci_details["checkout_steps_without_persist_credentials_false"], 0)
+        self.assertEqual(ci_details["upload_artifact_steps_missing_retention_days"], [])
         self.assertEqual(ci_details["missing_release_gates_needs"], [])
         self.assertEqual(ci_details["missing_release_gates_os"], [])
         self.assertEqual(ci_details["missing_release_gates_python"], [])
+        self.assertEqual(optional_details["upload_artifact_steps_missing_retention_days"], [])
         self.assertTrue(check_by_id["public_candidate_content_scan"]["passed"])
         self.assertEqual(check_by_id["public_candidate_content_scan"]["details"]["issue_count"], 0)
+
+    def test_workflow_readiness_uses_yaml_structure_not_line_order(self) -> None:
+        from ai22b.talent_foundry.public_release import (
+            REQUIRED_CI_JOB_COMMAND_MARKERS,
+            _workflow_marker_check,
+        )
+
+        test_markers = "\n".join(f"          {marker}" for marker in REQUIRED_CI_JOB_COMMAND_MARKERS["test"])
+        security_markers = "\n".join(f"          {marker}" for marker in REQUIRED_CI_JOB_COMMAND_MARKERS["security"])
+        release_markers = "\n".join(f"          {marker}" for marker in REQUIRED_CI_JOB_COMMAND_MARKERS["release-gates"])
+        workflow_text = f"""
+name: CI
+on:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ${{{{ matrix.os }}}}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v6
+        with: {{persist-credentials: false}}
+      - uses: actions/setup-python@v6
+      - run: |
+{test_markers}
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with: {{persist-credentials: false}}
+      - uses: actions/setup-python@v6
+      - run: |
+{security_markers}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: security-reports
+          path: runs/*.json
+          retention-days: 14
+  release-gates:
+    needs: [security, test]
+    runs-on: ${{{{ matrix.os }}}}
+    strategy:
+      matrix:
+        python-version: ["3.12", "3.11"]
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+      - run: |
+{release_markers}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: public-release-gate-reports-ubuntu-latest-py3.12
+          path: runs/*.json
+          retention-days: 14
+"""
+
+        check = _workflow_marker_check(workflow_text)
+
+        self.assertTrue(check["passed"], check["details"])
+        self.assertIsNone(check["details"]["workflow_yaml_parse_error"])
+        self.assertEqual(check["details"]["upload_artifact_steps_missing_retention_days"], [])
+        self.assertIn("on", check["details"]["workflow_yaml_top_level_keys"])
+
+    def test_workflow_readiness_rejects_job_scoped_policy_bypasses(self) -> None:
+        from ai22b.talent_foundry.public_release import (
+            REQUIRED_CI_JOB_COMMAND_MARKERS,
+            _workflow_marker_check,
+        )
+
+        test_markers = "\n".join(f"          {marker}" for marker in REQUIRED_CI_JOB_COMMAND_MARKERS["test"])
+        security_markers = "\n".join(f"          {marker}" for marker in REQUIRED_CI_JOB_COMMAND_MARKERS["security"])
+        release_markers = "\n".join(f"          {marker}" for marker in REQUIRED_CI_JOB_COMMAND_MARKERS["release-gates"])
+        workflow_text = f"""
+name: CI
+on:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with: {{persist-credentials: false}}
+      - uses: actions/setup-python@v6
+      - run: |
+{test_markers}
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with: {{persist-credentials: false}}
+      - uses: actions/setup-python@v6
+      - run: |
+{security_markers}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: security-reports
+          path: runs/*.json
+          retention-days: 14
+  release-gates:
+    needs: [security, test]
+    runs-on: ${{{{ matrix.os }}}}
+    strategy:
+      matrix:
+        python-version: ["3.12", "3.11"]
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+      - run: |
+{release_markers}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: public-release-gate-reports-ubuntu-latest-py3.12
+          path: runs/*.json
+          retention-days: 14
+"""
+
+        unsafe_permissions = workflow_text.replace(
+            "  security:\n    runs-on:",
+            "  security:\n    permissions:\n      contents: write\n    runs-on:",
+            1,
+        )
+        commented_build = workflow_text.replace("          python -m build", "          # python -m build", 1)
+        inline_comment_build = workflow_text.replace(
+            "          python -m build",
+            "          python -m pip --version # python -m build",
+            1,
+        )
+        missing_checkout = workflow_text.replace(
+            "      - uses: actions/checkout@v6\n        with: {persist-credentials: false}\n      - uses: actions/setup-python@v6\n",
+            "      - uses: actions/setup-python@v6\n",
+            1,
+        )
+
+        unsafe_check = _workflow_marker_check(unsafe_permissions)
+        commented_check = _workflow_marker_check(commented_build)
+        inline_comment_check = _workflow_marker_check(inline_comment_build)
+        missing_checkout_check = _workflow_marker_check(missing_checkout)
+
+        self.assertFalse(unsafe_check["passed"])
+        self.assertEqual(
+            unsafe_check["details"]["job_permission_issues"][0]["issue"],
+            "job_permission_grants_more_than_read",
+        )
+        self.assertFalse(commented_check["passed"])
+        self.assertIn("python -m build", commented_check["details"]["missing_job_command_markers"]["release-gates"])
+        self.assertFalse(inline_comment_check["passed"])
+        self.assertIn("python -m build", inline_comment_check["details"]["missing_job_command_markers"]["release-gates"])
+        self.assertFalse(missing_checkout_check["passed"])
+        self.assertIn("test", missing_checkout_check["details"]["missing_checkout_jobs"])
+
+    def test_optional_dependency_audit_requires_structural_triggers(self) -> None:
+        from ai22b.talent_foundry.public_release import _optional_dependency_audit_check
+
+        workflow_text = """
+name: Optional Dependency Audit
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  optional-dependency-audit:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        extra: [live-llm, local-llm, rag, fine-tune, all]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+      - run: |
+          python -m pip install pip-audit
+          python -m pip install -e ".[${{ matrix.extra }}]"
+          python -m pip_audit --local --format json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: optional-dependency-audit-${{ matrix.extra }}
+          path: runs/*.json
+          retention-days: 14
+"""
+
+        check = _optional_dependency_audit_check(workflow_text)
+        invalid_concurrency_check = _optional_dependency_audit_check(
+            workflow_text.replace(
+                "permissions:\n  contents: read\n",
+                "permissions:\n  contents: read\nconcurrency:\n  group: ${{ github.workflow }}-${{ matrix.extra }}\n",
+                1,
+            ).replace(
+                "on:\n  workflow_dispatch:\n",
+                "on:\n  workflow_dispatch:\n  schedule:\n    - cron: \"0 3 * * 1\"\n",
+                1,
+            )
+        )
+
+        self.assertFalse(check["passed"])
+        self.assertEqual(check["details"]["missing_triggers"], ["schedule"])
+        self.assertFalse(invalid_concurrency_check["passed"])
+        self.assertEqual(
+            invalid_concurrency_check["details"]["top_level_concurrency_issues"],
+            ["top_level_concurrency_uses_matrix_context"],
+        )
 
     def test_source_sbom_inventory_records_package_dependency_and_file_evidence(self) -> None:
         from ai22b.talent_foundry.source_sbom import build_source_sbom

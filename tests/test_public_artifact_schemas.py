@@ -367,6 +367,11 @@ class PublicArtifactSchemaTests(unittest.TestCase):
         control_matches = hidden_control_character_matches("safe text \u200B zero width")
         self.assertEqual(control_matches[0]["codepoint"], "U+200B")
         self.assertEqual(control_matches[0]["rule"], "hidden_control_character_observation")
+        self.assertEqual(control_matches[0]["line"], 1)
+        self.assertGreater(control_matches[0]["column"], 1)
+        self.assertIn("\\u200b", control_matches[0]["escaped_surrounding_snippet"].casefold())
+        self.assertIn("surrounding_snippet_sha256", control_matches[0])
+        self.assertNotIn("safe text", control_matches[0]["escaped_surrounding_snippet"])
 
     def test_public_inventory_detects_provider_secrets_and_real_local_paths(self) -> None:
         from ai22b.talent_foundry.public_inventory import scan_public_candidate_files
@@ -386,6 +391,10 @@ class PublicArtifactSchemaTests(unittest.TestCase):
                 "\n".join(
                     [
                         "ANTHROPIC" + "_API_KEY=anthropic_live_secret_123456",
+                        "db_" + "pass" + "word" + "=" + "'realistic_" + "pass" + "word_value_123'",
+                        '"' + "db_" + "pass" + "word" + '"' + ": " + '"' + "realistic_" + "pass" + "word_json_123" + '"',
+                        "'" + "pass" + "wd" + "'" + ": " + "'" + "realistic_" + "pass" + "wd_yaml_123" + "'",
+                        '"' + "pwd" + '"' + ": " + '"' + "realistic_pwd_json_123" + '"',
                         "CACHE_DIR = r'" + "C:" + "\\Users\\alice\\paideia-secret'",
                     ]
                 ),
@@ -396,6 +405,7 @@ class PublicArtifactSchemaTests(unittest.TestCase):
 
         rules = {issue["rule"] for issue in report["issues"]}
         self.assertIn("provider_secret_assignment", rules)
+        self.assertIn("hardcoded_password_assignment", rules)
         self.assertIn("generic_local_windows_user_path", rules)
 
     def test_public_inventory_reports_non_bidi_controls_without_blocking(self) -> None:
@@ -409,6 +419,27 @@ class PublicArtifactSchemaTests(unittest.TestCase):
         self.assertEqual(report["issue_count"], 0)
         self.assertEqual(report["observation_count"], 1)
         self.assertEqual(report["observations"][0]["rule"], "hidden_control_character_observation")
+        self.assertIn(
+            "\\u200b",
+            report["observations"][0]["matches"][0]["escaped_surrounding_snippet"].casefold(),
+        )
+        self.assertNotIn("Zero width", report["observations"][0]["matches"][0]["escaped_surrounding_snippet"])
+
+    def test_public_inventory_hidden_control_snippet_does_not_export_split_secret(self) -> None:
+        from ai22b.talent_foundry.public_inventory import scan_public_candidate_files
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "README.md").write_text(
+                "OPENAI" + "_API_KEY=sk-live\u200Bsecret_value_that_should_not_be_exported",
+                encoding="utf-8",
+            )
+            report = scan_public_candidate_files(root)
+
+        serialized = json.dumps(report, ensure_ascii=False)
+        self.assertIn("\\u200b", serialized.casefold())
+        self.assertNotIn("sk-live", serialized)
+        self.assertNotIn("secret_value_that_should_not_be_exported", serialized)
 
 
 if __name__ == "__main__":

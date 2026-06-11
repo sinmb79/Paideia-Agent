@@ -30,21 +30,58 @@ class TalentFoundryLlmClientTests(unittest.TestCase):
     def test_llm_result_public_artifact_contract_overrides_unsafe_fields(self) -> None:
         from ai22b.talent_foundry.llm_clients import LLMResult
 
+        secret = "sk-fixture_secret_value_1234567890"
         result = LLMResult(
             schema="paideia-llm-client-result/v1",
             engine="fixture",
             status="completed",
             text="ok",
+            reason=f"failed with https://example.invalid?api_key={secret}",
             fields={
                 "raw_output_saved": True,
                 "private_reasoning_trace": "full_chain_of_thought",
                 "provider_packet": {"private_reasoning_trace": "hidden details"},
+                "raw_response": {"body": "provider payload"},
+                "model": "fixture-model",
+                "error": {
+                    "message": f"provider returned {secret}",
+                    "body": {"provider_payload": "raw provider body"},
+                    "debug_headers": {"Authorization": f"Bearer {secret}"},
+                },
             },
         ).to_public_artifact()
 
         self.assertFalse(result["raw_output_saved"])
         self.assertEqual(result["private_reasoning_trace"], "do_not_store")
-        self.assertEqual(result["provider_packet"], {})
+        self.assertIn("[REDACTED_SECRET]", result["reason"])
+        self.assertIn("[REDACTED_SECRET]", result["error"]["message"])
+        self.assertEqual(result["model"], "fixture-model")
+        self.assertNotIn("provider_packet", result)
+        self.assertNotIn("raw_response", result)
+        self.assertNotIn("body", result["error"])
+        self.assertNotIn("debug_headers", result["error"])
+        self.assertNotIn(secret, json.dumps(result))
+
+    def test_client_generate_result_returns_typed_result_before_public_artifact(self) -> None:
+        from ai22b.talent_foundry.llm_clients import DeterministicClient, LLMResult
+
+        client = DeterministicClient()
+        typed_result = client.generate_result(
+            [{"role": "user", "content": json.dumps({"task": "typed contract smoke"})}],
+            tools=[{"name": "evidence_packet"}],
+            policy={"private_reasoning_trace": "do_not_store"},
+        )
+        artifact = client.generate(
+            [{"role": "user", "content": json.dumps({"task": "typed contract smoke"})}],
+            tools=[{"name": "evidence_packet"}],
+            policy={"private_reasoning_trace": "do_not_store"},
+        )
+
+        self.assertIsInstance(typed_result, LLMResult)
+        self.assertEqual(typed_result.status, "completed")
+        self.assertEqual(artifact["schema"], "paideia-llm-client-result/v1")
+        self.assertFalse(artifact["raw_output_saved"])
+        self.assertEqual(artifact["private_reasoning_trace"], "do_not_store")
 
     def test_private_reasoning_policy_marker_is_not_counted_as_hidden_trace(self) -> None:
         from ai22b.talent_foundry.llm_clients import count_private_reasoning_fields
@@ -84,6 +121,7 @@ class TalentFoundryLlmClientTests(unittest.TestCase):
         self.assertEqual(report["public_safe"]["private_reasoning_trace"], "do_not_store")
         self.assertTrue(checks["client_factory_contract"]["passed"])
         self.assertTrue(checks["deterministic_generate_contract"]["passed"])
+        self.assertTrue(checks["deterministic_generate_contract"]["typed_result_contract_used"])
         self.assertTrue(checks["external_api_missing_credentials_fail_closed"]["passed"])
         self.assertTrue(checks["localhost_adapters_explicit_live_contract"]["passed"])
         self.assertTrue(checks["local_model_missing_path_fail_closed"]["passed"])

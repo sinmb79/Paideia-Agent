@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ matrix.extra }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -56,3 +56,4 @@ jobs:
         with:
           name: optional-dependency-audit-${{ matrix.extra }}
           path: runs/pip_audit_${{ matrix.extra }}.json
+          retention-days: 14

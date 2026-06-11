@@ -25,6 +25,7 @@ CLIENT_RESULT_RUNTIME_SUMMARY_KEYS = (
     "status",
     "reason",
     "model",
+    "endpoint",
     "error_type",
     "network_access",
     "local_files_only",
@@ -661,11 +662,19 @@ def _invoke_live_client(
 ) -> dict[str, Any]:
     llm_client = client or build_llm_client(runtime_config)
     messages = build_runtime_messages(manifest=manifest, task=task, policy_context=policy_context)
-    client_result = llm_client.generate(messages, tools=tools or [], policy=policy_context or {})
+    if hasattr(llm_client, "generate_result"):
+        typed_result = llm_client.generate_result(messages, tools=tools or [], policy=policy_context or {})
+        client_result = typed_result.to_public_artifact()
+        typed_result_contract_used = True
+    else:
+        client_result = llm_client.generate(messages, tools=tools or [], policy=policy_context or {})
+        typed_result_contract_used = False
+    original_client_result_keys = set(client_result)
     private_reasoning_fields_omitted = count_private_reasoning_fields(client_result)
     client_result = sanitize_llm_result_packet(client_result)
     client_result_summary = _client_result_for_runtime_storage(
         client_result,
+        original_keys=original_client_result_keys,
         private_reasoning_fields_omitted=private_reasoning_fields_omitted,
     )
     engine = runtime_config["engine"]
@@ -674,6 +683,7 @@ def _invoke_live_client(
         runtime_status="completed" if client_result.get("status") == "completed" else "unavailable",
         client_result_summary=client_result_summary,
         client_override_used=client is not None,
+        typed_result_contract_used=typed_result_contract_used,
     )
     if client_result.get("status") != "completed":
         return {
@@ -718,6 +728,7 @@ def _invoke_live_client(
 def _client_result_for_runtime_storage(
     client_result: dict[str, Any],
     *,
+    original_keys: set[str] | None = None,
     private_reasoning_fields_omitted: int = 0,
 ) -> dict[str, Any]:
     summary = {
@@ -725,13 +736,19 @@ def _client_result_for_runtime_storage(
         for key in CLIENT_RESULT_RUNTIME_SUMMARY_KEYS
         if key in client_result
     }
+    private_reasoning_omitted_keys = {
+        key
+        for key in original_keys or set()
+        if count_private_reasoning_fields({key: "omitted_private_reasoning"}) > 0
+    }
     omitted_keys = sorted(
         key
-        for key in client_result
-        if key not in CLIENT_RESULT_RUNTIME_SUMMARY_KEYS
+        for key in (original_keys or set(client_result))
+        if key not in CLIENT_RESULT_RUNTIME_SUMMARY_KEYS and key not in private_reasoning_omitted_keys
     )
     if "text" in client_result:
         summary["text_omitted"] = True
+    summary.setdefault("raw_output_saved", False)
     if omitted_keys:
         summary["omitted_keys"] = omitted_keys
     if private_reasoning_fields_omitted:
@@ -747,6 +764,7 @@ def _build_llm_client_contract(
     runtime_status: str,
     client_result_summary: dict[str, Any],
     client_override_used: bool,
+    typed_result_contract_used: bool = False,
 ) -> dict[str, Any]:
     private_values_stored = client_result_summary.get("private_reasoning_field_values_stored", False)
     raw_output_saved = client_result_summary.get("raw_output_saved", False)
@@ -763,6 +781,7 @@ def _build_llm_client_contract(
         "client_result_status": client_result_summary.get("status"),
         "client_executor": "injected_client" if client_override_used else "built_in_client",
         "client_override_used": client_override_used,
+        "typed_result_contract_used": typed_result_contract_used,
         "application_engine_only": runtime_config.get("identity_policy") == "application_engine_not_identity",
         "network_access": runtime_config.get("network_access"),
         "network_call_requires_explicit_live_check": True,
@@ -1318,6 +1337,7 @@ def _sanitize_runtime_result(result: dict[str, Any] | None) -> dict[str, Any] | 
                 "status",
                 "reason",
                 "model",
+                "endpoint",
                 "error_type",
                 "network_access",
                 "local_files_only",
@@ -1345,6 +1365,7 @@ def _sanitize_runtime_result(result: dict[str, Any] | None) -> dict[str, Any] | 
                 "client_result_status",
                 "client_executor",
                 "client_override_used",
+                "typed_result_contract_used",
                 "application_engine_only",
                 "network_access",
                 "client_result_summary_only",

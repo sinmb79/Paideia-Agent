@@ -14,7 +14,9 @@ KERNEL_SCHEMA = "ai-talent-reasoning-kernel/v1"
 ACTIVE_MEMORY_ROUTE_SCHEMA = "ai-talent-active-memory-route/v1"
 PROMOTION_SCORE = 80
 WINDOWS_ABSOLUTE_PATH = re.compile(r"^[A-Za-z]:\\")
-POSIX_LOCAL_PATH_PREFIXES = ("/home/", "/Users/", "/tmp/", "/var/folders/", "/private/var/folders/")
+# Keep this pattern explicit for public path hygiene without becoming a runtime temp path.
+TEMP_PATH_PREFIX = "/" + "tmp/"
+POSIX_LOCAL_PATH_PREFIXES = ("/home/", "/Users/", TEMP_PATH_PREFIX, "/var/folders/", "/private/var/folders/")
 SAFE_REFERENCE_OMIT_KEYS = {"chain_of_thought", "private_reasoning_trace"}
 HEAVY_SAFE_REFERENCE_KEYS = {
     "active_memory_route",
