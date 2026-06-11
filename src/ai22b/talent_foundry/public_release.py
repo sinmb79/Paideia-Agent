@@ -555,6 +555,20 @@ def _workflow_triggers(workflow: dict[str, Any]) -> set[str]:
     return set()
 
 
+def _workflow_top_level_concurrency_issues(workflow: dict[str, Any]) -> list[str]:
+    concurrency = workflow.get("concurrency")
+    if concurrency is None:
+        return []
+    values: list[str] = []
+    if isinstance(concurrency, str):
+        values.append(concurrency)
+    elif isinstance(concurrency, dict):
+        for value in concurrency.values():
+            if isinstance(value, str):
+                values.append(value)
+    return ["top_level_concurrency_uses_matrix_context" for value in values if "matrix." in value]
+
+
 def _workflow_marker_check(text: str) -> dict[str, Any]:
     workflow, parse_error = _load_workflow_document(text)
     uses_entries = _workflow_uses_entries(workflow) if not parse_error else _workflow_legacy_uses_entries(text)
@@ -602,6 +616,7 @@ def _workflow_marker_check(text: str) -> dict[str, Any]:
         }
     )
     job_permission_issues = _workflow_job_permission_issues(workflow) if not parse_error else []
+    concurrency_issues = _workflow_top_level_concurrency_issues(workflow) if not parse_error else []
     retention = _workflow_upload_artifact_retention(workflow) if not parse_error else {
         "upload_artifact_steps": [],
         "upload_artifact_steps_missing_retention_days": ["workflow_yaml_unavailable"],
@@ -614,6 +629,7 @@ def _workflow_marker_check(text: str) -> dict[str, Any]:
         if not parse_error
         else _workflow_permissions_contents_read(text),
         "job_permission_issues": job_permission_issues,
+        "top_level_concurrency_issues": concurrency_issues,
         "action_major_versions": action_versions,
         "missing_or_old_actions": missing_or_old_actions,
         **checkout_status,
@@ -632,6 +648,7 @@ def _workflow_marker_check(text: str) -> dict[str, Any]:
         and not details["missing_jobs"]
         and details["permissions_contents_read"]
         and not job_permission_issues
+        and not concurrency_issues
         and not missing_or_old_actions
         and not details["missing_checkout_jobs"]
         and details["checkout_steps_without_persist_credentials_false"] == 0
@@ -696,6 +713,7 @@ def _optional_dependency_audit_check(text: str) -> dict[str, Any]:
         }
     )
     job_permission_issues = _workflow_job_permission_issues(workflow) if not parse_error else []
+    concurrency_issues = _workflow_top_level_concurrency_issues(workflow) if not parse_error else []
     retention = _workflow_upload_artifact_retention(workflow) if not parse_error else {
         "upload_artifact_steps": [],
         "upload_artifact_steps_missing_retention_days": ["workflow_yaml_unavailable"],
@@ -707,6 +725,7 @@ def _optional_dependency_audit_check(text: str) -> dict[str, Any]:
         if not parse_error
         else _workflow_permissions_contents_read(text),
         "job_permission_issues": job_permission_issues,
+        "top_level_concurrency_issues": concurrency_issues,
         "action_major_versions": action_versions,
         "missing_or_old_actions": missing_or_old_actions,
         "triggers": sorted(triggers),
@@ -722,6 +741,7 @@ def _optional_dependency_audit_check(text: str) -> dict[str, Any]:
         not parse_error
         and details["permissions_contents_read"]
         and not job_permission_issues
+        and not concurrency_issues
         and not missing_or_old_actions
         and not missing_triggers
         and not details["missing_extras"]

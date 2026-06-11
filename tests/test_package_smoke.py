@@ -389,9 +389,25 @@ jobs:
 """
 
         check = _optional_dependency_audit_check(workflow_text)
+        invalid_concurrency_check = _optional_dependency_audit_check(
+            workflow_text.replace(
+                "permissions:\n  contents: read\n",
+                "permissions:\n  contents: read\nconcurrency:\n  group: ${{ github.workflow }}-${{ matrix.extra }}\n",
+                1,
+            ).replace(
+                "on:\n  workflow_dispatch:\n",
+                "on:\n  workflow_dispatch:\n  schedule:\n    - cron: \"0 3 * * 1\"\n",
+                1,
+            )
+        )
 
         self.assertFalse(check["passed"])
         self.assertEqual(check["details"]["missing_triggers"], ["schedule"])
+        self.assertFalse(invalid_concurrency_check["passed"])
+        self.assertEqual(
+            invalid_concurrency_check["details"]["top_level_concurrency_issues"],
+            ["top_level_concurrency_uses_matrix_context"],
+        )
 
     def test_source_sbom_inventory_records_package_dependency_and_file_evidence(self) -> None:
         from ai22b.talent_foundry.source_sbom import build_source_sbom
