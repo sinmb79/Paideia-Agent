@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ipaddress
 import json
 import os
 import re
@@ -332,6 +333,28 @@ def _validated_http_url(url: str) -> str:
     return url
 
 
+def is_loopback_http_endpoint(url: str) -> bool:
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return False
+    host = parsed.hostname
+    if not host:
+        return False
+    if host.casefold() == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
+def _validated_local_http_url(url: str) -> str:
+    safe_url = _validated_http_url(url)
+    if not is_loopback_http_endpoint(safe_url):
+        raise ValueError("Local HTTP LLM endpoints must use localhost or a loopback IP address")
+    return safe_url
+
+
 def _extract_openai_compatible_text(data: dict[str, Any]) -> str:
     return str(data.get("choices", [{}])[0].get("message", {}).get("content", ""))
 
@@ -503,7 +526,7 @@ class GeminiGenerateContentClient(PublicArtifactLLMClient):
         model_name = str(self.model)
         if not model_name.startswith("models/"):
             model_name = f"models/{model_name}"
-        url = self.endpoint_template.format(model=model_name) + f"?key={api_key}"
+        url = self.endpoint_template.format(model=model_name)
         contents = [
             {
                 "role": "model" if item["role"] == "assistant" else "user",
@@ -518,7 +541,7 @@ class GeminiGenerateContentClient(PublicArtifactLLMClient):
         if system:
             body["systemInstruction"] = {"parts": [{"text": system}]}
         try:
-            data = _post_json(url=url, body=body, headers={})
+            data = _post_json(url=url, body=body, headers={"x-goog-api-key": api_key})
             parts = data.get("candidates", [{}])[0].get("content", {}).get("parts", [])
             text = "".join(str(part.get("text", "")) for part in parts)
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, KeyError, IndexError) as exc:
@@ -614,7 +637,18 @@ class OllamaClient(PublicArtifactLLMClient):
             },
             ensure_ascii=False,
         ).encode("utf-8")
-        safe_url = _validated_http_url(url)
+        try:
+            safe_url = _validated_local_http_url(url)
+        except ValueError as exc:
+            return _unavailable(
+                "ollama_local_http",
+                "local_http_endpoint_not_loopback",
+                model=self.model,
+                endpoint=self.endpoint,
+                error_type=type(exc).__name__,
+                error=str(exc)[:500],
+                network_access="localhost_only",
+            )
         request = urllib.request.Request(safe_url, data=body, headers={"Content-Type": "application/json"}, method="POST")
         try:
             # URL scheme is validated before the request is built.
@@ -660,7 +694,18 @@ class LMStudioClient(PublicArtifactLLMClient):
             },
             ensure_ascii=False,
         ).encode("utf-8")
-        safe_url = _validated_http_url(self.endpoint)
+        try:
+            safe_url = _validated_local_http_url(self.endpoint)
+        except ValueError as exc:
+            return _unavailable(
+                "lm_studio_local_http",
+                "local_http_endpoint_not_loopback",
+                model=self.model,
+                endpoint=self.endpoint,
+                error_type=type(exc).__name__,
+                error=str(exc)[:500],
+                network_access="localhost_only",
+            )
         request = urllib.request.Request(safe_url, data=body, headers={"Content-Type": "application/json"}, method="POST")
         try:
             # URL scheme is validated before the request is built.

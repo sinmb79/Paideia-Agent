@@ -4,6 +4,105 @@ from copy import deepcopy
 from typing import Any
 
 
+DEFAULT_CHATGPT_CODEX_MODEL = "gpt-5.5"
+DEFAULT_OPENAI_API_MODEL = "gpt-5.2"
+
+CHATGPT_CODEX_OAUTH_MODEL_CHOICES: list[dict[str, Any]] = [
+    {
+        "id": "gpt-5.5",
+        "label": "GPT-5.5",
+        "provider": "openai-codex",
+        "auth_mode": "codex_oauth",
+        "default": True,
+        "status": "operator_default",
+        "live_verification": "deferred_until_explicit_live_check",
+    },
+    {
+        "id": "gpt-5.4",
+        "label": "GPT-5.4",
+        "provider": "openai-codex",
+        "auth_mode": "codex_oauth",
+        "default": False,
+        "status": "known_local_hermes_option",
+        "live_verification": "deferred_until_explicit_live_check",
+    },
+    {
+        "id": "gpt-5.3-codex",
+        "label": "GPT-5.3 Codex",
+        "provider": "openai-codex",
+        "auth_mode": "codex_oauth",
+        "default": False,
+        "status": "known_local_hermes_option",
+        "live_verification": "deferred_until_explicit_live_check",
+    },
+    {
+        "id": "gpt-5.2-codex",
+        "label": "GPT-5.2 Codex",
+        "provider": "openai-codex",
+        "auth_mode": "codex_oauth",
+        "default": False,
+        "status": "known_local_hermes_option",
+        "live_verification": "deferred_until_explicit_live_check",
+    },
+    {
+        "id": "gpt-5.2",
+        "label": "GPT-5.2",
+        "provider": "openai-codex",
+        "auth_mode": "codex_oauth",
+        "default": False,
+        "status": "paideia_runtime_default_compatible",
+        "live_verification": "deferred_until_explicit_live_check",
+    },
+]
+
+OPENAI_API_MODEL_CHOICES: list[dict[str, Any]] = [
+    {
+        "id": "gpt-5.2",
+        "label": "GPT-5.2",
+        "provider": "openai",
+        "auth_mode": "api_key",
+        "default": True,
+        "status": "recommended_default",
+        "live_verification": "deferred_until_explicit_live_check",
+    },
+    {
+        "id": "gpt-4.1-mini",
+        "label": "GPT-4.1 mini",
+        "provider": "openai",
+        "auth_mode": "api_key",
+        "default": False,
+        "status": "low_cost_smoke_option",
+        "live_verification": "deferred_until_explicit_live_check",
+    },
+]
+
+API_LLM_MODEL_CHOICES: dict[str, list[dict[str, Any]]] = {
+    "anthropic_claude_api": [
+        {"id": "claude-3-5-sonnet-latest", "label": "Claude Sonnet", "status": "example_model"},
+        {"id": "claude-3-5-haiku-latest", "label": "Claude Haiku", "status": "example_model"},
+    ],
+    "google_gemini_api": [
+        {"id": "gemini-1.5-pro", "label": "Gemini 1.5 Pro", "status": "example_model"},
+        {"id": "gemini-1.5-flash", "label": "Gemini 1.5 Flash", "status": "example_model"},
+    ],
+    "mistral_api": [
+        {"id": "mistral-large-latest", "label": "Mistral Large", "status": "example_model"},
+        {"id": "mistral-small-latest", "label": "Mistral Small", "status": "example_model"},
+    ],
+    "openrouter_api": [
+        {"id": "openai/gpt-5.2", "label": "OpenAI GPT via OpenRouter", "status": "example_model"},
+        {"id": "anthropic/claude-3.5-sonnet", "label": "Claude via OpenRouter", "status": "example_model"},
+    ],
+    "ollama_local": [
+        {"id": "llama3.1", "label": "llama3.1", "status": "example_local_model"},
+        {"id": "qwen2.5", "label": "qwen2.5", "status": "example_local_model"},
+    ],
+    "lm_studio_local": [
+        {"id": "loaded-local-model", "label": "Loaded LM Studio model", "status": "placeholder_for_loaded_model"},
+    ],
+}
+
+
 LLM_SERVICE_CATALOG: list[dict[str, Any]] = [
     {
         "id": "openai_chatgpt_codex",
@@ -11,10 +110,31 @@ LLM_SERVICE_CATALOG: list[dict[str, Any]] = [
         "engine": "openai_chatgpt_codex",
         "status": "ready",
         "default_chat_mode": "auto",
-        "model_policy": "Use --llm-model, AI22B_OPENAI_MODEL, OPENAI_MODEL, or the built-in default.",
-        "requires": ["Codex/ChatGPT runtime for bridge context", "OPENAI_API_KEY only for live Responses API chat"],
+        "default_model": DEFAULT_CHATGPT_CODEX_MODEL,
+        "model_choices": CHATGPT_CODEX_OAUTH_MODEL_CHOICES,
+        "model_policy": "Select a ChatGPT/Codex model from the catalog or override with --llm-model, PAIDEIA_LLM_MODEL, AI22B_OPENAI_MODEL, or OPENAI_MODEL.",
+        "auth_modes": ["codex_oauth", "openai_api_fallback"],
+        "chat_backend_default": "codex_oauth",
+        "oauth_provider": "openai-codex",
+        "requires": ["Hermes/ChatGPT Codex OAuth by default", "OPENAI_API_KEY only when PAIDEIA_CHAT_BACKEND=openai_api"],
         "researcher_fit": "recommended",
-        "privacy_note": "Sends selected memory summaries only when live mode is explicitly used.",
+        "privacy_note": "Sends selected memory summaries only when live mode is explicitly used; raw OAuth tokens are never stored in Paideia artifacts.",
+    },
+    {
+        "id": "openai_responses_api",
+        "label": "OpenAI Responses API key adapter",
+        "engine": "openai_chatgpt_codex",
+        "status": "adapter_manifest_ready",
+        "default_chat_mode": "live_when_configured",
+        "default_model": DEFAULT_OPENAI_API_MODEL,
+        "model_choices": OPENAI_API_MODEL_CHOICES,
+        "model_policy": "Uses OPENAI_API_KEY and a selectable OpenAI model; run live checks only after owner configuration.",
+        "auth_modes": ["api_key"],
+        "chat_backend_default": "openai_api",
+        "api_provider": "openai",
+        "requires": ["OPENAI_API_KEY", "network access"],
+        "researcher_fit": "external_api_choice",
+        "privacy_note": "External API choice; raw API keys and raw provider payloads are not stored in Paideia artifacts.",
     },
     {
         "id": "deterministic_local",
@@ -33,6 +153,7 @@ LLM_SERVICE_CATALOG: list[dict[str, Any]] = [
         "engine": "anthropic_claude_api",
         "status": "adapter_manifest_ready",
         "default_chat_mode": "live_when_configured",
+        "model_choices": API_LLM_MODEL_CHOICES["anthropic_claude_api"],
         "model_policy": "Requires --llm-model and an Anthropic API key in the user's own environment.",
         "requires": ["ANTHROPIC_API_KEY", "network access"],
         "researcher_fit": "external_api_choice",
@@ -44,6 +165,7 @@ LLM_SERVICE_CATALOG: list[dict[str, Any]] = [
         "engine": "google_gemini_api",
         "status": "adapter_manifest_ready",
         "default_chat_mode": "live_when_configured",
+        "model_choices": API_LLM_MODEL_CHOICES["google_gemini_api"],
         "model_policy": "Requires --llm-model and a Gemini API key in the user's own environment.",
         "requires": ["GEMINI_API_KEY", "network access"],
         "researcher_fit": "external_api_choice",
@@ -55,6 +177,7 @@ LLM_SERVICE_CATALOG: list[dict[str, Any]] = [
         "engine": "mistral_api",
         "status": "adapter_manifest_ready",
         "default_chat_mode": "live_when_configured",
+        "model_choices": API_LLM_MODEL_CHOICES["mistral_api"],
         "model_policy": "Requires --llm-model and a Mistral API key in the user's own environment.",
         "requires": ["MISTRAL_API_KEY", "network access"],
         "researcher_fit": "external_api_choice",
@@ -66,6 +189,7 @@ LLM_SERVICE_CATALOG: list[dict[str, Any]] = [
         "engine": "openrouter_api",
         "status": "adapter_manifest_ready",
         "default_chat_mode": "live_when_configured",
+        "model_choices": API_LLM_MODEL_CHOICES["openrouter_api"],
         "model_policy": "Requires --llm-model and OPENROUTER_API_KEY in the user's own environment.",
         "requires": ["OPENROUTER_API_KEY", "network access"],
         "researcher_fit": "external_api_choice",
@@ -77,6 +201,7 @@ LLM_SERVICE_CATALOG: list[dict[str, Any]] = [
         "engine": "ollama_local_http",
         "status": "adapter_manifest_ready",
         "default_chat_mode": "local_http_when_running",
+        "model_choices": API_LLM_MODEL_CHOICES["ollama_local"],
         "model_policy": "Use --llm-model for an installed Ollama model; --llm-model-path can hold the localhost URL.",
         "requires": ["local Ollama server"],
         "researcher_fit": "local_private_model",
@@ -88,6 +213,7 @@ LLM_SERVICE_CATALOG: list[dict[str, Any]] = [
         "engine": "lm_studio_local_http",
         "status": "adapter_manifest_ready",
         "default_chat_mode": "local_http_when_running",
+        "model_choices": API_LLM_MODEL_CHOICES["lm_studio_local"],
         "model_policy": "Use --llm-model for the loaded local model; --llm-model-path can hold the localhost URL.",
         "requires": ["local LM Studio server"],
         "researcher_fit": "local_private_model",
@@ -161,6 +287,42 @@ CHAT_SURFACE_CATALOG: list[dict[str, Any]] = [
         "best_for": "future messaging-channel integration after explicit review",
         "channel_policy": "external_channels_disabled_until_configured",
     },
+    {
+        "id": "telegram-bridge",
+        "label": "Telegram private bridge",
+        "status": "ready_when_owner_configured",
+        "entrypoint": "ai22b-paideia-telegram",
+        "best_for": "owner-controlled mobile chat with the hired Paideia agent",
+        "channel_policy": "private_allowlist_required",
+        "requires": ["PAIDEIA_TELEGRAM_BOT_TOKEN", "PAIDEIA_TELEGRAM_ALLOWED_USERS"],
+        "setup_command": "ai22b-paideia-telegram --employment-record <employment_record.json>",
+        "network_access": "telegram_bot_api_after_owner_config",
+        "default_enabled": False,
+        "openclaw_pattern": "channel_adapter_disabled_until_token_and_allowlist_are_configured",
+        "safety": {
+            "allowlist_required": True,
+            "stores_bot_token": False,
+            "learning_promotion": "review_gated",
+            "external_channel_enabled_by_default": False,
+        },
+    },
+    {
+        "id": "external-chat-gateway",
+        "label": "External chat gateway manifest",
+        "status": "adapter_manifest_only_disabled_by_default",
+        "entrypoint": "adapter_manifests/external_chat_gateway.json",
+        "best_for": "future Slack, Discord, webhook, or other channel adapters after explicit owner review",
+        "channel_policy": "external_channels_disabled_until_configured",
+        "requires": ["channel-specific bot token", "owner allowlist", "webhook signing secret"],
+        "default_enabled": False,
+        "openclaw_pattern": "gateway_manifest_first_then_owner_approval",
+        "safety": {
+            "allowlist_required": True,
+            "stores_bot_token": False,
+            "learning_promotion": "review_gated",
+            "external_channel_enabled_by_default": False,
+        },
+    },
 ]
 
 DEFAULT_LLM_SERVICE_ID = "openai_chatgpt_codex"
@@ -174,6 +336,7 @@ EXTERNAL_API_ENGINES = {
 }
 LOCAL_HTTP_ENGINES = {"ollama_local_http", "lm_studio_local_http"}
 LOCAL_MODEL_ENGINES = {"bigram_local", "transformers_local", "llama_cpp_local"}
+OPENAI_API_SERVICE_IDS = {"openai_responses_api"}
 
 
 def _network_access_for_engine(engine: str) -> str:
@@ -184,6 +347,12 @@ def _network_access_for_engine(engine: str) -> str:
     if engine in LOCAL_HTTP_ENGINES:
         return "localhost_only"
     return "blocked"
+
+
+def _network_access_for_service(item: dict[str, Any]) -> str:
+    if item.get("id") in OPENAI_API_SERVICE_IDS:
+        return "external_api_selected_data_minimized"
+    return _network_access_for_engine(str(item.get("engine", "")))
 
 
 def _runtime_readiness_for_engine(engine: str, status: str) -> str:
@@ -198,8 +367,10 @@ def _runtime_readiness_for_engine(engine: str, status: str) -> str:
 
 def _doctor_command_for(item: dict[str, Any], *, live_check: bool = False) -> str:
     engine = item["engine"]
-    command = f"ai22b-talent-foundry doctor-llm-provider --llm-engine {engine}"
-    if engine in EXTERNAL_API_ENGINES or engine in LOCAL_HTTP_ENGINES:
+    command = f"ai22b-talent-foundry doctor-llm-provider --llm-engine {engine} --llm-service {item['id']}"
+    if item.get("default_model"):
+        command += f" --llm-model {item['default_model']}"
+    elif (engine in EXTERNAL_API_ENGINES and engine != "openai_chatgpt_codex") or engine in LOCAL_HTTP_ENGINES:
         command += " --llm-model <model>"
     if engine in LOCAL_HTTP_ENGINES:
         command += " --llm-model-path <localhost-url>"
@@ -216,7 +387,7 @@ def _enrich_llm_service_catalog() -> None:
         external_api = engine in EXTERNAL_API_ENGINES
         local_http = engine in LOCAL_HTTP_ENGINES
         local_model = engine in LOCAL_MODEL_ENGINES
-        network_access = _network_access_for_engine(engine)
+        network_access = _network_access_for_service(item)
         item.setdefault("runtime_readiness", _runtime_readiness_for_engine(engine, item.get("status", "unknown")))
         item.setdefault(
             "doctor",
@@ -241,7 +412,8 @@ def _enrich_llm_service_catalog() -> None:
             {
                 "network_access": network_access,
                 "external_api": external_api,
-                "codex_bridge": engine == "openai_chatgpt_codex",
+                "codex_bridge": engine == "openai_chatgpt_codex" and item.get("id") not in OPENAI_API_SERVICE_IDS,
+                "api_key_provider": item.get("id") in OPENAI_API_SERVICE_IDS,
                 "localhost_only": local_http,
                 "local_files_only": local_model,
                 "payload": (
@@ -289,6 +461,10 @@ def chat_surface_ids() -> list[str]:
     return [item["id"] for item in CHAT_SURFACE_CATALOG]
 
 
+def chatgpt_codex_model_ids() -> list[str]:
+    return [item["id"] for item in CHATGPT_CODEX_OAUTH_MODEL_CHOICES]
+
+
 def resolve_llm_service(
     *,
     llm_service: str | None = None,
@@ -306,10 +482,17 @@ def resolve_llm_service(
 
     resolved = deepcopy(service)
     resolved["service_id"] = resolved["id"]
-    resolved["selected_model"] = llm_model or None
+    resolved["selected_model"] = llm_model or resolved.get("default_model") or None
     resolved["selected_model_path"] = llm_model_path or None
     engine = resolved["engine"]
-    resolved["network_access"] = _network_access_for_engine(engine)
+    resolved["network_access"] = _network_access_for_service(resolved)
+    resolved["model_selection"] = {
+        "selected_model": resolved.get("selected_model"),
+        "default_model": resolved.get("default_model"),
+        "available_models": resolved.get("model_choices", []),
+        "custom_model_allowed": True,
+        "live_verification_required": engine in EXTERNAL_API_ENGINES or engine in LOCAL_HTTP_ENGINES,
+    }
     return resolved
 
 

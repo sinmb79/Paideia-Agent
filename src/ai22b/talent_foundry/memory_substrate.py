@@ -11,6 +11,12 @@ from typing import Any
 from ai22b.talent_foundry.language_development import (
     build_language_development_program,
 )
+from ai22b.talent_foundry.codex_oauth_adapter import (
+    CODEX_OAUTH_ENGINE,
+    CODEX_OAUTH_PROVIDER,
+    call_codex_oauth_llm,
+    resolve_codex_oauth_credentials,
+)
 from ai22b.talent_foundry.growth_profile import read_growth_profile
 from ai22b.talent_foundry.learning_loop import build_reasoning_kernel, record_learning_experience
 from ai22b.talent_foundry.life_trace import read_life_trace_jsonl
@@ -27,7 +33,7 @@ MEMORY_SUBSTRATE_SCHEMA = "ai-talent-memory-substrate/v1"
 CHAT_CONTEXT_SCHEMA = "ai-talent-chat-context/v1"
 CHAT_RUN_SCHEMA = "ai-talent-chat-run/v1"
 CHAT_RUNTIME_STATUS_CARD_SCHEMA = "paideia-chat-runtime-status-card/v1"
-DEFAULT_OPENAI_CHAT_MODEL = "gpt-5.2"
+DEFAULT_OPENAI_CHAT_MODEL = "gpt-5.5"
 
 RESEARCH_BASIS = [
     {
@@ -1497,12 +1503,154 @@ def _normalize_live_chat_output(output_text: str) -> dict[str, Any]:
     }
 
 
+def _truthy_env(name: str, default: str = "0") -> bool:
+    return os.environ.get(name, default).strip().lower() not in {"0", "false", "no", "off", ""}
+
+
+def _safe_error_text(exc: Exception, *, limit: int = 800) -> str:
+    sanitized = sanitize_llm_result_packet({"error": str(exc)[:limit]})
+    return str(sanitized.get("error", ""))
+
+
+def _resolve_hermes_agent_root() -> Path | None:
+    candidates: list[Path] = []
+    for key in ("PAIDEIA_HERMES_AGENT_ROOT", "HERMES_AGENT_ROOT"):
+        value = os.environ.get(key)
+        if value:
+            candidates.append(Path(value))
+    local_app_data = os.environ.get("LOCALAPPDATA")
+    if local_app_data:
+        candidates.append(Path(local_app_data) / "hermes" / "hermes-agent")
+    candidates.append(Path.home() / "AppData" / "Local" / "hermes" / "hermes-agent")
+
+    for candidate in candidates:
+        if (candidate / "agent" / "auxiliary_client.py").is_file():
+            return candidate
+    return None
+
+
+def _call_codex_oauth_chat(
+    *,
+    chat_context: dict[str, Any],
+    model: str,
+) -> dict[str, Any]:
+    hermes_root = _resolve_hermes_agent_root()
+    if hermes_root is None:
+        return {
+            "schema": "ai-talent-live-llm-result/v1",
+            "engine": CODEX_OAUTH_ENGINE,
+            "provider": CODEX_OAUTH_PROVIDER,
+            "status": "unavailable",
+            "reason": "hermes_agent_root_not_found",
+            "model": model,
+            "hint": "Set PAIDEIA_HERMES_AGENT_ROOT or install Hermes Agent with openai-codex OAuth.",
+        }
+
+    try:
+        codex_credentials = resolve_codex_oauth_credentials(hermes_root, refresh_if_expiring=True)
+        if not codex_credentials.get("authenticated"):
+            return {
+                "schema": "ai-talent-live-llm-result/v1",
+                "engine": CODEX_OAUTH_ENGINE,
+                "provider": CODEX_OAUTH_PROVIDER,
+                "status": "unavailable",
+                "reason": "codex_oauth_not_authenticated",
+                "model": model,
+                "hint": "Run `hermes auth add openai-codex` to connect ChatGPT/Codex OAuth.",
+            }
+    except Exception as exc:
+        return {
+            "schema": "ai-talent-live-llm-result/v1",
+            "engine": CODEX_OAUTH_ENGINE,
+            "provider": CODEX_OAUTH_PROVIDER,
+            "status": "unavailable",
+            "reason": "codex_oauth_auth_failed",
+            "model": model,
+            "error_type": type(exc).__name__,
+            "error": _safe_error_text(exc),
+            "hint": "Run `hermes auth add openai-codex` to refresh the ChatGPT/Codex OAuth session.",
+        }
+
+    messages = [
+        {
+            "role": "system",
+            "content": _live_chat_instructions_with_memory_bridge(chat_context["agent"]["name"]),
+        },
+        {
+            "role": "user",
+            "content": json.dumps(
+                {
+                    "task": "Generate one live chat turn for the hired local AI talent.",
+                    "local_talent_context": _compact_chat_context_for_live_llm(chat_context),
+                },
+                ensure_ascii=False,
+            ),
+        },
+    ]
+    timeout_seconds = float(os.environ.get("PAIDEIA_CODEX_OAUTH_TIMEOUT_SECONDS", "90"))
+
+    try:
+        output_text = call_codex_oauth_llm(
+            hermes_root,
+            task="paideia_chat",
+            model=model,
+            messages=messages,
+            timeout_seconds=timeout_seconds,
+        )
+    except Exception as exc:
+        return {
+            "schema": "ai-talent-live-llm-result/v1",
+            "engine": CODEX_OAUTH_ENGINE,
+            "provider": CODEX_OAUTH_PROVIDER,
+            "status": "unavailable",
+            "reason": "codex_oauth_call_failed",
+            "model": model,
+            "error_type": type(exc).__name__,
+            "error": _safe_error_text(exc),
+            "hint": "Run `hermes auth add openai-codex` if the stored ChatGPT/Codex OAuth session is expired.",
+        }
+
+    parsed = _normalize_live_chat_output(output_text)
+    return {
+        "schema": "ai-talent-live-llm-result/v1",
+        "engine": CODEX_OAUTH_ENGINE,
+        "provider": CODEX_OAUTH_PROVIDER,
+        "status": "completed",
+        "model": model,
+        "assistant_reply": parsed["assistant_reply"],
+        "reviewable_reasoning_summary": parsed["reviewable_reasoning_summary"],
+        "learning_candidate": parsed["learning_candidate"],
+        "private_reasoning_fields_omitted": parsed["private_reasoning_fields_omitted"],
+        "raw_output_saved": False,
+        "identity_policy": "application_engine_not_identity",
+        "network_access": "chatgpt_codex_oauth_data_minimized",
+        "data_policy": {
+            "send_private_training_files": False,
+            "send_selected_memory_and_recent_chat_summaries": True,
+            "store_hidden_chain_of_thought": False,
+            "private_reasoning_field_values_stored": False,
+        },
+    }
+
+
 def _call_openai_responses_chat(
     *,
     chat_context: dict[str, Any],
     model: str,
     max_output_tokens: int = 900,
 ) -> dict[str, Any]:
+    max_output_tokens = int(os.environ.get("PAIDEIA_LIVE_MAX_OUTPUT_TOKENS", max_output_tokens))
+    chat_backend = os.environ.get("PAIDEIA_CHAT_BACKEND", "openai_api").strip().lower()
+    if chat_backend in {"codex", "codex_oauth", "openai-codex", "chatgpt_codex_oauth"}:
+        return _call_codex_oauth_chat(chat_context=chat_context, model=model)
+    if chat_backend in {"auto", "codex_then_openai"}:
+        codex_result = _call_codex_oauth_chat(chat_context=chat_context, model=model)
+        if codex_result.get("status") == "completed":
+            return codex_result
+        if not _truthy_env("PAIDEIA_ALLOW_OPENAI_API_FALLBACK", "1"):
+            return codex_result
+
+    web_search_enabled = os.environ.get("PAIDEIA_ENABLE_WEB_SEARCH", "1").strip().lower() not in {"0", "false", "no", "off"}
     if not os.environ.get("OPENAI_API_KEY"):
         return {
             "schema": "ai-talent-live-llm-result/v1",
@@ -1530,11 +1678,17 @@ def _call_openai_responses_chat(
     }
     try:
         client = OpenAI()
+        create_kwargs: dict[str, Any] = {
+            "model": model,
+            "instructions": _live_chat_instructions_with_memory_bridge(chat_context["agent"]["name"]),
+            "input": json.dumps(payload, ensure_ascii=False),
+            "max_output_tokens": max_output_tokens,
+        }
+        if web_search_enabled:
+            create_kwargs["tools"] = [{"type": "web_search"}]
+            create_kwargs["tool_choice"] = "auto"
         response = client.responses.create(
-            model=model,
-            instructions=_live_chat_instructions_with_memory_bridge(chat_context["agent"]["name"]),
-            input=json.dumps(payload, ensure_ascii=False),
-            max_output_tokens=max_output_tokens,
+            **create_kwargs,
         )
     except Exception as exc:
         return {
@@ -1561,6 +1715,7 @@ def _call_openai_responses_chat(
         "reviewable_reasoning_summary": parsed["reviewable_reasoning_summary"],
         "learning_candidate": parsed["learning_candidate"],
         "private_reasoning_fields_omitted": parsed["private_reasoning_fields_omitted"],
+        "web_search_enabled": web_search_enabled,
         "raw_output_saved": False,
         "identity_policy": "application_engine_not_identity",
         "network_access": "openai_api_data_minimized",

@@ -72,6 +72,31 @@ def _hiring_packet(*, name: str, gender: str, specialty: str, role: str) -> dict
     }
 
 
+def _materialize_specialist_team_member(
+    *,
+    output_dir: Path,
+    owner: str,
+    request: str,
+    talent_name: str,
+    gender: str,
+    role: str,
+    member_slug: str,
+) -> dict:
+    blueprint = create_agent_training_blueprint(
+        owner=owner,
+        request=request,
+        talent_name=talent_name,
+        gender=gender,
+        domain="securities_research",
+        role_model_id="graham_value_investing",
+    )
+    blueprint["track"]["target_role"] = role
+    return materialize_training_blueprint(
+        blueprint,
+        output_dir=output_dir / "specialist_team_members" / member_slug,
+    )
+
+
 def run_demo(output_dir: Path = DEFAULT_RUN_DIR) -> dict[str, Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
     paths = {
@@ -250,15 +275,21 @@ def run_demo(output_dir: Path = DEFAULT_RUN_DIR) -> dict[str, Path]:
         / "shinyong_agent_release_bundle"
         / "hired_projection_swarm_cycle_log.jsonl",
         "macro_employment_record": output_dir
+        / "specialist_team_members"
+        / "macro"
         / "installed_agents"
         / "agents"
-        / "shinyong_agent_release_bundle"
-        / "employment_record.macro.json",
+        / "신용_거시_agent_release_bundle"
+        / "employment_record.json",
+        "macro_training_run": output_dir / "specialist_team_members" / "macro" / "training_run.json",
         "micro_employment_record": output_dir
+        / "specialist_team_members"
+        / "micro"
         / "installed_agents"
         / "agents"
-        / "shinyong_agent_release_bundle"
-        / "employment_record.micro.json",
+        / "신용_기업_agent_release_bundle"
+        / "employment_record.json",
+        "micro_training_run": output_dir / "specialist_team_members" / "micro" / "training_run.json",
         "hired_agent_team": output_dir
         / "installed_agents"
         / "agents"
@@ -586,20 +617,34 @@ def run_demo(output_dir: Path = DEFAULT_RUN_DIR) -> dict[str, Path]:
         quality_label={"score": 94, "reviewed_by": "보스", "status": "verified"},
         output_path=paths["hired_projection_swarm_cycle"],
     )
-    macro_hiring = hire_installed_agent(
-        paths["installed_agent_manifest"],
-        employer="보스",
+    macro_member_run = _materialize_specialist_team_member(
+        output_dir=output_dir,
+        owner="보스",
+        request=(
+            "보스 증권 리서치팀의 거시경제 담당 팀원을 별도 인격과 별도 이력서가 있는 "
+            "거시경제 분석 에이전트로 육성한다."
+        ),
+        talent_name="신용-거시",
+        gender="남자",
         role="거시경제 분석 에이전트",
-        record_name="employment_record.macro.json",
+        member_slug="macro",
     )
-    micro_hiring = hire_installed_agent(
-        paths["installed_agent_manifest"],
-        employer="보스",
+    micro_member_run = _materialize_specialist_team_member(
+        output_dir=output_dir,
+        owner="보스",
+        request=(
+            "보스 증권 리서치팀의 기업분석 담당 팀원을 별도 인격과 별도 이력서가 있는 "
+            "기업분석 에이전트로 육성한다."
+        ),
+        talent_name="신용-기업",
+        gender="남자",
         role="기업분석 에이전트",
-        record_name="employment_record.micro.json",
+        member_slug="micro",
     )
-    paths["macro_employment_record"] = macro_hiring["employment_record"]
-    paths["micro_employment_record"] = micro_hiring["employment_record"]
+    paths["macro_training_run"] = Path(macro_member_run["artifacts"]["training_run"])
+    paths["micro_training_run"] = Path(micro_member_run["artifacts"]["training_run"])
+    paths["macro_employment_record"] = Path(macro_member_run["artifacts"]["employment_record"])
+    paths["micro_employment_record"] = Path(micro_member_run["artifacts"]["employment_record"])
     assemble_hired_agent_team(
         [paths["macro_employment_record"], paths["micro_employment_record"]],
         team_name="보스 증권 리서치팀",

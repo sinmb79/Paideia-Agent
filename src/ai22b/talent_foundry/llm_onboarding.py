@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -17,6 +18,7 @@ from ai22b.talent_foundry.onboarding_choices import (
     LLM_SERVICE_CATALOG,
     LOCAL_HTTP_ENGINES,
     LOCAL_MODEL_ENGINES,
+    OPENAI_API_SERVICE_IDS,
     resolve_chat_surface,
     resolve_llm_service,
 )
@@ -29,12 +31,13 @@ LLM_LIVE_SETUP_GUIDE_SCHEMA = "paideia-llm-live-setup-guide/v1"
 LLM_CONNECTION_STATUS_CARD_SCHEMA = "paideia-llm-connection-status-card/v1"
 
 ENV_REQUIREMENTS: dict[str, list[list[str]]] = {
-    "openai_chatgpt_codex": [["OPENAI_API_KEY"]],
     "anthropic_claude_api": [["ANTHROPIC_API_KEY"]],
     "google_gemini_api": [["GEMINI_API_KEY", "GOOGLE_API_KEY"]],
     "mistral_api": [["MISTRAL_API_KEY"]],
     "openrouter_api": [["OPENROUTER_API_KEY"]],
 }
+OPENAI_API_BACKENDS = {"openai_api", "api", "responses", "openai_responses_api"}
+MODEL_ARGUMENT_REQUIRED_ENGINES = EXTERNAL_API_ENGINES - {"openai_chatgpt_codex"}
 
 DEFAULT_LOCAL_ENDPOINTS = {
     "ollama_local_http": "http://localhost:11434",
@@ -56,17 +59,19 @@ def _command(
     command: str,
     *,
     engine: str,
+    service: str | None = None,
     model: str | None = None,
     model_path: str | None = None,
     live: bool = False,
     strict: bool = False,
     output: str,
 ) -> str:
-    needs_model = engine in EXTERNAL_API_ENGINES or engine in LOCAL_HTTP_ENGINES
+    needs_model = engine in MODEL_ARGUMENT_REQUIRED_ENGINES or engine in LOCAL_HTTP_ENGINES
     needs_path = engine in LOCAL_HTTP_ENGINES or engine in LOCAL_MODEL_ENGINES
     parts = [
         f"ai22b-talent-foundry {command}",
         f"--llm-engine {engine}",
+        _arg("--llm-service", service).strip(),
         _arg("--llm-model", model, "<model>" if needs_model else None).strip(),
         _arg("--llm-model-path", model_path, "<localhost-url-or-local-model-path>" if needs_path else None).strip(),
         "--live-check" if live else "",
@@ -79,17 +84,19 @@ def _command(
 def _readiness_suite_command(
     *,
     engine: str,
+    service: str | None = None,
     model: str | None = None,
     model_path: str | None = None,
     live: bool = False,
     strict: bool = False,
     output_dir: str,
 ) -> str:
-    needs_model = engine in EXTERNAL_API_ENGINES or engine in LOCAL_HTTP_ENGINES
+    needs_model = engine in MODEL_ARGUMENT_REQUIRED_ENGINES or engine in LOCAL_HTTP_ENGINES
     needs_path = engine in LOCAL_HTTP_ENGINES or engine in LOCAL_MODEL_ENGINES
     parts = [
         "ai22b-talent-foundry doctor-llm-live-readiness",
         f"--llm-engine {engine}",
+        _arg("--llm-service", service).strip(),
         _arg("--llm-model", model, "<model>" if needs_model else None).strip(),
         _arg("--llm-model-path", model_path, "<localhost-url-or-local-model-path>" if needs_path else None).strip(),
         "--live-check" if live else "",
@@ -106,7 +113,7 @@ def _chat_command(
     model_path: str | None = None,
     mode: str,
 ) -> str:
-    needs_model = engine in EXTERNAL_API_ENGINES or engine in LOCAL_HTTP_ENGINES
+    needs_model = engine in MODEL_ARGUMENT_REQUIRED_ENGINES or engine in LOCAL_HTTP_ENGINES
     needs_path = engine in LOCAL_HTTP_ENGINES or engine in LOCAL_MODEL_ENGINES
     parts = [
         "ai22b-talent-foundry chat-hired-agent",
@@ -124,6 +131,7 @@ def _chat_command(
 def _chat_runtime_smoke_command(
     *,
     engine: str,
+    service: str | None = None,
     model: str | None = None,
     model_path: str | None = None,
     chat_surface: str,
@@ -131,11 +139,12 @@ def _chat_runtime_smoke_command(
     strict: bool = False,
     output: str,
 ) -> str:
-    needs_model = engine in EXTERNAL_API_ENGINES or engine in LOCAL_HTTP_ENGINES
+    needs_model = engine in MODEL_ARGUMENT_REQUIRED_ENGINES or engine in LOCAL_HTTP_ENGINES
     needs_path = engine in LOCAL_HTTP_ENGINES or engine in LOCAL_MODEL_ENGINES
     parts = [
         "ai22b-talent-foundry run-chat-runtime-smoke",
         f"--llm-engine {engine}",
+        _arg("--llm-service", service).strip(),
         f"--chat-surface {chat_surface}",
         _arg("--llm-model", model, "<model>" if needs_model else None).strip(),
         _arg("--llm-model-path", model_path, "<localhost-url-or-local-model-path>" if needs_path else None).strip(),
@@ -156,9 +165,15 @@ def _command_by_id(checklist: dict[str, Any], command_id: str) -> dict[str, Any]
     return {}
 
 
-def _profile_env_setup(engine: str) -> list[dict[str, Any]]:
+def _profile_env_setup(engine: str, *, service: str | None = None) -> list[dict[str, Any]]:
     setup: list[dict[str, Any]] = []
-    for group in ENV_REQUIREMENTS.get(engine, []):
+    env_requirements = ENV_REQUIREMENTS.get(engine, [])
+    if engine == "openai_chatgpt_codex":
+        backend = str(service or "").strip()
+        env_backend = os.environ.get("PAIDEIA_CHAT_BACKEND", "").strip().lower()
+        if backend in OPENAI_API_SERVICE_IDS or env_backend in OPENAI_API_BACKENDS:
+            env_requirements = [["OPENAI_API_KEY"]]
+    for group in env_requirements:
         preferred = group[0]
         setup.append(
             {
@@ -217,6 +232,7 @@ def build_llm_connection_profile(
     selected_llm = checklist["selected_llm_service"]
     selected_chat = checklist["selected_chat_surface"]
     engine = selected_llm["engine"]
+    service_id = selected_llm.get("service_id")
     model = selected_llm.get("selected_model")
     model_path = selected_llm.get("selected_model_path")
     runtime_config = build_llm_runtime_config(
@@ -238,7 +254,7 @@ def build_llm_connection_profile(
     if engine in LOCAL_HTTP_ENGINES and not local_endpoint:
         local_endpoint = DEFAULT_LOCAL_ENDPOINTS.get(engine)
     needs_live = engine in EXTERNAL_API_ENGINES or engine in LOCAL_HTTP_ENGINES
-    needs_model = engine in EXTERNAL_API_ENGINES or engine in LOCAL_HTTP_ENGINES
+    needs_model = engine in MODEL_ARGUMENT_REQUIRED_ENGINES or engine in LOCAL_HTTP_ENGINES
     needs_model_path = engine in LOCAL_MODEL_ENGINES
     readiness = _profile_readiness(
         engine=engine,
@@ -259,8 +275,13 @@ def build_llm_connection_profile(
             "requires_model_argument": needs_model,
             "requires_model_path": needs_model_path,
             "requires_localhost_endpoint": engine in LOCAL_HTTP_ENGINES,
-            "required_env": _profile_env_setup(engine),
+            "required_env": _profile_env_setup(engine, service=service_id),
             "recommended_model_argument": model or ("<model>" if needs_model else None),
+            "default_model": selected_llm.get("default_model"),
+            "model_choices": selected_llm.get("model_choices", []),
+            "model_selection": selected_llm.get("model_selection", {}),
+            "auth_modes": selected_llm.get("auth_modes", []),
+            "chat_backend_default": selected_llm.get("chat_backend_default"),
             "recommended_model_path_argument": (
                 model_path
                 or local_endpoint
@@ -357,7 +378,24 @@ def _setup_guide_status(profile: dict[str, Any], *, needs_live: bool) -> str:
 
 def _setup_cards(profile: dict[str, Any], *, needs_live: bool) -> list[dict[str, Any]]:
     setup = profile.get("setup_requirements", {}) if isinstance(profile.get("setup_requirements"), dict) else {}
+    selected = (
+        profile.get("selected_llm_service", {})
+        if isinstance(profile.get("selected_llm_service"), dict)
+        else {}
+    )
     cards: list[dict[str, Any]] = []
+    if selected.get("chat_backend_default") == "codex_oauth":
+        cards.append(
+            {
+                "id": "codex_oauth_credentials",
+                "title": "ChatGPT/Codex OAuth",
+                "status": "ready_when_hermes_openai_codex_auth_exists",
+                "provider": selected.get("oauth_provider") or "openai-codex",
+                "credential_source": "Hermes/Codex OAuth store",
+                "secret_policy": "OAuth tokens are resolved at runtime and are not copied into Paideia artifacts.",
+                "setup_command": "hermes auth add openai-codex",
+            }
+        )
     required_env = setup.get("required_env", []) if isinstance(setup.get("required_env"), list) else []
     if required_env:
         cards.append(
@@ -372,15 +410,20 @@ def _setup_cards(profile: dict[str, Any], *, needs_live: bool) -> list[dict[str,
                 ),
             }
         )
-    if setup.get("requires_model_argument"):
+    model_choices = setup.get("model_choices", []) if isinstance(setup.get("model_choices"), list) else []
+    if setup.get("requires_model_argument") or setup.get("recommended_model_argument") or model_choices:
         cards.append(
             {
                 "id": "model_argument",
                 "title": "Model name",
                 "status": "owner_action_required" if setup.get("recommended_model_argument") == "<model>" else "ready",
                 "recommended_value": setup.get("recommended_model_argument"),
+                "default_value": setup.get("default_model"),
+                "choices": model_choices,
+                "custom_model_allowed": True,
                 "examples": {
-                    "openai_chatgpt_codex": "gpt-4.1-mini",
+                    "openai_chatgpt_codex": "gpt-5.5",
+                    "openai_responses_api": "gpt-5.2",
                     "anthropic_claude_api": "claude-3-5-sonnet-latest",
                     "google_gemini_api": "gemini-1.5-pro",
                     "ollama_local_http": "llama3.1",
@@ -858,6 +901,7 @@ def build_llm_onboarding_checklist(
     engine = selected_llm["engine"]
     model = selected_llm.get("selected_model")
     model_path = selected_llm.get("selected_model_path")
+    service_id = selected_llm.get("service_id")
     runtime_config = build_llm_runtime_config(
         engine=engine,
         service=selected_llm.get("service_id"),
@@ -883,6 +927,7 @@ def build_llm_onboarding_checklist(
             "command": _command(
                 "doctor-llm-provider",
                 engine=engine,
+                service=service_id,
                 model=model,
                 model_path=model_path,
                 output="llm_provider_doctor.json",
@@ -896,6 +941,7 @@ def build_llm_onboarding_checklist(
             "command": _command(
                 "doctor-llm-provider",
                 engine=engine,
+                service=service_id,
                 model=model,
                 model_path=model_path,
                 live=True,
@@ -911,6 +957,7 @@ def build_llm_onboarding_checklist(
             "command": _command(
                 "run-llm-application-smoke",
                 engine=engine,
+                service=service_id,
                 model=model,
                 model_path=model_path,
                 output="llm_application_smoke.json",
@@ -927,6 +974,7 @@ def build_llm_onboarding_checklist(
             "command": _command(
                 "run-llm-application-smoke",
                 engine=engine,
+                service=service_id,
                 model=model,
                 model_path=model_path,
                 live=True,
@@ -942,6 +990,7 @@ def build_llm_onboarding_checklist(
             "command": _command(
                 "run-agent-runtime-smoke",
                 engine=engine,
+                service=service_id,
                 model=model,
                 model_path=model_path,
                 strict=True,
@@ -956,6 +1005,7 @@ def build_llm_onboarding_checklist(
             "command": _command(
                 "run-agent-runtime-smoke",
                 engine=engine,
+                service=service_id,
                 model=model,
                 model_path=model_path,
                 live=True,
@@ -970,6 +1020,7 @@ def build_llm_onboarding_checklist(
             "network_call": live_provider,
             "command": _readiness_suite_command(
                 engine=engine,
+                service=service_id,
                 model=model,
                 model_path=model_path,
                 live=live_provider,
@@ -987,6 +1038,7 @@ def build_llm_onboarding_checklist(
             "network_call": live_provider,
             "command": _chat_runtime_smoke_command(
                 engine=engine,
+                service=service_id,
                 model=model,
                 model_path=model_path,
                 chat_surface=selected_chat["id"],
@@ -1085,6 +1137,11 @@ def build_llm_provider_matrix(
                 "network_access": service.get("network_access"),
                 "runtime_readiness": service.get("runtime_readiness"),
                 "model_policy": service.get("model_policy"),
+                "default_model": service.get("default_model"),
+                "model_choices": service.get("model_choices", []),
+                "model_selection": service.get("model_selection", {}),
+                "auth_modes": service.get("auth_modes", []),
+                "chat_backend_default": service.get("chat_backend_default"),
                 "requires": service.get("requires", []),
                 "privacy_note": service.get("privacy_note"),
                 "cost_warning": service.get("cost_warning"),

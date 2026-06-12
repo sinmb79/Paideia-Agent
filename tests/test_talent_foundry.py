@@ -1675,6 +1675,25 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(result["reason"], "model_required_for_live_provider")
         self.assertEqual(result["llm_provider_preflight"]["status"], "needs_configuration")
 
+    def test_llm_provider_preflight_rejects_non_loopback_local_http_endpoint(self) -> None:
+        from ai22b.talent_foundry.llm_runtime import build_llm_provider_preflight, build_llm_runtime_config
+
+        config = build_llm_runtime_config(
+            engine="ollama_local_http",
+            model="llama3.1",
+            model_path="http://192.168.1.5:11434",
+        )
+        preflight = build_llm_provider_preflight(config, llm_mode="live")
+        blocking_checks = {item["id"]: item for item in preflight["blocking_checks"]}
+
+        self.assertEqual(preflight["schema"], "paideia-llm-provider-preflight/v1")
+        self.assertEqual(preflight["status"], "needs_configuration")
+        self.assertIn("local_http_endpoint", blocking_checks)
+        self.assertEqual(blocking_checks["local_http_endpoint"]["status"], "failed")
+        self.assertEqual(blocking_checks["local_http_endpoint"]["severity"], "error")
+        self.assertTrue(blocking_checks["local_http_endpoint"]["details"]["localhost_only_enforced"])
+        self.assertFalse(blocking_checks["local_http_endpoint"]["details"]["loopback_endpoint"])
+
     def test_external_live_clients_fail_closed_without_required_keys_or_models(self) -> None:
         import os
 
@@ -1809,6 +1828,7 @@ class TalentFoundryTests(unittest.TestCase):
         try:
             report = doctor_llm_provider(
                 engine="openai_chatgpt_codex",
+                service="openai_responses_api",
                 model="fake-model",
                 live_check=True,
                 client=FakeClient(),
@@ -1883,6 +1903,7 @@ class TalentFoundryTests(unittest.TestCase):
         try:
             report = doctor_llm_provider(
                 engine="openai_chatgpt_codex",
+                service="openai_responses_api",
                 model="fake-model",
                 live_check=True,
                 client=FakeFailingClient(),
@@ -1999,6 +2020,7 @@ class TalentFoundryTests(unittest.TestCase):
         from ai22b.talent_foundry.llm_onboarding import build_llm_connection_profile
 
         old_key = os.environ.pop("OPENAI_API_KEY", None)
+        old_backend = os.environ.pop("PAIDEIA_CHAT_BACKEND", None)
         try:
             profile = build_llm_connection_profile(
                 llm_service="openai_chatgpt_codex",
@@ -2007,31 +2029,33 @@ class TalentFoundryTests(unittest.TestCase):
         finally:
             if old_key is not None:
                 os.environ["OPENAI_API_KEY"] = old_key
+            if old_backend is not None:
+                os.environ["PAIDEIA_CHAT_BACKEND"] = old_backend
 
         setup = profile["setup_requirements"]
-        required_env = setup["required_env"][0]
         sequence = {item["id"]: item for item in profile["verification_sequence"]}
         serialized = json.dumps(profile, ensure_ascii=False)
 
         self.assertEqual(profile["schema"], "paideia-llm-connection-profile/v1")
-        self.assertEqual(profile["status"], "needs_credentials_before_live")
+        self.assertEqual(profile["status"], "ready_for_explicit_live_check")
         self.assertEqual(profile["selected_llm_service"]["engine"], "openai_chatgpt_codex")
+        self.assertEqual(profile["selected_llm_service"]["service_id"], "openai_chatgpt_codex")
+        self.assertEqual(profile["selected_llm_service"]["chat_backend_default"], "codex_oauth")
         self.assertEqual(profile["runtime_identity_policy"], "application_engine_not_identity")
         self.assertTrue(setup["requires_live_check_before_agent_work"])
-        self.assertTrue(setup["requires_model_argument"])
+        self.assertFalse(setup["requires_model_argument"])
         self.assertFalse(setup["requires_model_path"])
         self.assertFalse(setup["requires_localhost_endpoint"])
-        self.assertEqual(required_env["preferred"], "OPENAI_API_KEY")
-        self.assertEqual(required_env["one_of"], ["OPENAI_API_KEY"])
-        self.assertFalse(required_env["stores_secret_in_profile"])
-        self.assertIn("$env:OPENAI_API_KEY", required_env["powershell"])
+        self.assertEqual(setup["required_env"], [])
         self.assertEqual(setup["recommended_model_argument"], "gpt-4.1-mini")
-        self.assertEqual(profile["readiness"]["doctor_status"], "needs_configuration")
-        self.assertFalse(profile["readiness"]["doctor_passed"])
-        self.assertEqual(profile["readiness"]["live_preflight_status"], "needs_configuration")
+        self.assertIn("gpt-5.5", {item["id"] for item in setup["model_choices"]})
+        self.assertEqual(profile["readiness"]["doctor_status"], "ready")
+        self.assertTrue(profile["readiness"]["doctor_passed"])
+        self.assertEqual(profile["readiness"]["live_preflight_status"], "ready_for_explicit_live_attempt")
         self.assertFalse(sequence["no_network_doctor"]["network_call"])
         self.assertTrue(sequence["explicit_live_provider_check"]["network_call"])
         self.assertIn("--live-check", sequence["explicit_live_provider_check"]["command"])
+        self.assertIn("--llm-service openai_chatgpt_codex", sequence["explicit_live_provider_check"]["command"])
         self.assertIn("--llm-model gpt-4.1-mini", sequence["live_application_engine_smoke"]["command"])
         self.assertIn("--llm-mode live", profile["daily_use_commands"]["live_chat_template"])
         self.assertFalse(profile["data_policy"]["llm_is_identity"])
@@ -2040,6 +2064,44 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertFalse(profile["public_safe"]["secret_values_exported"])
         self.assertNotIn("sk-", serialized)
         self.assertNotIn("fixture_value_should_not_be_exported", serialized)
+
+    def test_llm_connection_profile_guides_openai_api_key_service_without_storing_secrets(self) -> None:
+        import os
+
+        from ai22b.talent_foundry.llm_onboarding import build_llm_connection_profile
+
+        old_key = os.environ.pop("OPENAI_API_KEY", None)
+        old_backend = os.environ.pop("PAIDEIA_CHAT_BACKEND", None)
+        try:
+            profile = build_llm_connection_profile(llm_service="openai_responses_api")
+        finally:
+            if old_key is not None:
+                os.environ["OPENAI_API_KEY"] = old_key
+            if old_backend is not None:
+                os.environ["PAIDEIA_CHAT_BACKEND"] = old_backend
+
+        setup = profile["setup_requirements"]
+        required_env = setup["required_env"][0]
+        sequence = {item["id"]: item for item in profile["verification_sequence"]}
+        serialized = json.dumps(profile, ensure_ascii=False)
+
+        self.assertEqual(profile["status"], "needs_credentials_before_live")
+        self.assertEqual(profile["selected_llm_service"]["service_id"], "openai_responses_api")
+        self.assertEqual(profile["selected_llm_service"]["chat_backend_default"], "openai_api")
+        self.assertEqual(profile["selected_llm_service"]["network_access"], "external_api_selected_data_minimized")
+        self.assertEqual(required_env["preferred"], "OPENAI_API_KEY")
+        self.assertEqual(required_env["one_of"], ["OPENAI_API_KEY"])
+        self.assertFalse(required_env["stores_secret_in_profile"])
+        self.assertIn("$env:OPENAI_API_KEY", required_env["powershell"])
+        self.assertEqual(setup["recommended_model_argument"], "gpt-5.2")
+        self.assertIn("gpt-4.1-mini", {item["id"] for item in setup["model_choices"]})
+        self.assertEqual(profile["readiness"]["doctor_status"], "needs_configuration")
+        self.assertFalse(profile["readiness"]["doctor_passed"])
+        self.assertEqual(profile["readiness"]["live_preflight_status"], "needs_configuration")
+        self.assertIn("--llm-service openai_responses_api", sequence["explicit_live_provider_check"]["command"])
+        self.assertIn("--llm-model gpt-5.2", sequence["live_application_engine_smoke"]["command"])
+        self.assertFalse(profile["public_safe"]["secret_values_exported"])
+        self.assertNotIn("sk-", serialized)
 
     def test_llm_connection_profile_guides_ollama_localhost_live_check(self) -> None:
         from ai22b.talent_foundry.llm_onboarding import build_llm_connection_profile
@@ -2079,14 +2141,17 @@ class TalentFoundryTests(unittest.TestCase):
         from ai22b.talent_foundry.llm_onboarding import build_llm_live_setup_guide
 
         old_key = os.environ.pop("OPENAI_API_KEY", None)
+        old_backend = os.environ.pop("PAIDEIA_CHAT_BACKEND", None)
         try:
             guide = build_llm_live_setup_guide(
-                llm_service="openai_chatgpt_codex",
+                llm_service="openai_responses_api",
                 llm_model="gpt-4.1-mini",
             )
         finally:
             if old_key is not None:
                 os.environ["OPENAI_API_KEY"] = old_key
+            if old_backend is not None:
+                os.environ["PAIDEIA_CHAT_BACKEND"] = old_backend
 
         cards = {item["id"]: item for item in guide["setup_cards"]}
         runbook = {item["id"]: item for item in guide["safe_runbook"]}
@@ -2095,13 +2160,16 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(guide["schema"], "paideia-llm-live-setup-guide/v1")
         self.assertEqual(guide["status"], "needs_owner_configuration_before_live")
         self.assertEqual(guide["selected_llm_service"]["engine"], "openai_chatgpt_codex")
+        self.assertEqual(guide["selected_llm_service"]["service_id"], "openai_responses_api")
         self.assertTrue(guide["readiness_gate"]["requires_explicit_live_check"])
         self.assertEqual(cards["api_credentials"]["required_env"][0]["preferred"], "OPENAI_API_KEY")
         self.assertFalse(cards["api_credentials"]["required_env"][0]["stores_secret_in_profile"])
         self.assertEqual(cards["model_argument"]["recommended_value"], "gpt-4.1-mini")
+        self.assertIn("gpt-5.2", {item["id"] for item in cards["model_argument"]["choices"]})
         self.assertTrue(runbook["explicit_live_readiness_suite"]["network_call"])
         self.assertIn("doctor-llm-live-readiness", runbook["explicit_live_readiness_suite"]["command"])
         self.assertIn("--live-check", runbook["explicit_live_readiness_suite"]["command"])
+        self.assertIn("--llm-service openai_responses_api", runbook["explicit_live_readiness_suite"]["command"])
         self.assertFalse(guide["public_safe"]["network_call_performed"])
         self.assertFalse(guide["public_safe"]["secret_values_exported"])
         self.assertFalse(guide["data_policy"]["llm_is_identity"])
@@ -4010,7 +4078,9 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(onboarding["flow"][0], "choose_llm_service")
         self.assertEqual(onboarding["flow"][1], "choose_chat_surface")
         self.assertIn("openai_chatgpt_codex", {item["id"] for item in onboarding["llm_service_catalog"]})
+        self.assertIn("openai_responses_api", {item["id"] for item in onboarding["llm_service_catalog"]})
         openai_choice = next(item for item in onboarding["llm_service_catalog"] if item["id"] == "openai_chatgpt_codex")
+        openai_api_choice = next(item for item in onboarding["llm_service_catalog"] if item["id"] == "openai_responses_api")
         ollama_choice = next(item for item in onboarding["llm_service_catalog"] if item["id"] == "ollama_local")
         self.assertIn("doctor-llm-provider", openai_choice["doctor"]["command"])
         self.assertIn("--live-check", openai_choice["doctor"]["live_check_command"])
@@ -4018,8 +4088,17 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertFalse(openai_choice["live_check_policy"]["network_call_made_by_default"])
         self.assertTrue(openai_choice["data_transfer_policy"]["external_api"])
         self.assertTrue(openai_choice["data_transfer_policy"]["codex_bridge"])
+        self.assertEqual(openai_choice["default_model"], "gpt-5.5")
+        self.assertIn("gpt-5.5", {item["id"] for item in openai_choice["model_choices"]})
+        self.assertFalse(openai_api_choice["data_transfer_policy"]["codex_bridge"])
+        self.assertTrue(openai_api_choice["data_transfer_policy"]["api_key_provider"])
+        self.assertEqual(openai_api_choice["chat_backend_default"], "openai_api")
         self.assertEqual(ollama_choice["data_transfer_policy"]["network_access"], "localhost_only")
-        self.assertIn("codex-bridge-chat", {item["id"] for item in onboarding["chat_surface_catalog"]})
+        chat_surface_ids = {item["id"] for item in onboarding["chat_surface_catalog"]}
+        self.assertIn("codex-bridge-chat", chat_surface_ids)
+        self.assertIn("telegram-bridge", chat_surface_ids)
+        telegram_surface = next(item for item in onboarding["chat_surface_catalog"] if item["id"] == "telegram-bridge")
+        self.assertEqual(telegram_surface["channel_policy"], "private_allowlist_required")
         self.assertEqual(identity_envelope["version"], "ail.v1")
         self.assertEqual(identity_envelope["extensions"]["agent_warrent"]["registration_state"], "local_unregistered")
         self.assertEqual(manifest["default_safety_posture"]["external_channels"], "disabled")
@@ -4175,6 +4254,13 @@ class TalentFoundryTests(unittest.TestCase):
             (source / ".env").write_text("PAIDEIA_TEST_PLACEHOLDER=do-not-copy", encoding="utf-8")
             (source / "id_rsa").write_text("placeholder ssh identity fixture; do not copy", encoding="utf-8")
             (source / "helper.py").write_text("print('reference only')", encoding="utf-8")
+            (source / ".git").mkdir()
+            (source / ".git" / "config").write_text("[remote]\nurl=https://secret.invalid/repo", encoding="utf-8")
+            (source / ".venv").mkdir()
+            (source / ".venv" / "pyvenv.cfg").write_text("home=C:\\private-python", encoding="utf-8")
+            nested_dependency = source / "node_modules" / "fixture-package"
+            nested_dependency.mkdir(parents=True)
+            (nested_dependency / "index.js").write_text("console.log(process.env.SECRET_TOKEN)", encoding="utf-8")
             report = migrate_external_agent_assets(
                 source,
                 paideia_kit_dir=kit_dir,
@@ -4192,6 +4278,9 @@ class TalentFoundryTests(unittest.TestCase):
             copied_key_path = imported_manifest_path.parent / "source" / "id_rsa"
             compatibility_path = imported_manifest_path.parent / "paideia_compatibility_profile.json"
             review_card_path = imported_manifest_path.parent / "paideia_skill_review.md"
+            copied_git_path = imported_manifest_path.parent / "source" / ".git" / "config"
+            copied_venv_path = imported_manifest_path.parent / "source" / ".venv" / "pyvenv.cfg"
+            copied_dependency_path = imported_manifest_path.parent / "source" / "node_modules" / "fixture-package" / "index.js"
             imported = json.loads(imported_manifest_path.read_text(encoding="utf-8"))
             compatibility = json.loads(compatibility_path.read_text(encoding="utf-8"))
             review_card = review_card_path.read_text(encoding="utf-8")
@@ -4229,6 +4318,15 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("Schema: `paideia-imported-skill-review-card/v1`", review_card)
         self.assertFalse(copied_env_path.exists())
         self.assertFalse(copied_key_path.exists())
+        self.assertFalse(copied_git_path.exists())
+        self.assertFalse(copied_venv_path.exists())
+        self.assertFalse(copied_dependency_path.exists())
+        skipped_dirs = {
+            item["path"].replace("\\", "/")
+            for item in imported["skipped_files"]
+            if item.get("reason") == "skipped_directory"
+        }
+        self.assertTrue({".git", ".venv", "node_modules"} <= skipped_dirs)
         self.assertTrue(doctor["passed"])
         self.assertEqual(doctor["checks"]["imported_skills"]["details"]["imported_count"], 1)
         self.assertEqual(
@@ -4241,6 +4339,78 @@ class TalentFoundryTests(unittest.TestCase):
             "paideia-imported-skill-compatibility-profile/v1",
         )
         self.assertEqual(doctor_skill["compatibility_activation_gate"], "locked_pending_owner_allowlist")
+
+    def test_discover_external_agent_assets_skips_dependency_and_vcs_dirs(self) -> None:
+        from ai22b.talent_foundry.skill_migration import discover_external_agent_assets
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "external_agent"
+            valid = root / "valid_skill"
+            dependency = root / "node_modules" / "copied-package"
+            vcs = root / ".git" / "hooks"
+            venv = root / ".venv" / "site-packages" / "fixture"
+            for path in [valid, dependency, vcs, venv]:
+                path.mkdir(parents=True)
+                (path / "SKILL.md").write_text(
+                    f"---\nname: {path.name}\ndescription: should be discovered only when safe.\n---\n",
+                    encoding="utf-8",
+                )
+
+            assets = discover_external_agent_assets(root, source_runtime="openclaw")
+
+        self.assertEqual([asset["slug"] for asset in assets], ["valid_skill"])
+
+    def test_discover_external_agent_assets_rejects_skip_dir_source_roots(self) -> None:
+        from ai22b.talent_foundry.skill_migration import discover_external_agent_assets
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "external_agent"
+            skip_sources = [
+                root / ".git",
+                root / ".venv",
+                root / "node_modules",
+                root / "node_modules" / "copied-package",
+            ]
+            for path in skip_sources:
+                path.mkdir(parents=True, exist_ok=True)
+                (path / "SKILL.md").write_text(
+                    f"---\nname: {path.name}\ndescription: should never be imported from skipped roots.\n---\n",
+                    encoding="utf-8",
+                )
+
+                self.assertEqual(discover_external_agent_assets(path, source_runtime="openclaw"), [])
+
+    def test_migrate_external_agent_assets_rejects_skip_dir_source_root(self) -> None:
+        from ai22b.talent_foundry.skill_migration import migrate_external_agent_assets
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "external_agent"
+            skip_sources = [
+                root / ".git",
+                root / ".venv",
+                root / ".venv" / "site-packages" / "fixture",
+                root / "node_modules",
+                root / "node_modules" / "fixture-package",
+            ]
+            for path in skip_sources:
+                path.mkdir(parents=True, exist_ok=True)
+                (path / "SKILL.md").write_text(
+                    "---\nname: skipped-root\ndescription: must not be imported.\n---\n",
+                    encoding="utf-8",
+                )
+                (path / "local_secret.txt").write_text("should not be copied", encoding="utf-8")
+
+            for index, source in enumerate(skip_sources, start=1):
+                kit_dir = Path(tmp) / f"kit-{index}"
+                report = migrate_external_agent_assets(
+                    source,
+                    paideia_kit_dir=kit_dir,
+                    source_runtime="openclaw",
+                )
+
+                self.assertEqual(report["imported_count"], 0)
+                self.assertEqual(report["imported_skills"], [])
+                self.assertFalse((kit_dir / "skills" / "imported" / "openclaw").exists())
 
     def test_cli_migrate_agent_assets_imports_hermes_skill_without_enabling_it(self) -> None:
         from ai22b.talent_foundry.agent_program import build_paideia_agent_install_kit
@@ -4658,19 +4828,35 @@ class TalentFoundryTests(unittest.TestCase):
                 Path(path).exists()
                 for path in session["artifacts"]["specialist_employment_records"]
             ]
+            member_onboarding_exists = [
+                Path(path).exists()
+                for path in session["artifacts"]["specialist_onboarding_sessions"]
+            ]
+            member_training_runs_exist = [
+                Path(path).exists()
+                for path in session["artifacts"]["specialist_training_runs"]
+            ]
 
         self.assertEqual(session["status"], "specialist_team_cycle_completed")
         self.assertEqual(session["answers"]["post_hire_mode"], "specialist_team")
         self.assertEqual(team["schema"], "ai-talent-hired-agent-team/v1")
         self.assertTrue(team["team_policy"]["not_a_projection_team"])
+        self.assertEqual(team["team_policy"]["member_development_model"], "built_in_paideia_talent_foundry_per_member")
+        self.assertTrue(team["team_policy"]["each_member_requires_separate_resume"])
+        self.assertTrue(team["development_validation"]["passed"])
         self.assertEqual(team["team"]["member_count"], 4)
         self.assertTrue(all(member["consciousness"] == "separately_hired_talent_agent" for member in team["members"]))
+        self.assertTrue(all(member["development_evidence"]["passed"] for member in team["members"]))
+        self.assertTrue(all(member["resume"]["present"] for member in team["members"]))
         self.assertEqual(team_cycle["cycle_status"], "completed")
+        self.assertTrue(team_cycle["development_validation"]["passed"])
         self.assertEqual(
             session["post_hire_extensions"]["specialist_team"]["member_count"],
             4,
         )
         self.assertTrue(all(member_records_exist))
+        self.assertTrue(all(member_onboarding_exists))
+        self.assertTrue(all(member_training_runs_exist))
 
     def test_cli_start_console_accepts_answers_file(self) -> None:
         from ai22b.talent_foundry.cli import main as cli_main
@@ -5227,6 +5413,7 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertTrue(all(member["consciousness"] == "separately_hired_talent_agent" for member in team["members"]))
         self.assertEqual(cycle["schema"], "ai-talent-hired-team-cycle/v1")
         self.assertEqual(cycle["cycle_status"], "completed")
+        self.assertTrue(cycle["development_validation"]["passed"])
         self.assertEqual(len(cycle["contributions"]), 2)
         self.assertTrue(team_workspace_exists)
 
@@ -6944,26 +7131,14 @@ class TalentFoundryTests(unittest.TestCase):
 
     def test_assemble_hired_agent_team_records_separately_hired_members(self) -> None:
         from ai22b.talent_foundry.demo import run_demo
-        from ai22b.talent_foundry.registry import assemble_hired_agent_team, hire_installed_agent
+        from ai22b.talent_foundry.registry import assemble_hired_agent_team
 
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             outputs = run_demo(output_dir=tmp_path / "runs")
-            macro = hire_installed_agent(
-                outputs["installed_agent_manifest"],
-                employer="보스",
-                role="거시경제 분석 에이전트",
-                record_name="employment_record.macro.json",
-            )
-            micro = hire_installed_agent(
-                outputs["installed_agent_manifest"],
-                employer="보스",
-                role="기업분석 에이전트",
-                record_name="employment_record.micro.json",
-            )
             team_path = tmp_path / "hired_team.json"
             team = assemble_hired_agent_team(
-                [macro["employment_record"], micro["employment_record"]],
+                [outputs["macro_employment_record"], outputs["micro_employment_record"]],
                 team_name="보스 증권 리서치팀",
                 domain="증권 리서치",
                 output_path=team_path,
@@ -6975,6 +7150,15 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(team["team"]["domain"], "증권 리서치")
         self.assertTrue(all(member["consciousness"] == "separately_hired_talent_agent" for member in team["members"]))
         self.assertTrue(all("clone_of" not in member for member in team["members"]))
+        self.assertTrue(team["team_policy"]["each_member_requires_separate_resume"])
+        self.assertFalse(team["team_policy"]["role_label_only_membership_allowed"])
+        self.assertEqual(team["team_policy"]["member_development_model"], "built_in_paideia_talent_foundry_per_member")
+        self.assertTrue(team["development_validation"]["passed"])
+        self.assertTrue(all(member["development_evidence"]["passed"] for member in team["members"]))
+        self.assertTrue(all(member["resume"]["present"] for member in team["members"]))
+        self.assertTrue(
+            all("hiring_dossier" in member["development_evidence"]["development_artifacts"] for member in team["members"])
+        )
         self.assertIn("투자 실행", " ".join(team["team_policy"]["guardrails"]))
         self.assertEqual(saved_team["team_id"], team["team_id"])
 
@@ -6982,28 +7166,15 @@ class TalentFoundryTests(unittest.TestCase):
         from ai22b.talent_foundry.demo import run_demo
         from ai22b.talent_foundry.registry import (
             assemble_hired_agent_team,
-            hire_installed_agent,
             run_hired_team_cycle,
         )
 
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             outputs = run_demo(output_dir=tmp_path / "runs")
-            macro = hire_installed_agent(
-                outputs["installed_agent_manifest"],
-                employer="보스",
-                role="거시경제 분석 에이전트",
-                record_name="employment_record.macro.json",
-            )
-            micro = hire_installed_agent(
-                outputs["installed_agent_manifest"],
-                employer="보스",
-                role="기업분석 에이전트",
-                record_name="employment_record.micro.json",
-            )
             team_path = tmp_path / "hired_team.json"
             assemble_hired_agent_team(
-                [macro["employment_record"], micro["employment_record"]],
+                [outputs["macro_employment_record"], outputs["micro_employment_record"]],
                 team_name="보스 증권 리서치팀",
                 domain="증권 리서치",
                 output_path=team_path,
@@ -7034,23 +7205,10 @@ class TalentFoundryTests(unittest.TestCase):
     def test_cli_hired_team_commands_assemble_and_run_cycle(self) -> None:
         from ai22b.talent_foundry.cli import main as cli_main
         from ai22b.talent_foundry.demo import run_demo
-        from ai22b.talent_foundry.registry import hire_installed_agent
 
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             outputs = run_demo(output_dir=tmp_path / "runs")
-            macro = hire_installed_agent(
-                outputs["installed_agent_manifest"],
-                employer="보스",
-                role="거시경제 분석 에이전트",
-                record_name="employment_record.macro.json",
-            )
-            micro = hire_installed_agent(
-                outputs["installed_agent_manifest"],
-                employer="보스",
-                role="기업분석 에이전트",
-                record_name="employment_record.micro.json",
-            )
             team_path = tmp_path / "hired_team.json"
             cycle_path = tmp_path / "team_cycle.json"
             workspace = tmp_path / "team_workspace"
@@ -7062,9 +7220,9 @@ class TalentFoundryTests(unittest.TestCase):
                     "--domain",
                     "증권 리서치",
                     "--employment-record",
-                    str(macro["employment_record"]),
+                    str(outputs["macro_employment_record"]),
                     "--employment-record",
-                    str(micro["employment_record"]),
+                    str(outputs["micro_employment_record"]),
                     "--output",
                     str(team_path),
                 ]

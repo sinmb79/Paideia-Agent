@@ -13,6 +13,7 @@ from ai22b.talent_foundry.llm_clients import (
     build_llm_client,
     build_runtime_messages,
     count_private_reasoning_fields,
+    is_loopback_http_endpoint,
     sanitize_llm_result_packet,
 )
 
@@ -62,12 +63,19 @@ MODEL_REQUIRED_ENGINES = {
 }
 LOCAL_MODEL_PATH_REQUIRED_ENGINES = {"bigram_local", "transformers_local", "llama_cpp_local"}
 PROVIDER_ENV_REQUIREMENTS = {
-    "openai_chatgpt_codex": [["OPENAI_API_KEY"]],
     "anthropic_claude_api": [["ANTHROPIC_API_KEY"]],
     "google_gemini_api": [["GEMINI_API_KEY", "GOOGLE_API_KEY"]],
     "mistral_api": [["MISTRAL_API_KEY"]],
     "openrouter_api": [["OPENROUTER_API_KEY"]],
 }
+OPENAI_API_CHAT_BACKENDS = {"openai_api", "api", "responses", "openai_responses_api"}
+OPENAI_API_SERVICE_IDS = {"openai_responses_api"}
+
+
+def _openai_chat_backend(*, service: str | None = None) -> str:
+    if (service or "").strip() in OPENAI_API_SERVICE_IDS:
+        return "openai_api"
+    return os.environ.get("PAIDEIA_CHAT_BACKEND", "codex_oauth").strip().lower()
 
 
 def build_llm_runtime_config(
@@ -93,10 +101,14 @@ def build_llm_runtime_config(
     if engine not in compatible_engines:
         raise ValueError(f"Unsupported LLM runtime engine: {engine}")
 
-    codex_bridge = engine == "openai_chatgpt_codex"
+    service_id = service or engine
+    openai_api_service = engine == "openai_chatgpt_codex" and service_id in OPENAI_API_SERVICE_IDS
+    codex_bridge = engine == "openai_chatgpt_codex" and not openai_api_service
     external_api = engine in EXTERNAL_API_ENGINES
     local_http = engine in LOCAL_HTTP_ENGINES
-    if codex_bridge:
+    if openai_api_service:
+        network_access = "external_api_selected_data_minimized"
+    elif codex_bridge:
         network_access = "codex_host_managed_data_minimized"
     elif external_api:
         network_access = "external_api_selected_data_minimized"
@@ -106,7 +118,7 @@ def build_llm_runtime_config(
         network_access = "blocked"
     return {
         "schema": RUNTIME_SCHEMA,
-        "service": service or engine,
+        "service": service_id,
         "engine": engine,
         "model": model,
         "model_path": model_path,
@@ -182,7 +194,40 @@ def doctor_llm_provider(
         details={"model_required": model_required, "model_present": bool(model)},
     )
 
-    if engine in PROVIDER_ENV_REQUIREMENTS:
+    if engine == "openai_chatgpt_codex":
+        chat_backend = _openai_chat_backend(service=service)
+        if chat_backend in OPENAI_API_CHAT_BACKENDS:
+            env_groups = [["OPENAI_API_KEY"]]
+            group_results = [
+                {
+                    "one_of": group,
+                    "present": [key for key in group if bool(os.environ.get(key))],
+                }
+                for group in env_groups
+            ]
+            env_ready = all(bool(item["present"]) for item in group_results)
+            add_check(
+                "credential_environment",
+                env_ready,
+                details={
+                    "backend": chat_backend,
+                    "required": group_results,
+                    "secret_values_exported": False,
+                },
+            )
+        else:
+            add_check(
+                "codex_oauth_backend",
+                True,
+                details={
+                    "backend": chat_backend,
+                    "provider": "openai-codex",
+                    "credential_source": "Hermes/Codex OAuth store",
+                    "secret_values_exported": False,
+                    "live_credential_check_deferred_until_explicit_live_attempt": True,
+                },
+            )
+    elif engine in PROVIDER_ENV_REQUIREMENTS:
         env_groups = PROVIDER_ENV_REQUIREMENTS[engine]
         group_results = [
             {
@@ -203,12 +248,17 @@ def doctor_llm_provider(
 
     if engine in LOCAL_HTTP_ENGINES:
         default_endpoint = "http://localhost:11434" if engine == "ollama_local_http" else "http://localhost:1234/v1/chat/completions"
+        endpoint = model_path or default_endpoint
+        loopback_endpoint = is_loopback_http_endpoint(endpoint)
         add_check(
             "local_http_endpoint",
-            True,
-            severity="warning",
+            loopback_endpoint,
+            severity="warning" if loopback_endpoint else "error",
             details={
-                "endpoint": model_path or default_endpoint,
+                "endpoint": endpoint,
+                "loopback_endpoint": loopback_endpoint,
+                "allowed_hosts": ["localhost", "127.0.0.0/8", "::1"],
+                "localhost_only_enforced": True,
                 "server_reachability_requires_live_check": True,
             },
         )
@@ -448,7 +498,6 @@ def invoke_llm_application_engine(
 
     engine = effective_config["engine"]
     model_path = effective_config.get("model_path")
-    model = effective_config.get("model")
     preflight = build_llm_provider_preflight(effective_config, llm_mode=llm_mode, llm_model=llm_model)
     if engine in {"bigram_local", "transformers_local", "llama_cpp_local"} and not model_path:
         return _attach_provider_preflight({

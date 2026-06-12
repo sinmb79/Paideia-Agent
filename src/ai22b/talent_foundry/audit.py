@@ -150,6 +150,7 @@ REQUIRED_LLM_SERVICE_IDS = {
     "mistral_api",
     "ollama_local",
     "openai_chatgpt_codex",
+    "openai_responses_api",
     "openrouter_api",
     "transformers_local",
 }

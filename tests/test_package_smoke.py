@@ -25,6 +25,7 @@ class PackageSmokeTests(unittest.TestCase):
                 "ai22b-doctor": "ai22b.doctor:main",
                 "ai22b-bigram": "ai22b.from_scratch.bigram:main",
                 "ai22b-talent-foundry": "ai22b.talent_foundry.cli:main",
+                "ai22b-paideia-telegram": "ai22b.talent_foundry.telegram_bridge:main",
             },
         )
         for target in scripts.values():
@@ -60,7 +61,7 @@ class PackageSmokeTests(unittest.TestCase):
         self.assertTrue(report["passed"])
         self.assertEqual(report["status"], "passed")
         self.assertTrue(report["summary"]["distribution_installed"])
-        self.assertGreaterEqual(report["summary"]["console_script_count"], 3)
+        self.assertGreaterEqual(report["summary"]["console_script_count"], 4)
         self.assertFalse(report["public_safe"]["network_call_performed"])
         self.assertFalse(report["public_safe"]["subprocess_executed"])
         self.assertFalse(report["public_safe"]["local_absolute_paths_exported"])
