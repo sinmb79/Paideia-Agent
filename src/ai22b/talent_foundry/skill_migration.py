@@ -11,11 +11,12 @@ from typing import Any
 from ai22b.talent_foundry.closed_ecosystem import build_closed_growth_contract
 
 
-MIGRATION_REPORT_SCHEMA = "ai22b-paideia-external-skill-migration/v1"
-IMPORTED_SKILL_SCHEMA = "ai22b-paideia-imported-skill/v1"
-COMPATIBILITY_PROFILE_SCHEMA = "paideia-imported-skill-compatibility-profile/v1"
-SKILL_REVIEW_CARD_SCHEMA = "paideia-imported-skill-review-card/v1"
+EXTERNAL_REFERENCE_INTAKE_REPORT_SCHEMA = "ai22b-paideia-external-reference-intake/v1"
+EXTERNAL_REFERENCE_ASSET_SCHEMA = "ai22b-paideia-external-reference-asset/v1"
+COMPATIBILITY_PROFILE_SCHEMA = "paideia-external-reference-compatibility-profile/v1"
+REFERENCE_REVIEW_CARD_SCHEMA = "paideia-external-reference-review-card/v1"
 MAX_COPY_BYTES = 5 * 1024 * 1024
+ALLOWED_SOURCE_RUNTIMES = {"generic", "hermes", "openclaw"}
 SKIP_DIRS = {".git", ".hg", ".svn", "node_modules", ".venv", "venv", "__pycache__", "dist", "build"}
 SKIP_DIRS_CASEFOLD = {name.casefold() for name in SKIP_DIRS}
 SENSITIVE_FILE_NAMES = {
@@ -54,6 +55,14 @@ def _read_json(path: Path) -> dict[str, Any]:
 def _slugify(value: str, fallback: str) -> str:
     text = re.sub(r"[^A-Za-z0-9가-힣._-]+", "-", value.strip()).strip("-._")
     return text[:80] or fallback
+
+
+def _normalize_source_runtime(source_runtime: str) -> str:
+    runtime = str(source_runtime or "generic").strip().casefold()
+    if runtime not in ALLOWED_SOURCE_RUNTIMES:
+        allowed = ", ".join(sorted(ALLOWED_SOURCE_RUNTIMES))
+        raise ValueError(f"source_runtime must be one of: {allowed}")
+    return runtime
 
 
 def _read_text_limited(path: Path, limit: int = 200_000) -> str:
@@ -112,6 +121,7 @@ def _detect_format(skill_dir: Path) -> tuple[str, Path]:
 
 
 def discover_external_agent_assets(source_path: Path, *, source_runtime: str = "generic") -> list[dict[str, Any]]:
+    source_runtime = _normalize_source_runtime(source_runtime)
     source_path = source_path.resolve()
     if _has_skipped_path_component(source_path):
         return []
@@ -267,21 +277,23 @@ def _copy_skill_tree(source_dir: Path, target_dir: Path) -> tuple[list[str], lis
 
 
 def _wrapper_skill_md(package: dict[str, Any], manifest_name: str, compatibility_name: str) -> str:
-    return f"""# Imported External Skill Reference
+    return f"""# External Reference Quarantine Card
 
-This reference was imported from `{package['source_runtime']}` and is not an active Paideia skill.
+This third-party procedure was copied into Paideia's external-reference quarantine from
+`{package['source_runtime']}`. It is not an active Paideia skill and must not be treated
+as a plug-in for a raised talent.
 
 Original format: `{package['source_format']}`
 Original entry file: `{package.get('entry_file') or 'unknown'}`
 
 Paideia policy:
 
-- Do not execute scripts from this skill until `paideia_skill_manifest.json` is reviewed.
-- Treat third-party skills as untrusted local code.
-- Use this document as reference material, not as an active Paideia skill.
-- Do not expose this reference as `SKILL.md` until it has been rewritten as a Paideia-native exercise.
-- Do not import this skill's memory, profile, prompts, or workflow as Paideia identity.
-- Convert useful procedures into Paideia education axes or rewritten procedural exercises after testing.
+- Never execute scripts from this source as a Paideia skill.
+- Treat third-party skills as untrusted reference material.
+- Use this document as curriculum stimulus, not as an active Paideia skill.
+- Never expose this source as `SKILL.md` inside a Paideia kit.
+- Do not import this source's memory, profile, prompts, workflow, or reasoning style as Paideia identity.
+- Convert useful ideas into Paideia-native training exercises, guided practice, exams, and reviewed procedures.
 - Promote only reviewed summaries or successful Paideia work evidence into the learning ledger.
 
 Review manifest: `{manifest_name}`
@@ -319,7 +331,7 @@ def _capability_requests(
         {
             "id": "reference_read",
             "status": "allowed_for_review",
-            "reason": "Imported files may be read as reference material while the skill stays disabled.",
+            "reason": "Copied files may be read as quarantined reference material only.",
             "evidence": {"copied_file_count": len(copied_files)},
         }
     ]
@@ -327,8 +339,8 @@ def _capability_requests(
         requests.append(
             {
                 "id": "filesystem_read",
-                "status": "review_required",
-                "reason": "Imported procedures may need local files but must be scoped before activation.",
+                "status": "paideia_rewrite_required",
+                "reason": "Any useful local-file assumption must be rewritten as a Paideia-native exercise or procedure.",
                 "evidence": {"copied_file_count": len(copied_files)},
             }
         )
@@ -336,8 +348,8 @@ def _capability_requests(
         requests.append(
             {
                 "id": "subprocess_execution",
-                "status": "manual_allowlist_required",
-                "reason": "Script-like files were copied as reference only and cannot execute before review.",
+                "status": "blocked_for_direct_external_use",
+                "reason": "Script-like files are copied as reference only and must never execute as external skills.",
                 "evidence": {"script_files": script_files[:20]},
             }
         )
@@ -345,8 +357,8 @@ def _capability_requests(
         requests.append(
             {
                 "id": "network_access",
-                "status": "manual_allowlist_required",
-                "reason": "Network-related patterns were detected in imported source.",
+                "status": "blocked_for_direct_external_use",
+                "reason": "Network-related patterns were detected in quarantined reference source.",
                 "evidence": {"risk_flags": [flag for flag in risk_flags if flag in {"remote_shell_pipe", "network_listener"}]},
             }
         )
@@ -355,7 +367,7 @@ def _capability_requests(
             {
                 "id": "credential_access",
                 "status": "blocked_until_rewritten",
-                "reason": "Credential-like names or patterns require rewrite before activation.",
+                "reason": "Credential-like names or patterns require removal before any Paideia-native rewrite.",
                 "evidence": {
                     "credential_pattern_detected": "credential_access" in risk_flags,
                     "sensitive_file_skip_count": sensitive_skip_count,
@@ -367,7 +379,7 @@ def _capability_requests(
             {
                 "id": "destructive_filesystem",
                 "status": "blocked_until_rewritten",
-                "reason": "Recursive deletion patterns are incompatible with default Paideia skill activation.",
+                "reason": "Recursive deletion patterns are incompatible with Paideia-native training material.",
                 "evidence": {"risk_flags": ["recursive_delete"]},
             }
         )
@@ -379,29 +391,29 @@ def _adapter_strategy(source_runtime: str) -> dict[str, Any]:
     if runtime == "hermes":
         return {
             "source_runtime": "hermes",
-            "recommended_adapter": "hermes_style_quarantined_wrapper",
+            "recommended_adapter": "none_reference_only",
             "notes": [
-                "Preserve the original Hermes skill as reference material.",
-                "Extract reusable procedures into Paideia-reviewed steps before activation.",
+                "Preserve the original Hermes skill only as external reference material.",
+                "Extract useful ideas into Paideia-reviewed curriculum, practice, and exam steps.",
                 "Do not import Hermes memory/profile state as Paideia identity.",
             ],
         }
     if runtime == "openclaw":
         return {
             "source_runtime": "openclaw",
-            "recommended_adapter": "openclaw_workspace_skill_wrapper",
+            "recommended_adapter": "none_reference_only",
             "notes": [
-                "Map workspace assumptions to an explicit Paideia kit/workspace scope.",
+                "Map workspace assumptions to Paideia-native training tasks instead of wrappers.",
                 "Keep gateway/channel behavior disabled until separate channel policy review.",
                 "Treat active-memory references as candidates, not automatic memory promotion.",
             ],
         }
     return {
         "source_runtime": source_runtime,
-        "recommended_adapter": "generic_quarantined_wrapper",
+        "recommended_adapter": "none_reference_only",
         "notes": [
             "Treat the imported folder as third-party reference material.",
-            "Create a Paideia-specific procedure only after review and test evidence.",
+            "Create a Paideia-specific exercise or procedure only after review, practice, and test evidence.",
         ],
     }
 
@@ -426,36 +438,37 @@ def _compatibility_profile(
         "entry_file": package.get("entry_file"),
         "adapter_strategy": _adapter_strategy(str(package["source_runtime"])),
         "capability_requests": capability_requests,
-        "activation_gate": {
-            "status": "locked_pending_owner_allowlist",
-            "activation_allowed": False,
+        "internalization_gate": {
+            "status": "locked_pending_paideia_rewrite_and_exam",
+            "direct_external_activation_allowed": False,
+            "paideia_native_procedure_allowed": False,
             "required_artifacts": [
                 "REFERENCE.md",
-                "paideia_skill_manifest.json",
-                "paideia_compatibility_profile.json",
-                "paideia_skill_review.md",
+                "paideia_external_reference_manifest.json",
+                "paideia_reference_compatibility_profile.json",
+                "paideia_reference_review.md",
                 "paideia_rewrite_plan.json",
-                "owner_allowlist_decision.json",
-                "disposable_workspace_test_result.json",
+                "guided_practice_result.json",
+                "timed_exam_result.json",
                 "education_axis_promotion_review.json",
             ],
             "required_steps": [
                 "Review copied source and risk flags.",
-                "Rewrite or remove blocked capability requests.",
+                "Extract only the useful idea, not the external skill procedure as-is.",
                 "Rewrite useful ideas as Paideia-native training exercises or procedures.",
-                "Declare a minimal filesystem/network/subprocess allowlist.",
-                "Run the skill in a disposable workspace.",
-                "Attach test evidence before any Paideia memory promotion.",
+                "Run guided practice against the rewritten material.",
+                "Run a timed exam or task trial.",
+                "Attach review evidence before any Paideia memory or reasoning-kibo promotion.",
             ],
         },
         "conversion_plan": [
-            {"stage": "reference_import", "status": "completed"},
-            {"stage": "procedure_extraction", "status": "reference_only_pending_owner_review"},
-            {"stage": "paideia_native_rewrite", "status": "required_before_activation"},
-            {"stage": "allowlist_design", "status": "pending_owner_review"},
-            {"stage": "disposable_test", "status": "pending"},
+            {"stage": "external_reference_intake", "status": "completed"},
+            {"stage": "idea_extraction", "status": "reference_only_pending_owner_review"},
+            {"stage": "paideia_native_rewrite", "status": "required_before_any_use"},
+            {"stage": "guided_practice", "status": "pending"},
+            {"stage": "timed_exam_or_task_trial", "status": "pending"},
             {"stage": "education_axis_promotion_review", "status": "pending"},
-            {"stage": "paideia_skill_activation", "status": "blocked_until_gate_passes"},
+            {"stage": "direct_external_skill_activation", "status": "forbidden"},
         ],
         "memory_policy": {
             "source_skill_as_reference_only": True,
@@ -481,14 +494,14 @@ def _review_card_md(manifest: dict[str, Any]) -> str:
         if isinstance(item, dict)
     )
     risk_lines = "\n".join(f"- `{flag}`" for flag in manifest.get("risk_flags", [])) or "- none"
-    return f"""# Imported Skill Review Card
+    return f"""# External Reference Review Card
 
-Schema: `{SKILL_REVIEW_CARD_SCHEMA}`
+Schema: `{REFERENCE_REVIEW_CARD_SCHEMA}`
 
-Skill: `{manifest.get('name')}`
+Reference: `{manifest.get('name')}`
 Runtime: `{manifest.get('source_runtime')}`
 Status: `{manifest.get('status')}`
-Activation: `{manifest.get('activation', {}).get('status')}`
+Direct External Use: `forbidden`
 
 ## Compatibility Requests
 
@@ -500,10 +513,10 @@ Activation: `{manifest.get('activation', {}).get('status')}`
 
 ## Required Owner Decision
 
-- Keep this skill quarantined until the Boss reviews the copied source.
-- Create `owner_allowlist_decision.json` before activation.
-- Run a disposable workspace test before using this skill in a hired agent.
-- Promote only reviewed summaries or rewritten procedures into Paideia memory.
+- Keep this source quarantined as reference material.
+- Do not activate it as an external skill.
+- Rewrite useful ideas as Paideia-native training, guided practice, and exam material.
+- Promote only reviewed summaries, rewritten procedures, or successful Paideia work evidence into memory.
 """
 
 
@@ -512,18 +525,22 @@ def _skill_safety_contract(manifest: dict[str, Any]) -> dict[str, Any]:
     copied_files = list(manifest.get("copied_files", []))
     skipped_files = list(manifest.get("skipped_files", []))
     return {
-        "schema": "paideia-imported-skill-safety-contract/v1",
-        "status": "quarantined",
-        "activation_allowed": False,
-        "execute_imported_code": False,
+        "schema": "paideia-external-reference-safety-contract/v1",
+        "status": "quarantined_reference_only",
+        "direct_external_activation_allowed": False,
+        "paideia_native_procedure_allowed_without_rewrite": False,
+        "execute_reference_code": False,
         "active_skill_descriptor_created": False,
+        "direct_external_skill_copy_allowed": False,
         "identity_injection_allowed": False,
         "memory_import_allowed": False,
         "reasoning_kibo_import_allowed": False,
         "active_skill_copy_allowed": False,
         "reference_only_until_paideia_rewrite": True,
         "requires_manual_boss_review": True,
-        "requires_allowlist_before_activation": True,
+        "requires_paideia_native_rewrite": True,
+        "requires_guided_practice": True,
+        "requires_timed_exam_or_task_trial": True,
         "dangerous_pattern_count": len(manifest.get("risk_matches", [])),
         "risk_flags": risk_flags,
         "copied_file_count": len(copied_files),
@@ -551,29 +568,33 @@ def _skill_safety_contract(manifest: dict[str, Any]) -> dict[str, Any]:
                 "identity_boundary",
                 "paideia_native_rewrite",
                 "compatibility_profile",
+                "guided_practice",
+                "timed_exam_or_task_trial",
                 *(risk_flags or []),
             }
         ),
     }
 
 
-def _migration_safety_contract(imported: list[dict[str, Any]]) -> dict[str, Any]:
-    risk_flags = sorted({flag for item in imported for flag in item.get("risk_flags", [])})
+def _intake_safety_contract(references: list[dict[str, Any]]) -> dict[str, Any]:
+    risk_flags = sorted({flag for item in references for flag in item.get("risk_flags", [])})
     return {
-        "schema": "paideia-skill-migration-safety-contract/v1",
-        "status": "quarantined_pending_boss_review",
-        "imported_count": len(imported),
-        "all_imported_skills_disabled": all(item.get("activation") == "disabled" for item in imported),
-        "imported_code_executed": False,
+        "schema": "paideia-external-reference-intake-safety-contract/v1",
+        "status": "quarantined_reference_only",
+        "reference_count": len(references),
+        "all_external_references_non_executable": True,
+        "external_code_executed": False,
         "sensitive_files_copied": False,
         "risk_flags": risk_flags,
-        "activation_policy": {
-            "default_activation": "disabled",
+        "internalization_policy": {
+            "default_direct_use": "forbidden",
             "manual_boss_review_required": True,
-            "allowlist_required": True,
-            "doctor_required_before_chat": True,
             "paideia_native_rewrite_required": True,
+            "guided_practice_required": True,
+            "timed_exam_or_task_trial_required": True,
+            "doctor_required_before_chat": True,
             "external_skill_identity_injection_allowed": False,
+            "direct_external_skill_activation_allowed": False,
         },
         "default_permissions": {
             "filesystem": "none_until_reviewed",
@@ -586,48 +607,52 @@ def _migration_safety_contract(imported: list[dict[str, Any]]) -> dict[str, Any]
     }
 
 
-def _migration_compatibility_summary(imported: list[dict[str, Any]]) -> dict[str, Any]:
+def _intake_compatibility_summary(references: list[dict[str, Any]]) -> dict[str, Any]:
     request_ids = sorted(
         {
             request.get("id")
-            for item in imported
+            for item in references
             for request in item.get("compatibility_profile", {}).get("capability_requests", [])
             if isinstance(request, dict) and request.get("id")
         }
     )
     return {
-        "schema": "paideia-skill-migration-compatibility-summary/v1",
-        "imported_count": len(imported),
-        "activation_locked_count": sum(
+        "schema": "paideia-external-reference-compatibility-summary/v1",
+        "reference_count": len(references),
+        "internalization_locked_count": sum(
             1
-            for item in imported
-            if item.get("compatibility_profile", {}).get("activation_gate", {}).get("status")
-            == "locked_pending_owner_allowlist"
+            for item in references
+            if item.get("compatibility_profile", {}).get("internalization_gate", {}).get("status")
+            == "locked_pending_paideia_rewrite_and_exam"
         ),
-        "all_activation_gates_locked": all(
-            item.get("compatibility_profile", {}).get("activation_gate", {}).get("activation_allowed") is False
-            for item in imported
+        "all_internalization_gates_locked": all(
+            item.get("compatibility_profile", {}).get("internalization_gate", {}).get(
+                "direct_external_activation_allowed"
+            )
+            is False
+            for item in references
         ),
         "capability_request_ids": request_ids,
-        "source_runtimes": sorted({str(item.get("source_runtime")) for item in imported}),
+        "source_runtimes": sorted({str(item.get("source_runtime")) for item in references}),
     }
 
 
-def migrate_external_agent_assets(
+def intake_external_agent_references(
     source_path: Path,
     *,
     paideia_kit_dir: Path,
     source_runtime: str = "generic",
     output_path: Path | None = None,
 ) -> dict[str, Any]:
+    source_runtime = _normalize_source_runtime(source_runtime)
     source_path = source_path.resolve()
     paideia_kit_dir = paideia_kit_dir.resolve()
     packages = discover_external_agent_assets(source_path, source_runtime=source_runtime)
-    imported: list[dict[str, Any]] = []
+    references: list[dict[str, Any]] = []
     for index, package in enumerate(packages, start=1):
         source_dir = Path(package["source_dir"])
-        slug = _slugify(str(package.get("slug") or source_dir.name), f"skill-{index}")
-        target_dir = paideia_kit_dir / "skills" / "imported" / source_runtime / slug
+        slug = _slugify(str(package.get("slug") or source_dir.name), f"reference-{index}")
+        target_dir = paideia_kit_dir / "references" / "external" / source_runtime / slug
         copied, skipped, risks = _copy_skill_tree(source_dir, target_dir)
         risk_flags = sorted({risk["risk_id"] for risk in risks})
         compatibility = _compatibility_profile(
@@ -637,7 +662,7 @@ def migrate_external_agent_assets(
             risk_flags=risk_flags,
         )
         manifest = {
-            "schema": IMPORTED_SKILL_SCHEMA,
+            "schema": EXTERNAL_REFERENCE_ASSET_SCHEMA,
             "created_at_utc": _now(),
             "name": package["name"],
             "slug": slug,
@@ -645,14 +670,14 @@ def migrate_external_agent_assets(
             "source_format": package["source_format"],
             "source_dir_name": source_dir.name,
             "entry_file": package.get("entry_file"),
-            "activation": {
-                "status": "disabled",
-                "reason": "imported_external_skill_requires_boss_review",
-                "allowlist_required": True,
+            "direct_external_use": {
+                "status": "forbidden",
+                "reason": "external_sources_are_reference_material_not_paideia_skills",
+                "paideia_native_rewrite_required": True,
             },
-            "migration_mode": "wrap_quarantine_reference_rewrite_then_allowlist",
+            "intake_mode": "quarantine_reference_rewrite_as_training_only",
             "closed_growth_contract": build_closed_growth_contract(
-                context="imported_external_skill",
+                context="external_reference_intake",
                 source_runtime=source_runtime,
             ),
             "identity_policy": {
@@ -676,24 +701,28 @@ def migrate_external_agent_assets(
             "suggested_paideia_axes": _education_axes_for(package),
             "compatibility_profile": compatibility,
             "review_checklist": [
-                "Read REFERENCE.md and copied source references before enabling.",
-                "Read paideia_compatibility_profile.json and paideia_skill_review.md.",
+                "Read REFERENCE.md and copied source references before extracting ideas.",
+                "Read paideia_reference_compatibility_profile.json and paideia_reference_review.md.",
                 "Remove or rewrite remote shell installers.",
-                "Confirm file/network permissions needed by the skill.",
-                "Run inside a disposable workspace before promotion.",
+                "Map useful ideas into Paideia education axes.",
+                "Run guided practice and a timed exam for rewritten material.",
                 "Promote only reviewable successful usage summaries into the learning ledger.",
             ],
-            "status": "quarantined_pending_boss_review",
+            "status": "quarantined_reference_only",
         }
         manifest["safety_contract"] = _skill_safety_contract(manifest)
-        _write_json(target_dir / "paideia_skill_manifest.json", manifest)
-        _write_json(target_dir / "paideia_compatibility_profile.json", compatibility)
-        (target_dir / "paideia_skill_review.md").write_text(_review_card_md(manifest), encoding="utf-8")
+        _write_json(target_dir / "paideia_external_reference_manifest.json", manifest)
+        _write_json(target_dir / "paideia_reference_compatibility_profile.json", compatibility)
+        (target_dir / "paideia_reference_review.md").write_text(_review_card_md(manifest), encoding="utf-8")
         (target_dir / "REFERENCE.md").write_text(
-            _wrapper_skill_md(package, "paideia_skill_manifest.json", "paideia_compatibility_profile.json"),
+            _wrapper_skill_md(
+                package,
+                "paideia_external_reference_manifest.json",
+                "paideia_reference_compatibility_profile.json",
+            ),
             encoding="utf-8",
         )
-        imported.append(
+        references.append(
             {
                 "name": manifest["name"],
                 "slug": slug,
@@ -702,11 +731,11 @@ def migrate_external_agent_assets(
                 "reference_document": str((target_dir / "REFERENCE.md").relative_to(paideia_kit_dir)),
                 "active_skill_descriptor_created": False,
                 "status": manifest["status"],
-                "activation": manifest["activation"]["status"],
+                "direct_external_use": manifest["direct_external_use"]["status"],
                 "risk_flags": risk_flags,
                 "compatibility_profile": {
                     "schema": compatibility["schema"],
-                    "activation_gate": compatibility["activation_gate"],
+                    "internalization_gate": compatibility["internalization_gate"],
                     "capability_requests": compatibility["capability_requests"],
                 },
                 "sensitive_file_skip_count": manifest["safety_contract"]["sensitive_file_skip_count"],
@@ -715,35 +744,59 @@ def migrate_external_agent_assets(
         )
 
     report = {
-        "schema": MIGRATION_REPORT_SCHEMA,
+        "schema": EXTERNAL_REFERENCE_INTAKE_REPORT_SCHEMA,
         "created_at_utc": _now(),
         "source_runtime": source_runtime,
         "source": str(source_path),
         "paideia_kit_dir": str(paideia_kit_dir),
-        "migration_policy": {
-            "mode": "wrap_quarantine_reference_rewrite_then_allowlist",
-            "execute_imported_code": False,
-            "default_activation": "disabled",
+        "intake_policy": {
+            "mode": "quarantine_reference_rewrite_as_training_only",
+            "execute_external_code": False,
+            "default_direct_use": "forbidden",
             "boss_review_required": True,
             "third_party_skills_trusted": False,
             "external_skills_are_reference_material": True,
             "paideia_native_rewrite_required": True,
+            "guided_practice_required": True,
+            "timed_exam_or_task_trial_required": True,
             "external_skill_identity_injection_allowed": False,
             "direct_skill_copy_allowed": False,
+            "direct_external_skill_activation_allowed": False,
         },
         "closed_growth_contract": build_closed_growth_contract(
-            context="external_skill_migration_report",
+            context="external_reference_intake_report",
             source_runtime=source_runtime,
         ),
-        "safety_contract": _migration_safety_contract(imported),
-        "compatibility_summary": _migration_compatibility_summary(imported),
-        "imported_count": len(imported),
-        "imported_skills": imported,
+        "safety_contract": _intake_safety_contract(references),
+        "compatibility_summary": _intake_compatibility_summary(references),
+        "reference_count": len(references),
+        "external_references": references,
     }
-    output_path = output_path or paideia_kit_dir / "paideia_skill_migration_report.json"
+    output_path = output_path or paideia_kit_dir / "paideia_external_reference_intake_report.json"
     _write_json(output_path, report)
     _update_install_manifest(paideia_kit_dir, report)
     return report
+
+
+def migrate_external_agent_assets(
+    source_path: Path,
+    *,
+    paideia_kit_dir: Path,
+    source_runtime: str = "generic",
+    output_path: Path | None = None,
+) -> dict[str, Any]:
+    """Compatibility wrapper for the old CLI/API name.
+
+    Paideia no longer treats this path as skill migration. The old function name
+    remains so existing local scripts fail soft, but it now writes the external
+    reference intake contract and reference-only quarantine layout.
+    """
+    return intake_external_agent_references(
+        source_path,
+        paideia_kit_dir=paideia_kit_dir,
+        source_runtime=source_runtime,
+        output_path=output_path,
+    )
 
 
 def _update_install_manifest(paideia_kit_dir: Path, report: dict[str, Any]) -> None:
@@ -751,11 +804,13 @@ def _update_install_manifest(paideia_kit_dir: Path, report: dict[str, Any]) -> N
     if not manifest_path.exists():
         return
     manifest = _read_json(manifest_path)
-    manifest.setdefault("entrypoints", {})["imported_skill_references"] = "skills/imported"
-    manifest.setdefault("entrypoints", {})["skill_migration_report"] = "paideia_skill_migration_report.json"
-    manifest["imported_skill_policy"] = report["migration_policy"]
-    manifest["imported_skill_safety_contract"] = report["safety_contract"]
-    manifest["imported_skill_compatibility_summary"] = report["compatibility_summary"]
-    manifest["imported_skill_count"] = report["imported_count"]
-    manifest["directories"] = sorted({*manifest.get("directories", []), "skills"})
+    manifest.setdefault("entrypoints", {})["external_reference_quarantine"] = "references/external"
+    manifest.setdefault("entrypoints", {})[
+        "external_reference_intake_report"
+    ] = "paideia_external_reference_intake_report.json"
+    manifest["external_reference_policy"] = report["intake_policy"]
+    manifest["external_reference_safety_contract"] = report["safety_contract"]
+    manifest["external_reference_compatibility_summary"] = report["compatibility_summary"]
+    manifest["external_reference_count"] = report["reference_count"]
+    manifest["directories"] = sorted({*manifest.get("directories", []), "references"})
     _write_json(manifest_path, manifest)

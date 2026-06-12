@@ -4013,7 +4013,7 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("build-paideia-agent-kit", {command["id"] for command in manifest["commands"]})
         self.assertIn("doctor-agent-program", {command["id"] for command in manifest["commands"]})
         self.assertIn("doctor-paideia-kit-first-run", {command["id"] for command in manifest["commands"]})
-        self.assertIn("migrate-agent-assets", {command["id"] for command in manifest["commands"]})
+        self.assertIn("intake-external-references", {command["id"] for command in manifest["commands"]})
         self.assertIn("run-agent-program-chat", {command["id"] for command in manifest["commands"]})
         self.assertIn("list-role-model-curricula", {command["id"] for command in manifest["commands"]})
 
@@ -4274,10 +4274,10 @@ class TalentFoundryTests(unittest.TestCase):
             first_chat["agent_program_chat_status_card"]["public_safe"]["private_reasoning_trace_stored"]
         )
 
-    def test_migrate_openclaw_skill_wraps_and_quarantines_imported_asset(self) -> None:
+    def test_intake_openclaw_reference_quarantines_without_skill_activation(self) -> None:
         from ai22b.talent_foundry.agent_program import build_paideia_agent_install_kit, doctor_agent_program
         from ai22b.talent_foundry.demo import run_demo
-        from ai22b.talent_foundry.skill_migration import migrate_external_agent_assets
+        from ai22b.talent_foundry.skill_migration import intake_external_agent_references
 
         with tempfile.TemporaryDirectory() as tmp:
             outputs = run_demo(output_dir=Path(tmp) / "runs")
@@ -4306,31 +4306,31 @@ class TalentFoundryTests(unittest.TestCase):
             nested_dependency = source / "node_modules" / "fixture-package"
             nested_dependency.mkdir(parents=True)
             (nested_dependency / "index.js").write_text("console.log(process.env.SECRET_TOKEN)", encoding="utf-8")
-            report = migrate_external_agent_assets(
+            report = intake_external_agent_references(
                 source,
                 paideia_kit_dir=kit_dir,
                 source_runtime="openclaw",
             )
-            imported_manifest_path = (
+            reference_manifest_path = (
                 kit_dir
-                / "skills"
-                / "imported"
+                / "references"
+                / "external"
                 / "openclaw"
                 / "danger-report"
-                / "paideia_skill_manifest.json"
+                / "paideia_external_reference_manifest.json"
             )
-            copied_env_path = imported_manifest_path.parent / "source" / ".env"
-            copied_key_path = imported_manifest_path.parent / "source" / "id_rsa"
-            compatibility_path = imported_manifest_path.parent / "paideia_compatibility_profile.json"
-            review_card_path = imported_manifest_path.parent / "paideia_skill_review.md"
-            reference_doc_path = imported_manifest_path.parent / "REFERENCE.md"
-            generated_skill_path = imported_manifest_path.parent / "SKILL.md"
-            copied_original_skill_path = imported_manifest_path.parent / "source" / "SKILL.md"
-            copied_skill_reference_path = imported_manifest_path.parent / "source" / "SOURCE_SKILL_REFERENCE.md"
-            copied_git_path = imported_manifest_path.parent / "source" / ".git" / "config"
-            copied_venv_path = imported_manifest_path.parent / "source" / ".venv" / "pyvenv.cfg"
-            copied_dependency_path = imported_manifest_path.parent / "source" / "node_modules" / "fixture-package" / "index.js"
-            imported = json.loads(imported_manifest_path.read_text(encoding="utf-8"))
+            copied_env_path = reference_manifest_path.parent / "source" / ".env"
+            copied_key_path = reference_manifest_path.parent / "source" / "id_rsa"
+            compatibility_path = reference_manifest_path.parent / "paideia_reference_compatibility_profile.json"
+            review_card_path = reference_manifest_path.parent / "paideia_reference_review.md"
+            reference_doc_path = reference_manifest_path.parent / "REFERENCE.md"
+            generated_skill_path = reference_manifest_path.parent / "SKILL.md"
+            copied_original_skill_path = reference_manifest_path.parent / "source" / "SKILL.md"
+            copied_skill_reference_path = reference_manifest_path.parent / "source" / "SOURCE_SKILL_REFERENCE.md"
+            copied_git_path = reference_manifest_path.parent / "source" / ".git" / "config"
+            copied_venv_path = reference_manifest_path.parent / "source" / ".venv" / "pyvenv.cfg"
+            copied_dependency_path = reference_manifest_path.parent / "source" / "node_modules" / "fixture-package" / "index.js"
+            reference = json.loads(reference_manifest_path.read_text(encoding="utf-8"))
             install_manifest = json.loads((kit_dir / "paideia_agent_install_manifest.json").read_text(encoding="utf-8"))
             compatibility = json.loads(compatibility_path.read_text(encoding="utf-8"))
             review_card = review_card_path.read_text(encoding="utf-8")
@@ -4344,73 +4344,90 @@ class TalentFoundryTests(unittest.TestCase):
             copied_venv_exists = copied_venv_path.exists()
             copied_dependency_exists = copied_dependency_path.exists()
             doctor = doctor_agent_program(kit_dir / "22b_paideia_agent_program.json")
-            tampered_imported = dict(imported)
-            tampered_imported["activation"] = {**tampered_imported["activation"], "status": "enabled"}
-            tampered_imported["safety_contract"] = {
-                **tampered_imported["safety_contract"],
-                "execute_imported_code": True,
+            tampered_reference = dict(reference)
+            tampered_reference["direct_external_use"] = {
+                **tampered_reference["direct_external_use"],
+                "status": "allowed",
             }
-            imported_manifest_path.write_text(
-                json.dumps(tampered_imported, ensure_ascii=False, indent=2),
+            tampered_reference["safety_contract"] = {
+                **tampered_reference["safety_contract"],
+                "execute_reference_code": True,
+            }
+            reference_manifest_path.write_text(
+                json.dumps(tampered_reference, ensure_ascii=False, indent=2),
                 encoding="utf-8",
             )
             tampered_doctor = doctor_agent_program(kit_dir / "22b_paideia_agent_program.json")
 
-        self.assertEqual(report["schema"], "ai22b-paideia-external-skill-migration/v1")
-        self.assertEqual(report["imported_count"], 1)
+        self.assertEqual(report["schema"], "ai22b-paideia-external-reference-intake/v1")
+        self.assertEqual(report["reference_count"], 1)
         self.assertEqual(report["closed_growth_contract"]["schema"], "paideia-closed-growth-contract/v1")
         self.assertEqual(report["closed_growth_contract"]["ecosystem_model"], "closed_curated_growth_ecosystem")
-        self.assertTrue(report["migration_policy"]["external_skills_are_reference_material"])
-        self.assertTrue(report["migration_policy"]["paideia_native_rewrite_required"])
-        self.assertFalse(report["migration_policy"]["external_skill_identity_injection_allowed"])
-        self.assertFalse(report["migration_policy"]["direct_skill_copy_allowed"])
-        self.assertFalse(report["imported_skills"][0]["active_skill_descriptor_created"])
-        self.assertTrue(report["imported_skills"][0]["reference_document"].endswith("REFERENCE.md"))
-        self.assertEqual(report["safety_contract"]["schema"], "paideia-skill-migration-safety-contract/v1")
-        self.assertFalse(report["safety_contract"]["imported_code_executed"])
+        self.assertTrue(report["intake_policy"]["external_skills_are_reference_material"])
+        self.assertTrue(report["intake_policy"]["paideia_native_rewrite_required"])
+        self.assertTrue(report["intake_policy"]["guided_practice_required"])
+        self.assertTrue(report["intake_policy"]["timed_exam_or_task_trial_required"])
+        self.assertFalse(report["intake_policy"]["external_skill_identity_injection_allowed"])
+        self.assertFalse(report["intake_policy"]["direct_skill_copy_allowed"])
+        self.assertFalse(report["intake_policy"]["direct_external_skill_activation_allowed"])
+        self.assertFalse(report["external_references"][0]["active_skill_descriptor_created"])
+        self.assertEqual(report["external_references"][0]["direct_external_use"], "forbidden")
+        self.assertTrue(report["external_references"][0]["reference_document"].endswith("REFERENCE.md"))
+        self.assertEqual(report["safety_contract"]["schema"], "paideia-external-reference-intake-safety-contract/v1")
+        self.assertFalse(report["safety_contract"]["external_code_executed"])
         self.assertFalse(report["safety_contract"]["sensitive_files_copied"])
-        self.assertTrue(report["safety_contract"]["all_imported_skills_disabled"])
-        self.assertTrue(report["safety_contract"]["activation_policy"]["paideia_native_rewrite_required"])
-        self.assertFalse(report["safety_contract"]["activation_policy"]["external_skill_identity_injection_allowed"])
-        self.assertEqual(report["compatibility_summary"]["schema"], "paideia-skill-migration-compatibility-summary/v1")
-        self.assertTrue(report["compatibility_summary"]["all_activation_gates_locked"])
+        self.assertTrue(report["safety_contract"]["all_external_references_non_executable"])
+        self.assertTrue(report["safety_contract"]["internalization_policy"]["paideia_native_rewrite_required"])
+        self.assertTrue(report["safety_contract"]["internalization_policy"]["guided_practice_required"])
+        self.assertTrue(report["safety_contract"]["internalization_policy"]["timed_exam_or_task_trial_required"])
+        self.assertFalse(report["safety_contract"]["internalization_policy"]["external_skill_identity_injection_allowed"])
+        self.assertFalse(report["safety_contract"]["internalization_policy"]["direct_external_skill_activation_allowed"])
+        self.assertEqual(report["compatibility_summary"]["schema"], "paideia-external-reference-compatibility-summary/v1")
+        self.assertTrue(report["compatibility_summary"]["all_internalization_gates_locked"])
         self.assertIn("network_access", report["compatibility_summary"]["capability_request_ids"])
         self.assertIn("subprocess_execution", report["compatibility_summary"]["capability_request_ids"])
-        self.assertEqual(imported["status"], "quarantined_pending_boss_review")
-        self.assertEqual(imported["activation"]["status"], "disabled")
-        self.assertEqual(imported["closed_growth_contract"]["schema"], "paideia-closed-growth-contract/v1")
-        self.assertFalse(imported["identity_policy"]["external_skill_identity_injection_allowed"])
-        self.assertTrue(imported["identity_policy"]["original_skill_is_reference_material"])
-        self.assertIn("remote_shell_pipe", imported["risk_flags"])
-        self.assertIn("recursive_delete", imported["risk_flags"])
-        self.assertIn("network_listener", imported["risk_flags"])
-        self.assertIn("sensitive_file_name", imported["risk_flags"])
-        self.assertEqual(imported["safety_contract"]["schema"], "paideia-imported-skill-safety-contract/v1")
-        self.assertFalse(imported["safety_contract"]["activation_allowed"])
-        self.assertFalse(imported["safety_contract"]["execute_imported_code"])
-        self.assertFalse(imported["safety_contract"]["active_skill_descriptor_created"])
-        self.assertFalse(imported["safety_contract"]["identity_injection_allowed"])
-        self.assertFalse(imported["safety_contract"]["memory_import_allowed"])
-        self.assertFalse(imported["safety_contract"]["reasoning_kibo_import_allowed"])
-        self.assertTrue(imported["safety_contract"]["reference_only_until_paideia_rewrite"])
-        self.assertFalse(imported["safety_contract"]["sensitive_files_copied"])
-        self.assertGreaterEqual(imported["safety_contract"]["sensitive_file_skip_count"], 2)
-        self.assertEqual(imported["compatibility_profile"]["schema"], "paideia-imported-skill-compatibility-profile/v1")
-        self.assertEqual(compatibility["schema"], "paideia-imported-skill-compatibility-profile/v1")
-        self.assertEqual(compatibility["activation_gate"]["status"], "locked_pending_owner_allowlist")
-        self.assertFalse(compatibility["activation_gate"]["activation_allowed"])
+        self.assertEqual(reference["status"], "quarantined_reference_only")
+        self.assertEqual(reference["direct_external_use"]["status"], "forbidden")
+        self.assertEqual(reference["closed_growth_contract"]["schema"], "paideia-closed-growth-contract/v1")
+        self.assertFalse(reference["identity_policy"]["external_skill_identity_injection_allowed"])
+        self.assertTrue(reference["identity_policy"]["original_skill_is_reference_material"])
+        self.assertIn("remote_shell_pipe", reference["risk_flags"])
+        self.assertIn("recursive_delete", reference["risk_flags"])
+        self.assertIn("network_listener", reference["risk_flags"])
+        self.assertIn("sensitive_file_name", reference["risk_flags"])
+        self.assertEqual(reference["safety_contract"]["schema"], "paideia-external-reference-safety-contract/v1")
+        self.assertFalse(reference["safety_contract"]["direct_external_activation_allowed"])
+        self.assertFalse(reference["safety_contract"]["execute_reference_code"])
+        self.assertFalse(reference["safety_contract"]["active_skill_descriptor_created"])
+        self.assertFalse(reference["safety_contract"]["direct_external_skill_copy_allowed"])
+        self.assertFalse(reference["safety_contract"]["identity_injection_allowed"])
+        self.assertFalse(reference["safety_contract"]["memory_import_allowed"])
+        self.assertFalse(reference["safety_contract"]["reasoning_kibo_import_allowed"])
+        self.assertTrue(reference["safety_contract"]["reference_only_until_paideia_rewrite"])
+        self.assertTrue(reference["safety_contract"]["requires_paideia_native_rewrite"])
+        self.assertTrue(reference["safety_contract"]["requires_guided_practice"])
+        self.assertTrue(reference["safety_contract"]["requires_timed_exam_or_task_trial"])
+        self.assertFalse(reference["safety_contract"]["sensitive_files_copied"])
+        self.assertGreaterEqual(reference["safety_contract"]["sensitive_file_skip_count"], 2)
+        self.assertEqual(reference["compatibility_profile"]["schema"], "paideia-external-reference-compatibility-profile/v1")
+        self.assertEqual(compatibility["schema"], "paideia-external-reference-compatibility-profile/v1")
+        self.assertEqual(
+            compatibility["internalization_gate"]["status"],
+            "locked_pending_paideia_rewrite_and_exam",
+        )
+        self.assertFalse(compatibility["internalization_gate"]["direct_external_activation_allowed"])
         capability_ids = {item["id"] for item in compatibility["capability_requests"]}
         self.assertIn("destructive_filesystem", capability_ids)
         self.assertIn("credential_access", capability_ids)
-        self.assertIn("REFERENCE.md", compatibility["activation_gate"]["required_artifacts"])
-        self.assertIn("disposable_workspace_test_result.json", compatibility["activation_gate"]["required_artifacts"])
-        self.assertIn("Schema: `paideia-imported-skill-review-card/v1`", review_card)
+        self.assertIn("REFERENCE.md", compatibility["internalization_gate"]["required_artifacts"])
+        self.assertIn("timed_exam_result.json", compatibility["internalization_gate"]["required_artifacts"])
+        self.assertIn("Schema: `paideia-external-reference-review-card/v1`", review_card)
         self.assertTrue(reference_doc_exists)
         self.assertFalse(generated_skill_exists)
         self.assertTrue(copied_skill_reference_exists)
         self.assertFalse(copied_original_skill_exists)
-        self.assertIn("imported_skill_references", install_manifest["entrypoints"])
-        self.assertNotIn("imported_skills", install_manifest["entrypoints"])
+        self.assertIn("external_reference_quarantine", install_manifest["entrypoints"])
+        self.assertNotIn("imported_skill_references", install_manifest["entrypoints"])
         self.assertFalse(copied_env_exists)
         self.assertFalse(copied_key_exists)
         self.assertFalse(copied_git_exists)
@@ -4418,32 +4435,37 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertFalse(copied_dependency_exists)
         skipped_dirs = {
             item["path"].replace("\\", "/")
-            for item in imported["skipped_files"]
+            for item in reference["skipped_files"]
             if item.get("reason") == "skipped_directory"
         }
         self.assertTrue({".git", ".venv", "node_modules"} <= skipped_dirs)
         self.assertTrue(doctor["passed"])
-        self.assertEqual(doctor["checks"]["imported_skills"]["details"]["imported_count"], 1)
+        self.assertEqual(doctor["checks"]["external_references"]["details"]["reference_count"], 1)
         self.assertEqual(
-            doctor["checks"]["imported_skills"]["details"]["contract_schema"],
-            "paideia-imported-skill-safety-contract/v1",
+            doctor["checks"]["external_references"]["details"]["contract_schema"],
+            "paideia-external-reference-safety-contract/v1",
         )
-        doctor_skill = doctor["checks"]["imported_skills"]["details"]["skills"][0]
+        doctor_reference = doctor["checks"]["external_references"]["details"]["references"][0]
         self.assertEqual(
-            doctor_skill["compatibility_profile_schema"],
-            "paideia-imported-skill-compatibility-profile/v1",
+            doctor_reference["compatibility_profile_schema"],
+            "paideia-external-reference-compatibility-profile/v1",
         )
-        self.assertEqual(doctor_skill["compatibility_activation_gate"], "locked_pending_owner_allowlist")
-        self.assertEqual(doctor_skill["closed_growth_contract_schema"], "paideia-closed-growth-contract/v1")
-        self.assertTrue(doctor_skill["paideia_native_rewrite_required"])
-        self.assertFalse(doctor_skill["external_skill_identity_injection_allowed"])
-        self.assertFalse(doctor_skill["active_skill_descriptor_created"])
-        self.assertEqual(doctor_skill["active_skill_descriptors"], [])
+        self.assertEqual(
+            doctor_reference["compatibility_internalization_gate"],
+            "locked_pending_paideia_rewrite_and_exam",
+        )
+        self.assertEqual(doctor_reference["closed_growth_contract_schema"], "paideia-closed-growth-contract/v1")
+        self.assertTrue(doctor_reference["paideia_native_rewrite_required"])
+        self.assertFalse(doctor_reference["external_skill_identity_injection_allowed"])
+        self.assertFalse(doctor_reference["active_skill_descriptor_created"])
+        self.assertEqual(doctor_reference["active_skill_descriptors"], [])
         self.assertFalse(tampered_doctor["passed"])
-        self.assertFalse(tampered_doctor["checks"]["imported_skills"]["passed"])
+        self.assertFalse(tampered_doctor["checks"]["external_references"]["passed"])
         self.assertEqual(
-            tampered_doctor["checks"]["imported_skills"]["details"]["unsafe_enabled_imports"][0]["activation"],
-            "enabled",
+            tampered_doctor["checks"]["external_references"]["details"]["unsafe_external_references"][0][
+                "direct_external_use"
+            ],
+            "allowed",
         )
 
     def test_discover_external_agent_assets_skips_dependency_and_vcs_dirs(self) -> None:
@@ -4486,8 +4508,8 @@ class TalentFoundryTests(unittest.TestCase):
 
                 self.assertEqual(discover_external_agent_assets(path, source_runtime="openclaw"), [])
 
-    def test_migrate_external_agent_assets_rejects_skip_dir_source_root(self) -> None:
-        from ai22b.talent_foundry.skill_migration import migrate_external_agent_assets
+    def test_intake_external_agent_references_rejects_skip_dir_source_root(self) -> None:
+        from ai22b.talent_foundry.skill_migration import intake_external_agent_references
 
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "external_agent"
@@ -4508,17 +4530,39 @@ class TalentFoundryTests(unittest.TestCase):
 
             for index, source in enumerate(skip_sources, start=1):
                 kit_dir = Path(tmp) / f"kit-{index}"
-                report = migrate_external_agent_assets(
+                report = intake_external_agent_references(
                     source,
                     paideia_kit_dir=kit_dir,
                     source_runtime="openclaw",
                 )
 
-                self.assertEqual(report["imported_count"], 0)
-                self.assertEqual(report["imported_skills"], [])
-                self.assertFalse((kit_dir / "skills" / "imported" / "openclaw").exists())
+                self.assertEqual(report["reference_count"], 0)
+                self.assertEqual(report["external_references"], [])
+                self.assertFalse((kit_dir / "references" / "external" / "openclaw").exists())
 
-    def test_cli_migrate_agent_assets_imports_hermes_skill_without_enabling_it(self) -> None:
+    def test_intake_external_agent_references_rejects_unsafe_source_runtime(self) -> None:
+        from ai22b.talent_foundry.skill_migration import intake_external_agent_references
+
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "external_agent"
+            source.mkdir()
+            (source / "SKILL.md").write_text(
+                "---\nname: unsafe-runtime-fixture\ndescription: should never escape quarantine.\n---\n",
+                encoding="utf-8",
+            )
+            kit_dir = Path(tmp) / "kit"
+
+            with self.assertRaises(ValueError):
+                intake_external_agent_references(
+                    source,
+                    paideia_kit_dir=kit_dir,
+                    source_runtime="..\\..\\skills\\imported\\openclaw",
+                )
+
+            self.assertFalse((Path(tmp) / "skills").exists())
+            self.assertFalse((kit_dir / "references").exists())
+
+    def test_cli_intake_external_references_quarantines_hermes_procedure(self) -> None:
         from ai22b.talent_foundry.agent_program import build_paideia_agent_install_kit
         from ai22b.talent_foundry.cli import main as cli_main
         from ai22b.talent_foundry.demo import run_demo
@@ -4534,10 +4578,10 @@ class TalentFoundryTests(unittest.TestCase):
                 encoding="utf-8",
             )
             (source / "handler.js").write_text("console.log('reference only');", encoding="utf-8")
-            report_path = kit_dir / "migration.json"
+            report_path = kit_dir / "external_reference_intake.json"
             exit_code = cli_main(
                 [
-                    "migrate-agent-assets",
+                    "intake-external-references",
                     "--source",
                     str(source),
                     "--paideia-kit",
@@ -4552,21 +4596,24 @@ class TalentFoundryTests(unittest.TestCase):
             install_manifest = json.loads((kit_dir / "paideia_agent_install_manifest.json").read_text(encoding="utf-8"))
 
         self.assertEqual(exit_code, 0)
-        self.assertEqual(report["imported_count"], 1)
-        self.assertEqual(report["migration_policy"]["default_activation"], "disabled")
-        self.assertEqual(report["safety_contract"]["status"], "quarantined_pending_boss_review")
-        self.assertFalse(report["safety_contract"]["imported_code_executed"])
-        self.assertEqual(report["compatibility_summary"]["schema"], "paideia-skill-migration-compatibility-summary/v1")
-        self.assertTrue(report["compatibility_summary"]["all_activation_gates_locked"])
-        self.assertEqual(install_manifest["imported_skill_count"], 1)
-        self.assertEqual(install_manifest["imported_skill_policy"]["execute_imported_code"], False)
+        self.assertEqual(report["reference_count"], 1)
+        self.assertEqual(report["intake_policy"]["default_direct_use"], "forbidden")
+        self.assertEqual(report["safety_contract"]["status"], "quarantined_reference_only")
+        self.assertFalse(report["safety_contract"]["external_code_executed"])
         self.assertEqual(
-            install_manifest["imported_skill_safety_contract"]["schema"],
-            "paideia-skill-migration-safety-contract/v1",
+            report["compatibility_summary"]["schema"],
+            "paideia-external-reference-compatibility-summary/v1",
+        )
+        self.assertTrue(report["compatibility_summary"]["all_internalization_gates_locked"])
+        self.assertEqual(install_manifest["external_reference_count"], 1)
+        self.assertEqual(install_manifest["external_reference_policy"]["execute_external_code"], False)
+        self.assertEqual(
+            install_manifest["external_reference_safety_contract"]["schema"],
+            "paideia-external-reference-intake-safety-contract/v1",
         )
         self.assertEqual(
-            install_manifest["imported_skill_compatibility_summary"]["schema"],
-            "paideia-skill-migration-compatibility-summary/v1",
+            install_manifest["external_reference_compatibility_summary"]["schema"],
+            "paideia-external-reference-compatibility-summary/v1",
         )
 
     def test_cli_agent_program_chat_routes_through_paideia_manifest(self) -> None:

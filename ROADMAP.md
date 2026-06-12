@@ -1,4 +1,4 @@
-# Paideia Agent Roadmap
+﻿# Paideia Agent Roadmap
 
 [English](ROADMAP.md) | [한국어](ROADMAP.ko.md)
 
@@ -15,7 +15,7 @@ Graham Junior offline onboarding
 -> first-run and runtime doctors
 ```
 
-The MVP must run without private files, API keys, generated checkpoints, or network calls. Live LLMs, imported skills, Agent_warrent registration, and projection swarms can be connected later only after the local deterministic path is proven.
+The MVP must run without private files, API keys, generated checkpoints, or network calls. Live LLMs, quarantined external references, Agent_warrent registration, and projection swarms can be connected later only after the local deterministic path is proven.
 
 ## Feature Status
 
@@ -27,7 +27,7 @@ The MVP must run without private files, API keys, generated checkpoints, or netw
 | Local agent kit and doctors | Core MVP | Must install, smoke-test, and fail closed without secrets. |
 | LLM provider selection | Core MVP / Optional live | Deterministic local is default; live providers require explicit setup. |
 | Agent_warrent / Agent ID Card | Beta | Local export only; owner controls external registration. |
-| Hermes/OpenClaw skill migration | Experimental | Imported skills stay quarantined and disabled by default. |
+| External reference quarantine | Experimental | Hermes/OpenClaw/community procedures stay reference-only and cannot become active Paideia skills without native rewrite, practice, exam, and review. |
 | Projection swarm | Experimental | Parent-controlled task projections; reviewed parent synthesis only. |
 | Dashboard / studio UI | Future | Add after CLI runtime and doctors are stable. |
 | Local fine-tuning | Future | Add only after data policy, evals, and security gates mature. |
@@ -36,7 +36,7 @@ The MVP must run without private files, API keys, generated checkpoints, or netw
 
 1. Keep the README 3-minute demo path current.
 2. Run full tests, compile checks, package build, and public hygiene in CI.
-3. Maintain a security threat model for prompt injection, memory poisoning, imported skills, provider secrets, and generated kits.
+3. Maintain a security threat model for prompt injection, memory poisoning, external reference sources, provider secrets, and generated kits.
 4. Keep public artifacts schema-named and inventory them before introducing stricter validators.
 5. Split large modules only in small reviewable steps, starting with policy and tool execution boundaries.
 
@@ -62,3 +62,4 @@ The MVP must run without private files, API keys, generated checkpoints, or netw
 - Uploading owner data, private memories, or generated agents.
 - Running live LLM/provider checks without explicit owner action.
 - Treating deterministic demos as proof of investment, medical, legal, or security advice.
+

@@ -345,7 +345,7 @@ def _console_answers_template() -> dict[str, Any]:
         "gateway_mode": "local_loopback",
         "channel_mode": "local_only",
         "web_search_provider": "skip_now",
-        "skills_mode": "quarantine_import_only",
+        "external_reference_mode": "reference_quarantine_only",
         "talent_source": "public_role_model",
         "request": "증권전문가 에이전트를 길러서 주간 리서치 루틴을 맡기고 싶다.",
         "domain": "securities_research",
