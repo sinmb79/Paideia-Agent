@@ -94,6 +94,7 @@ class TalentFoundryTests(unittest.TestCase):
 
     def test_training_blueprint_turns_hiring_request_into_growth_pipeline(self) -> None:
         from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
+        from ai22b.talent_foundry.closed_ecosystem import validate_closed_growth_contract
 
         blueprint = create_agent_training_blueprint(
             owner="보스",
@@ -131,8 +132,46 @@ class TalentFoundryTests(unittest.TestCase):
             artifact_ids,
         )
 
+        self.assertTrue(validate_closed_growth_contract(blueprint["closed_growth_contract"])["passed"])
+        self.assertIn("external_skill_quarantine_engine", blueprint["core_engine_boundaries"]["engine_ids"])
+        self.assertFalse(
+            blueprint["closed_growth_contract"]["external_skill_policy"]["direct_copy_as_paideia_skill_allowed"]
+        )
+
+    def test_closed_growth_contract_validation_rejects_open_skill_identity_drift(self) -> None:
+        from ai22b.talent_foundry.closed_ecosystem import (
+            build_closed_growth_contract,
+            validate_closed_growth_contract,
+        )
+
+        contract = build_closed_growth_contract(context="test")
+        tampered = json.loads(json.dumps(contract, ensure_ascii=False))
+        tampered["identity_boundary"]["identity_sources_allowed"].append("external_skill")
+        tampered["identity_boundary"]["reasoning_kibo_copy_from_external_skill_allowed"] = True
+        tampered["embodied_learning_policy"]["direct_usb_style_data_transfer_allowed"] = True
+        tampered["embodied_learning_policy"]["internalization_stages"] = ["copy_data"]
+        tampered["practice_reasoning_policy"]["broad_exhaustive_search_is_primary_method"] = True
+        tampered["practice_reasoning_policy"]["practice_loop"] = ["search_everything", "answer"]
+        tampered["reinforcement_learning_policy"]["raw_external_answer_reinforcement_allowed"] = True
+        tampered["external_skill_policy"]["promotion_path"] = ["direct_install"]
+        tampered["work_growth_policy"]["promotion_requires_reviewed_result"] = False
+
+        validation = validate_closed_growth_contract(tampered)
+
+        self.assertFalse(validation["passed"])
+        self.assertIn("embodied_learning_blocks_usb_transfer", validation["failed_checks"])
+        self.assertIn("embodied_learning_requires_full_internalization", validation["failed_checks"])
+        self.assertIn("practice_reasoning_not_broad_search_first", validation["failed_checks"])
+        self.assertIn("practice_reasoning_uses_required_loop", validation["failed_checks"])
+        self.assertIn("reinforcement_blocks_raw_external_answers", validation["failed_checks"])
+        self.assertIn("identity_sources_are_paideia_only", validation["failed_checks"])
+        self.assertIn("identity_blocks_external_reasoning_kibo", validation["failed_checks"])
+        self.assertIn("external_skill_promotion_path_is_rewrite_test_review", validation["failed_checks"])
+        self.assertIn("work_growth_requires_reviewed_result", validation["failed_checks"])
+
     def test_training_blueprint_materializes_employable_agent_packet(self) -> None:
         from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
+        from ai22b.talent_foundry.closed_ecosystem import validate_closed_growth_contract
         from ai22b.talent_foundry.training_run import materialize_training_blueprint
 
         blueprint = create_agent_training_blueprint(
@@ -156,6 +195,12 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("건강 데이터", talent_plan["education_path"]["graduate_school"]["required_domains"])
         self.assertEqual(manifest["agent"]["role"], "생활건강 리서치 에이전트")
         self.assertEqual(manifest["llm_policy"]["role"], "application_engine_not_identity")
+        self.assertEqual(manifest["closed_growth_contract"]["schema"], "paideia-closed-growth-contract/v1")
+        self.assertTrue(validate_closed_growth_contract(manifest["closed_growth_contract"])["passed"])
+        self.assertIn("reasoning_kibo_engine", manifest["core_engine_boundaries"]["engine_ids"])
+        self.assertFalse(
+            manifest["closed_growth_contract"]["external_skill_policy"]["direct_activation_allowed"]
+        )
         self.assertEqual(employment_record["agent"]["role"], "생활건강 리서치 에이전트")
         self.assertEqual(employment_record["status"], "active")
         self.assertTrue(release_archive_exists)
@@ -4278,26 +4323,64 @@ class TalentFoundryTests(unittest.TestCase):
             copied_key_path = imported_manifest_path.parent / "source" / "id_rsa"
             compatibility_path = imported_manifest_path.parent / "paideia_compatibility_profile.json"
             review_card_path = imported_manifest_path.parent / "paideia_skill_review.md"
+            reference_doc_path = imported_manifest_path.parent / "REFERENCE.md"
+            generated_skill_path = imported_manifest_path.parent / "SKILL.md"
+            copied_original_skill_path = imported_manifest_path.parent / "source" / "SKILL.md"
+            copied_skill_reference_path = imported_manifest_path.parent / "source" / "SOURCE_SKILL_REFERENCE.md"
             copied_git_path = imported_manifest_path.parent / "source" / ".git" / "config"
             copied_venv_path = imported_manifest_path.parent / "source" / ".venv" / "pyvenv.cfg"
             copied_dependency_path = imported_manifest_path.parent / "source" / "node_modules" / "fixture-package" / "index.js"
             imported = json.loads(imported_manifest_path.read_text(encoding="utf-8"))
+            install_manifest = json.loads((kit_dir / "paideia_agent_install_manifest.json").read_text(encoding="utf-8"))
             compatibility = json.loads(compatibility_path.read_text(encoding="utf-8"))
             review_card = review_card_path.read_text(encoding="utf-8")
+            reference_doc_exists = reference_doc_path.exists()
+            generated_skill_exists = generated_skill_path.exists()
+            copied_skill_reference_exists = copied_skill_reference_path.exists()
+            copied_original_skill_exists = copied_original_skill_path.exists()
+            copied_env_exists = copied_env_path.exists()
+            copied_key_exists = copied_key_path.exists()
+            copied_git_exists = copied_git_path.exists()
+            copied_venv_exists = copied_venv_path.exists()
+            copied_dependency_exists = copied_dependency_path.exists()
             doctor = doctor_agent_program(kit_dir / "22b_paideia_agent_program.json")
+            tampered_imported = dict(imported)
+            tampered_imported["activation"] = {**tampered_imported["activation"], "status": "enabled"}
+            tampered_imported["safety_contract"] = {
+                **tampered_imported["safety_contract"],
+                "execute_imported_code": True,
+            }
+            imported_manifest_path.write_text(
+                json.dumps(tampered_imported, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            tampered_doctor = doctor_agent_program(kit_dir / "22b_paideia_agent_program.json")
 
         self.assertEqual(report["schema"], "ai22b-paideia-external-skill-migration/v1")
         self.assertEqual(report["imported_count"], 1)
+        self.assertEqual(report["closed_growth_contract"]["schema"], "paideia-closed-growth-contract/v1")
+        self.assertEqual(report["closed_growth_contract"]["ecosystem_model"], "closed_curated_growth_ecosystem")
+        self.assertTrue(report["migration_policy"]["external_skills_are_reference_material"])
+        self.assertTrue(report["migration_policy"]["paideia_native_rewrite_required"])
+        self.assertFalse(report["migration_policy"]["external_skill_identity_injection_allowed"])
+        self.assertFalse(report["migration_policy"]["direct_skill_copy_allowed"])
+        self.assertFalse(report["imported_skills"][0]["active_skill_descriptor_created"])
+        self.assertTrue(report["imported_skills"][0]["reference_document"].endswith("REFERENCE.md"))
         self.assertEqual(report["safety_contract"]["schema"], "paideia-skill-migration-safety-contract/v1")
         self.assertFalse(report["safety_contract"]["imported_code_executed"])
         self.assertFalse(report["safety_contract"]["sensitive_files_copied"])
         self.assertTrue(report["safety_contract"]["all_imported_skills_disabled"])
+        self.assertTrue(report["safety_contract"]["activation_policy"]["paideia_native_rewrite_required"])
+        self.assertFalse(report["safety_contract"]["activation_policy"]["external_skill_identity_injection_allowed"])
         self.assertEqual(report["compatibility_summary"]["schema"], "paideia-skill-migration-compatibility-summary/v1")
         self.assertTrue(report["compatibility_summary"]["all_activation_gates_locked"])
         self.assertIn("network_access", report["compatibility_summary"]["capability_request_ids"])
         self.assertIn("subprocess_execution", report["compatibility_summary"]["capability_request_ids"])
         self.assertEqual(imported["status"], "quarantined_pending_boss_review")
         self.assertEqual(imported["activation"]["status"], "disabled")
+        self.assertEqual(imported["closed_growth_contract"]["schema"], "paideia-closed-growth-contract/v1")
+        self.assertFalse(imported["identity_policy"]["external_skill_identity_injection_allowed"])
+        self.assertTrue(imported["identity_policy"]["original_skill_is_reference_material"])
         self.assertIn("remote_shell_pipe", imported["risk_flags"])
         self.assertIn("recursive_delete", imported["risk_flags"])
         self.assertIn("network_listener", imported["risk_flags"])
@@ -4305,6 +4388,11 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(imported["safety_contract"]["schema"], "paideia-imported-skill-safety-contract/v1")
         self.assertFalse(imported["safety_contract"]["activation_allowed"])
         self.assertFalse(imported["safety_contract"]["execute_imported_code"])
+        self.assertFalse(imported["safety_contract"]["active_skill_descriptor_created"])
+        self.assertFalse(imported["safety_contract"]["identity_injection_allowed"])
+        self.assertFalse(imported["safety_contract"]["memory_import_allowed"])
+        self.assertFalse(imported["safety_contract"]["reasoning_kibo_import_allowed"])
+        self.assertTrue(imported["safety_contract"]["reference_only_until_paideia_rewrite"])
         self.assertFalse(imported["safety_contract"]["sensitive_files_copied"])
         self.assertGreaterEqual(imported["safety_contract"]["sensitive_file_skip_count"], 2)
         self.assertEqual(imported["compatibility_profile"]["schema"], "paideia-imported-skill-compatibility-profile/v1")
@@ -4314,13 +4402,20 @@ class TalentFoundryTests(unittest.TestCase):
         capability_ids = {item["id"] for item in compatibility["capability_requests"]}
         self.assertIn("destructive_filesystem", capability_ids)
         self.assertIn("credential_access", capability_ids)
+        self.assertIn("REFERENCE.md", compatibility["activation_gate"]["required_artifacts"])
         self.assertIn("disposable_workspace_test_result.json", compatibility["activation_gate"]["required_artifacts"])
         self.assertIn("Schema: `paideia-imported-skill-review-card/v1`", review_card)
-        self.assertFalse(copied_env_path.exists())
-        self.assertFalse(copied_key_path.exists())
-        self.assertFalse(copied_git_path.exists())
-        self.assertFalse(copied_venv_path.exists())
-        self.assertFalse(copied_dependency_path.exists())
+        self.assertTrue(reference_doc_exists)
+        self.assertFalse(generated_skill_exists)
+        self.assertTrue(copied_skill_reference_exists)
+        self.assertFalse(copied_original_skill_exists)
+        self.assertIn("imported_skill_references", install_manifest["entrypoints"])
+        self.assertNotIn("imported_skills", install_manifest["entrypoints"])
+        self.assertFalse(copied_env_exists)
+        self.assertFalse(copied_key_exists)
+        self.assertFalse(copied_git_exists)
+        self.assertFalse(copied_venv_exists)
+        self.assertFalse(copied_dependency_exists)
         skipped_dirs = {
             item["path"].replace("\\", "/")
             for item in imported["skipped_files"]
@@ -4339,6 +4434,17 @@ class TalentFoundryTests(unittest.TestCase):
             "paideia-imported-skill-compatibility-profile/v1",
         )
         self.assertEqual(doctor_skill["compatibility_activation_gate"], "locked_pending_owner_allowlist")
+        self.assertEqual(doctor_skill["closed_growth_contract_schema"], "paideia-closed-growth-contract/v1")
+        self.assertTrue(doctor_skill["paideia_native_rewrite_required"])
+        self.assertFalse(doctor_skill["external_skill_identity_injection_allowed"])
+        self.assertFalse(doctor_skill["active_skill_descriptor_created"])
+        self.assertEqual(doctor_skill["active_skill_descriptors"], [])
+        self.assertFalse(tampered_doctor["passed"])
+        self.assertFalse(tampered_doctor["checks"]["imported_skills"]["passed"])
+        self.assertEqual(
+            tampered_doctor["checks"]["imported_skills"]["details"]["unsafe_enabled_imports"][0]["activation"],
+            "enabled",
+        )
 
     def test_discover_external_agent_assets_skips_dependency_and_vcs_dirs(self) -> None:
         from ai22b.talent_foundry.skill_migration import discover_external_agent_assets
@@ -5514,6 +5620,14 @@ class TalentFoundryTests(unittest.TestCase):
             doctor_path = Path(tmp) / "release_doctor_report.json"
             report = doctor_agent_release_bundle(outputs["release_bundle"], output_path=doctor_path)
             saved = json.loads(doctor_path.read_text(encoding="utf-8"))
+            bundle_manifest_path = Path(outputs["release_bundle"]) / "bundle_manifest.json"
+            tampered_manifest = json.loads(bundle_manifest_path.read_text(encoding="utf-8"))
+            tampered_manifest["closed_growth_contract"]["external_skill_policy"]["promotion_path"] = ["direct_install"]
+            bundle_manifest_path.write_text(
+                json.dumps(tampered_manifest, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            tampered_report = doctor_agent_release_bundle(outputs["release_bundle"])
 
         self.assertEqual(report["schema"], "ai-talent-release-bundle-doctor/v1")
         self.assertTrue(report["passed"])
@@ -5527,6 +5641,12 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("assemble_specialist_team", report["checks"]["entrypoints"]["available"])
         self.assertIn("run_specialist_team_cycle", report["checks"]["entrypoints"]["available"])
         self.assertEqual(report["checks"]["console_template"]["post_hire_mode"], "projection_swarm")
+        self.assertFalse(tampered_report["passed"])
+        self.assertFalse(tampered_report["checks"]["local_only_policy"]["passed"])
+        self.assertIn(
+            "external_skill_promotion_path_is_rewrite_test_review",
+            tampered_report["checks"]["local_only_policy"]["closed_growth_contract_validation"]["failed_checks"],
+        )
 
     def test_release_bundle_doctor_ignores_post_install_runtime_outputs(self) -> None:
         from ai22b.talent_foundry.demo import run_demo

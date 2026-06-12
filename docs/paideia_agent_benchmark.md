@@ -59,8 +59,9 @@
 
 6. 외부 스킬 마이그레이션
    - Hermes/OpenClaw/generic skill 폴더를 `migrate-agent-assets`로 가져올 수 있습니다.
-   - `SKILL.md`, `skill.yaml`, `README.md` 기반 폴더를 감지하고 Paideia kit의 `skills/imported/<runtime>/<skill>/`로 복사합니다.
-   - 원본 코드는 실행하지 않고, wrapper `SKILL.md`와 `paideia_skill_manifest.json`을 생성합니다.
+   - `SKILL.md`, `skill.yaml`, `README.md` 기반 폴더를 감지하고 Paideia kit의 `skills/imported/<runtime>/<skill>/`로 참고자료만 복사합니다.
+   - 원본 코드는 실행하지 않고, 외부 `SKILL.md`는 `SOURCE_SKILL_REFERENCE.md`로 바꾸며, 활성 스킬 descriptor 대신 `REFERENCE.md`, `paideia_skill_manifest.json`, `paideia_compatibility_profile.json`을 생성합니다.
+   - 기본 마이그레이션 모드는 `wrap_quarantine_reference_rewrite_then_allowlist`입니다.
    - 기본 상태는 `quarantined_pending_boss_review`와 `activation.status=disabled`입니다.
    - `curl|bash`, `Invoke-Expression`, recursive delete, credential access, network listener 같은 위험 패턴을 표시합니다.
 

@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from ai22b.talent_foundry.closed_ecosystem import build_closed_growth_contract, validate_closed_growth_contract
 from ai22b.talent_foundry.dossier import build_release_hiring_dossier, render_hiring_dossier_markdown
 
 
@@ -125,6 +126,7 @@ def _write_text(path: Path, content: str) -> None:
 
 
 def _bundle_manifest(files: list[str], *, include_cohort: bool) -> dict[str, Any]:
+    closed_growth_contract = build_closed_growth_contract(context="release_bundle_manifest")
     return {
         "schema": BUNDLE_SCHEMA,
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -132,6 +134,8 @@ def _bundle_manifest(files: list[str], *, include_cohort: bool) -> dict[str, Any
         "public_distribution_ready": True,
         "contains_private_runtime_state": False,
         "llm_policy": "application_engine_not_identity",
+        "closed_growth_contract": closed_growth_contract,
+        "core_engine_boundaries": closed_growth_contract["core_engine_boundaries"],
         "files": files,
         "included_artifacts": {
             "agent_manifest": "agent_manifest.json",
@@ -1031,9 +1035,11 @@ def doctor_agent_release_bundle(bundle_dir: Path, *, output_path: Path | None = 
     ]
     missing_template_fields = [field for field in template_required if field not in template]
     post_hire_mode = template.get("post_hire_mode")
+    closed_growth_validation = validate_closed_growth_contract(manifest.get("closed_growth_contract", {}))
     local_policy_passed = (
         manifest.get("contains_private_runtime_state") is False
         and manifest.get("llm_policy") == "application_engine_not_identity"
+        and closed_growth_validation.get("passed") is True
         and not forbidden_file_hits
         and not forbidden_content_hits
         and "보스 승인 없는 외부 업로드 금지" in manifest.get("guardrails", [])
@@ -1058,6 +1064,9 @@ def doctor_agent_release_bundle(bundle_dir: Path, *, output_path: Path | None = 
             "passed": local_policy_passed,
             "contains_private_runtime_state": manifest.get("contains_private_runtime_state"),
             "llm_policy": manifest.get("llm_policy"),
+            "closed_growth_contract_schema": manifest.get("closed_growth_contract", {}).get("schema"),
+            "closed_growth_ecosystem_model": manifest.get("closed_growth_contract", {}).get("ecosystem_model"),
+            "closed_growth_contract_validation": closed_growth_validation,
             "forbidden_file_hits": forbidden_file_hits,
             "forbidden_content_hits": forbidden_content_hits,
             "scanned_release_files": scanned_release_files,

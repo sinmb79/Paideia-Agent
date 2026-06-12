@@ -21,6 +21,8 @@ The intent is to make the hired Paideia agent behave like the local Hermes agent
   - Paideia-owned adapter boundary for Hermes `openai-codex` credential resolution and LLM calls.
   - Returns only public-safe credential status fields.
   - Does not return or store raw OAuth token values.
+  - Temporarily imports Hermes modules, restores `sys.path` / `sys.modules`, and rejects unreviewed Hermes roots.
+  - A Hermes root must have `.paideia_codex_oauth_adapter_review.json` with schema `paideia-codex-oauth-adapter-review/v1`, or be listed in `PAIDEIA_TRUSTED_HERMES_AGENT_ROOTS`.
 
 - `src/ai22b/talent_foundry/telegram_bridge.py`
   - Official repo-owned Telegram bridge module.
@@ -166,6 +168,7 @@ Telegram notification was sent successfully in the private operator environment.
 
 1. Add a first-run doctor check for:
    - Hermes agent root exists.
+   - Hermes agent root has a Paideia review marker or appears in `PAIDEIA_TRUSTED_HERMES_AGENT_ROOTS`.
    - `openai-codex` credentials are available.
    - Codex OAuth live smoke can complete without exposing token values.
 2. Keep the product-level model policy explicit:

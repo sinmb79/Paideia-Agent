@@ -454,6 +454,8 @@ def _skills_from_event(source: str, event: dict[str, Any], event_reference: dict
 
 
 def _quality_passes(quality_label: dict[str, Any]) -> bool:
+    if quality_label.get("force_quarantine") is True:
+        return False
     score = int(quality_label.get("score", 0))
     status = str(quality_label.get("status", ""))
     return score >= PROMOTION_SCORE and status in {"verified", "passed", "approved"}

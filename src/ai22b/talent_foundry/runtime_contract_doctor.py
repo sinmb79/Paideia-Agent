@@ -9,6 +9,7 @@ from typing import Any
 
 from ai22b.config import PROJECT_ROOT
 from ai22b.talent_foundry.agent_runner import run_agent_from_manifest
+from ai22b.talent_foundry.closed_ecosystem import build_closed_growth_contract, validate_closed_growth_contract
 from ai22b.talent_foundry.learning_loop import build_reasoning_kernel, create_learning_ledger
 from ai22b.talent_foundry.llm_runtime import build_llm_runtime_config
 
@@ -603,6 +604,8 @@ def doctor_runtime_contract(
     root = (repo_root or PROJECT_ROOT).resolve()
     live_contract = run_live_agent_loop_contract()
     fail_closed_contract = run_fail_closed_runtime_contract()
+    closed_growth_contract = build_closed_growth_contract(context="runtime_contract_doctor")
+    closed_growth_validation = validate_closed_growth_contract(closed_growth_contract)
     checks: list[dict[str, Any]] = []
     _check(
         checks,
@@ -632,6 +635,18 @@ def doctor_runtime_contract(
             "chat_status": fail_closed_contract.get("details", {}).get("chat_status")
             if isinstance(fail_closed_contract.get("details"), dict)
             else None,
+        },
+    )
+    _check(
+        checks,
+        "closed_growth_contract_passed",
+        closed_growth_validation.get("passed") is True,
+        details={
+            "schema": closed_growth_contract.get("schema"),
+            "status": closed_growth_validation.get("status"),
+            "ecosystem_model": closed_growth_contract.get("ecosystem_model"),
+            "failed_checks": closed_growth_validation.get("failed_checks"),
+            "missing_core_engines": closed_growth_validation.get("missing_core_engines"),
         },
     )
     public_safe_packets = [
@@ -666,6 +681,8 @@ def doctor_runtime_contract(
         "artifacts": {
             "live_agent_loop_contract": live_contract,
             "fail_closed_runtime_contract": fail_closed_contract,
+            "closed_growth_contract": closed_growth_contract,
+            "closed_growth_contract_validation": closed_growth_validation,
         },
         "public_safe": public_safe,
     }
