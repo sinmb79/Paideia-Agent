@@ -1,4 +1,4 @@
-# Paideia Agent Benchmark: Hermes/OpenClaw Lessons
+﻿# Paideia Agent Benchmark: Hermes/OpenClaw Lessons
 
 작성일: 2026-05-31
 
@@ -53,16 +53,16 @@
    - sample talent, grham-쥬니어, 미래 전문 인재는 서로 다른 install kit와 기억 파일을 갖습니다.
 
 5. 스킬/채널 보안
-   - community skills와 external channels는 기본 비활성화입니다.
+   - community procedures는 외부 참고자료로만 검역하고, external channels는 기본 비활성화입니다.
    - OpenClaw 스타일 gateway는 매니페스트만 준비하고, loopback/private network 정책을 확인하기 전까지 실행하지 않습니다.
    - Hermes/OpenClaw 어댑터는 `adapter_manifests/`에 export shape만 둡니다.
 
-6. 외부 스킬 마이그레이션
-   - Hermes/OpenClaw/generic skill 폴더를 `migrate-agent-assets`로 가져올 수 있습니다.
-   - `SKILL.md`, `skill.yaml`, `README.md` 기반 폴더를 감지하고 Paideia kit의 `skills/imported/<runtime>/<skill>/`로 참고자료만 복사합니다.
-   - 원본 코드는 실행하지 않고, 외부 `SKILL.md`는 `SOURCE_SKILL_REFERENCE.md`로 바꾸며, 활성 스킬 descriptor 대신 `REFERENCE.md`, `paideia_skill_manifest.json`, `paideia_compatibility_profile.json`을 생성합니다.
-   - 기본 마이그레이션 모드는 `wrap_quarantine_reference_rewrite_then_allowlist`입니다.
-   - 기본 상태는 `quarantined_pending_boss_review`와 `activation.status=disabled`입니다.
+6. 외부 참고자료 검역
+   - Hermes/OpenClaw/generic 절차 폴더는 `intake-external-references`로 활성 스킬이 아니라 참고자료 검역함에만 복사할 수 있습니다.
+   - `SKILL.md`, `skill.yaml`, `README.md` 기반 폴더를 감지하고 Paideia kit의 `references/external/<runtime>/<reference>/`로 참고자료만 복사합니다.
+   - 원본 코드는 실행하지 않고, 외부 `SKILL.md`는 `SOURCE_SKILL_REFERENCE.md`로 바꾸며, 활성 스킬 descriptor 대신 `REFERENCE.md`, `paideia_external_reference_manifest.json`, `paideia_reference_compatibility_profile.json`을 생성합니다.
+   - 기본 intake 모드는 `quarantine_reference_rewrite_as_training_only`입니다.
+   - 기본 상태는 `quarantined_reference_only`와 `direct_external_use.status=forbidden`입니다.
    - `curl|bash`, `Invoke-Expression`, recursive delete, credential access, network listener 같은 위험 패턴을 표시합니다.
 
 ## 현재 구현
@@ -71,7 +71,7 @@
   - `build-agent-program`
   - `build-paideia-agent-kit`
   - `doctor-agent-program`
-  - `migrate-agent-assets`
+  - `intake-external-references`
   - `run-agent-program-chat`
 
 - 설치 키트 산출물
@@ -83,18 +83,18 @@
   - `adapter_manifests/codex_native.json`
   - `adapter_manifests/hermes_style.json`
   - `adapter_manifests/openclaw_style.json`
-  - `skills/imported/<runtime>/<skill>/paideia_skill_manifest.json`
+  - `references/external/<runtime>/<reference>/paideia_external_reference_manifest.json`
 
-## 마이그레이션 명령
+## 외부 참고자료 검역 명령
 
 ```powershell
-ai22b-talent-foundry migrate-agent-assets `
+ai22b-talent-foundry intake-external-references `
   --source C:\path\to\openclaw-or-hermes-skill `
   --paideia-kit C:\path\to\paideia_agent_kit `
   --source-runtime openclaw
 ```
 
-마이그레이션은 사용 가능 상태로 켜지지 않습니다. Paideia의 원칙은 "가져오기와 활성화는 분리한다"입니다. 보스가 내용을 검토하고 테스트한 뒤에만 교육축 또는 절차 스킬로 승격합니다.
+검역 자료는 사용 가능 상태로 켜지지 않습니다. Paideia의 원칙은 "외부 스킬은 Paideia 스킬이 아니다"입니다. 보스가 내용을 검토하더라도 원본 절차를 활성화하지 않고, 유용한 아이디어만 Paideia-native 교육과제, guided practice, timed exam/task trial, 업무 증거를 거쳐 내재화합니다.
 
 ## Sources
 
@@ -106,3 +106,4 @@ ai22b-talent-foundry migrate-agent-assets `
 - OpenClaw troubleshooting: https://openclaw.com.au/troubleshooting
 - OpenClaw active memory docs: https://docs.openclaw.ai/concepts/active-memory
 - OpenClaw per-user memory setup guide: https://hindsight.vectorize.io/guides/2026/04/15/guide-openclaw-per-user-memory-across-channels-setup
+

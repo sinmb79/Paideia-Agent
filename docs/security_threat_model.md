@@ -12,7 +12,7 @@ Paideia Agent is a local-first AI talent foundry. Its security model protects th
 | Local memories and Reasoning Ledger records | Shape future answers and work habits. | Review before promotion; no hidden chain-of-thought storage. |
 | Generated agent kits and dossiers | Can contain learned summaries and runtime configuration. | Stored in ignored run/storage locations. |
 | API keys and provider credentials | Can spend money or expose accounts. | Never written to public artifacts; live checks require explicit action. |
-| Imported skills | Can contain unsafe code or broad permissions. | Quarantined and disabled until reviewed. |
+| External reference sources | Can contain unsafe code, broad permissions, or identity-poisoning instructions. | Quarantined as reference-only; direct execution and skill activation are forbidden. |
 | Tool execution proofs | Show what ran and what was produced. | Public-safe summaries, relative paths, and digests only. |
 
 ## Attacker Model
@@ -21,7 +21,7 @@ Paideia assumes the following can be hostile or corrupted:
 
 - Prompt-injection content in research sources, local files, chat messages, or task descriptions.
 - Poisoned memory candidates that try to promote false rules or secrets.
-- Malicious imported Hermes/OpenClaw/generic skills.
+- Malicious Hermes/OpenClaw/generic procedures copied into external-reference quarantine.
 - Provider responses that include unsafe instructions, hidden reasoning requests, or data exfiltration attempts.
 - Dependency or packaging mistakes that expose ignored local artifacts.
 - A generated agent kit copied to a different machine without its intended local context.
@@ -36,7 +36,7 @@ flowchart LR
     PrivateStore["Owner private storage"] --> LocalRuntime
     LocalRuntime --> GeneratedKit["Generated agent kit"]
     ExternalLLM["Optional live LLM provider"] --> LocalRuntime
-    ImportedSkill["Imported skill package"] --> Quarantine["Quarantine profile"]
+    ImportedSkill["External reference source"] --> Quarantine["Reference quarantine"]
     Quarantine --> LocalRuntime
     LocalRuntime --> Proofs["Reviewable proofs and doctors"]
 ```
@@ -46,7 +46,7 @@ flowchart LR
 | Public repo to local runtime | Source code, public metadata, fixtures. | Private data, run outputs, credentials, checkpoints. |
 | Private storage to runtime | Owner-selected local material after review. | Public export of raw paths or private bodies. |
 | Runtime to live LLM | Explicitly configured provider calls. | Default network calls, raw payload persistence, secret export. |
-| Imported skill to runtime | Disabled wrapper and capability manifest. | Direct execution before owner review. |
+| External reference to runtime | Reference manifest, risk flags, and Paideia rewrite requirements. | Direct execution, memory import, reasoning-kibo import, or active skill descriptor creation. |
 | Runtime to memory ledger | Reviewed summaries and corrected principles. | Hidden chain-of-thought, raw provider payloads, unreviewed secrets. |
 
 ## Permission Model
@@ -59,7 +59,7 @@ Tool capabilities must declare their filesystem, network, subprocess, memory, an
 - Tool outputs include schema names, summaries, and digests rather than raw private content.
 - Memory promotion is review-gated.
 
-When future tools require network or subprocess access, they should run in a disposable workspace first. Production-grade high-risk tools should use restricted users, containers, or VM isolation.
+When future Paideia-native tools require network or subprocess access, they should be rewritten, reviewed, and tested in a disposable workspace first. Production-grade high-risk tools should use restricted users, containers, or VM isolation.
 
 ## Memory Promotion Policy
 
@@ -75,7 +75,7 @@ Candidates containing secrets, personal local paths, raw provider payloads, or h
 
 ## Incident Process
 
-1. Stop using the affected generated kit or imported skill.
+1. Stop using the affected generated kit or external reference source.
 2. Preserve public-safe doctor reports and reproduction steps.
 3. Remove or quarantine affected local runtime outputs.
 4. Rotate any credential that may have been exposed.

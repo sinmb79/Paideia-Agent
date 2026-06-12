@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
@@ -134,11 +134,11 @@ CONSOLE_QUESTIONS = [
         "advanced_only": True,
     },
     {
-        "id": "skills_mode",
-        "label": "스킬",
-        "prompt": "Hermes/OpenClaw 스타일 스킬은 어떻게 처리할까요?",
-        "default": "quarantine_import_only",
-        "step": "skills",
+        "id": "external_reference_mode",
+        "label": "External refs",
+        "prompt": "How should Hermes/OpenClaw/community procedures be handled?",
+        "default": "reference_quarantine_only",
+        "step": "external_references",
     },
     {
         "id": "talent_source",
@@ -304,7 +304,7 @@ WIZARD_STEPS = [
     ("workspace", "Workspace", "Choose owner, local storage, and file layout."),
     ("gateway_channels", "Gateway/Channels", "Choose local chat surface and whether external channels stay disabled."),
     ("web_search", "Web/Search", "Optionally configure web search for future research tasks."),
-    ("skills", "Skills", "Import Hermes/OpenClaw-style skills as reviewed, quarantined extensions."),
+    ("external_references", "External References", "Quarantine third-party procedures as reference material only."),
     ("education_path", "Education Path", "Choose owner self-extension, public role model, or custom role-model flow."),
     ("runtime", "Runtime", "Choose first goal, post-hire mode, and simulation rollouts."),
     ("identity", "Agent Identity", "Prepare local Agent ID Card payload without external registration."),
@@ -356,11 +356,11 @@ def _question_choices(question_id: str) -> list[dict[str, str]]:
             {"id": "browser_manual", "label": "Manual browser research"},
             {"id": "provider_manifest_only", "label": "Provider manifest only"},
         ]
-    if question_id == "skills_mode":
+    if question_id == "external_reference_mode":
         return [
-            {"id": "quarantine_import_only", "label": "Import but quarantine until review"},
-            {"id": "skip_now", "label": "Skip skills now"},
-            {"id": "review_existing", "label": "Review existing local skills"},
+            {"id": "reference_quarantine_only", "label": "Reference quarantine only"},
+            {"id": "skip_now", "label": "Skip external references"},
+            {"id": "review_existing", "label": "Review existing references"},
         ]
     if question_id == "talent_source":
         return [
@@ -442,6 +442,12 @@ def _normalized_answers(answers: dict[str, Any]) -> dict[str, str]:
                 raise ValueError(f"Missing required console answer: {key}")
             value = question.get("default", "")
         normalized[key] = str(value).strip()
+    if not normalized.get("external_reference_mode"):
+        normalized["external_reference_mode"] = str(
+            answers.get("skills_mode") or "reference_quarantine_only"
+        ).strip()
+    if normalized["external_reference_mode"] == "quarantine_import_only":
+        normalized["external_reference_mode"] = "reference_quarantine_only"
     if normalized.get("talent_source") == "owner_self_extension":
         normalized["domain"] = "owner_self_extension"
         normalized["role_model_id"] = ""
@@ -495,7 +501,9 @@ def collect_console_answers(input_func: Callable[[str], str] = input) -> dict[st
     answers: dict[str, str] = {}
     mode: str | None = None
     print("Paideia Agent onboarding wizard")
-    print("OpenClaw-style flow: config -> model/auth -> workspace -> gateway/channels -> skills -> education -> health -> finish")
+    print(
+        "Paideia flow: config -> model/auth -> workspace -> gateway/channels -> external references -> education -> health -> finish"
+    )
     for question in questions_with_choices():
         if question.get("advanced_only") and mode != "advanced":
             continue
@@ -544,7 +552,7 @@ def build_openclaw_style_wizard(
         "quickstart_defaults": {
             "gateway_mode": "local_loopback",
             "channel_mode": "local_only",
-            "skills_mode": "quarantine_import_only",
+            "external_reference_mode": "reference_quarantine_only",
             "agent_id_card_mode": "payload_only",
             "simulation_rollouts_enabled": "yes",
         },
@@ -677,10 +685,11 @@ def build_onboarding_choice_manifest(
                 "external_channels_enabled": normalized.get("channel_mode") not in {"local_only", "later", ""},
                 "external_channels_review_required": True,
             },
-            "skills": {
-                "mode": normalized.get("skills_mode"),
-                "migration_policy": "quarantine_import_only_until_review",
+            "external_references": {
+                "mode": normalized.get("external_reference_mode"),
+                "intake_policy": "reference_quarantine_only_rewrite_as_paideia_training",
                 "external_code_execution_during_onboarding": False,
+                "direct_external_skill_activation_allowed": False,
             },
             "education_path": {
                 "talent_source": normalized.get("talent_source"),
@@ -1887,9 +1896,10 @@ def write_openclaw_style_config(
             "mode": normalized.get("channel_mode", "local_only"),
             "external_channels": "disabled_until_explicit_configuration",
         },
-        "skills": {
-            "mode": normalized.get("skills_mode", "quarantine_import_only"),
-            "community_skills": "manual_review_required",
+        "external_references": {
+            "mode": normalized.get("external_reference_mode", "reference_quarantine_only"),
+            "community_procedures": "reference_quarantine_only",
+            "direct_external_skill_activation_allowed": False,
         },
         "education_path": {
             "talent_source": normalized.get("talent_source"),

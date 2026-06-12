@@ -183,7 +183,7 @@ REQUIRED_PUBLIC_PROGRAM_COMMANDS = {
     "build-paideia-agent-kit",
     "doctor-agent-program",
     "doctor-paideia-kit-first-run",
-    "migrate-agent-assets",
+    "intake-external-references",
     "run-agent-program-chat",
     "run-hired-agent-job-cycle",
     "record-hired-learning",

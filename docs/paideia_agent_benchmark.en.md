@@ -27,7 +27,7 @@ Paideia adapts this as:
 - `learning_ledger.json` for quality-gated experience promotion,
 - `memory_substrate.json` for bounded recall,
 - adapter manifests for future external runtimes,
-- skill migration support for external skill folders.
+- external-reference quarantine support for third-party procedure folders.
 
 What Paideia does differently:
 
@@ -45,39 +45,41 @@ Paideia adapts this as:
 - per-talent install kits,
 - `doctor-agent-program`,
 - local storage outside the source tree,
-- `skills/imported/<runtime>/<skill>/` for migrated skills,
+- `references/external/<runtime>/<reference>/` for quarantined external reference material,
 - bounded active memory routing into chat/work runs,
 - future gateway adapters that start disabled.
 
 What Paideia does differently:
 
-- imported skills are quarantined by default,
+- external procedures are quarantined as reference material by default,
 - external channels are disabled until explicitly configured,
 - each hired talent receives isolated runtime records,
-- skill promotion requires owner review and test evidence.
+- useful ideas require Paideia-native rewrite, guided practice, timed exam or task trial, owner review, and test evidence before they can influence memory or reasoning kibo.
 
-## External Skill Migration
+## External Reference Quarantine
 
 Paideia supports this command:
 
 ```powershell
-ai22b-talent-foundry migrate-agent-assets `
+ai22b-talent-foundry intake-external-references `
   --source C:\path\to\hermes-or-openclaw-skill `
   --paideia-kit C:\path\to\paideia-agent-kit `
   --source-runtime hermes
 ```
 
-The migration layer detects `SKILL.md`, `skill.yaml`, `skill.yml`, `hermes.yaml`, `hermes.yml`, and README-based generic skill folders. It copies source files into the Paideia kit as reference material, rewrites source `SKILL.md` files to `SOURCE_SKILL_REFERENCE.md`, writes `REFERENCE.md`, and creates `paideia_skill_manifest.json`, `paideia_compatibility_profile.json`, and `paideia_skill_review.md`. It does not create an active `SKILL.md` descriptor.
+The reference-intake layer detects `SKILL.md`, `skill.yaml`, `skill.yml`, `hermes.yaml`, `hermes.yml`, and README-based generic procedure folders. It copies source files into the Paideia kit as reference material, rewrites source `SKILL.md` files to `SOURCE_SKILL_REFERENCE.md`, writes `REFERENCE.md`, and creates `paideia_external_reference_manifest.json`, `paideia_reference_compatibility_profile.json`, and `paideia_reference_review.md`. It does not create an active `SKILL.md` descriptor.
 
 Default policy:
 
-- `execute_imported_code = false`
-- `activation.status = disabled`
+- `execute_external_code = false`
+- `direct_external_use.status = forbidden`
 - `boss_review_required = true`
 - `third_party_skills_trusted = false`
-- `migration_mode = wrap_quarantine_reference_rewrite_then_allowlist`
-- external skills are reference-only until rewritten as Paideia-native training, tested in a disposable workspace, and reviewed
-- activation gate remains locked until owner allowlist and disposable workspace test evidence exist
+- `intake_mode = quarantine_reference_rewrite_as_training_only`
+- `guided_practice_required = true`
+- `timed_exam_or_task_trial_required = true`
+- external procedures remain reference-only until useful ideas are rewritten as Paideia-native training, practiced, tested, and reviewed
+- the internalization gate remains locked until rewrite, guided-practice, timed-exam, owner-review, and work-evidence artifacts exist
 
 Risk scanning currently flags:
 

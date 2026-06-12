@@ -92,7 +92,10 @@ from ai22b.talent_foundry.role_models import (
     summarize_role_model,
 )
 from ai22b.talent_foundry.same_sky_eval import run_same_sky_eval
-from ai22b.talent_foundry.skill_migration import migrate_external_agent_assets
+from ai22b.talent_foundry.skill_migration import (
+    intake_external_agent_references,
+    migrate_external_agent_assets,
+)
 from ai22b.talent_foundry.simulation_rollouts import evaluate_simulation_rollouts
 from ai22b.talent_foundry.source_sbom import build_source_sbom
 from ai22b.talent_foundry.registry import (
@@ -1049,9 +1052,22 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Return exit code 2 when the kit first-run doctor report does not pass.",
     )
 
+    intake_external_references_command = subparsers.add_parser(
+        "intake-external-references",
+        help="Copy Hermes/OpenClaw/generic procedures into external-reference quarantine without activating them.",
+    )
+    intake_external_references_command.add_argument("--source", required=True)
+    intake_external_references_command.add_argument("--paideia-kit", required=True)
+    intake_external_references_command.add_argument(
+        "--source-runtime",
+        choices=["hermes", "openclaw", "generic"],
+        default="generic",
+    )
+    intake_external_references_command.add_argument("--output")
+
     migrate_agent_assets_command = subparsers.add_parser(
         "migrate-agent-assets",
-        help="Import Hermes/OpenClaw/generic skills into a Paideia Agent kit as quarantined wrappers.",
+        help=argparse.SUPPRESS,
     )
     migrate_agent_assets_command.add_argument("--source", required=True)
     migrate_agent_assets_command.add_argument("--paideia-kit", required=True)
@@ -2139,8 +2155,27 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 2
         return 0
 
+    if args.command == "intake-external-references":
+        output_path = (
+            Path(args.output)
+            if args.output
+            else Path(args.paideia_kit) / "paideia_external_reference_intake_report.json"
+        )
+        intake_external_agent_references(
+            Path(args.source),
+            paideia_kit_dir=Path(args.paideia_kit),
+            source_runtime=args.source_runtime,
+            output_path=output_path,
+        )
+        print(str(output_path))
+        return 0
+
     if args.command == "migrate-agent-assets":
-        output_path = Path(args.output) if args.output else Path(args.paideia_kit) / "paideia_skill_migration_report.json"
+        output_path = (
+            Path(args.output)
+            if args.output
+            else Path(args.paideia_kit) / "paideia_external_reference_intake_report.json"
+        )
         migrate_external_agent_assets(
             Path(args.source),
             paideia_kit_dir=Path(args.paideia_kit),

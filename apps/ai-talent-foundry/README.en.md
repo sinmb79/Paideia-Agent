@@ -88,7 +88,7 @@ ai22b-talent-foundry doctor-agent-program `
   --program C:\path\to\paideia-agent-kit\22b_paideia_agent_program.json
 ```
 
-The kit contains onboarding files, adapter manifests, memory records, a hiring dossier, and a local chat entrypoint. External Hermes/OpenClaw/generic skills can be imported with `migrate-agent-assets`, but they remain disabled until reviewed.
+The kit contains onboarding files, adapter manifests, memory records, a hiring dossier, and a local chat entrypoint. External Hermes/OpenClaw/generic procedures are not imported as Paideia skills; they can only be copied into `references/external/` with `intake-external-references` as quarantined reference material for later Paideia-native rewriting.
 
 ## Closed Growth Contract
 
@@ -96,7 +96,7 @@ The foundry now emits a `paideia-closed-growth-contract/v1` with every blueprint
 
 Important runtime consequences:
 
-- Imported Hermes/OpenClaw/community skills are stored as `REFERENCE.md` and `SOURCE_SKILL_REFERENCE.md`, not active `SKILL.md` descriptors.
+- Hermes/OpenClaw/community procedures are stored as `REFERENCE.md` and `SOURCE_SKILL_REFERENCE.md` quarantine records, not active `SKILL.md` descriptors.
 - Team members must each have their own training evidence, dossier, resume, memory substrate, and employment record.
 - Chat learning candidates are quarantined before Boss review and cannot directly update the reasoning kibo.
 - ChatGPT/Codex OAuth can be used as an LLM backend, but it remains an application engine. It does not become the talent identity.

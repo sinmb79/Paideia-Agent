@@ -25,10 +25,10 @@ The expected first-run result is a public-safe doctor report plus a Graham Junio
 
 The GitHub `main` branch now contains the installable Paideia Agent preview:
 
-- OpenClaw-style onboarding that asks the owner to choose an LLM service, chat surface, role-model curriculum, skill-migration posture, storage policy, runtime mode, and Agent ID policy.
+- Paideia first-run onboarding that asks the owner to choose an LLM service, chat surface, role-model curriculum, external-reference quarantine posture, storage policy, runtime mode, and Agent ID policy.
 - A directly testable Graham Junior securities-research sample plus additional role-model process tracks for software engineering, data analysis, cybersecurity, marketing, education, healthcare operations, management, legal/compliance research, blockchain protocol research, SRE, deep research, and accounting controls.
 - Agent_warrent / Agent ID Card local export support, with manual owner-controlled registration only. Paideia prepares reviewed connector files but does not sign, upload, or register by itself.
-- Hermes/OpenClaw/generic skill migration into a quarantined compatibility profile. Imported skills stay disabled until the owner reviews required capabilities and test evidence.
+- Hermes/OpenClaw/generic external-reference quarantine. Third-party procedures stay reference-only and cannot become Paideia skills without native rewrite, practice, exam, owner review, and work evidence.
 - Parent-controlled projection swarm cycles. A hired talent can split work into task projections, compare them on `projection_synthesis_board`, and promote only the reviewed parent synthesis into the learning ledger.
 - Public-safe release gates: package install doctor, first-run doctor, public release readiness audit, source hygiene script, security scans, JSON Schema contracts with negative tests, action-policy eval, LLM adapter contracts, and the full regression suite.
 
@@ -81,7 +81,7 @@ Most agent runtimes begin with an assistant and add tools, memory, channels, and
 - **Role-model process replication**: a role model contributes sourced learning conditions and curriculum pressure, not a preloaded personality or worldview.
 - **Parent-controlled projection swarm**: one hired talent can split work into task projections, synthesize their findings, and promote only reviewed learning back into the parent record.
 - **Local-first ownership**: the owner keeps private data, generated memories, voice assets, local curricula, and installed agent bundles on their own machine.
-- **Safe skill migration**: Hermes/OpenClaw/generic skills can be imported, but they stay reference-only until rewritten, tested, and reviewed.
+- **External reference quarantine**: Hermes/OpenClaw/generic procedures can be studied as reference material, but they are never attached as active Paideia skills.
 
 ## Bundled Role Models
 
@@ -232,11 +232,11 @@ The interactive first-run path also has an OpenClaw-style alias:
 ai22b-talent-foundry onboard
 ```
 
-This wizard uses config detection, QuickStart/Advanced mode, Model/Auth, Workspace, Gateway/Channels, Skills, Education Path, Runtime, Agent Identity, Health Check, and Finish steps.
+This wizard uses config detection, QuickStart/Advanced mode, Model/Auth, Workspace, Gateway/Channels, External References, Education Path, Runtime, Agent Identity, Health Check, and Finish steps.
 
 This sample first selects the LLM service and chat surface, writes `llm_provider_matrix.json`, a selected-provider checklist, `llm_connection_profile.json`, `llm_live_setup_guide.json`, `onboarding_choice_manifest.json`, and `onboarding_launch_plan.json`, then lets that selected LLM act as the curriculum researcher for the Graham-inspired securities research track.
 
-Open `onboarding_choice_manifest.json` when you want the choice receipt: selected LLM service, chat surface, gateway/channel posture, skill migration mode, role-model curriculum, storage policy, runtime mode, and Agent ID/Agent_warrent policy in one public-safe document. It records whether a local model path or private curriculum directory was supplied without storing those raw paths.
+Open `onboarding_choice_manifest.json` when you want the choice receipt: selected LLM service, chat surface, gateway/channel posture, external-reference quarantine mode, role-model curriculum, storage policy, runtime mode, and Agent ID/Agent_warrent policy in one public-safe document. It records whether a local model path or private curriculum directory was supplied without storing those raw paths.
 
 Open `onboarding_launch_plan.json` after the wizard if you want the OpenClaw-style "what do I do next?" view. It now includes an `operator_dashboard` and `next_action_queue` with Model/Auth, Onboarding Choices, Chat Surface, Education Path, Agent Identity, Health Check, and Learning Loop cards. It lists the selected LLM, selected chat surface, role-model education path, local Agent ID payload status, Agent_warrent registration request draft, first chat command, live-readiness suite, chat runtime smoke, next goal cycle, and onboarding doctor command without saving API keys, raw provider payloads, or hidden reasoning traces.
 
@@ -491,36 +491,36 @@ ai22b-talent-foundry run-agent-program-chat `
 
 Each installed-program chat output now includes `agent_program_chat_status_card`. This card ties the chat turn back to the installable Paideia program, selected LLM mode, chat surface, provider preflight, bounded memory route, learning decision, and public-safe proof flags. It lets an operator verify that the conversation went through the installed agent program instead of a loose prompt wrapper.
 
-## Hermes/OpenClaw-Style Skill Migration
+## External Reference Quarantine
 
-Hermes and OpenClaw both make skill and memory systems central to agent usefulness. Paideia supports migration from those ecosystems, but does not execute imported skills automatically.
+Hermes and OpenClaw both make skill and memory systems central to agent usefulness. Paideia does not migrate those skills into a raised talent. External procedures can only be copied into a quarantined reference area so the owner can study them and rewrite useful ideas as Paideia-native curriculum, guided practice, timed exams, and reviewed procedures.
 
 ```powershell
-ai22b-talent-foundry migrate-agent-assets `
+ai22b-talent-foundry intake-external-references `
   --source C:\path\to\external-skill `
   --paideia-kit "$env:AI22B_STORAGE_ROOT\paideia-agent-kits\grham_junior_paideia_agent" `
   --source-runtime openclaw
 ```
 
-Imported skills are copied to:
+External references are copied to:
 
 ```text
-skills/imported/<runtime>/<skill>/
+references/external/<runtime>/<reference>/
 ```
 
-Each import receives:
+Each quarantined reference receives:
 
-- a wrapper `SKILL.md`,
-- a `paideia_skill_manifest.json`,
-- a `paideia_compatibility_profile.json` that maps Hermes/OpenClaw assumptions into Paideia capability requests,
-- a `paideia_skill_review.md` card for the owner review queue,
-- a per-skill `safety_contract` and top-level migration `safety_contract`,
-- `activation.status = disabled`,
+- a `REFERENCE.md` quarantine card,
+- a `paideia_external_reference_manifest.json`,
+- a `paideia_reference_compatibility_profile.json` that maps Hermes/OpenClaw assumptions into Paideia rewrite and internalization requirements,
+- a `paideia_reference_review.md` card for the owner review queue,
+- a per-reference `safety_contract` and top-level intake `safety_contract`,
+- `direct_external_use.status = forbidden`,
 - sensitive files such as `.env`, local credentials, private keys, token files, and certificate/key material are not copied,
 - risk flags for suspicious patterns such as remote shell installers, credential access, recursive delete, and network listeners,
-- a review checklist before promotion into a Paideia education axis or procedural skill.
+- a review checklist before any idea can become Paideia-native training material.
 
-The rule is simple: **migration is easy; activation is deliberate**. Imported code is never executed during migration, and default permissions stay `network=blocked`, `subprocess=blocked`, and `credential_access=blocked` until a reviewed allowlist exists. The compatibility profile keeps the activation gate locked until the owner reviews risk flags, rewrites blocked capability requests, declares a minimal allowlist, and runs a disposable workspace test.
+The rule is simple: **external skills are not Paideia skills**. Reference code is never executed during intake, and default permissions stay `network=blocked`, `subprocess=blocked`, and `credential_access=blocked`. Useful ideas must pass through Paideia rewrite, guided practice, a timed exam or task trial, owner review, and reviewed work evidence before they can influence memory or the reasoning kibo.
 
 ## Agent Program Outputs
 
