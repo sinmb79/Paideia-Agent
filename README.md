@@ -32,6 +32,24 @@ The GitHub `main` branch now contains the installable Paideia Agent preview:
 - Parent-controlled projection swarm cycles. A hired talent can split work into task projections, compare them on `projection_synthesis_board`, and promote only the reviewed parent synthesis into the learning ledger.
 - Public-safe release gates: package install doctor, first-run doctor, public release readiness audit, source hygiene script, security scans, JSON Schema contracts with negative tests, action-policy eval, LLM adapter contracts, and the full regression suite.
 
+## Recent Improvements: 2026-06-12 to 2026-06-13
+
+The latest work tightened Paideia's central philosophy and runtime boundaries:
+
+- **ChatGPT/Codex OAuth path**: hired-agent chat can use a Hermes-style `openai-codex` OAuth backend while keeping the LLM as an application engine, not the agent identity. Telegram bridge commands can switch backend and model.
+- **LLM and chat onboarding choices**: onboarding now separates ChatGPT/Codex OAuth, OpenAI API key mode, other API providers, local model adapters, Telegram, and external chat surfaces.
+- **Per-member team development**: even when a team is assembled, each member must be raised through the built-in development program and carry its own training run, dossier, resume, memory substrate, and employment record.
+- **Closed growth ecosystem**: external Hermes/OpenClaw/community skills are reference material only. They are stored as `REFERENCE.md` / `SOURCE_SKILL_REFERENCE.md`, never as active `SKILL.md`, until rewritten as Paideia-native training and reviewed.
+- **Human-like closure**: Paideia now treats knowledge transfer like a human body/brain model, not USB copy. External material must pass through attention, curriculum mapping, guided practice, timed exams, feedback, reasoning-kibo consolidation, and varied work application.
+- **Chat learning quarantine**: live chat learning candidates are forced into review quarantine before they can affect the memory substrate or reasoning kibo.
+- **Codex OAuth trust boundary**: Hermes roots must carry a Paideia review marker or appear in `PAIDEIA_TRUSTED_HERMES_AGENT_ROOTS` before their OAuth adapter code can run.
+
+More detail:
+
+- [Paideia Closed Growth Ecosystem](docs/closed_growth_ecosystem.en.md)
+- [Paideia 폐쇄형 성장 생태계 원칙](docs/closed_growth_ecosystem.ko.md)
+- [Codex OAuth Telegram Bridge Handoff](docs/codex_oauth_telegram_handoff.md)
+
 ## Origin
 
 Paideia Agent starts from a simple question: what if an AI agent could extend you, or what if a field role model's learning path could become the curriculum for a local AI talent that helps you work?
@@ -55,6 +73,7 @@ Planning and contribution documents:
 Most agent runtimes begin with an assistant and add tools, memory, channels, and skills. Paideia begins with a curriculum:
 
 - **Raise first, hire later**: a talent passes through growth records, courses, exams, reports, and review gates before becoming an agent.
+- **Human-like closure**: knowledge is not copied into the agent like USB data. It is internalized through curriculum, practice, timed exams, feedback, reinforcement, and applied work.
 - **Memory substrate, not full transcript replay**: the runtime selects bounded summaries, learning records, and procedural cues instead of injecting every old conversation.
 - **Reasoning Ledger / Ariadne Thread**: a reviewable ledger of hypotheses, evidence, mistakes, corrected principles, study habits, and work patterns. It is not hidden chain-of-thought. The internal compatibility artifact is still named `reasoning_kibo.jsonl`.
 - **Developmental Ecology / Life Trace / Growth Profile**: synthetic family climate, peer conflict, ordinary conversation, stress recovery, school life, aesthetic exposure, and domain curiosity are condensed into relationship, emotion, culture, aesthetic, and asymmetry memory.
@@ -62,7 +81,7 @@ Most agent runtimes begin with an assistant and add tools, memory, channels, and
 - **Role-model process replication**: a role model contributes sourced learning conditions and curriculum pressure, not a preloaded personality or worldview.
 - **Parent-controlled projection swarm**: one hired talent can split work into task projections, synthesize their findings, and promote only reviewed learning back into the parent record.
 - **Local-first ownership**: the owner keeps private data, generated memories, voice assets, local curricula, and installed agent bundles on their own machine.
-- **Safe skill migration**: Hermes/OpenClaw/generic skills can be imported, but they are quarantined and disabled until reviewed.
+- **Safe skill migration**: Hermes/OpenClaw/generic skills can be imported, but they stay reference-only until rewritten, tested, and reviewed.
 
 ## Bundled Role Models
 

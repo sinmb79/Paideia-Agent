@@ -67,7 +67,7 @@ ai22b-talent-foundry migrate-agent-assets `
   --source-runtime hermes
 ```
 
-The migration layer detects `SKILL.md`, `skill.yaml`, `skill.yml`, `hermes.yaml`, `hermes.yml`, and README-based generic skill folders. It copies source files into the Paideia kit, writes a wrapper `SKILL.md`, and creates `paideia_skill_manifest.json`, `paideia_compatibility_profile.json`, and `paideia_skill_review.md`.
+The migration layer detects `SKILL.md`, `skill.yaml`, `skill.yml`, `hermes.yaml`, `hermes.yml`, and README-based generic skill folders. It copies source files into the Paideia kit as reference material, rewrites source `SKILL.md` files to `SOURCE_SKILL_REFERENCE.md`, writes `REFERENCE.md`, and creates `paideia_skill_manifest.json`, `paideia_compatibility_profile.json`, and `paideia_skill_review.md`. It does not create an active `SKILL.md` descriptor.
 
 Default policy:
 
@@ -75,7 +75,8 @@ Default policy:
 - `activation.status = disabled`
 - `boss_review_required = true`
 - `third_party_skills_trusted = false`
-- `migration_mode = wrap_quarantine_doctor_then_allowlist`
+- `migration_mode = wrap_quarantine_reference_rewrite_then_allowlist`
+- external skills are reference-only until rewritten as Paideia-native training, tested in a disposable workspace, and reviewed
 - activation gate remains locked until owner allowlist and disposable workspace test evidence exist
 
 Risk scanning currently flags:
@@ -95,6 +96,8 @@ education -> assessment -> memory formation -> hiring dossier -> installable age
 ```
 
 The agent's runtime behavior should be grounded in accumulated learning records and reviewable reasoning habits, not only in a persona prompt or a few memory snippets.
+
+The 2026-06-12 to 2026-06-13 hardening adds an explicit closed-growth contract: knowledge is not USB-copied into an agent. It passes through attention, curriculum mapping, practice, timed exams, feedback, reinforcement, and applied work before it can shape the agent's reasoning kibo.
 
 ## References
 
