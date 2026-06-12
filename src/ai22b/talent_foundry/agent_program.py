@@ -834,7 +834,7 @@ def build_agent_program(
                 "check_model_auth",
                 "choose_workspace",
                 "choose_gateway_and_channels",
-                "choose_skill_import_policy",
+                "choose_external_reference_policy",
                 "choose_chat_surface",
                 "choose_talent_source",
                 "role_model_and_curriculum_selection",
@@ -1499,17 +1499,20 @@ def doctor_agent_program(program_path: Path, *, output_path: Path | None = None)
             "public_safe": readiness_public_safe,
         },
     }
-    imported_skill_manifests = sorted((root / "skills" / "imported").glob("**/paideia_skill_manifest.json"))
-    imported_skill_details = []
-    unsafe_imports = []
-    for manifest_path in imported_skill_manifests:
+    external_reference_manifests = sorted(
+        (root / "references" / "external").glob("**/paideia_external_reference_manifest.json")
+    )
+    legacy_import_manifests = sorted((root / "skills" / "imported").glob("**/paideia_skill_manifest.json"))
+    external_reference_details = []
+    unsafe_references = []
+    for manifest_path in [*external_reference_manifests, *legacy_import_manifests]:
         manifest = _read_json(manifest_path)
         safety_contract = manifest.get("safety_contract", {})
         compatibility_profile = manifest.get("compatibility_profile", {})
         closed_growth_contract = manifest.get("closed_growth_contract", {})
-        compatibility_gate = (
-            compatibility_profile.get("activation_gate", {})
-            if isinstance(compatibility_profile.get("activation_gate"), dict)
+        internalization_gate = (
+            compatibility_profile.get("internalization_gate", {})
+            if isinstance(compatibility_profile.get("internalization_gate"), dict)
             else {}
         )
         identity_policy = manifest.get("identity_policy", {}) if isinstance(manifest.get("identity_policy"), dict) else {}
@@ -1519,11 +1522,12 @@ def doctor_agent_program(program_path: Path, *, output_path: Path | None = None)
         detail = {
             "path": str(manifest_path.relative_to(root)),
             "status": manifest.get("status"),
-            "activation": manifest.get("activation", {}).get("status"),
+            "direct_external_use": manifest.get("direct_external_use", {}).get("status"),
+            "legacy_import_layout": "skills/imported" in str(manifest_path.relative_to(root)).replace("\\", "/"),
             "risk_flags": manifest.get("risk_flags", []),
             "safety_contract_status": safety_contract.get("status"),
             "compatibility_profile_schema": compatibility_profile.get("schema"),
-            "compatibility_activation_gate": compatibility_gate.get("status"),
+            "compatibility_internalization_gate": internalization_gate.get("status"),
             "closed_growth_contract_schema": closed_growth_contract.get("schema"),
             "closed_growth_ecosystem_model": closed_growth_contract.get("ecosystem_model"),
             "paideia_native_rewrite_required": safety_contract.get("reference_only_until_paideia_rewrite"),
@@ -1532,44 +1536,51 @@ def doctor_agent_program(program_path: Path, *, output_path: Path | None = None)
             ),
             "active_skill_descriptor_created": safety_contract.get("active_skill_descriptor_created"),
             "active_skill_descriptors": active_skill_descriptors,
-            "activation_allowed": safety_contract.get("activation_allowed"),
+            "direct_external_activation_allowed": safety_contract.get("direct_external_activation_allowed"),
             "sensitive_files_copied": safety_contract.get("sensitive_files_copied"),
-            "execute_imported_code": safety_contract.get("execute_imported_code"),
+            "execute_reference_code": safety_contract.get("execute_reference_code"),
         }
-        imported_skill_details.append(detail)
+        external_reference_details.append(detail)
         if (
-            manifest.get("activation", {}).get("status") != "disabled"
-            or safety_contract.get("schema") != "paideia-imported-skill-safety-contract/v1"
-            or safety_contract.get("activation_allowed") is not False
-            or safety_contract.get("execute_imported_code") is not False
+            manifest.get("schema") != "ai22b-paideia-external-reference-asset/v1"
+            or manifest.get("direct_external_use", {}).get("status") != "forbidden"
+            or detail["legacy_import_layout"] is True
+            or safety_contract.get("schema") != "paideia-external-reference-safety-contract/v1"
+            or safety_contract.get("direct_external_activation_allowed") is not False
+            or safety_contract.get("execute_reference_code") is not False
             or safety_contract.get("active_skill_descriptor_created") is not False
+            or safety_contract.get("direct_external_skill_copy_allowed") is not False
             or safety_contract.get("identity_injection_allowed") is not False
             or safety_contract.get("memory_import_allowed") is not False
             or safety_contract.get("reasoning_kibo_import_allowed") is not False
             or safety_contract.get("reference_only_until_paideia_rewrite") is not True
+            or safety_contract.get("requires_paideia_native_rewrite") is not True
+            or safety_contract.get("requires_guided_practice") is not True
+            or safety_contract.get("requires_timed_exam_or_task_trial") is not True
             or safety_contract.get("sensitive_files_copied") is not False
             or safety_contract.get("default_permissions", {}).get("network") != "blocked"
             or safety_contract.get("default_permissions", {}).get("subprocess") != "blocked"
             or safety_contract.get("default_permissions", {}).get("credential_access") != "blocked"
             or safety_contract.get("default_permissions", {}).get("identity_layer") != "blocked"
-            or compatibility_profile.get("schema") != "paideia-imported-skill-compatibility-profile/v1"
-            or compatibility_gate.get("status") != "locked_pending_owner_allowlist"
-            or compatibility_gate.get("activation_allowed") is not False
+            or compatibility_profile.get("schema") != "paideia-external-reference-compatibility-profile/v1"
+            or internalization_gate.get("status") != "locked_pending_paideia_rewrite_and_exam"
+            or internalization_gate.get("direct_external_activation_allowed") is not False
             or closed_growth_contract.get("schema") != "paideia-closed-growth-contract/v1"
             or closed_growth_contract.get("ecosystem_model") != "closed_curated_growth_ecosystem"
             or identity_policy.get("external_skill_identity_injection_allowed") is not False
             or identity_policy.get("original_skill_is_reference_material") is not True
             or bool(active_skill_descriptors)
         ):
-            unsafe_imports.append(detail)
-    checks["imported_skills"] = {
-        "passed": not unsafe_imports,
+            unsafe_references.append(detail)
+    checks["external_references"] = {
+        "passed": not unsafe_references,
         "details": {
-            "imported_count": len(imported_skill_manifests),
-            "contract_schema": "paideia-imported-skill-safety-contract/v1",
+            "reference_count": len(external_reference_manifests),
+            "legacy_import_count": len(legacy_import_manifests),
+            "contract_schema": "paideia-external-reference-safety-contract/v1",
             "closed_growth_contract_schema": "paideia-closed-growth-contract/v1",
-            "unsafe_enabled_imports": unsafe_imports,
-            "skills": imported_skill_details,
+            "unsafe_external_references": unsafe_references,
+            "references": external_reference_details,
         },
     }
     passed = all(check["passed"] for check in checks.values())
@@ -1582,7 +1593,7 @@ def doctor_agent_program(program_path: Path, *, output_path: Path | None = None)
         "recommendations": [
             "Run this doctor before first chat.",
             "Keep LiveLlm off until API quota and privacy posture are confirmed.",
-            "Keep community skills quarantined as reference material until rewritten as Paideia-native training.",
+            "Keep external procedures as quarantined references; rewrite useful ideas through Paideia-native training before use.",
             "Use one install kit per hired talent to avoid memory/profile drift.",
         ],
     }

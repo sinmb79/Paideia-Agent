@@ -154,10 +154,11 @@ def _discover_latest_employment_record(storage_root: Path) -> Path:
         for path in root.rglob("employment_record.json"):
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))
-            except Exception:
+                mtime = path.stat().st_mtime
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError):
                 continue
             if data.get("schema") == "ai-talent-local-employment/v1" and data.get("status") == "active":
-                candidates.append((path.stat().st_mtime, path))
+                candidates.append((mtime, path))
     if not candidates:
         raise FileNotFoundError(f"No active employment_record.json found under {storage_root}")
     return sorted(candidates, reverse=True)[0][1]

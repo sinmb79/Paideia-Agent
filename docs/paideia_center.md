@@ -1,4 +1,4 @@
-# Paideia Agent
+﻿# Paideia Agent
 
 `Paideia Agent`는 단일 에이전트 이름만이 아니라, 보스의 컴퓨터에서 AI 인재를 길러내는 로컬 AI 교육센터/육성 프로그램입니다.
 
@@ -76,17 +76,18 @@ ai22b-talent-foundry doctor-agent-program `
   --output .\paideia_agent_kit\paideia_doctor_report.json
 ```
 
-설치 키트에는 `README.md`, `doctor_paideia.ps1`, `start_paideia_chat.ps1`, `paideia_onboarding.template.json`, `adapter_manifests/`가 포함됩니다. Hermes/OpenClaw식 확장을 고려하되, 외부 채널과 커뮤니티 스킬은 기본 비활성화입니다.
+설치 키트에는 `README.md`, `doctor_paideia.ps1`, `start_paideia_chat.ps1`, `paideia_onboarding.template.json`, `adapter_manifests/`가 포함됩니다. Hermes/OpenClaw식 확장을 참고하되, 외부 채널은 명시적 설정 전까지 비활성화하고 커뮤니티 절차는 Paideia 스킬이 아니라 외부 참고자료로만 격리합니다.
 
-## Hermes/OpenClaw 스킬 마이그레이션
+## Hermes/OpenClaw 외부 참고자료 검역
 
-기존 Hermes/OpenClaw 스킬은 다음 명령으로 Paideia Agent kit에 가져올 수 있습니다.
+기존 Hermes/OpenClaw 절차는 Paideia Agent kit의 활성 스킬로 가져오지 않습니다. 필요한 경우 다음 명령으로 외부 참고자료 검역함에만 복사합니다.
 
 ```powershell
-ai22b-talent-foundry migrate-agent-assets `
+ai22b-talent-foundry intake-external-references `
   --source C:\path\to\skill-folder `
   --paideia-kit C:\path\to\paideia_agent_kit `
   --source-runtime openclaw
 ```
 
-마이그레이션된 스킬은 즉시 실행되지 않습니다. Paideia는 외부 스킬을 `skills/imported/<runtime>/<skill>/` 아래에 복사하고, wrapper `SKILL.md`와 `paideia_skill_manifest.json`을 만듭니다. 기본 상태는 `disabled`이며, 보스 검토와 doctor 확인 후에만 교육축이나 절차 스킬로 승격해야 합니다.
+검역된 자료는 실행되지 않습니다. Paideia는 외부 절차를 `references/external/<runtime>/<reference>/` 아래에 복사하고, 활성 `SKILL.md`가 아니라 `REFERENCE.md`, `SOURCE_SKILL_REFERENCE.md`, `paideia_external_reference_manifest.json`을 만듭니다. 기본 상태는 `direct_external_use.status=forbidden`이며, 유용한 아이디어만 Paideia-native 교육과제, guided practice, timed exam/task trial, 보스 검토, 업무 증거를 거쳐 내재화할 수 있습니다.
+

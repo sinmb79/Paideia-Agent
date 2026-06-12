@@ -10,7 +10,7 @@
   "gateway_mode": "local_loopback",
   "channel_mode": "local_only",
   "web_search_provider": "skip_now",
-  "skills_mode": "quarantine_import_only",
+  "external_reference_mode": "reference_quarantine_only",
   "talent_source": "public_role_model",
   "request": "Raise and test a separate Graham-inspired securities research AI talent without modifying any existing talent.",
   "domain": "securities_research",
