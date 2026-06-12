@@ -49,6 +49,7 @@ EMPLOYMENT_GOAL_CYCLE_SCHEMA = "ai-talent-employment-goal-cycle/v1"
 HIRED_AGENT_JOB_CYCLE_SCHEMA = "ai-talent-hired-agent-job-cycle/v1"
 HIRED_AGENT_TEAM_SCHEMA = "ai-talent-hired-agent-team/v1"
 HIRED_TEAM_CYCLE_SCHEMA = "ai-talent-hired-team-cycle/v1"
+TEAM_MEMBER_DEVELOPMENT_EVIDENCE_SCHEMA = "paideia-team-member-development-evidence/v1"
 HIRED_PROJECTION_SWARM_SCHEMA = "ai-talent-hired-projection-swarm/v1"
 HIRED_PROJECTION_SWARM_CYCLE_SCHEMA = "ai-talent-hired-projection-swarm-cycle/v1"
 PROJECTION_LEARNING_CANDIDATE_SCHEMA = "paideia-projection-learning-candidate/v1"
@@ -354,6 +355,11 @@ def hire_installed_agent(
                 "grade_learning_records",
                 "grade_learning_records.json",
             ),
+            "hiring_dossier": installed_manifest["entrypoints"].get("hiring_dossier", "hiring_dossier.json"),
+            "hiring_dossier_markdown": installed_manifest["entrypoints"].get(
+                "hiring_dossier_markdown",
+                "HIRING_DOSSIER.ko.md",
+            ),
             "llm_connection_profile": llm_connection_profile_entrypoint,
             "llm_live_setup_guide": llm_live_setup_guide_entrypoint,
             "agent_id_card_payload": "agent_id_card_payload.json",
@@ -506,6 +512,195 @@ def _employment_context(employment_record: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _load_installed_manifest_for_employment(employment_record: dict[str, Any], target_root: Path) -> dict[str, Any]:
+    installed_manifest_name = employment_record.get("source", {}).get("installed_manifest")
+    if not installed_manifest_name:
+        return {}
+    installed_manifest_path = target_root / installed_manifest_name
+    if not installed_manifest_path.exists():
+        return {}
+    try:
+        installed_manifest = _read_json(installed_manifest_path)
+    except Exception:
+        return {}
+    return installed_manifest if isinstance(installed_manifest, dict) else {}
+
+
+def _entrypoint_for(
+    key: str,
+    *,
+    employment_record: dict[str, Any],
+    installed_manifest: dict[str, Any],
+    default: str,
+) -> str:
+    entrypoints = employment_record.get("entrypoints", {}) if isinstance(employment_record.get("entrypoints"), dict) else {}
+    installed_entrypoints = (
+        installed_manifest.get("entrypoints", {}) if isinstance(installed_manifest.get("entrypoints"), dict) else {}
+    )
+    return str(entrypoints.get(key) or installed_entrypoints.get(key) or default)
+
+
+def _artifact_check(
+    check_id: str,
+    *,
+    target_root: Path,
+    entrypoint: str,
+    required: bool = True,
+) -> dict[str, Any]:
+    path = target_root / entrypoint
+    return {
+        "id": check_id,
+        "entrypoint": entrypoint,
+        "required": required,
+        "exists": path.exists(),
+    }
+
+
+def build_team_member_development_evidence(employment_record_path: Path) -> dict[str, Any]:
+    """Return the per-member training evidence required before team membership.
+
+    A Paideia team member must be a separately hired talent, not a role label
+    attached to a generic agent. The evidence stays public-safe: it records
+    artifact names and pass/fail checks, not private reasoning traces.
+    """
+
+    employment_record, agent_manifest, target_root = _load_active_employment(employment_record_path)
+    installed_manifest = _load_installed_manifest_for_employment(employment_record, target_root)
+    artifact_defaults = {
+        "agent_manifest": "agent_manifest.json",
+        "memory_substrate": "memory_substrate.json",
+        "language_development_program": "language_development_program.json",
+        "developmental_ecology": "developmental_ecology.json",
+        "life_trace": "life_trace.jsonl",
+        "growth_profile": "growth_profile.json",
+        "learning_ledger": "learning_ledger.json",
+        "grade_learning_records": "grade_learning_records.json",
+        "hiring_dossier": "hiring_dossier.json",
+        "hiring_dossier_markdown": "HIRING_DOSSIER.ko.md",
+    }
+    artifact_entrypoints = {
+        key: _entrypoint_for(
+            key,
+            employment_record=employment_record,
+            installed_manifest=installed_manifest,
+            default=default,
+        )
+        for key, default in artifact_defaults.items()
+    }
+    artifact_checks = [
+        _artifact_check(key, target_root=target_root, entrypoint=entrypoint)
+        for key, entrypoint in artifact_entrypoints.items()
+    ]
+
+    dossier_path = target_root / artifact_entrypoints["hiring_dossier"]
+    dossier: dict[str, Any] = {}
+    if dossier_path.exists():
+        try:
+            dossier = _read_json(dossier_path)
+        except Exception:
+            dossier = {}
+    resume_text = (
+        str(dossier.get("resume") or "").strip()
+        or str(agent_manifest.get("identity_source", {}).get("resume") or "").strip()
+    )
+    learning_ledger_path = target_root / artifact_entrypoints["learning_ledger"]
+    learning_ledger: dict[str, Any] = {}
+    if learning_ledger_path.exists():
+        try:
+            learning_ledger = _read_json(learning_ledger_path)
+        except Exception:
+            learning_ledger = {}
+
+    evidence_checks = [
+        *artifact_checks,
+        {
+            "id": "resume_present",
+            "required": True,
+            "exists": bool(resume_text),
+            "source": "hiring_dossier.resume_or_agent_manifest.identity_source.resume",
+        },
+        {
+            "id": "separate_employment_record_active",
+            "required": True,
+            "exists": employment_record.get("schema") == EMPLOYMENT_SCHEMA and employment_record.get("status") == "active",
+            "employment_id": employment_record.get("employment_id"),
+        },
+        {
+            "id": "reasoning_kernel_present",
+            "required": True,
+            "exists": bool(learning_ledger.get("reasoning_kernel")),
+            "source": artifact_entrypoints["learning_ledger"],
+        },
+    ]
+    missing_required = [
+        item["id"]
+        for item in evidence_checks
+        if item.get("required") and not item.get("exists")
+    ]
+    status = "verified" if not missing_required else "incomplete"
+    return {
+        "schema": TEAM_MEMBER_DEVELOPMENT_EVIDENCE_SCHEMA,
+        "status": status,
+        "passed": status == "verified",
+        "employment_id": employment_record.get("employment_id"),
+        "agent": employment_record.get("agent", {}),
+        "member_training_model": "built_in_paideia_talent_foundry_per_member",
+        "separate_employment_record_required": True,
+        "resume_required": True,
+        "resume": {
+            "present": bool(resume_text),
+            "source": "hiring_dossier.resume",
+            "hiring_dossier": artifact_entrypoints["hiring_dossier"],
+            "hiring_dossier_markdown": artifact_entrypoints["hiring_dossier_markdown"],
+        },
+        "development_artifacts": artifact_entrypoints,
+        "evidence_checks": evidence_checks,
+        "missing_required": missing_required,
+        "private_reasoning_trace": "do_not_store",
+    }
+
+
+def validate_hired_agent_team_members(team: dict[str, Any]) -> dict[str, Any]:
+    if team.get("schema") != HIRED_AGENT_TEAM_SCHEMA:
+        raise ValueError("Unsupported hired agent team schema")
+    member_reports = []
+    for member in team.get("members", []):
+        existing_evidence = member.get("development_evidence")
+        if isinstance(existing_evidence, dict) and existing_evidence.get("passed"):
+            evidence = existing_evidence
+        else:
+            record_path = Path(member.get("employment_record_path", ""))
+            evidence = build_team_member_development_evidence(record_path)
+        member_reports.append(
+            {
+                "member_id": member.get("member_id"),
+                "employment_id": (
+                    member.get("employment_context", {}).get("employment_id")
+                    if isinstance(member.get("employment_context"), dict)
+                    else None
+                ),
+                "passed": bool(evidence.get("passed")),
+                "status": evidence.get("status"),
+                "missing_required": evidence.get("missing_required", []),
+                "development_evidence": evidence,
+            }
+        )
+    failed = [item for item in member_reports if not item["passed"]]
+    return {
+        "schema": "paideia-hired-agent-team-development-validation/v1",
+        "status": "verified" if not failed and bool(member_reports) else "blocked",
+        "passed": not failed and bool(member_reports),
+        "member_count": len(member_reports),
+        "member_reports": member_reports,
+        "required_policy": {
+            "each_member_must_be_raised_by_built_in_program": True,
+            "each_member_must_have_separate_employment_record": True,
+            "each_member_must_have_resume_or_hiring_dossier": True,
+            "role_label_only_membership_allowed": False,
+        },
+    }
+
+
 def _route_active_memory_for_employment(
     employment_record: dict[str, Any],
     target_root: Path,
@@ -644,6 +839,12 @@ def assemble_hired_agent_team(
     for index, record_path in enumerate(employment_record_paths, start=1):
         employment_record, _agent_manifest, _target_root = _load_active_employment(record_path)
         context = _employment_context(employment_record)
+        development_evidence = build_team_member_development_evidence(record_path)
+        if not development_evidence.get("passed"):
+            missing = ", ".join(development_evidence.get("missing_required", []))
+            raise ValueError(
+                f"Team member {context['employment_id']} has not completed required Paideia development evidence: {missing}"
+            )
         employment_ids.append(context["employment_id"])
         for guardrail in employment_record.get("guardrails", []):
             if guardrail not in guardrails:
@@ -657,6 +858,8 @@ def assemble_hired_agent_team(
                 "consciousness": "separately_hired_talent_agent",
                 "coordination_role": context["agent_role"],
                 "growth_after_hire_continues": context["growth_after_hire_continues"],
+                "development_evidence": development_evidence,
+                "resume": development_evidence["resume"],
             }
         )
 
@@ -674,9 +877,29 @@ def assemble_hired_agent_team(
         "team_policy": {
             "coordination_model": "separately_hired_agents_under_boss_employment",
             "not_a_projection_team": True,
+            "member_development_model": "built_in_paideia_talent_foundry_per_member",
+            "role_label_only_membership_allowed": False,
+            "each_member_requires_separate_resume": True,
+            "each_member_requires_separate_employment_record": True,
             "guardrails": guardrails,
             "review_required": "boss_or_oversight_committee",
             "learning_policy": "각 멤버의 고용 기록과 학습 원장을 유지하면서 팀 사이클 결과를 검토 후 반영한다.",
+        },
+        "development_validation": {
+            "schema": "paideia-hired-agent-team-development-validation/v1",
+            "status": "verified",
+            "passed": True,
+            "member_count": len(members),
+            "member_reports": [
+                {
+                    "member_id": member["member_id"],
+                    "employment_id": member["employment_context"]["employment_id"],
+                    "passed": member["development_evidence"]["passed"],
+                    "status": member["development_evidence"]["status"],
+                    "missing_required": member["development_evidence"]["missing_required"],
+                }
+                for member in members
+            ],
         },
     }
 
@@ -1330,6 +1553,15 @@ def run_hired_team_cycle(
     if team.get("schema") != HIRED_AGENT_TEAM_SCHEMA:
         raise ValueError("Unsupported hired agent team schema")
 
+    team_validation = validate_hired_agent_team_members(team)
+    if not team_validation["passed"]:
+        failed = [
+            f"{item.get('member_id')}: {', '.join(item.get('missing_required', []))}"
+            for item in team_validation["member_reports"]
+            if not item.get("passed")
+        ]
+        raise ValueError("Hired agent team members are not development-verified: " + "; ".join(failed))
+
     workspace_dir.mkdir(parents=True, exist_ok=True)
     contributions = []
     for member in team.get("members", []):
@@ -1377,6 +1609,7 @@ def run_hired_team_cycle(
         "objective": objective,
         "cycle_status": cycle_status,
         "team_policy": team["team_policy"],
+        "development_validation": team_validation,
         "contributions": contributions,
         "synthesis": {
             "summary": "별도 고용된 전문 에이전트들의 관점을 모아 보스 검토용 팀 결과로 정리했다.",

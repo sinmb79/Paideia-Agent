@@ -69,6 +69,18 @@ Telegram 브리지는 다음 명령을 지원합니다.
 - `/model <name>`: 이후 채팅 턴의 모델 변경
 - `/team <objective>`: specialist team이 구성된 경우 팀 단위로 dispatch 후 lead가 종합
 
+## 팀제 운영 원칙
+
+팀제 운영에서도 팀원은 단순한 역할 라벨이 아닙니다. 각 팀원은 Paideia의 내장 육성 프로그램을 별도로 통과해야 하며, 각자 다음 증거를 가져야 합니다.
+
+- 별도 `employment_record.json`
+- 별도 onboarding session
+- 별도 training run
+- `language_development_program`, `growth_profile`, `learning_ledger`, `memory_substrate`
+- `hiring_dossier.json` 또는 resume evidence
+
+`telegram-bridge`의 `/team` dispatch와 `run_hired_team_cycle`은 팀 멤버의 `development_evidence.passed`가 참이 아니면 실행을 막습니다. 즉, "거시 담당", "리스크 담당" 같은 역할명만 붙인 구성은 Paideia 팀원이 될 수 없습니다.
+
 ## 검증 원칙
 
 - 온보딩 산출물은 기본적으로 네트워크 호출을 하지 않습니다.

@@ -4828,19 +4828,35 @@ class TalentFoundryTests(unittest.TestCase):
                 Path(path).exists()
                 for path in session["artifacts"]["specialist_employment_records"]
             ]
+            member_onboarding_exists = [
+                Path(path).exists()
+                for path in session["artifacts"]["specialist_onboarding_sessions"]
+            ]
+            member_training_runs_exist = [
+                Path(path).exists()
+                for path in session["artifacts"]["specialist_training_runs"]
+            ]
 
         self.assertEqual(session["status"], "specialist_team_cycle_completed")
         self.assertEqual(session["answers"]["post_hire_mode"], "specialist_team")
         self.assertEqual(team["schema"], "ai-talent-hired-agent-team/v1")
         self.assertTrue(team["team_policy"]["not_a_projection_team"])
+        self.assertEqual(team["team_policy"]["member_development_model"], "built_in_paideia_talent_foundry_per_member")
+        self.assertTrue(team["team_policy"]["each_member_requires_separate_resume"])
+        self.assertTrue(team["development_validation"]["passed"])
         self.assertEqual(team["team"]["member_count"], 4)
         self.assertTrue(all(member["consciousness"] == "separately_hired_talent_agent" for member in team["members"]))
+        self.assertTrue(all(member["development_evidence"]["passed"] for member in team["members"]))
+        self.assertTrue(all(member["resume"]["present"] for member in team["members"]))
         self.assertEqual(team_cycle["cycle_status"], "completed")
+        self.assertTrue(team_cycle["development_validation"]["passed"])
         self.assertEqual(
             session["post_hire_extensions"]["specialist_team"]["member_count"],
             4,
         )
         self.assertTrue(all(member_records_exist))
+        self.assertTrue(all(member_onboarding_exists))
+        self.assertTrue(all(member_training_runs_exist))
 
     def test_cli_start_console_accepts_answers_file(self) -> None:
         from ai22b.talent_foundry.cli import main as cli_main
@@ -5397,6 +5413,7 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertTrue(all(member["consciousness"] == "separately_hired_talent_agent" for member in team["members"]))
         self.assertEqual(cycle["schema"], "ai-talent-hired-team-cycle/v1")
         self.assertEqual(cycle["cycle_status"], "completed")
+        self.assertTrue(cycle["development_validation"]["passed"])
         self.assertEqual(len(cycle["contributions"]), 2)
         self.assertTrue(team_workspace_exists)
 
@@ -7114,26 +7131,14 @@ class TalentFoundryTests(unittest.TestCase):
 
     def test_assemble_hired_agent_team_records_separately_hired_members(self) -> None:
         from ai22b.talent_foundry.demo import run_demo
-        from ai22b.talent_foundry.registry import assemble_hired_agent_team, hire_installed_agent
+        from ai22b.talent_foundry.registry import assemble_hired_agent_team
 
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             outputs = run_demo(output_dir=tmp_path / "runs")
-            macro = hire_installed_agent(
-                outputs["installed_agent_manifest"],
-                employer="보스",
-                role="거시경제 분석 에이전트",
-                record_name="employment_record.macro.json",
-            )
-            micro = hire_installed_agent(
-                outputs["installed_agent_manifest"],
-                employer="보스",
-                role="기업분석 에이전트",
-                record_name="employment_record.micro.json",
-            )
             team_path = tmp_path / "hired_team.json"
             team = assemble_hired_agent_team(
-                [macro["employment_record"], micro["employment_record"]],
+                [outputs["macro_employment_record"], outputs["micro_employment_record"]],
                 team_name="보스 증권 리서치팀",
                 domain="증권 리서치",
                 output_path=team_path,
@@ -7145,6 +7150,15 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(team["team"]["domain"], "증권 리서치")
         self.assertTrue(all(member["consciousness"] == "separately_hired_talent_agent" for member in team["members"]))
         self.assertTrue(all("clone_of" not in member for member in team["members"]))
+        self.assertTrue(team["team_policy"]["each_member_requires_separate_resume"])
+        self.assertFalse(team["team_policy"]["role_label_only_membership_allowed"])
+        self.assertEqual(team["team_policy"]["member_development_model"], "built_in_paideia_talent_foundry_per_member")
+        self.assertTrue(team["development_validation"]["passed"])
+        self.assertTrue(all(member["development_evidence"]["passed"] for member in team["members"]))
+        self.assertTrue(all(member["resume"]["present"] for member in team["members"]))
+        self.assertTrue(
+            all("hiring_dossier" in member["development_evidence"]["development_artifacts"] for member in team["members"])
+        )
         self.assertIn("투자 실행", " ".join(team["team_policy"]["guardrails"]))
         self.assertEqual(saved_team["team_id"], team["team_id"])
 
@@ -7152,28 +7166,15 @@ class TalentFoundryTests(unittest.TestCase):
         from ai22b.talent_foundry.demo import run_demo
         from ai22b.talent_foundry.registry import (
             assemble_hired_agent_team,
-            hire_installed_agent,
             run_hired_team_cycle,
         )
 
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             outputs = run_demo(output_dir=tmp_path / "runs")
-            macro = hire_installed_agent(
-                outputs["installed_agent_manifest"],
-                employer="보스",
-                role="거시경제 분석 에이전트",
-                record_name="employment_record.macro.json",
-            )
-            micro = hire_installed_agent(
-                outputs["installed_agent_manifest"],
-                employer="보스",
-                role="기업분석 에이전트",
-                record_name="employment_record.micro.json",
-            )
             team_path = tmp_path / "hired_team.json"
             assemble_hired_agent_team(
-                [macro["employment_record"], micro["employment_record"]],
+                [outputs["macro_employment_record"], outputs["micro_employment_record"]],
                 team_name="보스 증권 리서치팀",
                 domain="증권 리서치",
                 output_path=team_path,
@@ -7204,23 +7205,10 @@ class TalentFoundryTests(unittest.TestCase):
     def test_cli_hired_team_commands_assemble_and_run_cycle(self) -> None:
         from ai22b.talent_foundry.cli import main as cli_main
         from ai22b.talent_foundry.demo import run_demo
-        from ai22b.talent_foundry.registry import hire_installed_agent
 
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             outputs = run_demo(output_dir=tmp_path / "runs")
-            macro = hire_installed_agent(
-                outputs["installed_agent_manifest"],
-                employer="보스",
-                role="거시경제 분석 에이전트",
-                record_name="employment_record.macro.json",
-            )
-            micro = hire_installed_agent(
-                outputs["installed_agent_manifest"],
-                employer="보스",
-                role="기업분석 에이전트",
-                record_name="employment_record.micro.json",
-            )
             team_path = tmp_path / "hired_team.json"
             cycle_path = tmp_path / "team_cycle.json"
             workspace = tmp_path / "team_workspace"
@@ -7232,9 +7220,9 @@ class TalentFoundryTests(unittest.TestCase):
                     "--domain",
                     "증권 리서치",
                     "--employment-record",
-                    str(macro["employment_record"]),
+                    str(outputs["macro_employment_record"]),
                     "--employment-record",
-                    str(micro["employment_record"]),
+                    str(outputs["micro_employment_record"]),
                     "--output",
                     str(team_path),
                 ]

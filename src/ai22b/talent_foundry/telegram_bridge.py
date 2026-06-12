@@ -14,6 +14,7 @@ from typing import Any, Sequence
 from ai22b.config import STORAGE_ROOT, talent_foundry_storage_path
 from ai22b.talent_foundry.memory_substrate import run_chat_turn_from_employment
 from ai22b.talent_foundry.onboarding_choices import DEFAULT_CHATGPT_CODEX_MODEL, chatgpt_codex_model_ids
+from ai22b.talent_foundry.registry import validate_hired_agent_team_members
 
 
 DEFAULT_MODEL = DEFAULT_CHATGPT_CODEX_MODEL
@@ -379,6 +380,24 @@ def _run_team_directive(
         return {"ok": False, "error": f"Team file could not be read: {type(exc).__name__}: {exc}"}
 
     team_name = (team.get("team") or {}).get("name") or "Investment Office"
+    try:
+        team_validation = validate_hired_agent_team_members(team)
+    except Exception as exc:
+        return {
+            "ok": False,
+            "error": f"Team members are not Paideia development-verified: {type(exc).__name__}: {exc}",
+        }
+    if not team_validation.get("passed"):
+        failed = [
+            f"{item.get('member_id')}: {', '.join(item.get('missing_required', []))}"
+            for item in team_validation.get("member_reports", [])
+            if not item.get("passed")
+        ]
+        return {
+            "ok": False,
+            "error": "Team members are not Paideia development-verified: " + "; ".join(failed),
+            "team_validation": team_validation,
+        }
     members = team.get("members") or []
     specialists = [
         member
@@ -448,6 +467,7 @@ def _run_team_directive(
         "llm_mode": llm_mode,
         "llm_model": llm_model,
         "chat_backend": chat_backend,
+        "development_validation": team_validation,
         "specialist_reports": reports,
         "leader_synthesis": leader_result,
     }

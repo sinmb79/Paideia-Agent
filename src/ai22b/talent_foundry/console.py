@@ -27,7 +27,6 @@ from ai22b.talent_foundry.role_models import (
 from ai22b.talent_foundry.registry import (
     assemble_hired_agent_team,
     assemble_hired_projection_swarm,
-    hire_installed_agent,
     run_hired_projection_swarm_cycle,
     run_hired_team_cycle,
 )
@@ -2113,16 +2112,38 @@ def run_console_session(
         team_dir = output_dir / "specialist_team"
         team_path = team_dir / "hired_agent_team.json"
         cycle_path = team_dir / "hired_agent_team_cycle.json"
-        installed_manifest_path = Path(onboarding["artifacts"]["installed_agent_manifest"])
         specialist_employment_records = []
+        specialist_onboarding_sessions = []
+        specialist_training_runs = []
         for role_id, role in SPECIALIST_TEAM_ROLES:
-            hiring = hire_installed_agent(
-                installed_manifest_path,
-                employer=normalized["owner"],
-                role=role,
-                record_name=f"employment_record.specialist_{role_id}.json",
+            member_name = f"{normalized['talent_name']}-{role_id}"
+            member_request = (
+                f"{normalized['request']}\n\n"
+                f"Separate specialist team member role: {role}\n"
+                f"Team objective: {normalized.get('team_objective') or normalized.get('initial_goal') or normalized['request']}\n"
+                "Raise this member through the built-in Paideia development program before team assignment."
             )
-            specialist_employment_records.append(hiring["employment_record"])
+            member_session = run_agent_onboarding(
+                owner=normalized["owner"],
+                request=member_request,
+                talent_name=member_name,
+                gender=normalized["gender"],
+                output_dir=team_dir / "members" / role_id,
+                domain=normalized.get("team_domain") or normalized.get("domain") or None,
+                role_model_id=normalized.get("role_model_id") or None,
+                private_curriculum_dir=normalized.get("private_curriculum_dir") or None,
+                agent_surface=normalized.get("agent_surface") or "cli-console",
+                llm_service=normalized.get("llm_service") or None,
+                llm_model=normalized.get("llm_model") or None,
+                llm_model_path=normalized.get("llm_model_path") or None,
+                chat_surface=normalized.get("chat_surface") or DEFAULT_CHAT_SURFACE_ID,
+                initial_goal=f"{role} specialist onboarding goal for {normalized.get('team_name') or normalized['talent_name']}",
+                cycle_note=f"First specialist cycle: prepare evidence-backed work habits for {role}.",
+                reviewed_by=normalized["owner"],
+            )
+            specialist_employment_records.append(Path(member_session["artifacts"]["employment_record"]))
+            specialist_onboarding_sessions.append(member_session["artifacts"]["onboarding_session"])
+            specialist_training_runs.append(member_session["artifacts"]["training_run"])
 
         team = assemble_hired_agent_team(
             specialist_employment_records,
@@ -2144,6 +2165,8 @@ def run_console_session(
         artifacts["specialist_team"] = str(team_path)
         artifacts["specialist_team_cycle"] = str(cycle_path)
         artifacts["specialist_employment_records"] = [str(path) for path in specialist_employment_records]
+        artifacts["specialist_onboarding_sessions"] = [str(path) for path in specialist_onboarding_sessions]
+        artifacts["specialist_training_runs"] = [str(path) for path in specialist_training_runs]
         post_hire_extensions["specialist_team"] = {
             "schema": team["schema"],
             "cycle_schema": cycle["schema"],
@@ -2151,6 +2174,8 @@ def run_console_session(
             "member_count": team["team"]["member_count"],
             "member_roles": [role for _role_id, role in SPECIALIST_TEAM_ROLES],
             "member_type": "separately_hired_talent_agent",
+            "member_development_model": team["team_policy"]["member_development_model"],
+            "role_label_only_membership_allowed": team["team_policy"]["role_label_only_membership_allowed"],
             "not_a_projection_team": team["team_policy"]["not_a_projection_team"],
         }
         if cycle["cycle_status"] == "completed":

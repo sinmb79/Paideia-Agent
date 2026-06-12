@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import tempfile
 import unittest
@@ -92,6 +93,21 @@ class TalentFoundryTelegramBridgeTests(unittest.TestCase):
             else:
                 os.environ["PAIDEIA_CHAT_BACKEND"] = previous_backend
 
+    def _verified_development_evidence(self) -> dict:
+        return {
+            "schema": "paideia-team-member-development-evidence/v1",
+            "status": "verified",
+            "passed": True,
+            "member_training_model": "built_in_paideia_talent_foundry_per_member",
+            "resume": {
+                "present": True,
+                "source": "hiring_dossier.resume",
+                "hiring_dossier": "hiring_dossier.json",
+                "hiring_dossier_markdown": "HIRING_DOSSIER.ko.md",
+            },
+            "missing_required": [],
+        }
+
     def test_team_directive_dispatches_specialist_then_leader(self) -> None:
         from ai22b.talent_foundry import telegram_bridge
 
@@ -109,17 +125,24 @@ class TalentFoundryTelegramBridgeTests(unittest.TestCase):
     {
       "member_id": "leader",
       "employment_record_path": "%s",
-      "coordination_role": "CIO"
+      "coordination_role": "CIO",
+      "development_evidence": %s
     },
     {
       "member_id": "market",
       "employment_record_path": "%s",
-      "coordination_role": "US market strategist"
+      "coordination_role": "US market strategist",
+      "development_evidence": %s
     }
   ]
 }
 """
-                % (str(leader).replace("\\", "\\\\"), str(specialist).replace("\\", "\\\\")),
+                % (
+                    str(leader).replace("\\", "\\\\"),
+                    json.dumps(self._verified_development_evidence(), ensure_ascii=False),
+                    str(specialist).replace("\\", "\\\\"),
+                    json.dumps(self._verified_development_evidence(), ensure_ascii=False),
+                ),
                 encoding="utf-8",
             )
             calls: list[Path] = []
@@ -152,6 +175,54 @@ class TalentFoundryTelegramBridgeTests(unittest.TestCase):
             self.assertEqual(calls, [specialist, leader])
             self.assertIn("1/1 specialist reports", result["answer"])
             self.assertTrue(Path(result["artifact_path"]).exists())
+
+    def test_team_directive_blocks_role_label_members_without_development_evidence(self) -> None:
+        from ai22b.talent_foundry import telegram_bridge
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            leader = root / "leader.json"
+            specialist = root / "specialist.json"
+            team_path = root / "team.json"
+            team_path.write_text(
+                """
+{
+  "schema": "ai-talent-hired-agent-team/v1",
+  "team": {"name": "Fixture Investment Office"},
+  "members": [
+    {
+      "member_id": "leader",
+      "employment_record_path": "%s",
+      "coordination_role": "CIO"
+    },
+    {
+      "member_id": "market",
+      "employment_record_path": "%s",
+      "coordination_role": "US market strategist"
+    }
+  ]
+}
+"""
+                % (str(leader).replace("\\", "\\\\"), str(specialist).replace("\\", "\\\\")),
+                encoding="utf-8",
+            )
+
+            result = telegram_bridge._run_team_directive(
+                team_path=team_path,
+                leader_record=leader,
+                objective="check markets",
+                output_dir=root / "runs",
+                llm_mode="live",
+                llm_model="gpt-test",
+                learn_from_chat=True,
+                live_max_output_tokens=1234,
+                chat_backend="codex_oauth",
+                hermes_agent_root=None,
+                team_max_workers=1,
+            )
+
+        self.assertFalse(result["ok"])
+        self.assertIn("development-verified", result["error"])
 
 
 if __name__ == "__main__":

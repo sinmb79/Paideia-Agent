@@ -42,6 +42,15 @@ and capstone score >= 88.
 Fallback or quarantined learning cannot graduate.
 ```
 
+Team membership now has an additional product rule:
+
+```text
+Every team member must be raised by the built-in Paideia development program.
+Every team member must have a separate active employment_record.
+Every team member must expose resume or hiring_dossier evidence.
+Role labels alone cannot create team membership.
+```
+
 This rule is now recorded in:
 
 - `investment-office\teams\22b-investment-office\development\DEVELOPMENT_REPORT.md`
@@ -92,12 +101,23 @@ Add a first-class domain model for hired agent teams with:
 - Team lead role
 - Specialist roster
 - Employment record paths
+- Per-member onboarding session paths
+- Per-member training run paths
+- Per-member resume or hiring dossier evidence
 - Growth program paths
 - Education and capstone status
 - Active graduation rule
 - No-autonomous-trading policy
 
 The team should not rely on ad hoc JSON mutation.
+
+The supported creation path should be:
+
+1. Build or choose the team objective.
+2. For each specialist role, run Paideia's built-in onboarding/development program separately.
+3. Produce that member's own `employment_record.json`, training run, learning ledger, memory substrate, and hiring dossier/resume.
+4. Assemble the team only from members whose `development_evidence.passed` is true.
+5. Block `/team` dispatch when any member is only a role label or lacks development evidence.
 
 ### 2. Growth-before-credential Pipeline
 
