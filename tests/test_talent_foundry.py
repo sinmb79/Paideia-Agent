@@ -148,12 +148,22 @@ class TalentFoundryTests(unittest.TestCase):
         tampered = json.loads(json.dumps(contract, ensure_ascii=False))
         tampered["identity_boundary"]["identity_sources_allowed"].append("external_skill")
         tampered["identity_boundary"]["reasoning_kibo_copy_from_external_skill_allowed"] = True
+        tampered["embodied_learning_policy"]["direct_usb_style_data_transfer_allowed"] = True
+        tampered["embodied_learning_policy"]["internalization_stages"] = ["copy_data"]
+        tampered["practice_reasoning_policy"]["broad_exhaustive_search_is_primary_method"] = True
+        tampered["practice_reasoning_policy"]["practice_loop"] = ["search_everything", "answer"]
+        tampered["reinforcement_learning_policy"]["raw_external_answer_reinforcement_allowed"] = True
         tampered["external_skill_policy"]["promotion_path"] = ["direct_install"]
         tampered["work_growth_policy"]["promotion_requires_reviewed_result"] = False
 
         validation = validate_closed_growth_contract(tampered)
 
         self.assertFalse(validation["passed"])
+        self.assertIn("embodied_learning_blocks_usb_transfer", validation["failed_checks"])
+        self.assertIn("embodied_learning_requires_full_internalization", validation["failed_checks"])
+        self.assertIn("practice_reasoning_not_broad_search_first", validation["failed_checks"])
+        self.assertIn("practice_reasoning_uses_required_loop", validation["failed_checks"])
+        self.assertIn("reinforcement_blocks_raw_external_answers", validation["failed_checks"])
         self.assertIn("identity_sources_are_paideia_only", validation["failed_checks"])
         self.assertIn("identity_blocks_external_reasoning_kibo", validation["failed_checks"])
         self.assertIn("external_skill_promotion_path_is_rewrite_test_review", validation["failed_checks"])

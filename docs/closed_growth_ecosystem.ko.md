@@ -4,6 +4,16 @@ English: [Closed Growth Ecosystem](closed_growth_ecosystem.en.md)
 
 Paideia Agent는 열린 스킬 마켓플레이스가 아닙니다. 목표는 보스가 설계한 교육과정으로 AI 인재를 키우고, 각 인재가 자기 전공, 기억, 추론 기보, 이력서, ID를 가진 전문가로 성장하게 하는 것입니다.
 
+## 인간형 폐쇄성
+
+여기서 폐쇄성은 단순한 보안 차단이 아니라 인간의 신체와 뇌 구조에 가까운 학습 모델입니다. 인간은 어릴 때부터 배운 내용이 몸과 뇌에 축적되며, 컴퓨터처럼 USB로 지식이나 해결법을 즉시 복사할 수 없습니다. Paideia Agent도 같은 원칙을 따릅니다.
+
+- 외부 자료는 바로 기억이나 기보가 되지 않고, 주의, 이해, 교육과정 매핑, 연습, 시험, 피드백, 응용을 거쳐 내재화됩니다.
+- 추론 LLM처럼 모든 경우의 수를 넓게 검색하는 것이 1차 목적이 아닙니다.
+- 먼저 과제를 어떻게 풀지 깊이 사고하고, 꼭 필요한 과정과 방법을 고른 뒤, 제한된 시간 안에 답을 찾는 시험과 연습을 반복합니다.
+- 반복된 시험, 오류 수정, 보스/감독 검토, 실제 업무 성공 증거가 강화 신호가 됩니다.
+- 이 강화 과정을 통해 에이전트는 외부의 복사본이 아니라 자기만의 문제 해결 방식과 추론 기보를 형성합니다.
+
 ## 핵심 차이
 
 | 구분 | 열린 커스텀 에이전트 | Paideia Agent |
@@ -31,6 +41,7 @@ flowchart LR
 
 - `education_program_engine`: 전공, 교육과정, 시험, 성장 경로를 만듭니다.
 - `assessment_and_dossier_engine`: 이력서와 채용 dossier를 만듭니다.
+- `embodied_practice_and_exam_engine`: 지식이 직접 복사되지 않고 연습, 시간 제한 시험, 피드백, 응용을 통과하게 합니다.
 - `reasoning_kibo_engine`: 시험, 오답, 피드백, 업무 경험에서 추론 기보를 형성합니다.
 - `memory_substrate_engine`: 검증된 기억만 active memory로 올립니다.
 - `identity_and_id_card_engine`: 고유 ID와 Agent_warrent envelope를 관리합니다.
@@ -46,6 +57,8 @@ flowchart LR
 - 외부 스킬의 직접 활성화와 직접 복사는 금지됩니다.
 - 외부 스킬의 메모리, 프롬프트, 워크플로는 Paideia 정체성으로 들어갈 수 없습니다.
 - 외부 스킬을 가져올 때 Paideia는 활성 `SKILL.md`를 만들지 않고 `REFERENCE.md`와 `SOURCE_SKILL_REFERENCE.md`로만 보관합니다.
+- USB식 직접 데이터 전송, 직접 memory patch, 직접 해결법 복사는 금지됩니다.
+- 문제 해결은 `understand_task -> choose_minimal_necessary_method -> solve_under_time_constraint -> review_result_and_errors -> extract_personal_method -> apply_method_to_new_domain` 루프를 따릅니다.
 - 쓸만한 절차는 반드시 Paideia 교육 축이나 절차 훈련으로 재작성해야 합니다.
 - 실패했거나 검토되지 않은 실행은 격리되고, 성공한 요약과 검토된 업무 증거만 승격됩니다.
 - 채팅에서 나온 학습 후보도 보스 검토 전에는 `force_quarantine`으로 격리하며, 곧바로 memory substrate나 reasoning kibo에 승격하지 않습니다.
