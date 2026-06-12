@@ -1828,6 +1828,7 @@ class TalentFoundryTests(unittest.TestCase):
         try:
             report = doctor_llm_provider(
                 engine="openai_chatgpt_codex",
+                service="openai_responses_api",
                 model="fake-model",
                 live_check=True,
                 client=FakeClient(),
@@ -1902,6 +1903,7 @@ class TalentFoundryTests(unittest.TestCase):
         try:
             report = doctor_llm_provider(
                 engine="openai_chatgpt_codex",
+                service="openai_responses_api",
                 model="fake-model",
                 live_check=True,
                 client=FakeFailingClient(),
@@ -2018,6 +2020,7 @@ class TalentFoundryTests(unittest.TestCase):
         from ai22b.talent_foundry.llm_onboarding import build_llm_connection_profile
 
         old_key = os.environ.pop("OPENAI_API_KEY", None)
+        old_backend = os.environ.pop("PAIDEIA_CHAT_BACKEND", None)
         try:
             profile = build_llm_connection_profile(
                 llm_service="openai_chatgpt_codex",
@@ -2026,31 +2029,33 @@ class TalentFoundryTests(unittest.TestCase):
         finally:
             if old_key is not None:
                 os.environ["OPENAI_API_KEY"] = old_key
+            if old_backend is not None:
+                os.environ["PAIDEIA_CHAT_BACKEND"] = old_backend
 
         setup = profile["setup_requirements"]
-        required_env = setup["required_env"][0]
         sequence = {item["id"]: item for item in profile["verification_sequence"]}
         serialized = json.dumps(profile, ensure_ascii=False)
 
         self.assertEqual(profile["schema"], "paideia-llm-connection-profile/v1")
-        self.assertEqual(profile["status"], "needs_credentials_before_live")
+        self.assertEqual(profile["status"], "ready_for_explicit_live_check")
         self.assertEqual(profile["selected_llm_service"]["engine"], "openai_chatgpt_codex")
+        self.assertEqual(profile["selected_llm_service"]["service_id"], "openai_chatgpt_codex")
+        self.assertEqual(profile["selected_llm_service"]["chat_backend_default"], "codex_oauth")
         self.assertEqual(profile["runtime_identity_policy"], "application_engine_not_identity")
         self.assertTrue(setup["requires_live_check_before_agent_work"])
-        self.assertTrue(setup["requires_model_argument"])
+        self.assertFalse(setup["requires_model_argument"])
         self.assertFalse(setup["requires_model_path"])
         self.assertFalse(setup["requires_localhost_endpoint"])
-        self.assertEqual(required_env["preferred"], "OPENAI_API_KEY")
-        self.assertEqual(required_env["one_of"], ["OPENAI_API_KEY"])
-        self.assertFalse(required_env["stores_secret_in_profile"])
-        self.assertIn("$env:OPENAI_API_KEY", required_env["powershell"])
+        self.assertEqual(setup["required_env"], [])
         self.assertEqual(setup["recommended_model_argument"], "gpt-4.1-mini")
-        self.assertEqual(profile["readiness"]["doctor_status"], "needs_configuration")
-        self.assertFalse(profile["readiness"]["doctor_passed"])
-        self.assertEqual(profile["readiness"]["live_preflight_status"], "needs_configuration")
+        self.assertIn("gpt-5.5", {item["id"] for item in setup["model_choices"]})
+        self.assertEqual(profile["readiness"]["doctor_status"], "ready")
+        self.assertTrue(profile["readiness"]["doctor_passed"])
+        self.assertEqual(profile["readiness"]["live_preflight_status"], "ready_for_explicit_live_attempt")
         self.assertFalse(sequence["no_network_doctor"]["network_call"])
         self.assertTrue(sequence["explicit_live_provider_check"]["network_call"])
         self.assertIn("--live-check", sequence["explicit_live_provider_check"]["command"])
+        self.assertIn("--llm-service openai_chatgpt_codex", sequence["explicit_live_provider_check"]["command"])
         self.assertIn("--llm-model gpt-4.1-mini", sequence["live_application_engine_smoke"]["command"])
         self.assertIn("--llm-mode live", profile["daily_use_commands"]["live_chat_template"])
         self.assertFalse(profile["data_policy"]["llm_is_identity"])
@@ -2059,6 +2064,44 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertFalse(profile["public_safe"]["secret_values_exported"])
         self.assertNotIn("sk-", serialized)
         self.assertNotIn("fixture_value_should_not_be_exported", serialized)
+
+    def test_llm_connection_profile_guides_openai_api_key_service_without_storing_secrets(self) -> None:
+        import os
+
+        from ai22b.talent_foundry.llm_onboarding import build_llm_connection_profile
+
+        old_key = os.environ.pop("OPENAI_API_KEY", None)
+        old_backend = os.environ.pop("PAIDEIA_CHAT_BACKEND", None)
+        try:
+            profile = build_llm_connection_profile(llm_service="openai_responses_api")
+        finally:
+            if old_key is not None:
+                os.environ["OPENAI_API_KEY"] = old_key
+            if old_backend is not None:
+                os.environ["PAIDEIA_CHAT_BACKEND"] = old_backend
+
+        setup = profile["setup_requirements"]
+        required_env = setup["required_env"][0]
+        sequence = {item["id"]: item for item in profile["verification_sequence"]}
+        serialized = json.dumps(profile, ensure_ascii=False)
+
+        self.assertEqual(profile["status"], "needs_credentials_before_live")
+        self.assertEqual(profile["selected_llm_service"]["service_id"], "openai_responses_api")
+        self.assertEqual(profile["selected_llm_service"]["chat_backend_default"], "openai_api")
+        self.assertEqual(profile["selected_llm_service"]["network_access"], "external_api_selected_data_minimized")
+        self.assertEqual(required_env["preferred"], "OPENAI_API_KEY")
+        self.assertEqual(required_env["one_of"], ["OPENAI_API_KEY"])
+        self.assertFalse(required_env["stores_secret_in_profile"])
+        self.assertIn("$env:OPENAI_API_KEY", required_env["powershell"])
+        self.assertEqual(setup["recommended_model_argument"], "gpt-5.2")
+        self.assertIn("gpt-4.1-mini", {item["id"] for item in setup["model_choices"]})
+        self.assertEqual(profile["readiness"]["doctor_status"], "needs_configuration")
+        self.assertFalse(profile["readiness"]["doctor_passed"])
+        self.assertEqual(profile["readiness"]["live_preflight_status"], "needs_configuration")
+        self.assertIn("--llm-service openai_responses_api", sequence["explicit_live_provider_check"]["command"])
+        self.assertIn("--llm-model gpt-5.2", sequence["live_application_engine_smoke"]["command"])
+        self.assertFalse(profile["public_safe"]["secret_values_exported"])
+        self.assertNotIn("sk-", serialized)
 
     def test_llm_connection_profile_guides_ollama_localhost_live_check(self) -> None:
         from ai22b.talent_foundry.llm_onboarding import build_llm_connection_profile
@@ -2098,14 +2141,17 @@ class TalentFoundryTests(unittest.TestCase):
         from ai22b.talent_foundry.llm_onboarding import build_llm_live_setup_guide
 
         old_key = os.environ.pop("OPENAI_API_KEY", None)
+        old_backend = os.environ.pop("PAIDEIA_CHAT_BACKEND", None)
         try:
             guide = build_llm_live_setup_guide(
-                llm_service="openai_chatgpt_codex",
+                llm_service="openai_responses_api",
                 llm_model="gpt-4.1-mini",
             )
         finally:
             if old_key is not None:
                 os.environ["OPENAI_API_KEY"] = old_key
+            if old_backend is not None:
+                os.environ["PAIDEIA_CHAT_BACKEND"] = old_backend
 
         cards = {item["id"]: item for item in guide["setup_cards"]}
         runbook = {item["id"]: item for item in guide["safe_runbook"]}
@@ -2114,13 +2160,16 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(guide["schema"], "paideia-llm-live-setup-guide/v1")
         self.assertEqual(guide["status"], "needs_owner_configuration_before_live")
         self.assertEqual(guide["selected_llm_service"]["engine"], "openai_chatgpt_codex")
+        self.assertEqual(guide["selected_llm_service"]["service_id"], "openai_responses_api")
         self.assertTrue(guide["readiness_gate"]["requires_explicit_live_check"])
         self.assertEqual(cards["api_credentials"]["required_env"][0]["preferred"], "OPENAI_API_KEY")
         self.assertFalse(cards["api_credentials"]["required_env"][0]["stores_secret_in_profile"])
         self.assertEqual(cards["model_argument"]["recommended_value"], "gpt-4.1-mini")
+        self.assertIn("gpt-5.2", {item["id"] for item in cards["model_argument"]["choices"]})
         self.assertTrue(runbook["explicit_live_readiness_suite"]["network_call"])
         self.assertIn("doctor-llm-live-readiness", runbook["explicit_live_readiness_suite"]["command"])
         self.assertIn("--live-check", runbook["explicit_live_readiness_suite"]["command"])
+        self.assertIn("--llm-service openai_responses_api", runbook["explicit_live_readiness_suite"]["command"])
         self.assertFalse(guide["public_safe"]["network_call_performed"])
         self.assertFalse(guide["public_safe"]["secret_values_exported"])
         self.assertFalse(guide["data_policy"]["llm_is_identity"])
@@ -4029,7 +4078,9 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(onboarding["flow"][0], "choose_llm_service")
         self.assertEqual(onboarding["flow"][1], "choose_chat_surface")
         self.assertIn("openai_chatgpt_codex", {item["id"] for item in onboarding["llm_service_catalog"]})
+        self.assertIn("openai_responses_api", {item["id"] for item in onboarding["llm_service_catalog"]})
         openai_choice = next(item for item in onboarding["llm_service_catalog"] if item["id"] == "openai_chatgpt_codex")
+        openai_api_choice = next(item for item in onboarding["llm_service_catalog"] if item["id"] == "openai_responses_api")
         ollama_choice = next(item for item in onboarding["llm_service_catalog"] if item["id"] == "ollama_local")
         self.assertIn("doctor-llm-provider", openai_choice["doctor"]["command"])
         self.assertIn("--live-check", openai_choice["doctor"]["live_check_command"])
@@ -4037,8 +4088,17 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertFalse(openai_choice["live_check_policy"]["network_call_made_by_default"])
         self.assertTrue(openai_choice["data_transfer_policy"]["external_api"])
         self.assertTrue(openai_choice["data_transfer_policy"]["codex_bridge"])
+        self.assertEqual(openai_choice["default_model"], "gpt-5.5")
+        self.assertIn("gpt-5.5", {item["id"] for item in openai_choice["model_choices"]})
+        self.assertFalse(openai_api_choice["data_transfer_policy"]["codex_bridge"])
+        self.assertTrue(openai_api_choice["data_transfer_policy"]["api_key_provider"])
+        self.assertEqual(openai_api_choice["chat_backend_default"], "openai_api")
         self.assertEqual(ollama_choice["data_transfer_policy"]["network_access"], "localhost_only")
-        self.assertIn("codex-bridge-chat", {item["id"] for item in onboarding["chat_surface_catalog"]})
+        chat_surface_ids = {item["id"] for item in onboarding["chat_surface_catalog"]}
+        self.assertIn("codex-bridge-chat", chat_surface_ids)
+        self.assertIn("telegram-bridge", chat_surface_ids)
+        telegram_surface = next(item for item in onboarding["chat_surface_catalog"] if item["id"] == "telegram-bridge")
+        self.assertEqual(telegram_surface["channel_policy"], "private_allowlist_required")
         self.assertEqual(identity_envelope["version"], "ail.v1")
         self.assertEqual(identity_envelope["extensions"]["agent_warrent"]["registration_state"], "local_unregistered")
         self.assertEqual(manifest["default_safety_posture"]["external_channels"], "disabled")

@@ -70,6 +70,7 @@ all = [
 ai22b-doctor = "ai22b.doctor:main"
 ai22b-bigram = "ai22b.from_scratch.bigram:main"
 ai22b-talent-foundry = "ai22b.talent_foundry.cli:main"
+ai22b-paideia-telegram = "ai22b.talent_foundry.telegram_bridge:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

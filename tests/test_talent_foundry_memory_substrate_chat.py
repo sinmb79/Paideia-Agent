@@ -9,6 +9,22 @@ from unittest.mock import patch
 
 
 class TalentFoundryMemorySubstrateChatTests(unittest.TestCase):
+    def _minimal_live_chat_context(self) -> dict:
+        return {
+            "schema": "ai-talent-chat-context/v1",
+            "language": "ko",
+            "agent": {"name": "fixture-agent"},
+            "message": "hello",
+            "identity_record": {},
+            "learning_profile": {},
+            "active_memory_route": {"selected_nodes": []},
+            "memory_bridge": {"selected_memory_tiles": []},
+            "conversation_method_training": {},
+            "language_development_program": {},
+            "recent_chat_history": [],
+            "guardrails": [],
+        }
+
     def test_graham_raise_packages_memory_substrate_for_separate_sample_ai(self) -> None:
         from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
         from ai22b.talent_foundry.training_run import materialize_training_blueprint
@@ -968,6 +984,169 @@ class TalentFoundryMemorySubstrateChatTests(unittest.TestCase):
         self.assertEqual(chat["reply_generation_mode"], "skipped_provider_not_ready")
         self.assertEqual(chat["llm_provider_preflight"]["status"], "needs_configuration")
         self.assertEqual(chat["chat_learning_update"]["decision"], "skipped_provider_not_ready")
+
+    def test_codex_oauth_backend_success_uses_paideia_owned_adapter_boundary(self) -> None:
+        from ai22b.talent_foundry import memory_substrate
+
+        output = json.dumps(
+            {
+                "assistant_reply": "Codex OAuth path replied.",
+                "reviewable_reasoning_summary": [{"step": "adapter", "summary": "fake adapter completed"}],
+                "learning_candidate": {
+                    "lesson": "adapter calls can be tested without Hermes network access",
+                    "reusable_principle": "mock the Paideia-owned adapter boundary",
+                    "memory_tags": ["codex_oauth"],
+                    "confidence": 0.7,
+                },
+            },
+            ensure_ascii=False,
+        )
+
+        with patch.dict(os.environ, {"PAIDEIA_CHAT_BACKEND": "codex_oauth"}, clear=False), patch.object(
+            memory_substrate,
+            "_resolve_hermes_agent_root",
+            return_value=Path("hermes-agent"),
+        ), patch.object(
+            memory_substrate,
+            "resolve_codex_oauth_credentials",
+            return_value={"authenticated": True, "provider": "openai-codex"},
+        ), patch.object(
+            memory_substrate,
+            "call_codex_oauth_llm",
+            return_value=output,
+        ) as fake_call:
+            result = memory_substrate._call_openai_responses_chat(
+                chat_context=self._minimal_live_chat_context(),
+                model="gpt-test",
+            )
+
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["engine"], "chatgpt_codex_oauth")
+        self.assertEqual(result["provider"], "openai-codex")
+        self.assertEqual(result["assistant_reply"], "Codex OAuth path replied.")
+        self.assertFalse(result["raw_output_saved"])
+        self.assertFalse(result["data_policy"]["send_private_training_files"])
+        self.assertTrue(fake_call.called)
+
+    def test_codex_oauth_auth_failure_redacts_secret_text(self) -> None:
+        from ai22b.talent_foundry import memory_substrate
+
+        secret = "sk-fixture_secret_value_1234567890"
+
+        with patch.dict(
+            os.environ,
+            {
+                "PAIDEIA_CHAT_BACKEND": "codex_oauth",
+                "OPENAI_API_KEY": secret,
+            },
+            clear=False,
+        ), patch.object(
+            memory_substrate,
+            "_resolve_hermes_agent_root",
+            return_value=Path("hermes-agent"),
+        ), patch.object(
+            memory_substrate,
+            "resolve_codex_oauth_credentials",
+            side_effect=RuntimeError(f"Authorization: Bearer {secret}; token={secret}"),
+        ):
+            result = memory_substrate._call_openai_responses_chat(
+                chat_context=self._minimal_live_chat_context(),
+                model="gpt-test",
+            )
+
+        serialized = json.dumps(result, ensure_ascii=False)
+        self.assertEqual(result["status"], "unavailable")
+        self.assertEqual(result["reason"], "codex_oauth_auth_failed")
+        self.assertNotIn(secret, serialized)
+        self.assertIn("[REDACTED_SECRET]", serialized)
+
+    def test_auto_backend_returns_codex_failure_when_api_fallback_is_disabled(self) -> None:
+        from ai22b.talent_foundry import memory_substrate
+
+        codex_result = {
+            "schema": "ai-talent-live-llm-result/v1",
+            "engine": "chatgpt_codex_oauth",
+            "provider": "openai-codex",
+            "status": "unavailable",
+            "reason": "codex_oauth_auth_failed",
+            "model": "gpt-test",
+        }
+
+        with patch.dict(
+            os.environ,
+            {
+                "PAIDEIA_CHAT_BACKEND": "auto",
+                "PAIDEIA_ALLOW_OPENAI_API_FALLBACK": "0",
+            },
+            clear=False,
+        ), patch.object(memory_substrate, "_call_codex_oauth_chat", return_value=codex_result):
+            result = memory_substrate._call_openai_responses_chat(
+                chat_context=self._minimal_live_chat_context(),
+                model="gpt-test",
+            )
+
+        self.assertEqual(result, codex_result)
+
+    def test_auto_backend_falls_back_to_openai_api_only_when_allowed(self) -> None:
+        from ai22b.talent_foundry import memory_substrate
+
+        codex_result = {
+            "schema": "ai-talent-live-llm-result/v1",
+            "engine": "chatgpt_codex_oauth",
+            "provider": "openai-codex",
+            "status": "unavailable",
+            "reason": "codex_oauth_auth_failed",
+            "model": "gpt-test",
+        }
+
+        with patch.dict(
+            os.environ,
+            {
+                "PAIDEIA_CHAT_BACKEND": "auto",
+                "PAIDEIA_ALLOW_OPENAI_API_FALLBACK": "1",
+            },
+            clear=False,
+        ), patch.object(memory_substrate, "_call_codex_oauth_chat", return_value=codex_result):
+            old_key = os.environ.pop("OPENAI_API_KEY", None)
+            try:
+                result = memory_substrate._call_openai_responses_chat(
+                    chat_context=self._minimal_live_chat_context(),
+                    model="gpt-test",
+                )
+            finally:
+                if old_key is not None:
+                    os.environ["OPENAI_API_KEY"] = old_key
+
+        self.assertEqual(result["engine"], "openai_responses_api")
+        self.assertEqual(result["status"], "unavailable")
+        self.assertEqual(result["reason"], "OPENAI_API_KEY_not_set")
+
+    def test_openai_chatgpt_codex_preflight_uses_codex_oauth_without_api_key(self) -> None:
+        from ai22b.talent_foundry.llm_runtime import build_llm_provider_preflight, build_llm_runtime_config
+
+        old_key = os.environ.pop("OPENAI_API_KEY", None)
+        try:
+            runtime_config = build_llm_runtime_config(engine="openai_chatgpt_codex", model="gpt-test")
+            with patch.dict(os.environ, {"PAIDEIA_CHAT_BACKEND": "codex_oauth"}, clear=False):
+                preflight = build_llm_provider_preflight(
+                    runtime_config,
+                    llm_mode="live",
+                    llm_model="gpt-test",
+                )
+            with patch.dict(os.environ, {"PAIDEIA_CHAT_BACKEND": "openai_api"}, clear=False):
+                api_preflight = build_llm_provider_preflight(
+                    runtime_config,
+                    llm_mode="live",
+                    llm_model="gpt-test",
+                )
+        finally:
+            if old_key is not None:
+                os.environ["OPENAI_API_KEY"] = old_key
+
+        self.assertEqual(preflight["status"], "ready_for_explicit_live_attempt")
+        self.assertFalse(preflight["blocking_checks"])
+        self.assertEqual(api_preflight["status"], "needs_configuration")
+        self.assertEqual(api_preflight["blocking_checks"][0]["id"], "credential_environment")
 
 
 if __name__ == "__main__":
