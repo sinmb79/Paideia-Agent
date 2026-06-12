@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from ai22b.talent_foundry.closed_ecosystem import build_closed_growth_contract
+
 
 SCHEMA = "ai-talent-agent-manifest/v1"
 
@@ -22,6 +24,7 @@ def build_agent_manifest(
     life_trace = hiring_packet.get("life_trace")
     growth_profile = hiring_packet.get("growth_profile")
     grade_learning_records = hiring_packet.get("grade_learning_records")
+    closed_growth_contract = build_closed_growth_contract(context="agent_manifest")
 
     return {
         "schema": SCHEMA,
@@ -77,6 +80,8 @@ def build_agent_manifest(
             "description": "LLM은 언어 생성과 도구 사용 엔진이며, 에이전트 정체성은 학적, 고용계약, 기억 프로필에서 온다.",
             "private_reasoning_trace": "do_not_store",
         },
+        "closed_growth_contract": closed_growth_contract,
+        "core_engine_boundaries": closed_growth_contract["core_engine_boundaries"],
         "memory_profile": {
             "owner": memory_profile.get("owner"),
             "semantic_themes": memory_profile.get("semantic_themes", []),

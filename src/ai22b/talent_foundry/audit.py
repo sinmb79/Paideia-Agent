@@ -1096,13 +1096,14 @@ def _public_safe_first_run_smoke() -> dict[str, Any]:
         if isinstance(agent_runtime_smoke.get("live_llm_agent_proof"), dict)
         else {}
     )
-    chat_runtime_smoke = run_chat_runtime_smoke(
-        engine="deterministic_local",
-        llm_mode="offline",
-        chat_surface="codex-bridge-chat",
-        artifact_dir=PROJECT_ROOT / "runs" / "audit_chat_runtime_smoke",
-        message="Public-safe first-run hired-chat smoke.",
-    )
+    with tempfile.TemporaryDirectory(prefix="paideia_audit_chat_runtime_smoke_") as smoke_tmp:
+        chat_runtime_smoke = run_chat_runtime_smoke(
+            engine="deterministic_local",
+            llm_mode="offline",
+            chat_surface="codex-bridge-chat",
+            artifact_dir=Path(smoke_tmp),
+            message="Public-safe first-run hired-chat smoke.",
+        )
     chat_runtime_details = (
         chat_runtime_smoke.get("details", {})
         if isinstance(chat_runtime_smoke.get("details"), dict)

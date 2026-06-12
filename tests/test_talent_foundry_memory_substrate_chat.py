@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import tempfile
+import types
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -91,6 +93,9 @@ class TalentFoundryMemorySubstrateChatTests(unittest.TestCase):
         self.assertEqual(bundle_manifest["included_artifacts"]["life_trace"], "life_trace.jsonl")
         self.assertEqual(bundle_manifest["included_artifacts"]["growth_profile"], "growth_profile.json")
         self.assertEqual(bundle_manifest["included_artifacts"]["grade_learning_records"], "grade_learning_records.json")
+        self.assertEqual(bundle_manifest["closed_growth_contract"]["schema"], "paideia-closed-growth-contract/v1")
+        self.assertEqual(bundle_manifest["closed_growth_contract"]["ecosystem_model"], "closed_curated_growth_ecosystem")
+        self.assertIn("external_skill_quarantine_engine", bundle_manifest["core_engine_boundaries"]["engine_ids"])
         self.assertIn("memory_substrate", installed_manifest["entrypoints"])
         self.assertIn("language_development_program", installed_manifest["entrypoints"])
         self.assertIn("developmental_ecology", installed_manifest["entrypoints"])
@@ -430,7 +435,7 @@ class TalentFoundryMemorySubstrateChatTests(unittest.TestCase):
         self.assertIn("Graham은 제 부모가 아니라", chat["assistant_answer"])
         self.assertNotIn("전문 리서치보다 일반 대화", chat["assistant_answer"])
 
-    def test_live_llm_chat_uses_local_context_and_promotes_chat_learning(self) -> None:
+    def test_live_llm_chat_uses_local_context_and_quarantines_chat_learning(self) -> None:
         from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
         from ai22b.talent_foundry.memory_substrate import run_chat_turn_from_employment
         from ai22b.talent_foundry.registry import hire_installed_agent
@@ -482,6 +487,8 @@ class TalentFoundryMemorySubstrateChatTests(unittest.TestCase):
                 llm_engine="openai_chatgpt_codex",
                 record_name="employment_record_codex.json",
             )
+            target_root = Path(hiring["employment_record"]).parent
+            ledger_before = json.loads((target_root / "learning_ledger.json").read_text(encoding="utf-8"))
             with patch.dict(os.environ, {"OPENAI_API_KEY": "fixture-openai-key-12345"}, clear=False), patch(
                 "ai22b.talent_foundry.memory_substrate._call_openai_responses_chat",
                 side_effect=fake_live_chat,
@@ -494,7 +501,6 @@ class TalentFoundryMemorySubstrateChatTests(unittest.TestCase):
                     llm_model="gpt-test",
                     learn_from_chat=True,
                 )
-            target_root = Path(hiring["employment_record"]).parent
             ledger = json.loads((target_root / "learning_ledger.json").read_text(encoding="utf-8"))
             substrate = json.loads((target_root / "memory_substrate.json").read_text(encoding="utf-8"))
 
@@ -512,25 +518,40 @@ class TalentFoundryMemorySubstrateChatTests(unittest.TestCase):
         self.assertEqual(chat["active_operator"], "llm.dynamic_context_conversation")
         self.assertIn("그때그때 맥락을 해석", chat["assistant_answer"])
         self.assertTrue(any(item["action"] == "live_llm_attempt" for item in chat["chat_execution_trace"]))
-        self.assertEqual(chat["chat_learning_update"]["decision"], "promoted")
+        self.assertEqual(chat["chat_learning_update"]["decision"], "quarantined")
+        self.assertEqual(
+            chat["chat_learning_update"]["policy"],
+            "chat_learning_candidate_pending_boss_review_no_automatic_promotion",
+        )
+        self.assertFalse(chat["chat_learning_update"]["automatic_promotion_performed"])
         self.assertEqual(chat["chat_execution_trace"][-2]["action"], "chat_learning_update")
         self.assertEqual(chat["chat_execution_trace"][-1]["action"], "chat_runtime_status_card_recorded")
         self.assertEqual(chat["chat_runtime_status_card"]["status"], "completed_live")
-        self.assertEqual(chat["chat_runtime_status_card"]["learning"]["decision"], "promoted")
+        self.assertEqual(chat["chat_runtime_status_card"]["learning"]["decision"], "quarantined")
         self.assertEqual(
             chat["memory_lifecycle_status_card"]["schema"],
             "paideia-memory-lifecycle-status-card/v1",
         )
         self.assertEqual(chat["memory_lifecycle_status_card"]["source"], "chat_turn")
-        self.assertEqual(chat["memory_lifecycle_status_card"]["learning"]["decision"], "promoted")
+        self.assertEqual(chat["memory_lifecycle_status_card"]["learning"]["decision"], "quarantined")
         self.assertTrue(chat["memory_lifecycle_status_card"]["active_context"]["quarantined_excluded"])
         self.assertEqual(
             chat["chat_runtime_status_card"]["memory_lifecycle"]["status"],
             chat["memory_lifecycle_status_card"]["status"],
         )
-        self.assertEqual(ledger["promoted_experiences"][-1]["source"], "chat_turn")
-        self.assertIn("conversation_context_learning", ledger["promoted_experiences"][-1]["promoted_skills"])
-        self.assertTrue(
+        self.assertEqual(
+            len(ledger.get("promoted_experiences", [])),
+            len(ledger_before.get("promoted_experiences", [])),
+        )
+        self.assertEqual(
+            len(ledger.get("quarantined_experiences", [])),
+            len(ledger_before.get("quarantined_experiences", [])) + 1,
+        )
+        self.assertEqual(ledger["quarantined_experiences"][-1]["source"], "chat_turn")
+        self.assertIn("do_not_promote_to_reasoning_kernel", ledger["quarantined_experiences"][-1]["flags"])
+        self.assertTrue(ledger["quarantined_experiences"][-1]["quality_label"]["force_quarantine"])
+        self.assertTrue(chat["chat_learning_update"]["forced_quarantine"])
+        self.assertFalse(
             any(node.get("source") == "learning_ledger_chat_turn" for node in substrate.get("nodes", []))
         )
 
@@ -598,6 +619,8 @@ class TalentFoundryMemorySubstrateChatTests(unittest.TestCase):
                 llm_model="openai/gpt-test",
                 record_name="employment_record_openrouter.json",
             )
+            target_root = Path(hiring["employment_record"]).parent
+            ledger_before = json.loads((target_root / "learning_ledger.json").read_text(encoding="utf-8"))
             with patch.dict(os.environ, {"OPENROUTER_API_KEY": "fixture-openrouter-key"}, clear=False), patch(
                 "ai22b.talent_foundry.memory_substrate.build_llm_client",
                 return_value=FakeGenericClient(),
@@ -608,7 +631,9 @@ class TalentFoundryMemorySubstrateChatTests(unittest.TestCase):
                     output_path=Path(tmp) / "generic_live_chat.json",
                     llm_mode="live",
                     llm_model="openai/gpt-test",
+                    learn_from_chat=True,
                 )
+            ledger_after = json.loads((target_root / "learning_ledger.json").read_text(encoding="utf-8"))
 
         self.assertEqual(chat["reply_generation_mode"], "live_generic_llm_client")
         self.assertEqual(chat["llm_runtime_result"]["provider_adapter"], "generic_llm_client")
@@ -626,6 +651,17 @@ class TalentFoundryMemorySubstrateChatTests(unittest.TestCase):
         self.assertEqual(live_context["memory_bridge"]["schema"], "paideia-live-chat-memory-bridge/v1")
         self.assertTrue(live_context["memory_bridge"]["education_growth_context"]["grade_learning_tiles"])
         self.assertEqual(captured["policy"]["response_format"], "json_object")
+        self.assertEqual(chat["chat_learning_update"]["decision"], "quarantined")
+        self.assertEqual(chat["chat_learning_update"]["policy"], "chat_learning_candidate_pending_boss_review_no_automatic_promotion")
+        self.assertTrue(chat["chat_learning_update"]["forced_quarantine"])
+        self.assertEqual(
+            len(ledger_after.get("promoted_experiences", [])),
+            len(ledger_before.get("promoted_experiences", [])),
+        )
+        self.assertEqual(
+            len(ledger_after.get("quarantined_experiences", [])),
+            len(ledger_before.get("quarantined_experiences", [])) + 1,
+        )
         self.assertTrue(
             any(
                 item["action"] == "live_llm_attempt"
@@ -1027,6 +1063,94 @@ class TalentFoundryMemorySubstrateChatTests(unittest.TestCase):
         self.assertFalse(result["raw_output_saved"])
         self.assertFalse(result["data_policy"]["send_private_training_files"])
         self.assertTrue(fake_call.called)
+
+    def test_codex_oauth_adapter_restores_import_boundary(self) -> None:
+        from ai22b.talent_foundry.codex_oauth_adapter import (
+            HERMES_ROOT_REVIEW_MARKER,
+            resolve_codex_oauth_credentials,
+        )
+
+        module_names = ["hermes_cli", "hermes_cli.auth", "agent", "agent.auxiliary_client"]
+        saved_modules = {name: sys.modules.get(name) for name in module_names if name in sys.modules}
+        for name in module_names:
+            sys.modules.pop(name, None)
+        preexisting_agent_module = types.ModuleType("agent")
+        preexisting_agent_module.marker = "preexisting-agent-module"
+        sys.modules["agent"] = preexisting_agent_module
+        original_path = list(sys.path)
+        env_guard = patch.dict(
+            os.environ,
+            {
+                "PAIDEIA_TRUSTED_HERMES_AGENT_ROOTS": "",
+                "PAIDEIA_TRUST_HERMES_AGENT_ROOT": "0",
+            },
+            clear=False,
+        )
+        env_guard.start()
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp) / "hermes"
+                (root / "hermes_cli").mkdir(parents=True)
+                (root / "agent").mkdir()
+                (root / "hermes_cli" / "__init__.py").write_text("", encoding="utf-8")
+                (root / "agent" / "__init__.py").write_text("", encoding="utf-8")
+                (root / "hermes_cli" / "auth.py").write_text(
+                    "def resolve_codex_runtime_credentials(refresh_if_expiring=True):\n"
+                    "    return {'api_key': 'fixture-token', 'provider': 'openai-codex', "
+                    "'base_url': 'https://example.invalid', 'source': 'test', 'auth_mode': 'oauth'}\n",
+                    encoding="utf-8",
+                )
+                (root / "agent" / "auxiliary_client.py").write_text(
+                    "def call_llm(**kwargs):\n    raise RuntimeError('not used')\n",
+                    encoding="utf-8",
+                )
+                (root / HERMES_ROOT_REVIEW_MARKER).write_text(
+                    json.dumps(
+                        {
+                            "schema": "paideia-codex-oauth-adapter-review/v1",
+                            "approved": True,
+                            "provider": "openai-codex",
+                        },
+                        ensure_ascii=False,
+                    ),
+                    encoding="utf-8",
+                )
+
+                result = resolve_codex_oauth_credentials(root, refresh_if_expiring=False)
+                root_text = str(root.resolve())
+
+                self.assertTrue(result["authenticated"])
+                self.assertEqual(result["provider"], "openai-codex")
+                self.assertEqual(sys.path, original_path)
+                self.assertIs(sys.modules.get("agent"), preexisting_agent_module)
+                self.assertNotIn(root_text, sys.path)
+                self.assertNotIn("hermes_cli.auth", sys.modules)
+
+                unreviewed_root = Path(tmp) / "unreviewed-hermes"
+                (unreviewed_root / "hermes_cli").mkdir(parents=True)
+                (unreviewed_root / "agent").mkdir()
+                (unreviewed_root / "hermes_cli" / "__init__.py").write_text("", encoding="utf-8")
+                (unreviewed_root / "agent" / "__init__.py").write_text("", encoding="utf-8")
+                (unreviewed_root / "hermes_cli" / "auth.py").write_text(
+                    "def resolve_codex_runtime_credentials(refresh_if_expiring=True):\n"
+                    "    return {'api_key': 'fixture-token'}\n",
+                    encoding="utf-8",
+                )
+                (unreviewed_root / "agent" / "auxiliary_client.py").write_text(
+                    "def call_llm(**kwargs):\n    raise RuntimeError('not used')\n",
+                    encoding="utf-8",
+                )
+                with self.assertRaises(ValueError):
+                    resolve_codex_oauth_credentials(unreviewed_root, refresh_if_expiring=False)
+
+                with self.assertRaises(ValueError):
+                    resolve_codex_oauth_credentials(Path(tmp) / "not-hermes", refresh_if_expiring=False)
+                self.assertEqual(sys.path, original_path)
+        finally:
+            for name in module_names:
+                sys.modules.pop(name, None)
+            sys.modules.update(saved_modules)
+            env_guard.stop()
 
     def test_codex_oauth_auth_failure_redacts_secret_text(self) -> None:
         from ai22b.talent_foundry import memory_substrate

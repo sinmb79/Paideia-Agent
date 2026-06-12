@@ -1506,10 +1506,15 @@ def doctor_agent_program(program_path: Path, *, output_path: Path | None = None)
         manifest = _read_json(manifest_path)
         safety_contract = manifest.get("safety_contract", {})
         compatibility_profile = manifest.get("compatibility_profile", {})
+        closed_growth_contract = manifest.get("closed_growth_contract", {})
         compatibility_gate = (
             compatibility_profile.get("activation_gate", {})
             if isinstance(compatibility_profile.get("activation_gate"), dict)
             else {}
+        )
+        identity_policy = manifest.get("identity_policy", {}) if isinstance(manifest.get("identity_policy"), dict) else {}
+        active_skill_descriptors = sorted(
+            str(path.relative_to(root)).replace("\\", "/") for path in manifest_path.parent.rglob("SKILL.md")
         )
         detail = {
             "path": str(manifest_path.relative_to(root)),
@@ -1519,6 +1524,14 @@ def doctor_agent_program(program_path: Path, *, output_path: Path | None = None)
             "safety_contract_status": safety_contract.get("status"),
             "compatibility_profile_schema": compatibility_profile.get("schema"),
             "compatibility_activation_gate": compatibility_gate.get("status"),
+            "closed_growth_contract_schema": closed_growth_contract.get("schema"),
+            "closed_growth_ecosystem_model": closed_growth_contract.get("ecosystem_model"),
+            "paideia_native_rewrite_required": safety_contract.get("reference_only_until_paideia_rewrite"),
+            "external_skill_identity_injection_allowed": identity_policy.get(
+                "external_skill_identity_injection_allowed"
+            ),
+            "active_skill_descriptor_created": safety_contract.get("active_skill_descriptor_created"),
+            "active_skill_descriptors": active_skill_descriptors,
             "activation_allowed": safety_contract.get("activation_allowed"),
             "sensitive_files_copied": safety_contract.get("sensitive_files_copied"),
             "execute_imported_code": safety_contract.get("execute_imported_code"),
@@ -1529,13 +1542,24 @@ def doctor_agent_program(program_path: Path, *, output_path: Path | None = None)
             or safety_contract.get("schema") != "paideia-imported-skill-safety-contract/v1"
             or safety_contract.get("activation_allowed") is not False
             or safety_contract.get("execute_imported_code") is not False
+            or safety_contract.get("active_skill_descriptor_created") is not False
+            or safety_contract.get("identity_injection_allowed") is not False
+            or safety_contract.get("memory_import_allowed") is not False
+            or safety_contract.get("reasoning_kibo_import_allowed") is not False
+            or safety_contract.get("reference_only_until_paideia_rewrite") is not True
             or safety_contract.get("sensitive_files_copied") is not False
             or safety_contract.get("default_permissions", {}).get("network") != "blocked"
             or safety_contract.get("default_permissions", {}).get("subprocess") != "blocked"
             or safety_contract.get("default_permissions", {}).get("credential_access") != "blocked"
+            or safety_contract.get("default_permissions", {}).get("identity_layer") != "blocked"
             or compatibility_profile.get("schema") != "paideia-imported-skill-compatibility-profile/v1"
             or compatibility_gate.get("status") != "locked_pending_owner_allowlist"
             or compatibility_gate.get("activation_allowed") is not False
+            or closed_growth_contract.get("schema") != "paideia-closed-growth-contract/v1"
+            or closed_growth_contract.get("ecosystem_model") != "closed_curated_growth_ecosystem"
+            or identity_policy.get("external_skill_identity_injection_allowed") is not False
+            or identity_policy.get("original_skill_is_reference_material") is not True
+            or bool(active_skill_descriptors)
         ):
             unsafe_imports.append(detail)
     checks["imported_skills"] = {
@@ -1543,6 +1567,7 @@ def doctor_agent_program(program_path: Path, *, output_path: Path | None = None)
         "details": {
             "imported_count": len(imported_skill_manifests),
             "contract_schema": "paideia-imported-skill-safety-contract/v1",
+            "closed_growth_contract_schema": "paideia-closed-growth-contract/v1",
             "unsafe_enabled_imports": unsafe_imports,
             "skills": imported_skill_details,
         },
@@ -1557,7 +1582,7 @@ def doctor_agent_program(program_path: Path, *, output_path: Path | None = None)
         "recommendations": [
             "Run this doctor before first chat.",
             "Keep LiveLlm off until API quota and privacy posture are confirmed.",
-            "Install community skills only after manual review.",
+            "Keep community skills quarantined as reference material until rewritten as Paideia-native training.",
             "Use one install kit per hired talent to avoid memory/profile drift.",
         ],
     }

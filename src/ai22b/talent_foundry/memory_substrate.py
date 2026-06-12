@@ -1992,7 +1992,7 @@ def _record_chat_learning(
     }
     runtime_result = run.get("llm_runtime_result", {})
     provider_fallback_used = bool(runtime_result.get("fallback_used"))
-    score = 60 if provider_fallback_used else 86 if runtime_result.get("status") == "completed" else 80
+    score = 60 if provider_fallback_used else 86
     status = "needs_review" if provider_fallback_used else "verified"
     ledger_before = len(ledger.get("promoted_experiences", []))
     quarantined_before = len(ledger.get("quarantined_experiences", []))
@@ -2003,6 +2003,7 @@ def _record_chat_learning(
         quality_label={
             "score": score,
             "status": status,
+            "force_quarantine": True,
             "reviewer": "local_chat_learning_policy",
             "notes": (
                 "LLM provider fallback 답변이므로 보스 검토 전 승격하지 않는다."
@@ -2017,47 +2018,18 @@ def _record_chat_learning(
 
     promoted_after = len(ledger.get("promoted_experiences", []))
     quarantined_after = len(ledger.get("quarantined_experiences", []))
-    decision = "promoted" if promoted_after > ledger_before else "quarantined"
-    latest_entry = (
-        ledger["promoted_experiences"][-1]
-        if decision == "promoted"
-        else ledger["quarantined_experiences"][-1]
-    )
+    if promoted_after > ledger_before or quarantined_after <= quarantined_before:
+        raise RuntimeError("chat learning quarantine contract failed closed")
+    decision = "quarantined"
+    latest_entry = ledger["quarantined_experiences"][-1]
     conversation_board = substrate.setdefault("boards", {}).setdefault("conversation_development", {})
-    if decision == "promoted":
-        substrate.setdefault("nodes", []).append(
-            {
-                "id": f"chat_learning:{latest_entry['id']}",
-                "source": "learning_ledger_chat_turn",
-                "title": "post-hire live conversation learning",
-                "memory_type": "procedural_conversation_update",
-                "content": {
-                    "summary": latest_entry.get("summary"),
-                    "lesson": lesson,
-                    "reusable_principle": principle,
-                    "promoted_skills": latest_entry.get("promoted_skills", []),
-                },
-                "tags": ["post_hire_chat_learning", *latest_entry.get("promoted_skills", [])],
-                "retrieval_cues": [run.get("message", ""), lesson, principle],
-                "use_as": "future_dialogue_style_and_boundary_memory",
-                "created_at_utc": _now(),
-            }
-        )
-        conversation_board.setdefault("post_hire_chat_learning", []).append(
-            {
-                "experience_id": latest_entry["id"],
-                "lesson": lesson,
-                "reusable_principle": principle,
-            }
-        )
-    else:
-        conversation_board.setdefault("quarantined_chat_learning", []).append(
-            {
-                "experience_id": latest_entry["id"],
-                "lesson": lesson,
-                "reason": "live_llm_failed_or_low_quality",
-            }
-        )
+    conversation_board.setdefault("quarantined_chat_learning", []).append(
+        {
+            "experience_id": latest_entry["id"],
+            "lesson": lesson,
+            "reason": "chat_learning_requires_boss_review_before_memory_promotion",
+        }
+    )
     substrate.setdefault("source_counts", {})["learning_ledger_promoted_experiences"] = len(
         ledger.get("promoted_experiences", [])
     )
@@ -2076,7 +2048,8 @@ def _record_chat_learning(
         "quarantined_count_before": quarantined_before,
         "quarantined_count_after": quarantined_after,
         "latest_promoted_skills": latest_entry.get("promoted_skills", []),
-        "policy": "reviewable_chat_summary_only_no_hidden_chain_of_thought",
+        "policy": "chat_learning_candidate_pending_boss_review_no_automatic_promotion",
+        "forced_quarantine": True,
         "automatic_promotion_performed": False,
         "ledger_write_performed": True,
     }

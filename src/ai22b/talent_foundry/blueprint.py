@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
+from ai22b.talent_foundry.closed_ecosystem import build_closed_growth_contract
 from ai22b.talent_foundry.process_emulation import build_process_emulation_plan
 from ai22b.talent_foundry.role_models import build_curriculum_manifest, build_role_model_profile
 from ai22b.talent_foundry.saju_seed import build_saju_narrative_seed
@@ -296,6 +297,7 @@ def create_agent_training_blueprint(
             )
         )
     track["domains"] = _highlight_domains(request, list(track["domains"]))
+    closed_growth_contract = build_closed_growth_contract(context="training_blueprint")
 
     training_pipeline = _training_pipeline(track)
     if role_model:
@@ -363,6 +365,8 @@ def create_agent_training_blueprint(
             "role": "application_engine_not_identity",
             "description": "LLM은 언어 생성과 도구 사용 엔진이며, 정체성은 학적, 평가, 성장 기록, 고용 계약에서 온다.",
         },
+        "closed_growth_contract": closed_growth_contract,
+        "core_engine_boundaries": closed_growth_contract["core_engine_boundaries"],
         "local_policy": {
             "storage": "local_first",
             "storage_root": "[AI22B_STORAGE_ROOT]/talent-foundry",
