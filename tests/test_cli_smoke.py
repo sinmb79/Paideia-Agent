@@ -72,6 +72,7 @@ class CliSmokeTests(unittest.TestCase):
             first_run_doctor_path = tmp_path / "first_run_doctor.json"
             package_install_doctor_path = tmp_path / "package_install_doctor.json"
             runtime_contract_doctor_path = tmp_path / "runtime_contract_doctor.json"
+            task_pursuit_plan_path = tmp_path / "task_pursuit_plan.json"
 
             role_models_code = cli_main(
                 [
@@ -258,6 +259,15 @@ class CliSmokeTests(unittest.TestCase):
                     str(runtime_contract_doctor_path),
                 ]
             )
+            task_pursuit_plan_code = cli_main(
+                [
+                    "build-task-pursuit-plan",
+                    "--request",
+                    "Build a local verified report and keep iterating until tests pass.",
+                    "--output",
+                    str(task_pursuit_plan_path),
+                ]
+            )
 
             role_models = json.loads(role_models_path.read_text(encoding="utf-8"))
             role_model_curricula = json.loads(role_model_curricula_path.read_text(encoding="utf-8"))
@@ -292,6 +302,7 @@ class CliSmokeTests(unittest.TestCase):
             first_run_doctor = json.loads(first_run_doctor_path.read_text(encoding="utf-8"))
             package_install_doctor = json.loads(package_install_doctor_path.read_text(encoding="utf-8"))
             runtime_contract_doctor = json.loads(runtime_contract_doctor_path.read_text(encoding="utf-8"))
+            task_pursuit_plan = json.loads(task_pursuit_plan_path.read_text(encoding="utf-8"))
 
         self.assertEqual(role_models_code, 0)
         self.assertEqual(role_model_curricula_code, 0)
@@ -314,6 +325,7 @@ class CliSmokeTests(unittest.TestCase):
         self.assertEqual(first_run_doctor_code, 0)
         self.assertEqual(package_install_doctor_code, 0)
         self.assertEqual(runtime_contract_doctor_code, 0)
+        self.assertEqual(task_pursuit_plan_code, 0)
 
         self.assertEqual(role_models["schema"], "ai-talent-role-model-list/v1")
         self.assertEqual(role_models["domain"], "securities_research")
@@ -372,6 +384,11 @@ class CliSmokeTests(unittest.TestCase):
         chat_smoke_command = next(item for item in llm_onboarding["command_plan"] if item["id"] == "chat_runtime_smoke")
         self.assertIn("run-chat-runtime-smoke", chat_smoke_command["command"])
         self.assertIn("--chat-surface codex-bridge-chat", chat_smoke_command["command"])
+
+        self.assertEqual(task_pursuit_plan["schema"], "paideia-task-pursuit-plan/v1")
+        self.assertTrue(task_pursuit_plan["validation"]["passed"])
+        self.assertEqual(task_pursuit_plan["necessary_research_plan"]["external_search_default"], "only_if_needed")
+        self.assertFalse(task_pursuit_plan["public_safe"]["network_call_performed"])
 
         self.assertEqual(llm_connection_profile["schema"], "paideia-llm-connection-profile/v1")
         self.assertEqual(llm_connection_profile["status"], "offline_ready_no_setup")

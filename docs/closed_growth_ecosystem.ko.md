@@ -42,6 +42,7 @@ flowchart LR
 - `education_program_engine`: 전공, 교육과정, 시험, 성장 경로를 만듭니다.
 - `assessment_and_dossier_engine`: 이력서와 채용 dossier를 만듭니다.
 - `embodied_practice_and_exam_engine`: 지식이 직접 복사되지 않고 연습, 시간 제한 시험, 피드백, 응용을 통과하게 합니다.
+- `task_pursuit_engine`: 보스의 지시를 6하 원칙, 필요한 조사, 작업, 검증, 수정, 완료 또는 차단 조건까지 이어지는 목표추진 계획으로 바꿉니다.
 - `reasoning_kibo_engine`: 시험, 오답, 피드백, 업무 경험에서 추론 기보를 형성합니다.
 - `memory_substrate_engine`: 검증된 기억만 active memory로 올립니다.
 - `identity_and_id_card_engine`: 고유 ID와 Agent_warrent envelope를 관리합니다.
@@ -59,6 +60,7 @@ flowchart LR
 - 외부 스킬을 가져올 때 Paideia는 활성 `SKILL.md`를 만들지 않고 `REFERENCE.md`와 `SOURCE_SKILL_REFERENCE.md`로만 보관합니다.
 - USB식 직접 데이터 전송, 직접 memory patch, 직접 해결법 복사는 금지됩니다.
 - 문제 해결은 `understand_task -> choose_minimal_necessary_method -> solve_under_time_constraint -> review_result_and_errors -> extract_personal_method -> apply_method_to_new_domain` 루프를 따릅니다.
+- 런타임 작업은 `paideia-task-pursuit-plan/v1`을 함께 남겨 누가/무엇을/언제/어디서/왜/어떻게, 로컬 우선 조사, 작업 큐, 검증, 수정, 중단 조건을 검토 가능하게 합니다.
 - 쓸만한 절차는 반드시 Paideia 교육 축이나 절차 훈련으로 재작성해야 합니다.
 - 실패했거나 검토되지 않은 실행은 격리되고, 성공한 요약과 검토된 업무 증거만 승격됩니다.
 - 채팅에서 나온 학습 후보도 보스 검토 전에는 `force_quarantine`으로 격리하며, 곧바로 memory substrate나 reasoning kibo에 승격하지 않습니다.

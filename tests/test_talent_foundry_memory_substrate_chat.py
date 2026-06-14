@@ -21,6 +21,7 @@ class TalentFoundryMemorySubstrateChatTests(unittest.TestCase):
             "learning_profile": {},
             "active_memory_route": {"selected_nodes": []},
             "memory_bridge": {"selected_memory_tiles": []},
+            "task_pursuit_plan": {"schema": "paideia-task-pursuit-plan/v1"},
             "conversation_method_training": {},
             "language_development_program": {},
             "recent_chat_history": [],
@@ -198,6 +199,12 @@ class TalentFoundryMemorySubstrateChatTests(unittest.TestCase):
         self.assertEqual(saved["llm_runtime_result"]["status"], "bridge_context_prepared")
         self.assertEqual(saved["llm_runtime_result"]["identity_policy"], "application_engine_not_identity")
         self.assertTrue(saved["chat_context"]["active_memory_route"]["selected_nodes"])
+        self.assertEqual(saved["task_pursuit_plan"]["schema"], "paideia-task-pursuit-plan/v1")
+        self.assertTrue(saved["task_pursuit_plan"]["validation"]["passed"])
+        self.assertEqual(
+            saved["chat_runtime_status_card"]["task_pursuit"]["validation_status"],
+            "passed",
+        )
         self.assertIn("memory_substrate.json", saved["chat_context"]["llm_contract"]["identity_source"])
         self.assertIn("grade_learning_records", saved["chat_context"]["llm_contract"]["identity_source"])
         self.assertIn("grham-쥬니어", saved["assistant_reply"])

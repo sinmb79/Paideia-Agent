@@ -140,6 +140,12 @@ def run_live_agent_loop_contract() -> dict[str, Any]:
     llm_result = run.get("llm_runtime_result", {}) if isinstance(run.get("llm_runtime_result"), dict) else {}
     client_result = llm_result.get("client_result", {}) if isinstance(llm_result.get("client_result"), dict) else {}
     llm_plan = llm_result.get("llm_plan", {}) if isinstance(llm_result.get("llm_plan"), dict) else {}
+    task_pursuit_plan = run.get("task_pursuit_plan", {}) if isinstance(run.get("task_pursuit_plan"), dict) else {}
+    task_pursuit_validation = (
+        task_pursuit_plan.get("validation", {})
+        if isinstance(task_pursuit_plan.get("validation"), dict)
+        else {}
+    )
     execution_contract = run.get("execution_contract", {}) if isinstance(run.get("execution_contract"), dict) else {}
     tool_execution = run.get("tool_execution", {}) if isinstance(run.get("tool_execution"), dict) else {}
     tool_scope = (
@@ -173,6 +179,11 @@ def run_live_agent_loop_contract() -> dict[str, Any]:
         "llm_applied_as": llm_result.get("applied_as"),
         "llm_plan_schema": llm_plan.get("schema"),
         "llm_plan_source": llm_plan.get("source"),
+        "task_pursuit_plan_schema": task_pursuit_plan.get("schema"),
+        "task_pursuit_validation_status": task_pursuit_validation.get("status"),
+        "task_pursuit_six_w_frame_complete": task_pursuit_validation.get("checks", {}).get("six_w_frame_complete")
+        if isinstance(task_pursuit_validation.get("checks"), dict)
+        else None,
         "client_result_text_omitted": client_result.get("text_omitted"),
         "client_result_raw_output_saved": client_result.get("raw_output_saved"),
         "client_result_private_reasoning_fields_omitted": client_result.get(
@@ -217,6 +228,9 @@ def run_live_agent_loop_contract() -> dict[str, Any]:
         and details["llm_applied_as"] == "live_language_and_tool_reasoning_engine"
         and details["llm_plan_schema"] == "paideia-llm-reviewable-plan/v1"
         and details["llm_plan_source"] == "json_object"
+        and details["task_pursuit_plan_schema"] == "paideia-task-pursuit-plan/v1"
+        and details["task_pursuit_validation_status"] == "passed"
+        and details["task_pursuit_six_w_frame_complete"] is True
         and details["client_result_text_omitted"] is True
         and details["client_result_raw_output_saved"] is False
         and details["client_result_private_reasoning_fields_omitted"] >= 2

@@ -27,6 +27,7 @@ from ai22b.talent_foundry.llm_clients import (
 )
 from ai22b.talent_foundry.llm_runtime import build_llm_provider_preflight, invoke_llm_application_engine
 from ai22b.talent_foundry.memory_lifecycle import build_memory_lifecycle_status_card
+from ai22b.talent_foundry.task_pursuit import build_task_pursuit_plan
 
 
 MEMORY_SUBSTRATE_SCHEMA = "ai-talent-memory-substrate/v1"
@@ -1299,6 +1300,13 @@ def build_chat_context(
         active_route=active_route,
         message=message,
     )
+    task_pursuit_plan = build_task_pursuit_plan(
+        message,
+        objective=message,
+        agent=agent,
+        context="chat_turn",
+        owner_label=str(employment_record.get("employer") or "Boss"),
+    )
     system_prompt = (
         f"You are {agent['name']}, a Korean-first local AI talent hired by the Boss. "
         "OpenAI ChatGPT Codex is only the language and tool reasoning engine. "
@@ -1360,6 +1368,7 @@ def build_chat_context(
         "recent_chat_history": recent_chat_history or [],
         "active_memory_route": active_route,
         "memory_bridge": memory_bridge,
+        "task_pursuit_plan": task_pursuit_plan,
         "conversation_method_training": memory_substrate.get(
             "conversation_method_training",
             CONVERSATION_METHOD_TRAINING,
@@ -1419,7 +1428,8 @@ def _live_chat_instructions_with_memory_bridge(agent_name: str) -> str:
     return (
         "Read local_talent_context.memory_bridge first. It links local grade learning records, "
         "Reasoning Ledger summaries, life trace, growth profile, and conversation development records "
-        "to this exact chat turn. "
+        "to this exact chat turn. Read local_talent_context.task_pursuit_plan next; it frames the owner request "
+        "with who/what/when/where/why/how, necessary-research gates, verification, and continuation rules. "
         + _live_chat_instructions(agent_name)
     )
 
@@ -1434,6 +1444,7 @@ def _compact_chat_context_for_live_llm(chat_context: dict[str, Any]) -> dict[str
         "learning_profile": chat_context.get("learning_profile"),
         "active_memory_route": chat_context.get("active_memory_route"),
         "memory_bridge": chat_context.get("memory_bridge"),
+        "task_pursuit_plan": chat_context.get("task_pursuit_plan"),
         "conversation_method_training": chat_context.get("conversation_method_training"),
         "language_development_program": chat_context.get("language_development_program"),
         "recent_chat_history": chat_context.get("recent_chat_history", []),
@@ -2593,6 +2604,14 @@ def _build_chat_runtime_status_card(
         live_attempt_status=live_attempt_status,
     )
     learning_decision = _chat_learning_decision(run)
+    task_pursuit_plan = (
+        run.get("task_pursuit_plan", {}) if isinstance(run.get("task_pursuit_plan"), dict) else {}
+    )
+    task_pursuit_validation = (
+        task_pursuit_plan.get("validation", {})
+        if isinstance(task_pursuit_plan.get("validation"), dict)
+        else {}
+    )
     preflight_data_policy = (
         llm_provider_preflight.get("data_policy", {})
         if isinstance(llm_provider_preflight.get("data_policy"), dict)
@@ -2626,6 +2645,22 @@ def _build_chat_runtime_status_card(
             "used": fallback_used,
             "presented_as_live": False,
             "reason": (live_llm_attempt or {}).get("reason") if fallback_used else None,
+        },
+        "task_pursuit": {
+            "schema": task_pursuit_plan.get("schema"),
+            "contract_schema": task_pursuit_plan.get("contract_schema"),
+            "validation_status": task_pursuit_validation.get("status"),
+            "six_w_frame_complete": task_pursuit_validation.get("checks", {}).get("six_w_frame_complete")
+            if isinstance(task_pursuit_validation.get("checks"), dict)
+            else None,
+            "continue_until": task_pursuit_plan.get("iteration_policy", {}).get("continue_until")
+            if isinstance(task_pursuit_plan.get("iteration_policy"), dict)
+            else None,
+            "external_search_default": task_pursuit_plan.get("necessary_research_plan", {}).get(
+                "external_search_default"
+            )
+            if isinstance(task_pursuit_plan.get("necessary_research_plan"), dict)
+            else None,
         },
         "learning": {
             "learn_from_chat_requested": bool(learn_from_chat),
@@ -2868,6 +2903,11 @@ def run_chat_turn_from_employment(
             ),
         ),
         _chat_trace_entry(
+            "task_pursuit_plan_created",
+            schema=chat_context.get("task_pursuit_plan", {}).get("schema"),
+            validation_status=chat_context.get("task_pursuit_plan", {}).get("validation", {}).get("status"),
+        ),
+        _chat_trace_entry(
             "base_runtime_checked",
             engine=base_runtime_result.get("engine"),
             status=base_runtime_result.get("status"),
@@ -2903,6 +2943,7 @@ def run_chat_turn_from_employment(
         },
         "message": message,
         "chat_context": chat_context,
+        "task_pursuit_plan": chat_context.get("task_pursuit_plan"),
         "llm_runtime_result": llm_runtime_result,
         "llm_provider_preflight": llm_provider_preflight,
         "llm_mode": llm_mode,

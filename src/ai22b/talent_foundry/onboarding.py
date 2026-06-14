@@ -19,6 +19,7 @@ from ai22b.talent_foundry.onboarding_choices import (
     resolve_llm_service,
 )
 from ai22b.talent_foundry.registry import assign_hired_goal, run_hired_goal_cycle
+from ai22b.talent_foundry.task_pursuit import build_task_pursuit_plan
 from ai22b.talent_foundry.training_run import materialize_training_blueprint
 
 
@@ -172,6 +173,19 @@ def run_agent_onboarding(
     )
     workspace_run_path = Path(first_goal_cycle["workspace_run"]["path"])
     learning_update_path = target_root / f"{goal['goal_id']}_learning_update.json"
+    task_pursuit_plan_path = output_dir / "task_pursuit_plan.json"
+    task_pursuit_plan = build_task_pursuit_plan(
+        request,
+        objective=goal["goal"],
+        agent={
+            "name": talent_name,
+            "role": track.get("target_role"),
+            "major_goal": track.get("name"),
+        },
+        context="onboard_agent",
+        owner_label=owner,
+    )
+    _write_json(task_pursuit_plan_path, task_pursuit_plan)
 
     artifacts = {
         "training_blueprint": training_run["artifacts"]["training_blueprint"],
@@ -202,6 +216,7 @@ def run_agent_onboarding(
         "first_workspace_run": str(workspace_run_path),
         "first_learning_update": str(learning_update_path),
         "first_goal_cycle": str(first_goal_cycle_path),
+        "task_pursuit_plan": str(task_pursuit_plan_path),
         "researcher_intake": str(researcher_intake_path),
         "llm_onboarding_checklist": str(llm_onboarding_checklist_path),
         "llm_connection_profile": str(llm_connection_profile_path),
@@ -291,6 +306,12 @@ def run_agent_onboarding(
             "first_cycle_status": first_goal_cycle.get("cycle_status"),
             "learning_decision": first_goal_cycle.get("learning_update", {}).get("decision"),
         },
+        "task_pursuit_plan": {
+            "path": str(task_pursuit_plan_path),
+            "schema": task_pursuit_plan["schema"],
+            "validation_status": task_pursuit_plan["validation"]["status"],
+            "mode": "six_w_plan_and_goal_pursuit",
+        },
         "local_policy": {
             "local_first": True,
             "network_access": selected_llm_service["network_access"],
@@ -310,6 +331,7 @@ def run_agent_onboarding(
             _stage("package", "completed", Path(training_run["artifacts"]["release_archive"])),
             _stage("install", "completed", Path(training_run["artifacts"]["installed_agent_manifest"])),
             _stage("hire", "completed", employment_record_path),
+            _stage("task_pursuit_plan", task_pursuit_plan["validation"]["status"], task_pursuit_plan_path),
             _stage("assign_goal", "completed", goal_path),
             _stage("first_goal_cycle", first_goal_cycle.get("cycle_status", "unknown"), first_goal_cycle_path),
             _stage("learning_update", first_goal_cycle.get("learning_update", {}).get("decision", "unknown"), learning_update_path),
@@ -321,6 +343,7 @@ def run_agent_onboarding(
             runtime_smoke_command,
             f"ai22b-talent-foundry run-hired-goal-cycle --employment-record \"{employment_record_path}\" --goal \"{goal_path}\" --cycle-note \"다음 주 업무를 진행한다.\" --workspace \"{target_root / 'next_goal_workspace'}\" --score {review_score} --reviewed-by \"{reviewed_by or owner}\"",
             f"ai22b-talent-foundry record-hired-learning --employment-record \"{employment_record_path}\" --run \"{workspace_run_path}\" --score {review_score} --reviewed-by \"{reviewed_by or owner}\"",
+            f"ai22b-talent-foundry build-task-pursuit-plan --request \"{request}\" --objective \"{goal['goal']}\" --output \"{task_pursuit_plan_path}\"",
         ],
     }
     _write_json(output_path, session)
