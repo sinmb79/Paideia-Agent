@@ -154,7 +154,9 @@ def _discover_latest_employment_record(storage_root: Path) -> Path:
         for path in root.rglob("employment_record.json"):
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))
-            except Exception:
+            except (OSError, json.JSONDecodeError):
+                data = None
+            if not isinstance(data, dict):
                 continue
             if data.get("schema") == "ai-talent-local-employment/v1" and data.get("status") == "active":
                 candidates.append((path.stat().st_mtime, path))
