@@ -19,6 +19,7 @@ from ai22b.talent_foundry.distribution import (
 from ai22b.talent_foundry.dossier import build_hiring_dossier, render_hiring_dossier_markdown
 from ai22b.talent_foundry.employment import create_employment_contract
 from ai22b.talent_foundry.family import create_child_seed, create_child_training_blueprint, create_family_union
+from ai22b.talent_foundry.genius_derivation import build_genius_derivation_profile
 from ai22b.talent_foundry.institutions import default_major_gate_submissions, run_institutional_review
 from ai22b.talent_foundry.learning_loop import (
     build_reasoning_kernel,
@@ -115,6 +116,7 @@ def run_demo(output_dir: Path = DEFAULT_RUN_DIR) -> dict[str, Path]:
         "agent_manifest": output_dir / "shinyong_agent_manifest.json",
         "hiring_dossier": output_dir / "shinyong_hiring_dossier.json",
         "hiring_dossier_markdown": output_dir / "shinyong_hiring_dossier.ko.md",
+        "genius_profile": output_dir / "shinyong_genius_profile.json",
         "agent_run": output_dir / "shinyong_agent_run.json",
         "agent_run_log": output_dir / "shinyong_agent_run_log.jsonl",
         "agent_run_blocked": output_dir / "shinyong_agent_run_blocked.json",
@@ -390,6 +392,33 @@ def run_demo(output_dir: Path = DEFAULT_RUN_DIR) -> dict[str, Path]:
     )
     _write_json(paths["institutional_review"], institutional_review)
 
+    demo_growth_profile = {
+        "schema": "paideia-growth-profile/v1",
+        "asymmetry_profile": {
+            "strength_biases": ["macro-risk-first evidence review", "valuation checklist compression"],
+            "growth_costs": ["may overfocus on downside risk"],
+            "domain_obsession": "증권 리서치",
+        },
+    }
+    genius_profile = build_genius_derivation_profile(
+        training_blueprint,
+        curriculum_manifest=training_blueprint.get("curriculum_manifest"),
+        assessment_transcript=institutional_review.get("assessment_transcript"),
+        growth_profile=demo_growth_profile,
+        output_path=paths["genius_profile"],
+    )
+    father["genius_profile"] = {
+        "schema": genius_profile["schema"],
+        "profile_id": genius_profile["profile_id"],
+        "primary_domain": genius_profile["domain_focus"]["primary_domain"],
+        "practice_cycle": genius_profile["deliberate_practice_program"]["cycle"],
+        "pattern_chunk_count": len(genius_profile["cognitive_kibo_targets"]["pattern_chunks"]),
+        "weakness_guardrail_count": len(genius_profile["unevenness_profile"]["weakness_guardrails"]),
+        "validation_status": genius_profile["validation"]["status"],
+        "policy": genius_profile["public_safe"],
+    }
+    _write_json(paths["father"], father)
+
     memory_store = create_memory_store(owner=father["talent"]["name"])
     memory_store = remember_event(memory_store, source="assessment", event=assessment)
     memory_store = remember_event(memory_store, source="institutional_review", event=institutional_review)
@@ -490,6 +519,7 @@ def run_demo(output_dir: Path = DEFAULT_RUN_DIR) -> dict[str, Path]:
         specialist_cohort_path=paths["specialist_cohort"],
         hiring_dossier_path=paths["hiring_dossier"],
         hiring_dossier_markdown_path=paths["hiring_dossier_markdown"],
+        genius_profile_path=paths["genius_profile"],
     )
     doctor_agent_release_bundle(paths["release_bundle"], output_path=paths["release_doctor_report"])
     package = package_agent_release_bundle(

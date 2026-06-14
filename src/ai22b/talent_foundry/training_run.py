@@ -18,6 +18,7 @@ from ai22b.talent_foundry.employment import create_employment_contract
 from ai22b.talent_foundry.exam_engine_v2 import augment_assessment_transcript_v2
 from ai22b.talent_foundry.grade_learning import build_grade_learning_records, write_grade_learning_records
 from ai22b.talent_foundry.growth_profile import build_growth_profile
+from ai22b.talent_foundry.genius_derivation import build_genius_derivation_profile
 from ai22b.talent_foundry.institutions import run_institutional_review
 from ai22b.talent_foundry.learning_loop import (
     build_reasoning_kernel,
@@ -232,6 +233,7 @@ def materialize_training_blueprint(
         "developmental_ecology": output_dir / f"{name_slug}_developmental_ecology.json",
         "life_trace": output_dir / f"{name_slug}_life_trace.jsonl",
         "growth_profile": output_dir / f"{name_slug}_growth_profile.json",
+        "genius_profile": output_dir / f"{name_slug}_genius_profile.json",
         "talent_plan": output_dir / f"{name_slug}_agent_plan.json",
         "institutional_review": output_dir / f"{name_slug}_institutional_review.json",
         "memory_profile": output_dir / f"{name_slug}_memory_profile.json",
@@ -369,6 +371,28 @@ def materialize_training_blueprint(
         }
         _write_json(artifacts["talent_plan"], packet)
 
+    genius_profile = build_genius_derivation_profile(
+        blueprint,
+        curriculum_manifest=blueprint.get("curriculum_manifest"),
+        assessment_transcript=assessment_transcript if blueprint.get("role_model") else institutional_review.get("assessment_transcript"),
+        growth_profile=growth_profile,
+        grade_learning_records=grade_learning_records,
+        reasoning_kibo=reasoning_kibo,
+        output_path=artifacts["genius_profile"],
+    )
+    packet["genius_profile"] = {
+        "schema": genius_profile["schema"],
+        "profile_id": genius_profile["profile_id"],
+        "primary_domain": genius_profile["domain_focus"]["primary_domain"],
+        "practice_cycle": genius_profile["deliberate_practice_program"]["cycle"],
+        "pattern_chunk_count": len(genius_profile["cognitive_kibo_targets"]["pattern_chunks"]),
+        "weakness_guardrail_count": len(genius_profile["unevenness_profile"]["weakness_guardrails"]),
+        "validation_status": genius_profile["validation"]["status"],
+        "path_hint": "[AI22B_STORAGE_ROOT]/talent-foundry/runs/<talent>_genius_profile.json",
+        "policy": genius_profile["public_safe"],
+    }
+    _write_json(artifacts["talent_plan"], packet)
+
     memory_store = create_memory_store(owner=packet["talent"]["name"])
     memory_store = remember_event(memory_store, source="institutional_review", event=institutional_review)
     memory_profile = consolidate_memory(memory_store)
@@ -397,6 +421,7 @@ def materialize_training_blueprint(
         life_trace_events=life_trace["events"],
         growth_profile=growth_profile,
         grade_learning_records=grade_learning_records.get("records", []) if grade_learning_records else [],
+        genius_profile=genius_profile,
     )
     write_memory_substrate(artifacts["memory_substrate"], memory_substrate)
 
@@ -410,6 +435,7 @@ def materialize_training_blueprint(
         life_trace_path=artifacts["life_trace"],
         growth_profile_path=artifacts["growth_profile"],
         grade_learning_records_path=artifacts.get("grade_learning_records"),
+        genius_profile_path=artifacts["genius_profile"],
     )
     package = package_agent_release_bundle(
         artifacts["release_bundle"],
@@ -503,6 +529,7 @@ def materialize_training_blueprint(
             "developmental_ecology_created": artifacts["developmental_ecology"].exists(),
             "life_trace_created": artifacts["life_trace"].exists(),
             "growth_profile_created": artifacts["growth_profile"].exists(),
+            "genius_profile_created": artifacts["genius_profile"].exists(),
             "grade_learning_records_created": (
                 artifacts["grade_learning_records"].exists() if "grade_learning_records" in artifacts else False
             ),

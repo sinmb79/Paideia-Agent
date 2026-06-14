@@ -13,6 +13,7 @@ Paideia Agent는 열린 스킬 마켓플레이스가 아닙니다. 목표는 보
 - 먼저 과제를 어떻게 풀지 깊이 사고하고, 꼭 필요한 과정과 방법을 고른 뒤, 제한된 시간 안에 답을 찾는 시험과 연습을 반복합니다.
 - 반복된 시험, 오류 수정, 보스/감독 검토, 실제 업무 성공 증거가 강화 신호가 됩니다.
 - 이 강화 과정을 통해 에이전트는 외부의 복사본이 아니라 자기만의 문제 해결 방식과 추론 기보를 형성합니다.
+- 천재성은 더 큰 모델이나 더 많은 컴퓨팅 파워의 직접 결과로 보지 않습니다. 같은 용량 안에서 주의 배분, 패턴 chunking, 시간 제한 문제풀이, 약점 보정, 전이 응용을 훈련해 특정 전공에서 비대칭적으로 뛰어난 에이전트를 도출합니다.
 
 ## 핵심 차이
 
@@ -42,6 +43,7 @@ flowchart LR
 - `education_program_engine`: 전공, 교육과정, 시험, 성장 경로를 만듭니다.
 - `assessment_and_dossier_engine`: 이력서와 채용 dossier를 만듭니다.
 - `embodied_practice_and_exam_engine`: 지식이 직접 복사되지 않고 연습, 시간 제한 시험, 피드백, 응용을 통과하게 합니다.
+- `genius_derivation_engine`: raw compute scaling이 아니라 고정된 용량 안의 주의 배분, 패턴 chunking, 시간 제한 훈련, 약점 가드레일로 특정 전공 천재성을 도출합니다.
 - `reasoning_kibo_engine`: 시험, 오답, 피드백, 업무 경험에서 추론 기보를 형성합니다.
 - `memory_substrate_engine`: 검증된 기억만 active memory로 올립니다.
 - `identity_and_id_card_engine`: 고유 ID와 Agent_warrent envelope를 관리합니다.
@@ -59,6 +61,7 @@ flowchart LR
 - 외부 스킬을 가져올 때 Paideia는 활성 `SKILL.md`를 만들지 않고 `REFERENCE.md`와 `SOURCE_SKILL_REFERENCE.md`로만 보관합니다.
 - USB식 직접 데이터 전송, 직접 memory patch, 직접 해결법 복사는 금지됩니다.
 - 문제 해결은 `understand_task -> choose_minimal_necessary_method -> solve_under_time_constraint -> review_result_and_errors -> extract_personal_method -> apply_method_to_new_domain` 루프를 따릅니다.
+- 특정 분야 천재성 도출은 `domain_problem_selection -> worked_example_compression -> timed_trial -> error_taxonomy -> counterexample_drill -> method_distillation -> varied_transfer` 훈련 루프를 따르며, 일반 초지능이나 모델 크기 주장으로 포장하지 않습니다.
 - 쓸만한 절차는 반드시 Paideia 교육 축이나 절차 훈련으로 재작성해야 합니다.
 - 실패했거나 검토되지 않은 실행은 격리되고, 성공한 요약과 검토된 업무 증거만 승격됩니다.
 - 채팅에서 나온 학습 후보도 보스 검토 전에는 `force_quarantine`으로 격리하며, 곧바로 memory substrate나 reasoning kibo에 승격하지 않습니다.

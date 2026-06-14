@@ -24,6 +24,7 @@ def build_agent_manifest(
     life_trace = hiring_packet.get("life_trace")
     growth_profile = hiring_packet.get("growth_profile")
     grade_learning_records = hiring_packet.get("grade_learning_records")
+    genius_profile = hiring_packet.get("genius_profile")
     closed_growth_contract = build_closed_growth_contract(context="agent_manifest")
 
     return {
@@ -59,6 +60,7 @@ def build_agent_manifest(
             "life_trace": life_trace,
             "growth_profile": growth_profile,
             "grade_learning_records": grade_learning_records,
+            "genius_profile": genius_profile,
             "reasoning_kibo_growth_model": {
                 "starts_at": "elementary_grade_1",
                 "continues_after_hire": True,

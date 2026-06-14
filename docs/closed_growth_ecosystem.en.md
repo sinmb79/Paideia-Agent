@@ -13,6 +13,7 @@ Closure here is not merely a security block. It is a learning model closer to th
 - The agent first thinks about how to solve the task, chooses the necessary method, then practices finding an answer under time constraints.
 - Repeated exams, error correction, Boss or oversight review, and successful work evidence become reinforcement signals.
 - Through that reinforcement, each agent forms its own problem-solving method instead of copying someone else's method.
+- Genius is not treated as a direct result of larger models or more compute. Paideia derives narrow, asymmetric excellence inside a fixed capacity budget through attention allocation, pattern chunking, timed problem solving, weakness correction, and transfer practice.
 
 ## Core Difference
 
@@ -42,6 +43,7 @@ flowchart LR
 - `education_program_engine`: creates the major, curriculum, exams, and growth path.
 - `assessment_and_dossier_engine`: creates the resume and hiring dossier.
 - `embodied_practice_and_exam_engine`: forces knowledge to pass through practice, timed exams, feedback, and application instead of direct copy.
+- `genius_derivation_engine`: derives domain-specific genius from fixed-capacity attention allocation, pattern chunking, timed practice, and weakness guardrails rather than raw compute scaling.
 - `reasoning_kibo_engine`: forms procedural reasoning from exams, mistakes, feedback, and work.
 - `memory_substrate_engine`: promotes only verified memory into active context.
 - `identity_and_id_card_engine`: manages local identity, ID card payload, and Agent_warrent envelope.
@@ -59,6 +61,7 @@ The codebase carries `paideia-closed-growth-contract/v1`.
 - Imported external skills are stored as `REFERENCE.md` and `SOURCE_SKILL_REFERENCE.md`, not as active `SKILL.md` descriptors.
 - USB-style direct data transfer, direct memory patching, and direct solution-method copying are forbidden.
 - Problem solving follows `understand_task -> choose_minimal_necessary_method -> solve_under_time_constraint -> review_result_and_errors -> extract_personal_method -> apply_method_to_new_domain`.
+- Domain genius derivation follows `domain_problem_selection -> worked_example_compression -> timed_trial -> error_taxonomy -> counterexample_drill -> method_distillation -> varied_transfer` and must not be framed as general superintelligence or model-size proof.
 - Useful procedures must be rewritten as Paideia education axes or procedural exercises.
 - Failed or unreviewed runs stay quarantined; only reviewed summaries and successful Paideia work evidence can be promoted.
 - Chat learning candidates are forced into quarantine before Boss review and cannot immediately enter the memory substrate or reasoning kibo.

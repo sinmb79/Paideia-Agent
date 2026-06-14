@@ -11,6 +11,7 @@ CORE_ENGINE_IDS = [
     "education_program_engine",
     "assessment_and_dossier_engine",
     "embodied_practice_and_exam_engine",
+    "genius_derivation_engine",
     "reasoning_kibo_engine",
     "memory_substrate_engine",
     "identity_and_id_card_engine",
@@ -89,6 +90,15 @@ def build_core_engine_boundaries() -> dict[str, Any]:
             "authority": "forces knowledge to pass through practice, timed exams, feedback, and application",
             "external_override_allowed": False,
             "upgrade_mode": "curriculum_practice_exam_feedback_cycle",
+        },
+        {
+            "id": "genius_derivation_engine",
+            "authority": (
+                "derives narrow domain excellence from fixed-capacity attention allocation, "
+                "pattern chunking, deliberate practice, weakness guardrails, and reviewed transfer work"
+            ),
+            "external_override_allowed": False,
+            "upgrade_mode": "exam_feedback_chunking_and_verified_transfer_only",
         },
         {
             "id": "reasoning_kibo_engine",
@@ -174,12 +184,16 @@ def build_closed_growth_contract(
         },
         "practice_reasoning_policy": {
             "goal": "develop_agent_owned_problem_solving_method",
+            "genius_derivation_goal": "domain_specific_excellence_under_fixed_capacity",
             "broad_exhaustive_search_is_primary_method": False,
             "search_role": "reference_and_evidence_support_after_task_framing",
+            "raw_compute_scaling_is_primary_path": False,
             "practice_loop": REQUIRED_PRACTICE_LOOP,
             "timed_exam_practice_required": True,
             "short_time_solution_training_required": True,
             "method_transfer_to_varied_work_required": True,
+            "pattern_chunking_required": True,
+            "explicit_weakness_guardrails_required": True,
         },
         "reinforcement_learning_policy": {
             "reinforcement_happens_during_training_and_work": True,
@@ -262,6 +276,8 @@ def validate_closed_growth_contract(contract: dict[str, Any]) -> dict[str, Any]:
         == REQUIRED_INTERNALIZATION_STAGES,
         "practice_reasoning_not_broad_search_first": practice_policy.get("broad_exhaustive_search_is_primary_method")
         is False,
+        "practice_reasoning_not_raw_compute_scaling": practice_policy.get("raw_compute_scaling_is_primary_path")
+        is False,
         "practice_reasoning_uses_required_loop": practice_loop == REQUIRED_PRACTICE_LOOP,
         "practice_reasoning_requires_timed_exam": practice_policy.get("timed_exam_practice_required") is True,
         "practice_reasoning_requires_short_time_solution_training": practice_policy.get(
@@ -270,6 +286,11 @@ def validate_closed_growth_contract(contract: dict[str, Any]) -> dict[str, Any]:
         is True,
         "practice_reasoning_transfers_method_to_varied_work": practice_policy.get(
             "method_transfer_to_varied_work_required"
+        )
+        is True,
+        "practice_reasoning_requires_pattern_chunking": practice_policy.get("pattern_chunking_required") is True,
+        "practice_reasoning_requires_weakness_guardrails": practice_policy.get(
+            "explicit_weakness_guardrails_required"
         )
         is True,
         "reinforcement_uses_exam_feedback_work_signals": reinforcement_signals == REQUIRED_REINFORCEMENT_SIGNALS,

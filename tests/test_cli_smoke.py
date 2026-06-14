@@ -53,6 +53,8 @@ class CliSmokeTests(unittest.TestCase):
             tmp_path = Path(tmp)
             role_models_path = tmp_path / "role_models.json"
             role_model_curricula_path = tmp_path / "role_model_curricula.json"
+            blueprint_path = tmp_path / "genius_blueprint.json"
+            genius_profile_path = tmp_path / "genius_profile.json"
             llm_services_path = tmp_path / "llm_services.json"
             llm_onboarding_path = tmp_path / "llm_onboarding_checklist.json"
             llm_connection_profile_path = tmp_path / "llm_connection_profile.json"
@@ -87,6 +89,29 @@ class CliSmokeTests(unittest.TestCase):
                     "list-role-model-curricula",
                     "--output",
                     str(role_model_curricula_path),
+                ]
+            )
+            blueprint_code = cli_main(
+                [
+                    "blueprint",
+                    "--request",
+                    "Raise a securities research agent that becomes narrowly excellent through timed trials.",
+                    "--name",
+                    "Genius Candidate",
+                    "--domain",
+                    "securities_research",
+                    "--output",
+                    str(blueprint_path),
+                ]
+            )
+            genius_profile_code = cli_main(
+                [
+                    "build-genius-profile",
+                    "--blueprint",
+                    str(blueprint_path),
+                    "--allow-draft",
+                    "--output",
+                    str(genius_profile_path),
                 ]
             )
             llm_services_code = cli_main(
@@ -261,6 +286,7 @@ class CliSmokeTests(unittest.TestCase):
 
             role_models = json.loads(role_models_path.read_text(encoding="utf-8"))
             role_model_curricula = json.loads(role_model_curricula_path.read_text(encoding="utf-8"))
+            genius_profile = json.loads(genius_profile_path.read_text(encoding="utf-8"))
             llm_services = json.loads(llm_services_path.read_text(encoding="utf-8"))
             llm_onboarding = json.loads(llm_onboarding_path.read_text(encoding="utf-8"))
             llm_connection_profile = json.loads(llm_connection_profile_path.read_text(encoding="utf-8"))
@@ -295,6 +321,8 @@ class CliSmokeTests(unittest.TestCase):
 
         self.assertEqual(role_models_code, 0)
         self.assertEqual(role_model_curricula_code, 0)
+        self.assertEqual(blueprint_code, 0)
+        self.assertEqual(genius_profile_code, 0)
         self.assertEqual(llm_services_code, 0)
         self.assertEqual(llm_onboarding_code, 0)
         self.assertEqual(llm_connection_profile_code, 0)
@@ -328,6 +356,13 @@ class CliSmokeTests(unittest.TestCase):
         curricula_by_id = {item["role_model_id"]: item for item in role_model_curricula["role_models"]}
         self.assertEqual(curricula_by_id["graham_value_investing"]["curriculum"]["status"], "connected")
         self.assertIn("--role-model graham_value_investing", curricula_by_id["graham_value_investing"]["blueprint_command"])
+
+        self.assertEqual(genius_profile["schema"], "paideia-genius-derivation-profile/v1")
+        self.assertEqual(genius_profile["validation"]["status"], "needs_training_evidence")
+        self.assertFalse(genius_profile["validation"]["passed"])
+        self.assertEqual(genius_profile["capacity_budget"]["strategy"], "fixed_capacity_efficiency_over_raw_compute_scaling")
+        self.assertFalse(genius_profile["public_safe"]["network_call_performed"])
+        self.assertEqual(genius_profile["public_safe"]["private_reasoning_trace"], "not_stored")
 
         self.assertEqual(llm_services["schema"], "paideia-llm-provider-matrix/v1")
         self.assertEqual(llm_services["selected_chat_surface"]["id"], "codex-bridge-chat")
@@ -1010,6 +1045,58 @@ class CliSmokeTests(unittest.TestCase):
         self.assertTrue(first_run_doctor["artifacts"]["package_install_doctor"]["distribution_installed"])
         self.assertEqual(first_run_doctor["artifacts"]["runtime_contract_doctor"]["status"], "passed")
         self.assertFalse(first_run_doctor["artifacts"]["runtime_contract_doctor"]["live_provider_called"])
+
+    def test_build_genius_profile_requires_evidence_unless_draft_is_allowed(self) -> None:
+        from ai22b.talent_foundry.cli import main as cli_main
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            blueprint_path = tmp_path / "blueprint.json"
+            profile_path = tmp_path / "genius_profile.json"
+            draft_path = tmp_path / "genius_profile_draft.json"
+
+            self.assertEqual(
+                cli_main(
+                    [
+                        "blueprint",
+                        "--request",
+                        "Raise a securities research agent.",
+                        "--name",
+                        "Draft Genius",
+                        "--domain",
+                        "securities_research",
+                        "--output",
+                        str(blueprint_path),
+                    ]
+                ),
+                0,
+            )
+            profile_code = cli_main(
+                [
+                    "build-genius-profile",
+                    "--blueprint",
+                    str(blueprint_path),
+                    "--output",
+                    str(profile_path),
+                ]
+            )
+            draft_code = cli_main(
+                [
+                    "build-genius-profile",
+                    "--blueprint",
+                    str(blueprint_path),
+                    "--allow-draft",
+                    "--output",
+                    str(draft_path),
+                ]
+            )
+            profile = json.loads(profile_path.read_text(encoding="utf-8"))
+            draft = json.loads(draft_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(profile_code, 2)
+        self.assertEqual(draft_code, 0)
+        self.assertEqual(profile["validation"]["status"], "needs_training_evidence")
+        self.assertEqual(draft["validation"]["status"], "needs_training_evidence")
 
 
 if __name__ == "__main__":

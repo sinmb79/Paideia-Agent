@@ -18,6 +18,7 @@ from ai22b.talent_foundry.codex_oauth_adapter import (
     resolve_codex_oauth_credentials,
 )
 from ai22b.talent_foundry.growth_profile import read_growth_profile
+from ai22b.talent_foundry.genius_derivation import read_genius_derivation_profile
 from ai22b.talent_foundry.learning_loop import build_reasoning_kernel, record_learning_experience
 from ai22b.talent_foundry.life_trace import read_life_trace_jsonl
 from ai22b.talent_foundry.llm_clients import (
@@ -661,6 +662,73 @@ def _nodes_from_growth_profile(profile: dict[str, Any] | None) -> list[dict[str,
     return nodes
 
 
+def _nodes_from_genius_profile(profile: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not profile:
+        return []
+    sections = [
+        (
+            "domain_focus",
+            "semantic_slow_store",
+            "genius_profile.domain_focus",
+            0.82,
+            {"genius_profile", "domain_focus", "major", "specialty"},
+        ),
+        (
+            "deliberate_practice_program",
+            "procedural_operator_store",
+            "genius_profile.deliberate_practice_program",
+            0.84,
+            {"genius_profile", "deliberate_practice", "timed_trial", "operator"},
+        ),
+        (
+            "cognitive_kibo_targets",
+            "procedural_operator_store",
+            "genius_profile.cognitive_kibo_targets",
+            0.86,
+            {"genius_profile", "chunking", "reasoning_kibo", "compression", "operator"},
+        ),
+        (
+            "unevenness_profile",
+            "metacognitive_monitor",
+            "genius_profile.unevenness_profile",
+            0.80,
+            {"genius_profile", "weakness_guardrail", "asymmetry", "monitor"},
+        ),
+        (
+            "scorecard",
+            "metacognitive_monitor",
+            "genius_profile.scorecard",
+            0.76,
+            {"genius_profile", "scorecard", "reviewed_transfer", "exam"},
+        ),
+    ]
+    nodes: list[dict[str, Any]] = []
+    talent_name = profile.get("talent", {}).get("name")
+    for key, layer, title, strength, tags in sections:
+        section = profile.get(key)
+        if not isinstance(section, dict):
+            continue
+        nodes.append(
+            _node(
+                node_id=_stable_id("genius-profile", profile.get("profile_id"), talent_name, key),
+                layer=layer,
+                source="genius_profile",
+                title=title,
+                summary=_compact(section, limit=460),
+                tags=_tokens(section) | tags,
+                stage="genius_derivation",
+                strength=strength,
+                metadata={
+                    "schema": profile.get("schema"),
+                    "profile_id": profile.get("profile_id"),
+                    "validation_status": profile.get("validation", {}).get("status"),
+                    "private_reasoning_trace": "not_stored",
+                },
+            )
+        )
+    return nodes
+
+
 def _nodes_from_grade_learning_records(records: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
     if not records:
         return []
@@ -899,6 +967,7 @@ def build_memory_substrate(
     life_trace_events: list[dict[str, Any]] | None = None,
     growth_profile: dict[str, Any] | None = None,
     grade_learning_records: list[dict[str, Any]] | None = None,
+    genius_profile: dict[str, Any] | None = None,
     objective: str | None = None,
 ) -> dict[str, Any]:
     agent = agent_manifest.get("agent", {})
@@ -916,10 +985,12 @@ def build_memory_substrate(
     life_trace_nodes = _nodes_from_life_trace(life_trace_events)
     growth_profile_nodes = _nodes_from_growth_profile(growth_profile)
     grade_learning_nodes = _nodes_from_grade_learning_records(grade_learning_records)
+    genius_profile_nodes = _nodes_from_genius_profile(genius_profile)
     nodes.extend(ecology_nodes)
     nodes.extend(life_trace_nodes)
     nodes.extend(growth_profile_nodes)
     nodes.extend(grade_learning_nodes)
+    nodes.extend(genius_profile_nodes)
     nodes.extend(_conversation_nodes(agent.get("name")))
     if process_plan:
         nodes.append(
@@ -983,6 +1054,13 @@ def build_memory_substrate(
             "node_count": len(grade_learning_nodes),
             "policy": "reviewable_yearly_learning_records_no_private_reasoning_trace",
         },
+        "genius_profile": {
+            "schema": genius_profile.get("schema") if genius_profile else None,
+            "profile_id": genius_profile.get("profile_id") if genius_profile else None,
+            "node_count": len(genius_profile_nodes),
+            "validation_status": genius_profile.get("validation", {}).get("status") if genius_profile else None,
+            "policy": genius_profile.get("public_safe", {}) if genius_profile else {},
+        },
         "source_counts": {
             "reasoning_kibo_entries": len(rows),
             "learning_ledger_promoted_experiences": len(learning_ledger.get("promoted_experiences", [])),
@@ -993,6 +1071,7 @@ def build_memory_substrate(
             "growth_profile_nodes": len(growth_profile_nodes),
             "grade_learning_records": len(grade_learning_records or []),
             "grade_learning_nodes": len(grade_learning_nodes),
+            "genius_profile_nodes": len(genius_profile_nodes),
             "conversation_method_skills": len(CONVERSATION_METHOD_TRAINING["skills"]),
             "nodes": len(nodes),
             "edges": len(edges),
@@ -1004,6 +1083,7 @@ def build_memory_substrate(
             "continues_after_hire": True,
             "exam_and_assignment_results_refine_operators": True,
             "post_hire_work_expands_route": True,
+            "domain_genius_profile_guides_attention": bool(genius_profile_nodes),
             "finalized": False,
         },
     }
@@ -1059,6 +1139,7 @@ def _load_or_build_substrate(
     life_trace_path: Path | None = None,
     growth_profile_path: Path | None = None,
     grade_learning_records_path: Path | None = None,
+    genius_profile_path: Path | None = None,
 ) -> tuple[dict[str, Any], Path]:
     entrypoints = employment_record.get("entrypoints", {})
     candidate = memory_substrate_path
@@ -1106,6 +1187,12 @@ def _load_or_build_substrate(
             grade_learning_records_path = target_root / entrypoint_name
         if grade_learning_records_path is None or not grade_learning_records_path.exists():
             grade_learning_records_path = _find_run_sidecar(target_root, "*_grade_learning_records.json")
+    if genius_profile_path is None:
+        entrypoint_name = employment_record.get("entrypoints", {}).get("genius_profile")
+        if entrypoint_name:
+            genius_profile_path = target_root / entrypoint_name
+        if genius_profile_path is None or not genius_profile_path.exists():
+            genius_profile_path = _find_run_sidecar(target_root, "*_genius_profile.json")
     if language_development_program_path is None:
         entrypoint_name = employment_record.get("entrypoints", {}).get("language_development_program")
         if entrypoint_name:
@@ -1128,6 +1215,7 @@ def _load_or_build_substrate(
             if grade_learning_records_path
             else []
         ),
+        genius_profile=read_genius_derivation_profile(genius_profile_path) if genius_profile_path else None,
         objective=objective,
     )
     write_memory_substrate(candidate, substrate)
@@ -1227,6 +1315,7 @@ def _build_live_chat_memory_bridge(
                 "life_trace_events",
                 "life_trace_nodes",
                 "growth_profile_nodes",
+                "genius_profile_nodes",
                 "learning_ledger_promoted_experiences",
                 "conversation_method_skills",
             ]
@@ -1256,6 +1345,14 @@ def _build_live_chat_memory_bridge(
                 limit=6,
             ),
         },
+        "genius_context": {
+            "summary": memory_substrate.get("genius_profile", {}),
+            "genius_tiles": _top_source_tiles(
+                memory_substrate,
+                sources={"genius_profile"},
+                limit=6,
+            ),
+        },
         "conversation_context": {
             "method_training_schema": memory_substrate.get("conversation_method_training", {}).get("schema"),
             "conversation_tiles": _top_source_tiles(
@@ -1264,10 +1361,24 @@ def _build_live_chat_memory_bridge(
                 limit=6,
             ),
         },
+        "goal_pursuit_contract": {
+            "schema": "paideia-goal-pursuit-contract/v1",
+            "planning_frame": "5w1h_before_action",
+            "question_order": ["who", "what", "why", "when", "where", "how"],
+            "evidence_policy": "collect_only_necessary_evidence_for_the_goal_and_domain",
+            "work_policy": "perform_only_necessary_steps_then_verify_against_completion_criteria",
+            "timed_attempt_required": True,
+            "weakness_guardrail_check_required": True,
+            "continue_until": "goal_completed_or_clear_blocker_recorded",
+            "reviewable_reasoning_summary_only": True,
+            "private_reasoning_trace": "not_stored",
+        },
         "response_contract": {
             "answer_language": "ko-KR",
             "use_local_identity_context_first": True,
             "use_grade_learning_records_for_growth_questions": True,
+            "use_domain_genius_profile_for_specialist_tasks": True,
+            "use_goal_pursuit_contract_for_tasks": True,
             "ordinary_conversation_should_remain_natural": True,
             "reviewable_reasoning_summary_only": True,
             "hidden_chain_of_thought": "forbidden",
@@ -1324,6 +1435,8 @@ def build_chat_context(
                 "memory_bridge",
                 "growth_profile",
                 "grade_learning_records",
+                "genius_profile",
+                "goal_pursuit_contract",
             ],
             "private_reasoning_trace": "do_not_store",
             "hidden_chain_of_thought": "forbidden",
@@ -1360,6 +1473,8 @@ def build_chat_context(
         "recent_chat_history": recent_chat_history or [],
         "active_memory_route": active_route,
         "memory_bridge": memory_bridge,
+        "genius_profile": memory_substrate.get("genius_profile", {}),
+        "goal_pursuit_contract": memory_bridge.get("goal_pursuit_contract", {}),
         "conversation_method_training": memory_substrate.get(
             "conversation_method_training",
             CONVERSATION_METHOD_TRAINING,
@@ -1419,7 +1534,9 @@ def _live_chat_instructions_with_memory_bridge(agent_name: str) -> str:
     return (
         "Read local_talent_context.memory_bridge first. It links local grade learning records, "
         "Reasoning Ledger summaries, life trace, growth profile, and conversation development records "
-        "to this exact chat turn. "
+        "to this exact chat turn. Also read the genius profile and goal pursuit contract for specialist "
+        "tasks: frame the task with 5W1H, gather only necessary evidence, attempt a bounded solution, "
+        "check weakness guardrails, and continue until completion or a clear blocker is recorded. "
         + _live_chat_instructions(agent_name)
     )
 
@@ -2679,6 +2796,7 @@ def run_chat_turn_from_employment(
     developmental_ecology_path: Path | None = None,
     life_trace_path: Path | None = None,
     growth_profile_path: Path | None = None,
+    genius_profile_path: Path | None = None,
     llm_mode: str = "offline",
     llm_model: str | None = None,
     learn_from_chat: bool = False,
@@ -2710,6 +2828,7 @@ def run_chat_turn_from_employment(
         developmental_ecology_path=developmental_ecology_path,
         life_trace_path=life_trace_path,
         growth_profile_path=growth_profile_path,
+        genius_profile_path=genius_profile_path,
     )
     if language_development_program_path is None:
         language_entrypoint = entrypoints.get("language_development_program")
