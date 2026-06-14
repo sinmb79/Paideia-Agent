@@ -151,6 +151,9 @@ class TalentFoundryTests(unittest.TestCase):
         tampered["embodied_learning_policy"]["direct_usb_style_data_transfer_allowed"] = True
         tampered["embodied_learning_policy"]["internalization_stages"] = ["copy_data"]
         tampered["practice_reasoning_policy"]["broad_exhaustive_search_is_primary_method"] = True
+        tampered["practice_reasoning_policy"]["raw_compute_scaling_is_primary_path"] = True
+        tampered["practice_reasoning_policy"]["pattern_chunking_required"] = False
+        tampered["practice_reasoning_policy"]["explicit_weakness_guardrails_required"] = False
         tampered["practice_reasoning_policy"]["practice_loop"] = ["search_everything", "answer"]
         tampered["reinforcement_learning_policy"]["raw_external_answer_reinforcement_allowed"] = True
         tampered["external_skill_policy"]["promotion_path"] = ["direct_install"]
@@ -162,6 +165,9 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("embodied_learning_blocks_usb_transfer", validation["failed_checks"])
         self.assertIn("embodied_learning_requires_full_internalization", validation["failed_checks"])
         self.assertIn("practice_reasoning_not_broad_search_first", validation["failed_checks"])
+        self.assertIn("practice_reasoning_not_raw_compute_scaling", validation["failed_checks"])
+        self.assertIn("practice_reasoning_requires_pattern_chunking", validation["failed_checks"])
+        self.assertIn("practice_reasoning_requires_weakness_guardrails", validation["failed_checks"])
         self.assertIn("practice_reasoning_uses_required_loop", validation["failed_checks"])
         self.assertIn("reinforcement_blocks_raw_external_answers", validation["failed_checks"])
         self.assertIn("identity_sources_are_paideia_only", validation["failed_checks"])
@@ -169,9 +175,108 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("external_skill_promotion_path_is_rewrite_test_review", validation["failed_checks"])
         self.assertIn("work_growth_requires_reviewed_result", validation["failed_checks"])
 
+    def test_genius_derivation_profile_trains_domain_excellence_without_raw_compute_claim(self) -> None:
+        from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
+        from ai22b.talent_foundry.genius_derivation import (
+            REQUIRED_PRACTICE_CYCLE,
+            build_genius_derivation_profile,
+            validate_genius_derivation_profile,
+        )
+
+        blueprint = create_agent_training_blueprint(
+            owner="보스",
+            request="증권 리서치에서만 천재적인 압축 문제해결력을 갖는 에이전트를 육성한다.",
+            talent_name="신용",
+            gender="남자",
+            domain="securities_research",
+        )
+        profile = build_genius_derivation_profile(
+            blueprint,
+            curriculum_manifest={
+                "curriculum_id": "securities-genius-test",
+                "domain": "securities_research",
+                "core_topics": ["valuation", "cash flow", "risk", "counterexample"],
+                "assessment_ladder": {"required_for_hiring": ["valuation_case_report"]},
+            },
+            assessment_transcript={
+                "results": [
+                    {
+                        "gate_id": "valuation_case_report",
+                        "gate_name": "Valuation case report",
+                        "passed": True,
+                        "rubric_scores": {"evidence": 24, "counterexample": 16},
+                        "weak_spots": ["counterexample"],
+                    }
+                ]
+            },
+            growth_profile={
+                "schema": "ai22b-paideia-growth-profile/v1",
+                "asymmetry_profile": {
+                    "strength_biases": ["slow valuation patience"],
+                    "growth_costs": ["can overfocus on downside"],
+                    "domain_obsession": "securities_research",
+                },
+            },
+            grade_learning_records={
+                "records": [
+                    {
+                        "year_id": "doctoral_year_1",
+                        "education_stage": "doctoral_research",
+                        "learning_data": ["valuation memo", "risk checklist"],
+                        "required_exams": ["valuation_case_report"],
+                        "feedback_loop": {"observed_weak_spots": ["counterexample"]},
+                    }
+                ]
+            },
+        )
+        validation = validate_genius_derivation_profile(profile)
+
+        self.assertEqual(profile["schema"], "paideia-genius-derivation-profile/v1")
+        self.assertEqual(profile["domain_focus"]["track_id"], "securities_research_phd")
+        self.assertIn("securities_research", profile["domain_focus"]["privileged_domains"])
+        self.assertEqual(profile["deliberate_practice_program"]["cycle"], REQUIRED_PRACTICE_CYCLE)
+        self.assertEqual(profile["capacity_budget"]["strategy"], "fixed_capacity_efficiency_over_raw_compute_scaling")
+        self.assertTrue(profile["design_claim"]["not_model_size_claim"])
+        self.assertIn("counterexample", profile["unevenness_profile"]["weakness_guardrails"])
+        self.assertGreaterEqual(len(profile["cognitive_kibo_targets"]["pattern_chunks"]), 3)
+        self.assertTrue(validation["passed"])
+        self.assertFalse(profile["public_safe"]["network_call_performed"])
+        self.assertEqual(profile["public_safe"]["private_reasoning_trace"], "not_stored")
+
+    def test_genius_derivation_profile_requires_training_evidence_not_blueprint_only(self) -> None:
+        from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
+        from ai22b.talent_foundry.genius_derivation import build_genius_derivation_profile
+
+        blueprint = create_agent_training_blueprint(
+            owner="보스",
+            request="증권 리서치에서만 천재적인 에이전트를 육성한다.",
+            talent_name="도윤",
+            gender="남자",
+            domain="securities_research",
+        )
+
+        profile = build_genius_derivation_profile(blueprint)
+
+        self.assertEqual(profile["validation"]["status"], "needs_training_evidence")
+        self.assertFalse(profile["validation"]["passed"])
+        self.assertIn("training_evidence_present", profile["validation"]["failed_checks"])
+        self.assertIn("reviewed_transfer_or_assessment_present", profile["validation"]["failed_checks"])
+
+    def test_genius_derivation_docs_are_utf8_readable_and_cross_linked(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        korean = (root / "docs" / "genius_derivation_engine.ko.md").read_text(encoding="utf-8")
+        english = (root / "docs" / "genius_derivation_engine.en.md").read_text(encoding="utf-8")
+
+        self.assertIn("# Paideia 천재 도출 엔진", korean)
+        self.assertIn("[English](genius_derivation_engine.en.md)", korean)
+        self.assertIn("# Paideia Genius Derivation Engine", english)
+        self.assertIn("[한국어](genius_derivation_engine.ko.md)", english)
+        self.assertNotIn("�", korean + english)
+
     def test_training_blueprint_materializes_employable_agent_packet(self) -> None:
         from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
         from ai22b.talent_foundry.closed_ecosystem import validate_closed_growth_contract
+        from ai22b.talent_foundry.memory_substrate import build_chat_context
         from ai22b.talent_foundry.training_run import materialize_training_blueprint
 
         blueprint = create_agent_training_blueprint(
@@ -185,7 +290,21 @@ class TalentFoundryTests(unittest.TestCase):
             run = materialize_training_blueprint(blueprint, output_dir=Path(tmp) / "raon_run")
             talent_plan = json.loads(Path(run["artifacts"]["talent_plan"]).read_text(encoding="utf-8"))
             manifest = json.loads(Path(run["artifacts"]["agent_manifest"]).read_text(encoding="utf-8"))
+            genius_profile = json.loads(Path(run["artifacts"]["genius_profile"]).read_text(encoding="utf-8"))
+            memory_substrate = json.loads(Path(run["artifacts"]["memory_substrate"]).read_text(encoding="utf-8"))
+            learning_ledger = json.loads(Path(run["artifacts"]["learning_ledger"]).read_text(encoding="utf-8"))
+            bundle_manifest = json.loads(
+                (Path(run["artifacts"]["release_bundle"]) / "bundle_manifest.json").read_text(encoding="utf-8")
+            )
             employment_record = json.loads(Path(run["artifacts"]["employment_record"]).read_text(encoding="utf-8"))
+            chat_context = build_chat_context(
+                employment_record=employment_record,
+                agent_manifest=manifest,
+                learning_ledger=learning_ledger,
+                memory_substrate=memory_substrate,
+                message="생활건강 리서치 과제를 6하 원칙으로 끝까지 진행해줘.",
+                substrate_path_name="memory_substrate.json",
+            )
             release_archive_exists = Path(run["artifacts"]["release_archive"]).exists()
 
         self.assertEqual(run["schema"], "ai-talent-training-run/v1")
@@ -197,13 +316,60 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(manifest["llm_policy"]["role"], "application_engine_not_identity")
         self.assertEqual(manifest["closed_growth_contract"]["schema"], "paideia-closed-growth-contract/v1")
         self.assertTrue(validate_closed_growth_contract(manifest["closed_growth_contract"])["passed"])
+        self.assertIn("genius_derivation_engine", manifest["core_engine_boundaries"]["engine_ids"])
+        self.assertEqual(manifest["identity_source"]["genius_profile"]["schema"], "paideia-genius-derivation-profile/v1")
+        self.assertEqual(genius_profile["validation"]["status"], "passed")
+        self.assertGreater(memory_substrate["source_counts"]["genius_profile_nodes"], 0)
+        self.assertTrue(memory_substrate["growth_policy"]["domain_genius_profile_guides_attention"])
+        self.assertIn("genius_profile", chat_context["llm_contract"]["identity_source"])
+        self.assertIn("goal_pursuit_contract", chat_context["llm_contract"]["identity_source"])
+        self.assertGreater(chat_context["memory_bridge"]["source_counts"]["genius_profile_nodes"], 0)
+        self.assertEqual(
+            chat_context["memory_bridge"]["goal_pursuit_contract"]["planning_frame"],
+            "5w1h_before_action",
+        )
+        self.assertTrue(
+            chat_context["memory_bridge"]["response_contract"]["use_domain_genius_profile_for_specialist_tasks"]
+        )
+        self.assertEqual(bundle_manifest["included_artifacts"]["genius_profile"], "genius_profile.json")
         self.assertIn("reasoning_kibo_engine", manifest["core_engine_boundaries"]["engine_ids"])
         self.assertFalse(
             manifest["closed_growth_contract"]["external_skill_policy"]["direct_activation_allowed"]
         )
         self.assertEqual(employment_record["agent"]["role"], "생활건강 리서치 에이전트")
+        self.assertEqual(employment_record["entrypoints"]["genius_profile"], "genius_profile.json")
         self.assertEqual(employment_record["status"], "active")
         self.assertTrue(release_archive_exists)
+
+    def test_graduate_package_requires_valid_genius_profile_for_ready_status(self) -> None:
+        from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
+        from ai22b.talent_foundry.graduate_package_builder import build_graduate_package
+        from ai22b.talent_foundry.training_run import materialize_training_blueprint
+
+        blueprint = create_agent_training_blueprint(
+            owner="보스",
+            request="생활건강 데이터를 근거 기반으로 다루는 건강 리서치 에이전트를 키워 고용하고 싶다.",
+            talent_name="라온",
+            gender="여자",
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            run = materialize_training_blueprint(blueprint, output_dir=tmp_path / "raon_run")
+            ready_package = build_graduate_package(
+                Path(run["artifacts"]["training_run"]),
+                tmp_path / "graduate_ready",
+            )
+            Path(run["artifacts"]["genius_profile"]).unlink()
+            review_package = build_graduate_package(
+                Path(run["artifacts"]["training_run"]),
+                tmp_path / "graduate_review_required",
+            )
+
+        self.assertEqual(ready_package["manifest"]["status"], "ready")
+        self.assertTrue(ready_package["manifest"]["readiness_checks"]["genius_profile_validation_passed"])
+        self.assertEqual(review_package["manifest"]["status"], "review_required")
+        self.assertFalse(review_package["manifest"]["readiness_checks"]["genius_profile_present"])
 
     def test_growth_plan_includes_balanced_stress_and_recovery(self) -> None:
         from ai22b.talent_foundry.program import create_talent_plan
@@ -5535,6 +5701,7 @@ class TalentFoundryTests(unittest.TestCase):
                 agent_manifest_path=outputs["agent_manifest"],
                 learning_ledger_path=outputs["learning_ledger"],
                 specialist_cohort_path=outputs["specialist_cohort"],
+                genius_profile_path=outputs["genius_profile"],
             )
             bundle_manifest = json.loads(bundle["bundle_manifest"].read_text(encoding="utf-8"))
             console_answers_template = json.loads(bundle["console_answers_template"].read_text(encoding="utf-8"))
@@ -5564,6 +5731,7 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("run_specialist_team_cycle.ps1", bundle_manifest["files"])
         self.assertIn("hiring_dossier.json", bundle_manifest["files"])
         self.assertIn("HIRING_DOSSIER.ko.md", bundle_manifest["files"])
+        self.assertIn("genius_profile.json", bundle_manifest["files"])
         self.assertIn("job_spec.template.json", bundle_manifest["files"])
         self.assertIn("dataflow_job.template.json", bundle_manifest["files"])
         self.assertIn("install.ps1", bundle_manifest["files"])
@@ -5596,6 +5764,7 @@ class TalentFoundryTests(unittest.TestCase):
         )
         self.assertEqual(bundle_manifest["included_artifacts"]["hiring_dossier"], "hiring_dossier.json")
         self.assertEqual(bundle_manifest["included_artifacts"]["hiring_dossier_markdown"], "HIRING_DOSSIER.ko.md")
+        self.assertEqual(bundle_manifest["included_artifacts"]["genius_profile"], "genius_profile.json")
         self.assertEqual(bundle_manifest["included_artifacts"]["dataflow_job_template"], "dataflow_job.template.json")
         self.assertEqual(console_answers_template["post_hire_mode"], "projection_swarm")
         self.assertIn("swarm_objective", console_answers_template)
@@ -5823,6 +5992,7 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("run_specialist_team_cycle.ps1", installed_manifest["installed_files"])
         self.assertIn("hiring_dossier.json", installed_manifest["installed_files"])
         self.assertIn("HIRING_DOSSIER.ko.md", installed_manifest["installed_files"])
+        self.assertIn("genius_profile.json", installed_manifest["installed_files"])
         self.assertIn("job_spec.template.json", installed_manifest["installed_files"])
         self.assertIn("dataflow_job.template.json", installed_manifest["installed_files"])
         self.assertEqual(installed_manifest["entrypoints"]["doctor"], "doctor.ps1")
@@ -5852,6 +6022,7 @@ class TalentFoundryTests(unittest.TestCase):
         )
         self.assertEqual(installed_manifest["entrypoints"]["hiring_dossier"], "hiring_dossier.json")
         self.assertEqual(installed_manifest["entrypoints"]["hiring_dossier_markdown"], "HIRING_DOSSIER.ko.md")
+        self.assertEqual(installed_manifest["entrypoints"]["genius_profile"], "genius_profile.json")
         self.assertEqual(installed_manifest["entrypoints"]["job_spec_template"], "job_spec.template.json")
         self.assertEqual(installed_manifest["entrypoints"]["dataflow_job_template"], "dataflow_job.template.json")
         self.assertEqual(unrelated_content, "do not touch")
@@ -7278,6 +7449,9 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertTrue(all(member["resume"]["present"] for member in team["members"]))
         self.assertTrue(
             all("hiring_dossier" in member["development_evidence"]["development_artifacts"] for member in team["members"])
+        )
+        self.assertTrue(
+            all("genius_profile" in member["development_evidence"]["development_artifacts"] for member in team["members"])
         )
         self.assertIn("투자 실행", " ".join(team["team_policy"]["guardrails"]))
         self.assertEqual(saved_team["team_id"], team["team_id"])

@@ -41,6 +41,7 @@ REQUIRED_INSTALLER_COMMANDS = [
     "build-developmental-ecology",
     "build-life-trace",
     "build-growth-profile",
+    "build-genius-profile",
     "run-same-sky-eval",
     "evaluate-simulation-rollouts",
     "promote-simulation-rollout-winner",
@@ -161,6 +162,7 @@ def _commands() -> list[dict[str, str]]:
         "build-developmental-ecology": "Build a synthetic developmental ecology seed from a training blueprint.",
         "build-life-trace": "Build age-appropriate synthetic life events from ecology for the memory substrate.",
         "build-growth-profile": "Condense life-trace and ecology records into relationship, emotion, culture, aesthetic, and asymmetry memory.",
+        "build-genius-profile": "Derive a public-safe domain genius profile from curriculum, exams, growth asymmetry, pattern chunks, and weakness guardrails.",
         "run-same-sky-eval": "Present one shared scene to multiple hired agents and compare reviewable interpretation differences.",
         "evaluate-simulation-rollouts": "Rank parallel rollout episodes and choose reviewed promotion or quarantine candidates without automatic memory promotion.",
         "promote-simulation-rollout-winner": "Promote only an owner-reviewed rollout winner summary into the hired talent learning ledger and Reasoning Ledger candidate list.",
@@ -228,6 +230,7 @@ def build_public_program_manifest(run_dir: Path, *, output_path: Path | None = N
     evidence_candidates = {
         "training_blueprint": "shinyong_training_blueprint.json",
         "growth_profile": "shinyong_growth_profile.json",
+        "genius_profile": "shinyong_genius_profile.json",
         "graduate_package": "graduate_package/graduate_package_manifest.json",
         "active_memory_route": "shinyong_active_memory_route.json",
         "release_package": "shinyong_agent_release_bundle.zip",
@@ -294,6 +297,14 @@ def build_public_program_manifest(run_dir: Path, *, output_path: Path | None = N
             "llm_identity_policy": "application_engine_not_identity",
             "growth_after_hire_continues": True,
             "learning_promotion": "only_quality_labeled_experiences",
+            "genius_derivation": {
+                "goal": "domain_specific_excellence_under_fixed_capacity",
+                "raw_compute_scaling_is_primary_path": False,
+                "requires_pattern_chunking": True,
+                "requires_timed_trials": True,
+                "requires_explicit_weakness_guardrails": True,
+                "requires_varied_transfer": True,
+            },
             "memory_routing": {
                 "active_context_budget": "bounded",
                 "compression_policy": "summaries_and_skills_only",

@@ -50,6 +50,7 @@ GENERATED_FILES = set(REQUIRED_FILES) | {
     "developmental_ecology.json",
     "life_trace.jsonl",
     "growth_profile.json",
+    "genius_profile.json",
     "grade_learning_records.json",
     "last_agent_run.json",
     "last_agent_job_run.json",
@@ -144,6 +145,7 @@ def _bundle_manifest(files: list[str], *, include_cohort: bool) -> dict[str, Any
             "developmental_ecology": "developmental_ecology.json" if "developmental_ecology.json" in files else None,
             "life_trace": "life_trace.jsonl" if "life_trace.jsonl" in files else None,
             "growth_profile": "growth_profile.json" if "growth_profile.json" in files else None,
+            "genius_profile": "genius_profile.json" if "genius_profile.json" in files else None,
             "grade_learning_records": "grade_learning_records.json"
             if "grade_learning_records.json" in files
             else None,
@@ -173,6 +175,7 @@ def _bundle_manifest(files: list[str], *, include_cohort: bool) -> dict[str, Any
             "developmental_ecology": "developmental_ecology.json" if "developmental_ecology.json" in files else None,
             "life_trace": "life_trace.jsonl" if "life_trace.jsonl" in files else None,
             "growth_profile": "growth_profile.json" if "growth_profile.json" in files else None,
+            "genius_profile": "genius_profile.json" if "genius_profile.json" in files else None,
             "grade_learning_records": "grade_learning_records.json"
             if "grade_learning_records.json" in files
             else None,
@@ -838,6 +841,7 @@ def create_agent_release_bundle(
     life_trace_path: Path | None = None,
     growth_profile_path: Path | None = None,
     grade_learning_records_path: Path | None = None,
+    genius_profile_path: Path | None = None,
     specialist_cohort_path: Path | None = None,
     hiring_dossier_path: Path | None = None,
     hiring_dossier_markdown_path: Path | None = None,
@@ -854,6 +858,7 @@ def create_agent_release_bundle(
         "developmental_ecology": output_dir / "developmental_ecology.json",
         "life_trace": output_dir / "life_trace.jsonl",
         "growth_profile": output_dir / "growth_profile.json",
+        "genius_profile": output_dir / "genius_profile.json",
         "grade_learning_records": output_dir / "grade_learning_records.json",
         "hiring_dossier": output_dir / "hiring_dossier.json",
         "hiring_dossier_markdown": output_dir / "HIRING_DOSSIER.ko.md",
@@ -909,6 +914,10 @@ def create_agent_release_bundle(
         _copy_json(growth_profile_path, paths["growth_profile"])
     else:
         paths.pop("growth_profile")
+    if genius_profile_path is not None:
+        _copy_json(genius_profile_path, paths["genius_profile"])
+    else:
+        paths.pop("genius_profile")
     if grade_learning_records_path is not None:
         _copy_json(grade_learning_records_path, paths["grade_learning_records"])
     else:
@@ -1260,6 +1269,8 @@ def install_agent_release_package(
         entrypoints["life_trace"] = "life_trace.jsonl"
     if "growth_profile.json" in installed_files:
         entrypoints["growth_profile"] = "growth_profile.json"
+    if "genius_profile.json" in installed_files:
+        entrypoints["genius_profile"] = "genius_profile.json"
     if "grade_learning_records.json" in installed_files:
         entrypoints["grade_learning_records"] = "grade_learning_records.json"
     manifest = {

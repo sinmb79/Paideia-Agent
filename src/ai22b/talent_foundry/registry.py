@@ -414,6 +414,8 @@ def hire_installed_agent(
         "llm_policy": agent_manifest.get("llm_policy", {}),
         "status": "active",
     }
+    if installed_manifest["entrypoints"].get("genius_profile"):
+        employment_record["entrypoints"]["genius_profile"] = installed_manifest["entrypoints"]["genius_profile"]
     employment_record_path = target_root / record_name
     _write_json(employment_record_path, employment_record)
     agent_id_card_payload_path = target_root / employment_record["entrypoints"]["agent_id_card_payload"]
@@ -573,6 +575,7 @@ def build_team_member_development_evidence(employment_record_path: Path) -> dict
         "developmental_ecology": "developmental_ecology.json",
         "life_trace": "life_trace.jsonl",
         "growth_profile": "growth_profile.json",
+        "genius_profile": "genius_profile.json",
         "learning_ledger": "learning_ledger.json",
         "grade_learning_records": "grade_learning_records.json",
         "hiring_dossier": "hiring_dossier.json",

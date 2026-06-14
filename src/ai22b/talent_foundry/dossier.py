@@ -87,6 +87,41 @@ def _employment_status(
     return "hire_ready" if employment_ready and oversight_ready and has_kernel else "review_required"
 
 
+def _genius_summary(genius_profile: Any, *, private_reasoning_trace_policy: str) -> dict[str, Any]:
+    if not isinstance(genius_profile, dict):
+        return {
+            "schema": None,
+            "profile_id": None,
+            "primary_domain": None,
+            "practice_cycle": [],
+            "pattern_chunk_count": None,
+            "weakness_guardrail_count": None,
+            "validation_status": None,
+            "private_reasoning_trace": private_reasoning_trace_policy,
+        }
+    if "domain_focus" in genius_profile or "cognitive_kibo_targets" in genius_profile:
+        return {
+            "schema": genius_profile.get("schema"),
+            "profile_id": genius_profile.get("profile_id"),
+            "primary_domain": genius_profile.get("domain_focus", {}).get("primary_domain"),
+            "practice_cycle": genius_profile.get("deliberate_practice_program", {}).get("cycle", []),
+            "pattern_chunk_count": len(genius_profile.get("cognitive_kibo_targets", {}).get("pattern_chunks", [])),
+            "weakness_guardrail_count": len(genius_profile.get("unevenness_profile", {}).get("weakness_guardrails", [])),
+            "validation_status": genius_profile.get("validation", {}).get("status"),
+            "private_reasoning_trace": private_reasoning_trace_policy,
+        }
+    return {
+        "schema": genius_profile.get("schema"),
+        "profile_id": genius_profile.get("profile_id"),
+        "primary_domain": genius_profile.get("primary_domain"),
+        "practice_cycle": genius_profile.get("practice_cycle", []),
+        "pattern_chunk_count": genius_profile.get("pattern_chunk_count"),
+        "weakness_guardrail_count": genius_profile.get("weakness_guardrail_count"),
+        "validation_status": genius_profile.get("validation_status"),
+        "private_reasoning_trace": private_reasoning_trace_policy,
+    }
+
+
 def build_hiring_dossier(
     *,
     hiring_packet: dict[str, Any],
@@ -110,6 +145,9 @@ def build_hiring_dossier(
     )
     growth_profile = hiring_packet.get("growth_profile") or agent_manifest.get("identity_source", {}).get(
         "growth_profile"
+    )
+    genius_profile = hiring_packet.get("genius_profile") or agent_manifest.get("identity_source", {}).get(
+        "genius_profile"
     )
     private_reasoning_trace_policy = public_reasoning_trace_policy(
         learning_ledger.get("policy", {}).get("private_reasoning_trace")
@@ -164,6 +202,10 @@ def build_hiring_dossier(
             else None,
             "policy": growth_profile.get("policy", {}) if isinstance(growth_profile, dict) else {},
         },
+        "genius_profile_summary": _genius_summary(
+            genius_profile,
+            private_reasoning_trace_policy=private_reasoning_trace_policy,
+        ),
         "llm_contract": {
             "role": llm_policy.get("role"),
             "private_reasoning_trace": private_reasoning_trace_policy,
@@ -216,6 +258,7 @@ def render_hiring_dossier_markdown(dossier: dict[str, Any]) -> str:
     doctoral = dossier.get("doctoral_defense", {})
     reasoning = dossier.get("reasoning_profile", {})
     growth = dossier.get("growth_profile_summary", {})
+    genius = dossier.get("genius_profile_summary", {})
     recommendation = dossier.get("employment_recommendation", {})
     llm_contract = dossier.get("llm_contract", {})
     gate_lines = [
@@ -261,6 +304,15 @@ def render_hiring_dossier_markdown(dossier: dict[str, Any]) -> str:
             f"- 관계 메모리 근거 수: {growth.get('relationship_memory_refs')}",
             f"- 감정 메모리 근거 수: {growth.get('emotional_memory_refs')}",
             "- 숨은 chain-of-thought: 저장하지 않음",
+            "",
+            "## 전공 천재성 도출 프로필",
+            f"- 스키마: {genius.get('schema')}",
+            f"- 주 전공 영역: {genius.get('primary_domain')}",
+            f"- 패턴 chunk 후보 수: {genius.get('pattern_chunk_count')}",
+            f"- 약점 가드레일 수: {genius.get('weakness_guardrail_count')}",
+            f"- 검증 상태: {genius.get('validation_status')}",
+            "- 범위: 일반 초지능 주장이 아니라 특정 분야의 검증 가능한 압축 문제해결 훈련 기록",
+            "- private reasoning trace: 저장하지 않음",
             "",
             "## LLM 계약",
             f"- LLM 역할: {llm_contract.get('role')}",

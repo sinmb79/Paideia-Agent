@@ -30,6 +30,7 @@ The GitHub `main` branch now contains the installable Paideia Agent preview:
 - Agent_warrent / Agent ID Card local export support, with manual owner-controlled registration only. Paideia prepares reviewed connector files but does not sign, upload, or register by itself.
 - Hermes/OpenClaw/generic skill migration into a quarantined compatibility profile. Imported skills stay disabled until the owner reviews required capabilities and test evidence.
 - Parent-controlled projection swarm cycles. A hired talent can split work into task projections, compare them on `projection_synthesis_board`, and promote only the reviewed parent synthesis into the learning ledger.
+- Domain genius derivation. Each talent can develop narrow excellence through fixed-capacity attention allocation, pattern chunking, timed trials, explicit weakness guardrails, and reviewed transfer work.
 - Public-safe release gates: package install doctor, first-run doctor, public release readiness audit, source hygiene script, security scans, JSON Schema contracts with negative tests, action-policy eval, LLM adapter contracts, and the full regression suite.
 
 ## Recent Improvements: 2026-06-12 to 2026-06-13
@@ -43,11 +44,15 @@ The latest work tightened Paideia's central philosophy and runtime boundaries:
 - **Human-like closure**: Paideia now treats knowledge transfer like a human body/brain model, not USB copy. External material must pass through attention, curriculum mapping, guided practice, timed exams, feedback, reasoning-kibo consolidation, and varied work application.
 - **Chat learning quarantine**: live chat learning candidates are forced into review quarantine before they can affect the memory substrate or reasoning kibo.
 - **Codex OAuth trust boundary**: Hermes roots must carry a Paideia review marker or appear in `PAIDEIA_TRUSTED_HERMES_AGENT_ROOTS` before their OAuth adapter code can run.
+- **Genius derivation engine**: Paideia now treats narrow genius as trained domain-specific efficiency, not raw compute scaling. The pipeline creates `*_genius_profile.json` and links it to the dossier, memory substrate, release bundle, installed agent, and graduate package.
+- **Evidence-based genius validation**: a profile built from a blueprint alone is a `needs_training_evidence` draft. It validates as `passed` only after training evidence such as passed assessments, reviewed work, growth profile evidence, or grade learning records is present.
 
 More detail:
 
 - [Paideia Closed Growth Ecosystem](docs/closed_growth_ecosystem.en.md)
 - [Paideia 폐쇄형 성장 생태계 원칙](docs/closed_growth_ecosystem.ko.md)
+- [Paideia Genius Derivation Engine](docs/genius_derivation_engine.en.md)
+- [Paideia 천재 도출 엔진](docs/genius_derivation_engine.ko.md)
 - [Codex OAuth Telegram Bridge Handoff](docs/codex_oauth_telegram_handoff.md)
 
 ## Origin
@@ -77,6 +82,7 @@ Most agent runtimes begin with an assistant and add tools, memory, channels, and
 - **Memory substrate, not full transcript replay**: the runtime selects bounded summaries, learning records, and procedural cues instead of injecting every old conversation.
 - **Reasoning Ledger / Ariadne Thread**: a reviewable ledger of hypotheses, evidence, mistakes, corrected principles, study habits, and work patterns. It is not hidden chain-of-thought. The internal compatibility artifact is still named `reasoning_kibo.jsonl`.
 - **Developmental Ecology / Life Trace / Growth Profile**: synthetic family climate, peer conflict, ordinary conversation, stress recovery, school life, aesthetic exposure, and domain curiosity are condensed into relationship, emotion, culture, aesthetic, and asymmetry memory.
+- **Genius Derivation Profile**: a narrow-domain training contract that turns curriculum, exams, growth asymmetry, pattern chunks, and weakness guardrails into a reviewable specialist-excellence path.
 - **Graduate package**: a raised talent can export an agent resume, transcript, memory pack, runtime manifest, and onboarding prompt before being used as an installable agent.
 - **Role-model process replication**: a role model contributes sourced learning conditions and curriculum pressure, not a preloaded personality or worldview.
 - **Parent-controlled projection swarm**: one hired talent can split work into task projections, synthesize their findings, and promote only reviewed learning back into the parent record.
@@ -148,8 +154,11 @@ flowchart LR
     Ecology --> GrowthProfile["Growth profile"]
     GrowthProfile --> Curriculum["Curriculum + simulations"]
     Curriculum --> Assessment["Exams, reports, feedback"]
+    Assessment --> GeniusProfile["Genius derivation profile"]
     Assessment --> Kibo["Reasoning Ledger"]
     Assessment --> Dossier["Hiring dossier"]
+    GeniusProfile --> Dossier
+    GeniusProfile --> Memory
     Dossier --> GraduatePackage["Graduate package"]
     Kibo --> Memory["Memory substrate"]
     GraduatePackage --> Kit["Paideia Agent kit"]
@@ -420,7 +429,7 @@ ai22b-talent-foundry raise `
   --blueprint "$env:AI22B_STORAGE_ROOT\talent-foundry\runs\agent_training_blueprint.json"
 ```
 
-`raise` now also writes `developmental_ecology.json`, `life_trace.jsonl`, `growth_profile.json`, `grade_learning_records.json`, and a memory substrate that links those growth records to chat. See [docs/developmental_ecology_v04.ko.md](docs/developmental_ecology_v04.ko.md) and [docs/growth_profile_v05.ko.md](docs/growth_profile_v05.ko.md).
+`raise` now also writes `developmental_ecology.json`, `life_trace.jsonl`, `growth_profile.json`, `genius_profile.json`, `grade_learning_records.json`, and a memory substrate that links those growth records to chat. See [docs/developmental_ecology_v04.ko.md](docs/developmental_ecology_v04.ko.md), [docs/growth_profile_v05.ko.md](docs/growth_profile_v05.ko.md), and [docs/genius_derivation_engine.en.md](docs/genius_derivation_engine.en.md).
 
 Build a graduate package for review before using the installed agent:
 
@@ -543,6 +552,7 @@ A Paideia Agent kit can include:
 - `memory_substrate.json`
 - `learning_ledger.json`
 - `language_development_program.json`
+- `genius_profile.json`
 - `hiring_dossier.json`
 - `HIRING_DOSSIER.ko.md`
 

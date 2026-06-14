@@ -55,6 +55,7 @@ from ai22b.talent_foundry.family import create_child_seed, create_child_training
 from ai22b.talent_foundry.first_run_doctor import doctor_first_run
 from ai22b.talent_foundry.graduate_package_builder import build_graduate_package
 from ai22b.talent_foundry.growth_profile import build_growth_profile
+from ai22b.talent_foundry.genius_derivation import build_genius_derivation_profile
 from ai22b.talent_foundry.institutions import default_major_gate_submissions, run_institutional_review
 from ai22b.talent_foundry.learning_loop import (
     build_reasoning_kernel,
@@ -71,7 +72,7 @@ from ai22b.talent_foundry.llm_onboarding import (
     build_llm_provider_matrix,
     format_llm_connection_status_card,
 )
-from ai22b.talent_foundry.memory_substrate import run_chat_turn_from_employment
+from ai22b.talent_foundry.memory_substrate import read_reasoning_kibo_jsonl, run_chat_turn_from_employment
 from ai22b.talent_foundry.onboarding import run_agent_onboarding
 from ai22b.talent_foundry.onboarding_doctor import doctor_onboarding_session
 from ai22b.talent_foundry.onboarding_choices import (
@@ -444,6 +445,23 @@ def _build_parser() -> argparse.ArgumentParser:
     growth_profile.add_argument("--life-trace", required=True)
     growth_profile.add_argument("--output", required=True)
 
+    genius_profile = subparsers.add_parser(
+        "build-genius-profile",
+        help="Build a public-safe domain genius derivation profile from curriculum, exams, growth, and grade records.",
+    )
+    genius_profile.add_argument("--blueprint", required=True)
+    genius_profile.add_argument("--curriculum")
+    genius_profile.add_argument("--assessment-transcript")
+    genius_profile.add_argument("--growth-profile")
+    genius_profile.add_argument("--grade-learning-records")
+    genius_profile.add_argument("--reasoning-kibo")
+    genius_profile.add_argument(
+        "--allow-draft",
+        action="store_true",
+        help="Return success for a draft profile that still needs training evidence.",
+    )
+    genius_profile.add_argument("--output", required=True)
+
     same_sky_eval = subparsers.add_parser(
         "run-same-sky-eval",
         help="Compare how one shared scene is interpreted by one or more hired Paideia agents.",
@@ -645,6 +663,7 @@ def _build_parser() -> argparse.ArgumentParser:
     bundle.add_argument("--developmental-ecology")
     bundle.add_argument("--life-trace")
     bundle.add_argument("--growth-profile")
+    bundle.add_argument("--genius-profile")
     bundle.add_argument("--cohort")
     bundle.add_argument("--hiring-dossier")
     bundle.add_argument("--hiring-dossier-markdown")
@@ -767,6 +786,7 @@ def _build_parser() -> argparse.ArgumentParser:
     chat_hired_agent_command.add_argument("--developmental-ecology")
     chat_hired_agent_command.add_argument("--life-trace")
     chat_hired_agent_command.add_argument("--growth-profile")
+    chat_hired_agent_command.add_argument("--genius-profile")
     chat_hired_agent_command.add_argument(
         "--llm-mode",
         choices=["offline", "auto", "live"],
@@ -1324,6 +1344,56 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(str(output_path))
         return 0
 
+    if args.command == "build-genius-profile":
+        blueprint_data = json.loads(Path(args.blueprint).read_text(encoding="utf-8"))
+        output_path = Path(args.output)
+        try:
+            profile = build_genius_derivation_profile(
+                blueprint_data,
+                curriculum_manifest=json.loads(Path(args.curriculum).read_text(encoding="utf-8"))
+                if args.curriculum
+                else blueprint_data.get("curriculum_manifest"),
+                assessment_transcript=json.loads(Path(args.assessment_transcript).read_text(encoding="utf-8"))
+                if args.assessment_transcript
+                else None,
+                growth_profile=json.loads(Path(args.growth_profile).read_text(encoding="utf-8"))
+                if args.growth_profile
+                else None,
+                grade_learning_records=json.loads(Path(args.grade_learning_records).read_text(encoding="utf-8"))
+                if args.grade_learning_records
+                else None,
+                reasoning_kibo={"entries": read_reasoning_kibo_jsonl(Path(args.reasoning_kibo))}
+                if args.reasoning_kibo
+                else None,
+                output_path=output_path,
+            )
+        except ValueError as exc:
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(
+                json.dumps(
+                    {
+                        "schema": "paideia-genius-derivation-profile/v1",
+                        "status": "failed",
+                        "validation": {
+                            "schema": "paideia-genius-derivation-profile-validation/v1",
+                            "status": "failed",
+                            "passed": False,
+                            "failed_checks": ["unsupported_training_blueprint_schema"],
+                        },
+                        "error": str(exc),
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            print(str(output_path))
+            return 2
+        print(str(output_path))
+        if profile["validation"]["status"] == "needs_training_evidence" and args.allow_draft:
+            return 0
+        return 0 if profile["validation"]["passed"] else 2
+
     if args.command == "run-same-sky-eval":
         scene = json.loads(Path(args.scene).read_text(encoding="utf-8"))
         output_path = Path(args.output)
@@ -1696,6 +1766,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             developmental_ecology_path=Path(args.developmental_ecology) if args.developmental_ecology else None,
             life_trace_path=Path(args.life_trace) if args.life_trace else None,
             growth_profile_path=Path(args.growth_profile) if args.growth_profile else None,
+            genius_profile_path=Path(args.genius_profile) if args.genius_profile else None,
             specialist_cohort_path=Path(args.cohort) if args.cohort else None,
             hiring_dossier_path=Path(args.hiring_dossier) if args.hiring_dossier else None,
             hiring_dossier_markdown_path=Path(args.hiring_dossier_markdown)
@@ -1835,6 +1906,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             developmental_ecology_path=Path(args.developmental_ecology) if args.developmental_ecology else None,
             life_trace_path=Path(args.life_trace) if args.life_trace else None,
             growth_profile_path=Path(args.growth_profile) if args.growth_profile else None,
+            genius_profile_path=Path(args.genius_profile) if args.genius_profile else None,
             llm_mode=llm_mode,
             llm_model=args.llm_model,
             learn_from_chat=args.learn_from_chat,
