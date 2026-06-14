@@ -31,6 +31,7 @@ from ai22b.talent_foundry.registry import (
     run_hired_team_cycle,
 )
 from ai22b.talent_foundry.simulation_rollouts import build_simulation_rollouts, evaluate_simulation_rollouts
+from ai22b.talent_foundry.task_pursuit import build_task_pursuit_plan
 
 
 CONSOLE_SESSION_SCHEMA = "ai-talent-guided-console-session/v1"
@@ -46,6 +47,7 @@ ONBOARDING_ACTION_ALLOWLIST = {
     "first_chat_offline",
     "llm_live_readiness_suite",
     "next_goal_cycle",
+    "task_pursuit_plan",
 }
 
 SPECIALIST_TEAM_ROLES = [
@@ -706,6 +708,8 @@ def build_onboarding_choice_manifest(
                 "post_hire_mode": normalized.get("post_hire_mode"),
                 "simulation_rollouts_enabled": normalized.get("simulation_rollouts_enabled"),
                 "finish_action": normalized.get("finish_action"),
+                "task_pursuit_mode": "six_w_plan_and_goal_pursuit",
+                "task_pursuit_plan": artifacts.get("task_pursuit_plan"),
             },
             "agent_identity": {
                 "agent_id_card_mode": normalized.get("agent_id_card_mode"),
@@ -740,6 +744,7 @@ def build_onboarding_choice_manifest(
             "llm_connection_profile": artifacts.get("llm_connection_profile"),
             "llm_live_setup_guide": artifacts.get("llm_live_setup_guide"),
             "onboarding_launch_plan": artifacts.get("onboarding_launch_plan"),
+            "task_pursuit_plan": artifacts.get("task_pursuit_plan"),
             "paideia_onboarding_config": artifacts.get("paideia_onboarding_config"),
             "employment_record": artifacts.get("employment_record"),
         },
@@ -831,6 +836,7 @@ def _build_next_action_queue(
     command_by_id = {str(item.get("id")): item for item in command_plan if isinstance(item, dict) and item.get("id")}
     base_order = [
         ("doctor_onboarding_session", "health_check"),
+        ("task_pursuit_plan", "task_pursuit"),
         ("first_chat_offline", "first_conversation"),
         ("review_onboarding_choices", "setup_review"),
         ("llm_live_readiness_suite", "model_auth"),
@@ -909,6 +915,18 @@ def _build_operator_dashboard(
                 "action_ids": [
                     action_id
                     for action_id in ["chat_runtime_smoke", "first_chat_offline"]
+                    if action_id in command_ids
+                ],
+            },
+            {
+                "id": "task_pursuit",
+                "title": "Task Pursuit",
+                "status": "six_w_plan_ready" if artifacts.get("task_pursuit_plan") else "needs_plan",
+                "task_pursuit_plan": artifacts.get("task_pursuit_plan"),
+                "mode": "six_w_plan_and_goal_pursuit",
+                "action_ids": [
+                    action_id
+                    for action_id in ["task_pursuit_plan", "next_goal_cycle"]
                     if action_id in command_ids
                 ],
             },
@@ -1020,6 +1038,14 @@ def build_onboarding_launch_plan(
             "required_before_agent_work": False,
             "expected": "shows the selected setup and policy receipt without storing raw local model paths or private curriculum paths.",
         },
+        {
+            "id": "task_pursuit_plan",
+            "title": "Review the 6W task-pursuit plan before work",
+            "path": artifacts.get("task_pursuit_plan", ""),
+            "network_call": False,
+            "required_before_agent_work": True,
+            "expected": "shows who/what/when/where/why/how, necessary research gates, work queue, verification, and stop conditions.",
+        },
         _copy_command(
             command_id="provider_doctor_no_network",
             title="Verify provider configuration without network transport",
@@ -1124,6 +1150,18 @@ def build_onboarding_launch_plan(
             ],
         },
         {
+            "id": "task_pursuit",
+            "title": "6W Task Pursuit",
+            "status": "completed" if artifacts.get("task_pursuit_plan") else "missing",
+            "artifact": artifacts.get("task_pursuit_plan"),
+            "proves": [
+                "six_w_task_framing",
+                "necessary_research_only",
+                "work_until_completed_or_blocked",
+                "verification_before_completion",
+            ],
+        },
+        {
             "id": "gateway_channels",
             "title": "Gateway/Channels",
             "status": "completed",
@@ -1221,6 +1259,7 @@ def build_onboarding_launch_plan(
         },
         "operator_notes": [
             "The chosen LLM is an execution engine, not the agent identity.",
+            "Every owner request should pass through the 6W task-pursuit plan before substantial work.",
             "Run live-readiness before daily external-provider work.",
             "Learning promotion remains review-gated; hidden reasoning traces are not stored.",
             "Agent ID Card integration writes local payloads only unless the owner performs explicit registration.",
@@ -1297,6 +1336,7 @@ def format_onboarding_finish_summary(session: dict[str, Any]) -> str:
         f"- Chat surface: {answers.get('chat_surface', '')}",
         f"- Console session: {artifacts.get('console_session', '')}",
         f"- Choice manifest: {artifacts.get('onboarding_choice_manifest', '')}",
+        f"- Task pursuit plan: {artifacts.get('task_pursuit_plan', '')}",
         f"- Launch plan: {launch_plan_path}",
         f"- Config: {artifacts.get('paideia_onboarding_config', '')}",
         "",
@@ -1654,6 +1694,49 @@ def run_onboarding_next_action(
 
     launch_plan = json.loads(launch_plan_path.read_text(encoding="utf-8"))
     artifacts = launch_plan.get("artifacts", {}) if isinstance(launch_plan.get("artifacts"), dict) else {}
+    if selected_action_id == "task_pursuit_plan":
+        summary = launch_plan.get("summary", {}) if isinstance(launch_plan.get("summary"), dict) else {}
+        selected_talent = (
+            launch_plan.get("selected_talent_path", {})
+            if isinstance(launch_plan.get("selected_talent_path"), dict)
+            else {}
+        )
+        request = str(message or summary.get("request") or "").strip()
+        if not request:
+            return {
+                **base_report,
+                "status": "blocked_missing_artifact",
+                "executed": False,
+                "reason": "owner_request_missing_from_launch_plan",
+            }
+        output_path = action_output_path or launch_plan_path.parent / "task_pursuit_plan.json"
+        plan = build_task_pursuit_plan(
+            request,
+            objective=str(summary.get("request") or request),
+            agent={
+                "name": summary.get("talent_name"),
+                "role": selected_talent.get("role_model_id"),
+                "major_goal": selected_talent.get("domain"),
+            },
+            context="onboarding_action_runner",
+            owner_label=str(summary.get("owner") or "Boss"),
+        )
+        _write_json(output_path, plan)
+        return {
+            **base_report,
+            "status": "completed" if plan.get("validation", {}).get("passed") else "completed_with_plan_review",
+            "executed": True,
+            "execution_adapter": "internal_build_task_pursuit_plan",
+            "command_or_path": next_action.get("command_or_path"),
+            "task_pursuit_plan_path": str(output_path),
+            "task_pursuit_plan_schema": plan.get("schema"),
+            "task_pursuit_validation_status": plan.get("validation", {}).get("status")
+            if isinstance(plan.get("validation"), dict)
+            else None,
+            "six_w_frame_keys": list(plan.get("six_w_frame", {}).keys())
+            if isinstance(plan.get("six_w_frame"), dict)
+            else [],
+        }
     if selected_action_id == "doctor_onboarding_session":
         from ai22b.talent_foundry.onboarding_doctor import doctor_onboarding_session
 
@@ -1903,6 +1986,8 @@ def write_openclaw_style_config(
             "post_hire_mode": normalized.get("post_hire_mode"),
             "simulation_rollouts_enabled": normalized.get("simulation_rollouts_enabled"),
             "finish_action": normalized.get("finish_action"),
+            "task_pursuit_mode": "six_w_plan_and_goal_pursuit",
+            "task_pursuit_plan": artifacts.get("task_pursuit_plan"),
             "onboarding_launch_plan": artifacts.get("onboarding_launch_plan"),
         },
         "launch_plan": {
@@ -1989,6 +2074,24 @@ def run_console_session(
         "agent_identity_verification": onboarding["artifacts"].get("agent_identity_verification"),
         "agent_warrent_registration_request": onboarding["artifacts"].get("agent_warrent_registration_request"),
     }
+    task_pursuit_plan_path = output_dir / "task_pursuit_plan.json"
+    task_pursuit_plan = build_task_pursuit_plan(
+        normalized["request"],
+        objective=normalized.get("initial_goal") or onboarding.get("employment", {}).get("goal") or normalized["request"],
+        agent={
+            "name": normalized.get("talent_name"),
+            "role": onboarding.get("track", {}).get("target_role")
+            if isinstance(onboarding.get("track"), dict)
+            else None,
+            "major_goal": onboarding.get("track", {}).get("name")
+            if isinstance(onboarding.get("track"), dict)
+            else None,
+        },
+        context="onboarding_launch_plan",
+        owner_label=normalized.get("owner") or "Boss",
+    )
+    _write_json(task_pursuit_plan_path, task_pursuit_plan)
+    artifacts["task_pursuit_plan"] = str(task_pursuit_plan_path)
     choice_manifest_path = output_dir / "onboarding_choice_manifest.json"
     artifacts["onboarding_choice_manifest"] = str(choice_manifest_path)
     status = onboarding["status"]
@@ -2274,6 +2377,12 @@ def run_console_session(
             "primary_next_action_id": launch_plan["operator_dashboard"]["primary_next_action_id"],
             "command_ids": [item["id"] for item in launch_plan["command_plan"]],
             "next_action_queue_ids": [item["action_id"] for item in launch_plan["next_action_queue"]],
+        },
+        "task_pursuit_plan": {
+            "schema": task_pursuit_plan["schema"],
+            "path": str(task_pursuit_plan_path),
+            "validation_status": task_pursuit_plan["validation"]["status"],
+            "mode": "six_w_plan_and_goal_pursuit",
         },
         "artifacts": artifacts,
         "next_commands": onboarding["next_commands"],

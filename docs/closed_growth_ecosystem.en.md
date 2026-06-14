@@ -42,6 +42,7 @@ flowchart LR
 - `education_program_engine`: creates the major, curriculum, exams, and growth path.
 - `assessment_and_dossier_engine`: creates the resume and hiring dossier.
 - `embodied_practice_and_exam_engine`: forces knowledge to pass through practice, timed exams, feedback, and application instead of direct copy.
+- `task_pursuit_engine`: turns each owner instruction into 6W task framing, necessary research, work, verification, repair, and continuation until completion or a clear blocker.
 - `reasoning_kibo_engine`: forms procedural reasoning from exams, mistakes, feedback, and work.
 - `memory_substrate_engine`: promotes only verified memory into active context.
 - `identity_and_id_card_engine`: manages local identity, ID card payload, and Agent_warrent envelope.
@@ -59,6 +60,7 @@ The codebase carries `paideia-closed-growth-contract/v1`.
 - Imported external skills are stored as `REFERENCE.md` and `SOURCE_SKILL_REFERENCE.md`, not as active `SKILL.md` descriptors.
 - USB-style direct data transfer, direct memory patching, and direct solution-method copying are forbidden.
 - Problem solving follows `understand_task -> choose_minimal_necessary_method -> solve_under_time_constraint -> review_result_and_errors -> extract_personal_method -> apply_method_to_new_domain`.
+- Runtime work also carries `paideia-task-pursuit-plan/v1`: who/what/when/where/why/how, local-context-first research, work queue, verification, repair, and stop conditions.
 - Useful procedures must be rewritten as Paideia education axes or procedural exercises.
 - Failed or unreviewed runs stay quarantined; only reviewed summaries and successful Paideia work evidence can be promoted.
 - Chat learning candidates are forced into quarantine before Boss review and cannot immediately enter the memory substrate or reasoning kibo.

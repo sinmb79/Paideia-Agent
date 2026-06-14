@@ -28,14 +28,16 @@ The GitHub `main` branch now contains the installable Paideia Agent preview:
 - OpenClaw-style onboarding that asks the owner to choose an LLM service, chat surface, role-model curriculum, skill-migration posture, storage policy, runtime mode, and Agent ID policy.
 - A directly testable Graham Junior securities-research sample plus additional role-model process tracks for software engineering, data analysis, cybersecurity, marketing, education, healthcare operations, management, legal/compliance research, blockchain protocol research, SRE, deep research, and accounting controls.
 - Agent_warrent / Agent ID Card local export support, with manual owner-controlled registration only. Paideia prepares reviewed connector files but does not sign, upload, or register by itself.
+- 6W task-pursuit mode: every owner request can be framed as who/what/when/where/why/how, necessary research, work queue, verification, and continuation until completion or a clear blocker.
 - Hermes/OpenClaw/generic skill migration into a quarantined compatibility profile. Imported skills stay disabled until the owner reviews required capabilities and test evidence.
 - Parent-controlled projection swarm cycles. A hired talent can split work into task projections, compare them on `projection_synthesis_board`, and promote only the reviewed parent synthesis into the learning ledger.
 - Public-safe release gates: package install doctor, first-run doctor, public release readiness audit, source hygiene script, security scans, JSON Schema contracts with negative tests, action-policy eval, LLM adapter contracts, and the full regression suite.
 
-## Recent Improvements: 2026-06-12 to 2026-06-13
+## Recent Improvements: 2026-06-12 to 2026-06-14
 
 The latest work tightened Paideia's central philosophy and runtime boundaries:
 
+- **6W task-pursuit mode**: agent runs, hired chat, program chat, onboarding, and the installable program now expose a no-network `task_pursuit_plan` so the agent plans, researches only what is needed, works, verifies, repairs, and continues until complete or blocked.
 - **ChatGPT/Codex OAuth path**: hired-agent chat can use a Hermes-style `openai-codex` OAuth backend while keeping the LLM as an application engine, not the agent identity. Telegram bridge commands can switch backend and model.
 - **LLM and chat onboarding choices**: onboarding now separates ChatGPT/Codex OAuth, OpenAI API key mode, other API providers, local model adapters, Telegram, and external chat surfaces.
 - **Per-member team development**: even when a team is assembled, each member must be raised through the built-in development program and carry its own training run, dossier, resume, memory substrate, and employment record.
@@ -47,6 +49,8 @@ The latest work tightened Paideia's central philosophy and runtime boundaries:
 More detail:
 
 - [Paideia Closed Growth Ecosystem](docs/closed_growth_ecosystem.en.md)
+- [Paideia Task Pursuit Mode](docs/task_pursuit_mode.en.md)
+- [Paideia 6하 원칙 목표추진 모드](docs/task_pursuit_mode.ko.md)
 - [Paideia 폐쇄형 성장 생태계 원칙](docs/closed_growth_ecosystem.ko.md)
 - [Codex OAuth Telegram Bridge Handoff](docs/codex_oauth_telegram_handoff.md)
 
@@ -74,6 +78,7 @@ Most agent runtimes begin with an assistant and add tools, memory, channels, and
 
 - **Raise first, hire later**: a talent passes through growth records, courses, exams, reports, and review gates before becoming an agent.
 - **Human-like closure**: knowledge is not copied into the agent like USB data. It is internalized through curriculum, practice, timed exams, feedback, reinforcement, and applied work.
+- **Plan and pursue before answering**: substantial requests are framed through a reviewable 6W task-pursuit plan, then driven through necessary research, work, verification, repair, and completion conditions.
 - **Memory substrate, not full transcript replay**: the runtime selects bounded summaries, learning records, and procedural cues instead of injecting every old conversation.
 - **Reasoning Ledger / Ariadne Thread**: a reviewable ledger of hypotheses, evidence, mistakes, corrected principles, study habits, and work patterns. It is not hidden chain-of-thought. The internal compatibility artifact is still named `reasoning_kibo.jsonl`.
 - **Developmental Ecology / Life Trace / Growth Profile**: synthetic family climate, peer conflict, ordinary conversation, stress recovery, school life, aesthetic exposure, and domain curiosity are condensed into relationship, emotion, culture, aesthetic, and asymmetry memory.

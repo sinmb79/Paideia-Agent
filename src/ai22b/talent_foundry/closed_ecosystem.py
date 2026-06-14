@@ -11,6 +11,7 @@ CORE_ENGINE_IDS = [
     "education_program_engine",
     "assessment_and_dossier_engine",
     "embodied_practice_and_exam_engine",
+    "task_pursuit_engine",
     "reasoning_kibo_engine",
     "memory_substrate_engine",
     "identity_and_id_card_engine",
@@ -89,6 +90,12 @@ def build_core_engine_boundaries() -> dict[str, Any]:
             "authority": "forces knowledge to pass through practice, timed exams, feedback, and application",
             "external_override_allowed": False,
             "upgrade_mode": "curriculum_practice_exam_feedback_cycle",
+        },
+        {
+            "id": "task_pursuit_engine",
+            "authority": "turns owner instructions into 6W task framing, necessary research, execution, verification, and continuation until completion or a clear blocker",
+            "external_override_allowed": False,
+            "upgrade_mode": "internal_six_w_goal_pursuit_contract",
         },
         {
             "id": "reasoning_kibo_engine",
@@ -174,6 +181,10 @@ def build_closed_growth_contract(
         },
         "practice_reasoning_policy": {
             "goal": "develop_agent_owned_problem_solving_method",
+            "task_pursuit_mode": "six_w_plan_and_goal_pursuit",
+            "six_w_task_framing_required": True,
+            "continue_until_completed_or_blocked": True,
+            "necessary_research_only": True,
             "broad_exhaustive_search_is_primary_method": False,
             "search_role": "reference_and_evidence_support_after_task_framing",
             "practice_loop": REQUIRED_PRACTICE_LOOP,
@@ -262,6 +273,9 @@ def validate_closed_growth_contract(contract: dict[str, Any]) -> dict[str, Any]:
         == REQUIRED_INTERNALIZATION_STAGES,
         "practice_reasoning_not_broad_search_first": practice_policy.get("broad_exhaustive_search_is_primary_method")
         is False,
+        "practice_reasoning_requires_six_w_goal_pursuit": practice_policy.get("six_w_task_framing_required") is True
+        and practice_policy.get("continue_until_completed_or_blocked") is True
+        and practice_policy.get("necessary_research_only") is True,
         "practice_reasoning_uses_required_loop": practice_loop == REQUIRED_PRACTICE_LOOP,
         "practice_reasoning_requires_timed_exam": practice_policy.get("timed_exam_practice_required") is True,
         "practice_reasoning_requires_short_time_solution_training": practice_policy.get(

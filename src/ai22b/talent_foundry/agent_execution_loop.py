@@ -18,6 +18,7 @@ from ai22b.talent_foundry.llm_runtime import (
     invoke_llm_application_engine,
 )
 from ai22b.talent_foundry.runtime_observability import build_agent_runtime_observability
+from ai22b.talent_foundry.task_pursuit import build_task_pursuit_plan
 from ai22b.talent_foundry.tool_registry import execute_registered_tools, tool_descriptors
 
 
@@ -699,6 +700,7 @@ def _build_agent_runtime_status_card(
     verification: dict[str, Any],
     memory_write: dict[str, Any],
     runtime_observability: dict[str, Any],
+    task_pursuit_plan: dict[str, Any],
 ) -> dict[str, Any]:
     policy_status = policy_decision.get("status")
     llm_status = llm_result.get("status")
@@ -706,6 +708,11 @@ def _build_agent_runtime_status_card(
     verification_status = verification.get("status")
     contract_status = execution_contract.get("status")
     memory_decision = memory_write.get("decision")
+    task_pursuit_validation = (
+        task_pursuit_plan.get("validation", {})
+        if isinstance(task_pursuit_plan.get("validation"), dict)
+        else {}
+    )
     llm_contract = (
         llm_result.get("llm_client_contract", {})
         if isinstance(llm_result.get("llm_client_contract"), dict)
@@ -761,6 +768,7 @@ def _build_agent_runtime_status_card(
         "run_status": run_status,
         "created_at_utc": _now(),
         "loop": {
+            "task_pursuit_planning": "passed" if task_pursuit_validation.get("passed") is True else "needs_review",
             "request_to_action_intent": "passed",
             "policy_before_llm": "passed",
             "policy_before_tools": "passed",
@@ -821,6 +829,20 @@ def _build_agent_runtime_status_card(
             if isinstance(runtime_observability.get("context"), dict)
             else None,
         },
+        "task_pursuit": {
+            "schema": task_pursuit_plan.get("schema"),
+            "contract_schema": task_pursuit_plan.get("contract_schema"),
+            "validation_status": task_pursuit_validation.get("status"),
+            "six_w_frame_complete": task_pursuit_validation.get("checks", {}).get("six_w_frame_complete")
+            if isinstance(task_pursuit_validation.get("checks"), dict)
+            else None,
+            "continue_until": task_pursuit_plan.get("iteration_policy", {}).get("continue_until")
+            if isinstance(task_pursuit_plan.get("iteration_policy"), dict)
+            else None,
+            "same_blocker_threshold": task_pursuit_plan.get("iteration_policy", {}).get("same_blocker_threshold")
+            if isinstance(task_pursuit_plan.get("iteration_policy"), dict)
+            else None,
+        },
         "public_safe": {
             **public_safe,
             "passed": passed_safety,
@@ -868,6 +890,12 @@ def run_agent_execution_loop(
     agent = manifest["agent"]
     run_id = _run_id(agent["name"], task, created_at)
     memory = manifest.get("memory_profile", {})
+    task_pursuit_plan = build_task_pursuit_plan(
+        task,
+        objective=task,
+        agent=agent,
+        context="agent_execution_loop",
+    )
     action_intents = infer_action_intents(task, manifest)
     policy_decision = evaluate_action_policy(manifest, action_intents)
     policy_violations = policy_decision["policy_violations"]
@@ -923,7 +951,17 @@ def run_agent_execution_loop(
             llm_mode=llm_mode,
             llm_model=llm_model,
             client=llm_client,
-            policy_context=policy_decision,
+            policy_context={
+                **policy_decision,
+                "task_pursuit_plan": {
+                    "schema": task_pursuit_plan["schema"],
+                    "objective": task_pursuit_plan["objective"],
+                    "six_w_frame": task_pursuit_plan["six_w_frame"],
+                    "success_criteria": task_pursuit_plan["success_criteria"],
+                    "necessary_research_plan": task_pursuit_plan["necessary_research_plan"],
+                    "iteration_policy": task_pursuit_plan["iteration_policy"],
+                },
+            },
             tools=selected_tool_descriptors,
         )
         llm_provider_preflight = llm_result.get("llm_provider_preflight", llm_provider_preflight)
@@ -1042,12 +1080,19 @@ def run_agent_execution_loop(
         verification=verification,
         memory_write=memory_write,
         runtime_observability=runtime_observability,
+        task_pursuit_plan=task_pursuit_plan,
     )
     audit_events = [
         {
             "recorded_at_utc": created_at,
             "event": "agent_execution_loop_started",
             "task_fingerprint": hashlib.sha256(task.encode("utf-8")).hexdigest()[:16],
+        },
+        {
+            "recorded_at_utc": created_at,
+            "event": "task_pursuit_plan_created",
+            "schema": task_pursuit_plan["schema"],
+            "validation_status": task_pursuit_plan["validation"]["status"],
         },
         *policy_decision.get("audit_events", []),
         {
@@ -1115,15 +1160,19 @@ def run_agent_execution_loop(
         },
         "action_intents": action_intents,
         "policy_decision": policy_decision,
+        "task_pursuit_plan": task_pursuit_plan,
         "execution_loop": {
             "schema": "paideia-agent-execution-loop/v1",
             "steps": [
                 "request",
+                "six_w_task_framing",
+                "necessary_research_decision",
                 "action_intent_inference",
                 "capability_policy",
                 "llm_planning",
                 "tool_execution",
                 "verification",
+                "repair_or_finish_iteration",
                 "memory_write_decision",
                 "audit_log",
             ],

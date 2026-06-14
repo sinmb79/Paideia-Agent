@@ -169,6 +169,40 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("external_skill_promotion_path_is_rewrite_test_review", validation["failed_checks"])
         self.assertIn("work_growth_requires_reviewed_result", validation["failed_checks"])
 
+    def test_task_pursuit_plan_frames_owner_request_with_six_w_and_completion_loop(self) -> None:
+        from ai22b.talent_foundry.task_pursuit import (
+            build_task_pursuit_contract,
+            build_task_pursuit_plan,
+            validate_task_pursuit_contract,
+        )
+
+        plan = build_task_pursuit_plan(
+            "Build a verified local research workflow and keep going until it passes tests.",
+            agent={
+                "name": "Julia",
+                "role": "local Paideia runtime engineer",
+                "major_goal": "Improve task execution",
+            },
+            context="test",
+            owner_label="Boss",
+        )
+
+        self.assertEqual(plan["schema"], "paideia-task-pursuit-plan/v1")
+        self.assertTrue(plan["validation"]["passed"])
+        self.assertEqual(list(plan["six_w_frame"].keys()), ["who", "what", "when", "where", "why", "how"])
+        self.assertTrue(plan["necessary_research_plan"]["local_context_first"])
+        self.assertEqual(plan["necessary_research_plan"]["external_search_default"], "only_if_needed")
+        self.assertEqual(plan["iteration_policy"]["continue_until"], "objective_completed_or_stop_condition")
+        self.assertEqual(plan["iteration_policy"]["same_blocker_threshold"], 3)
+        self.assertFalse(plan["private_reasoning_policy"]["hidden_chain_of_thought_stored"])
+        contract_validation = plan["validation"]["contract_validation"]
+        self.assertEqual(contract_validation["target_schema"], "paideia-task-pursuit-contract/v1")
+        self.assertTrue(contract_validation["passed"])
+        contract = build_task_pursuit_contract(context="test")
+        tampered = json.loads(json.dumps(contract, ensure_ascii=False))
+        tampered["research_policy"]["broad_exhaustive_search_is_primary_method"] = True
+        self.assertFalse(validate_task_pursuit_contract(tampered)["passed"])
+
     def test_training_blueprint_materializes_employable_agent_packet(self) -> None:
         from ai22b.talent_foundry.blueprint import create_agent_training_blueprint
         from ai22b.talent_foundry.closed_ecosystem import validate_closed_growth_contract
@@ -1335,6 +1369,13 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertIn("검증", result["memory_applied"]["procedural_principles"])
         self.assertEqual(result["llm_policy"]["role"], "application_engine_not_identity")
         self.assertEqual(result["execution_loop"]["schema"], "paideia-agent-execution-loop/v1")
+        self.assertIn("six_w_task_framing", result["execution_loop"]["steps"])
+        self.assertEqual(result["task_pursuit_plan"]["schema"], "paideia-task-pursuit-plan/v1")
+        self.assertTrue(result["task_pursuit_plan"]["validation"]["passed"])
+        self.assertEqual(
+            result["agent_runtime_status_card"]["task_pursuit"]["validation_status"],
+            "passed",
+        )
         self.assertEqual(result["execution_contract"]["schema"], "paideia-agent-execution-contract/v1")
         self.assertEqual(result["execution_contract"]["status"], "passed")
         self.assertEqual(result["execution_contract"]["policy_gate"]["status"], "approved")
@@ -4722,6 +4763,7 @@ class TalentFoundryTests(unittest.TestCase):
                 Path(session["artifacts"]["llm_live_setup_guide"]).read_text(encoding="utf-8")
             )
             launch_plan = json.loads(Path(session["artifacts"]["onboarding_launch_plan"]).read_text(encoding="utf-8"))
+            task_pursuit_plan = json.loads(Path(session["artifacts"]["task_pursuit_plan"]).read_text(encoding="utf-8"))
             config = json.loads(Path(session["artifacts"]["paideia_onboarding_config"]).read_text(encoding="utf-8"))
             agent_warrent_registration_request = json.loads(
                 Path(session["artifacts"]["agent_warrent_registration_request"]).read_text(encoding="utf-8")
@@ -4738,6 +4780,7 @@ class TalentFoundryTests(unittest.TestCase):
                     "llm_connection_profile",
                     "llm_live_setup_guide",
                     "onboarding_launch_plan",
+                    "task_pursuit_plan",
                     "onboarding_session",
                     "employment_record",
                     "first_goal_cycle",
@@ -4780,10 +4823,15 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertFalse(choice_manifest["selected"]["agent_identity"]["external_registration_performed"])
         self.assertEqual(launch_plan["selected_llm"]["engine"], "openai_chatgpt_codex")
         self.assertEqual(launch_plan["selected_chat_surface"]["id"], "codex-bridge-chat")
+        self.assertEqual(task_pursuit_plan["schema"], "paideia-task-pursuit-plan/v1")
+        self.assertTrue(task_pursuit_plan["validation"]["passed"])
+        self.assertEqual(choice_manifest["selected"]["runtime"]["task_pursuit_mode"], "six_w_plan_and_goal_pursuit")
+        self.assertEqual(config["runtime"]["task_pursuit_plan"], session["artifacts"]["task_pursuit_plan"])
         self.assertEqual(launch_plan["operator_dashboard"]["schema"], "paideia-openclaw-onboarding-dashboard/v1")
         self.assertEqual(launch_plan["operator_dashboard"]["primary_next_action_id"], "first_chat_offline")
         self.assertEqual(launch_plan["recommended_next_action_id"], "first_chat_offline")
         self.assertIn("first_chat_offline", {item["action_id"] for item in launch_plan["next_action_queue"]})
+        self.assertIn("task_pursuit_plan", {item["action_id"] for item in launch_plan["next_action_queue"]})
         self.assertIn("doctor_onboarding_session", {item["action_id"] for item in launch_plan["next_action_queue"]})
         self.assertFalse(launch_plan["operator_dashboard"]["safety_posture"]["secret_values_exported"])
         self.assertFalse(launch_plan["operator_dashboard"]["safety_posture"]["external_registration_performed"])
@@ -4818,6 +4866,7 @@ class TalentFoundryTests(unittest.TestCase):
                 "agent_runtime_smoke",
                 "chat_runtime_smoke",
                 "first_chat_offline",
+                "task_pursuit_plan",
                 "doctor_onboarding_session",
             },
             launch_command_ids,
@@ -4841,6 +4890,7 @@ class TalentFoundryTests(unittest.TestCase):
         self.assertEqual(session["launch_plan"]["primary_next_action_id"], "first_chat_offline")
         self.assertIn("doctor_onboarding_session", session["launch_plan"]["next_action_queue_ids"])
         self.assertIn("first_chat_offline", session["launch_plan"]["command_ids"])
+        self.assertEqual(session["task_pursuit_plan"]["validation_status"], "passed")
         self.assertEqual(
             session["onboarding_choice_manifest"]["path"],
             session["artifacts"]["onboarding_choice_manifest"],

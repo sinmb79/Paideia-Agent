@@ -115,6 +115,7 @@ from ai22b.talent_foundry.registry import (
 from ai22b.talent_foundry.runtime import run_work_session
 from ai22b.talent_foundry.runtime_benchmark import build_runtime_observability_comparison
 from ai22b.talent_foundry.runtime_contract_doctor import doctor_runtime_contract
+from ai22b.talent_foundry.task_pursuit import build_task_pursuit_plan
 from ai22b.talent_foundry.team import run_clone_team_session
 from ai22b.talent_foundry.training_run import materialize_training_blueprint
 from ai22b.talent_foundry.tool_registry import audit_tool_capability_registry
@@ -340,6 +341,18 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Return exit code 2 when the runtime contract doctor report does not pass.",
     )
+
+    task_pursuit = subparsers.add_parser(
+        "build-task-pursuit-plan",
+        help="Build a no-network 6W plan-mode and goal-pursuit packet for one owner request.",
+    )
+    task_pursuit.add_argument("--request", required=True)
+    task_pursuit.add_argument("--objective")
+    task_pursuit.add_argument("--success-criteria", action="append", dest="success_criteria")
+    task_pursuit.add_argument("--context", default="cli")
+    task_pursuit.add_argument("--owner-label", default="Boss")
+    task_pursuit.add_argument("--max-iterations", type=int, default=8)
+    task_pursuit.add_argument("--output", required=True)
 
     onboard = subparsers.add_parser(
         "onboard-agent",
@@ -1264,6 +1277,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.strict and not report.get("passed"):
             return 2
         return 0 if report.get("passed") else 1
+
+    if args.command == "build-task-pursuit-plan":
+        plan = build_task_pursuit_plan(
+            args.request,
+            objective=args.objective,
+            success_criteria=args.success_criteria,
+            context=args.context,
+            owner_label=args.owner_label,
+            max_iterations=args.max_iterations,
+        )
+        output_path = Path(args.output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(str(output_path))
+        return 0 if plan.get("validation", {}).get("passed") else 1
 
     if args.command == "onboard-agent":
         output_dir = Path(args.output_dir)

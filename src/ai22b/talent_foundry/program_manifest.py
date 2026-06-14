@@ -31,6 +31,7 @@ REQUIRED_INSTALLER_COMMANDS = [
     "doctor-first-run",
     "doctor-package-install",
     "doctor-runtime-contract",
+    "build-task-pursuit-plan",
     "start-console",
     "onboard-agent",
     "build-llm-onboarding-checklist",
@@ -151,6 +152,7 @@ def _commands() -> list[dict[str, str]]:
         "doctor-first-run": "Run the public-safe first-run verification pack for role models, LLM onboarding, runtime smoke, policy, release readiness, and SBOM.",
         "doctor-package-install": "Verify installed package metadata, console scripts, optional extras, and callable entrypoint targets.",
         "doctor-runtime-contract": "Verify the public-safe live-like agent loop and fail-closed live provider contracts without calling external providers.",
+        "build-task-pursuit-plan": "Build a public-safe 6W task plan and goal-pursuit packet before work starts.",
         "start-console": "Guide a non-expert installer through request, identity, first goal, and onboarding execution.",
         "onboard-agent": "Run one-shot onboarding from owner request to hired agent with a first reviewed goal cycle.",
         "build-llm-onboarding-checklist": "Build the selected LLM provider, smoke, runtime, and chat readiness checklist without making live calls.",
@@ -293,6 +295,9 @@ def build_public_program_manifest(run_dir: Path, *, output_path: Path | None = N
         "reasoning_model": {
             "llm_identity_policy": "application_engine_not_identity",
             "growth_after_hire_continues": True,
+            "task_pursuit_mode": "six_w_plan_and_goal_pursuit",
+            "broad_search_first_policy": "disabled",
+            "continue_until_completed_or_blocked": True,
             "learning_promotion": "only_quality_labeled_experiences",
             "memory_routing": {
                 "active_context_budget": "bounded",
@@ -308,6 +313,7 @@ def build_public_program_manifest(run_dir: Path, *, output_path: Path | None = N
                 "choose_chat_surface",
                 "capture_owner_request",
                 "select_role_model",
+                "build_task_pursuit_plan",
                 "write_onboarding_choice_manifest",
                 "raise_and_review_hiring_dossier",
             ],

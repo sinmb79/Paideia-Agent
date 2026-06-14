@@ -23,6 +23,7 @@ from ai22b.talent_foundry.onboarding_choices import (
     resolve_llm_service,
 )
 from ai22b.talent_foundry.role_models import list_role_models, summarize_role_model
+from ai22b.talent_foundry.task_pursuit import build_task_pursuit_contract
 
 
 AGENT_PROGRAM_SCHEMA = "ai22b-paideia-agent-program/v1"
@@ -191,6 +192,14 @@ def _onboarding_template(
             "default_llm_mode": "offline",
             "live_llm_requires_api_quota": True,
             "learn_from_chat_default": False,
+        },
+        "task_pursuit_mode": {
+            "enabled": True,
+            "contract_schema": "paideia-task-pursuit-contract/v1",
+            "mode": "six_w_plan_and_goal_pursuit",
+            "command": "ai22b-talent-foundry build-task-pursuit-plan --request \"<owner request>\" --output task_pursuit_plan.json",
+            "work_until_completed_or_blocked": True,
+            "external_search_default": "only_if_needed",
         },
         "researcher_mode": {
             "enabled": True,
@@ -457,6 +466,18 @@ def _build_agent_program_chat_status_card(
             "chat_runtime_status": chat_runtime_status,
             "chat_runtime_status_card_schema": chat_runtime.get("schema"),
         },
+        "task_pursuit": {
+            "contract_schema": program.get("task_pursuit_contract", {}).get("schema")
+            if isinstance(program.get("task_pursuit_contract"), dict)
+            else None,
+            "mode": program.get("task_pursuit_contract", {}).get("mode")
+            if isinstance(program.get("task_pursuit_contract"), dict)
+            else None,
+            "six_w_frame_required": program.get("task_pursuit_contract", {}).get("six_w_frame_required")
+            if isinstance(program.get("task_pursuit_contract"), dict)
+            else None,
+            "external_search_default": "only_if_needed",
+        },
         "provider_gate": {
             "preflight_status": provider_preflight.get("status"),
             "live_check_performed": provider_preflight.get("live_check_performed"),
@@ -549,6 +570,11 @@ def _build_kit_runtime_readiness(
         else []
     )
     verification_ids = [str(item.get("id")) for item in verification_sequence if isinstance(item, dict)]
+    task_pursuit_contract = (
+        program.get("task_pursuit_contract", {})
+        if isinstance(program.get("task_pursuit_contract"), dict)
+        else {}
+    )
     provider_args = [
         "--llm-engine",
         engine,
@@ -593,6 +619,12 @@ def _build_kit_runtime_readiness(
             }
             <= set(verification_ids),
         },
+        {
+            "id": "task_pursuit_contract_present",
+            "passed": task_pursuit_contract.get("schema") == "paideia-task-pursuit-contract/v1"
+            and task_pursuit_contract.get("six_w_frame_required") is True
+            and task_pursuit_contract.get("execution_policy", {}).get("work_until_completed_or_blocked") is True,
+        },
     ]
     readiness = {
         "schema": "ai22b-paideia-kit-runtime-readiness/v1",
@@ -616,6 +648,16 @@ def _build_kit_runtime_readiness(
             "identity_policy": runtime_config.get("identity_policy"),
             "network_access": runtime_config.get("network_access"),
             "private_reasoning_trace": runtime_config.get("private_reasoning_trace"),
+        },
+        "task_pursuit_contract": {
+            "schema": task_pursuit_contract.get("schema"),
+            "mode": task_pursuit_contract.get("mode"),
+            "six_w_frame_required": task_pursuit_contract.get("six_w_frame_required"),
+            "work_until_completed_or_blocked": task_pursuit_contract.get("execution_policy", {}).get(
+                "work_until_completed_or_blocked"
+            )
+            if isinstance(task_pursuit_contract.get("execution_policy"), dict)
+            else None,
         },
         "provider_preflight": {
             "offline": offline_preflight,
@@ -722,6 +764,10 @@ def build_agent_program(
     agent_manifest_path = target_root / entrypoints.get("agent_manifest", "agent_manifest.json")
     agent_manifest = _read_json(agent_manifest_path)
     agent = employment.get("agent", {})
+    task_pursuit_contract = build_task_pursuit_contract(
+        context="agent_program",
+        owner_label=str(employment.get("employer") or "Boss"),
+    )
     script_path = output_path.parent / DEFAULT_CHAT_SCRIPT
     script_path.write_text(_chat_script(), encoding="utf-8")
 
@@ -748,12 +794,14 @@ def build_agent_program(
             "connected_llm_role": "language_generation_and_high_level_reasoning_engine_only",
             "agent_identity_role": "local_learning_data_reasoning_ledger_and_employment_record",
             "answer_flow": [
+                "Codex frames the owner request through the 6W task-pursuit contract before substantial work.",
                 "Codex reads local identity, learning ledger, Reasoning Ledger, memory substrate, and recent chat logs.",
                 "Codex selects bounded context and asks the connected LLM to answer in the agent's learned style.",
                 "Codex stores only reviewable summaries, not hidden chain-of-thought.",
                 "Verified conversations and work are promoted back into the growth ledger.",
             ],
         },
+        "task_pursuit_contract": task_pursuit_contract,
         "growth_learning_model": {
             "type": "checkpointed_growth_loop",
             "not_case_by_case_prompt_patch": True,
