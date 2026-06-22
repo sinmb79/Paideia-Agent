@@ -36,6 +36,17 @@ blocks are intentionally narrow.
 | `tool_execution_artifact_manifest.v1.schema.json` | `paideia-tool-execution-artifact-manifest/v1` |
 | `reasoning_ledger_candidate.v1.schema.json` | `paideia-reasoning-ledger-candidate/v1` |
 | `hiring_dossier.v1.schema.json` | `ai-talent-hiring-dossier/v1` |
+| `task_fingerprint.v1.schema.json` | `paideia-task-fingerprint/v1` |
+| `kibo_record.v1.schema.json` | `paideia-kibo-record/v1` |
+| `reuse_decision.v1.schema.json` | `paideia-kibo-reuse-decision/v1` |
+| `kibo_reuse_plan.v1.schema.json` | `paideia-kibo-reuse-plan/v1` |
+| `pattern_candidate.v1.schema.json` | `paideia-pattern-candidate/v1` |
+| `pattern_exam_result.v1.schema.json` | `paideia-pattern-exam-result/v1` |
+| `real_world_outcome.v1.schema.json` | `paideia-real-world-outcome/v1` |
+| `failure_memory.v1.schema.json` | `paideia-failure-memory/v1` |
+| `user_decision_model.v1.schema.json` | `paideia-user-decision-model/v1` |
+| `critic_report.v1.schema.json` | `paideia-critic-report/v1` |
+| `skill_graph.v1.schema.json` | `paideia-skill-graph/v1` |
 
 Regression tests cover both accepted generated artifacts and rejected unsafe
 mutations, including raw output retention, private reasoning trace retention,

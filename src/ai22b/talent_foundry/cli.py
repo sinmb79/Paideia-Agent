@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Sequence
 
 from ai22b.config import talent_foundry_storage_path
+from ai22b.kibo_reuse.cli import handle_kibo_reuse_command, register_kibo_reuse_commands
 from ai22b.talent_foundry.agent_identity_card import (
     build_agent_id_card_payload,
     build_agent_identity_layer_envelope,
@@ -623,6 +624,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
 
     register_llm_runtime_commands(subparsers)
+    register_kibo_reuse_commands(subparsers)
 
     run_workspace_agent = subparsers.add_parser(
         "run-workspace-agent",
@@ -1103,6 +1105,10 @@ def _build_parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
+
+    kibo_result = handle_kibo_reuse_command(args)
+    if kibo_result is not None:
+        return kibo_result
 
     if args.command == "list-role-models":
         result = {

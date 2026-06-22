@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/sinmb79/Paideia-Agent/schemas/critic_report.v1.schema.json",
+  "title": "Paideia Critic Report",
+  "type": "object",
+  "required": [
+    "schema",
+    "report_id",
+    "pattern_id",
+    "objections",
+    "hidden_assumptions",
+    "risk_flags",
+    "required_safeguards",
+    "pass_gate"
+  ],
+  "properties": {
+    "schema": { "const": "paideia-critic-report/v1" },
+    "report_id": { "type": "string", "minLength": 1 },
+    "pattern_id": { "type": "string", "minLength": 1 },
+    "objections": { "type": "array", "items": { "type": "string" } },
+    "hidden_assumptions": { "type": "array", "items": { "type": "string" } },
+    "risk_flags": { "type": "array", "items": { "type": "string" } },
+    "required_safeguards": { "type": "array", "items": { "type": "string" } },
+    "pass_gate": { "type": "boolean" }
+  },
+  "additionalProperties": false
+}

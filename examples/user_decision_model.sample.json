@@ -1,0 +1,10 @@
+{
+  "schema": "paideia-user-decision-model/v1",
+  "owner": "Boss",
+  "preferred_output_style": ["conclusion_first", "practical"],
+  "risk_preference": "asymmetric_upside",
+  "decision_biases": ["theme_sensitivity"],
+  "recurring_priorities": ["ROI", "execution_feasibility", "downside_risk", "scalability"],
+  "rejected_patterns": [],
+  "favored_patterns": []
+}

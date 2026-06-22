@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/sinmb79/Paideia-Agent/schemas/failure_memory.v1.schema.json",
+  "title": "Paideia Failure Memory",
+  "type": "object",
+  "required": [
+    "schema",
+    "failure_id",
+    "pattern_id",
+    "task_id",
+    "error_type",
+    "severity",
+    "trigger_conditions",
+    "missed_signals",
+    "prevention_rules",
+    "created_at"
+  ],
+  "properties": {
+    "schema": { "const": "paideia-failure-memory/v1" },
+    "failure_id": { "type": "string", "minLength": 1 },
+    "pattern_id": { "type": "string", "minLength": 1 },
+    "task_id": { "type": "string", "minLength": 1 },
+    "error_type": { "type": "string", "minLength": 1 },
+    "severity": { "enum": ["low", "medium", "high", "critical", "catastrophic", "fatal"] },
+    "trigger_conditions": { "type": "array", "items": { "type": "string" } },
+    "missed_signals": { "type": "array", "items": { "type": "string" } },
+    "prevention_rules": { "type": "array", "items": { "type": "string" } },
+    "created_at": { "type": "string" }
+  },
+  "additionalProperties": false
+}

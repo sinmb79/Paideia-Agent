@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/sinmb79/Paideia-Agent/schemas/real_world_outcome.v1.schema.json",
+  "title": "Paideia Real World Outcome",
+  "type": "object",
+  "required": [
+    "schema",
+    "outcome_id",
+    "pattern_id",
+    "task_id",
+    "applied_at",
+    "outcome_type",
+    "success",
+    "quantitative_result",
+    "qualitative_result",
+    "user_feedback_score",
+    "error_type",
+    "notes"
+  ],
+  "properties": {
+    "schema": { "const": "paideia-real-world-outcome/v1" },
+    "outcome_id": { "type": "string", "minLength": 1 },
+    "pattern_id": { "type": "string", "minLength": 1 },
+    "task_id": { "type": "string", "minLength": 1 },
+    "applied_at": { "type": "string" },
+    "outcome_type": { "type": "string", "minLength": 1 },
+    "success": { "type": "boolean" },
+    "quantitative_result": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+    "qualitative_result": { "type": ["string", "null"] },
+    "user_feedback_score": { "type": ["integer", "null"], "minimum": 0, "maximum": 10 },
+    "error_type": { "type": ["string", "null"] },
+    "notes": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": false
+}

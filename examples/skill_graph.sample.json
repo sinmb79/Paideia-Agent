@@ -1,0 +1,35 @@
+{
+  "schema": "paideia-skill-graph/v1",
+  "nodes": [
+    {
+      "schema": "paideia-skill-node/v1",
+      "skill_id": "web_research",
+      "name": "web_research",
+      "domain": "investment_research",
+      "mastery_score": 0.72
+    },
+    {
+      "schema": "paideia-skill-node/v1",
+      "skill_id": "valuation",
+      "name": "valuation",
+      "domain": "investment_research",
+      "mastery_score": 0.82
+    },
+    {
+      "schema": "paideia-skill-node/v1",
+      "skill_id": "risk_analysis",
+      "name": "risk_analysis",
+      "domain": "investment_research",
+      "mastery_score": 0.78
+    }
+  ],
+  "edges": [
+    {
+      "schema": "paideia-skill-edge/v1",
+      "from_skill": "web_research",
+      "to_skill": "valuation",
+      "relation": "supports",
+      "weight": 0.7
+    }
+  ]
+}

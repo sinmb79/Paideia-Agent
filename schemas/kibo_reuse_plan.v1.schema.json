@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/sinmb79/Paideia-Agent/schemas/kibo_reuse_plan.v1.schema.json",
+  "title": "Paideia Kibo Reuse Plan",
+  "type": "object",
+  "required": [
+    "schema",
+    "task_fingerprint",
+    "reuse_decision",
+    "reuse_mode",
+    "selected_kibo_ids",
+    "reused_steps",
+    "llm_required_parts",
+    "risk_warnings",
+    "estimated_token_saving_ratio",
+    "execution_policy"
+  ],
+  "properties": {
+    "schema": { "const": "paideia-kibo-reuse-plan/v1" },
+    "task_fingerprint": { "type": "object" },
+    "reuse_decision": { "type": "object" },
+    "reuse_mode": {
+      "enum": [
+        "direct_reuse",
+        "partial_reuse",
+        "reference_only",
+        "reject_and_solve_fresh",
+        "quarantine_required"
+      ]
+    },
+    "selected_kibo_ids": { "type": "array", "items": { "type": "string" } },
+    "selected_kibo": { "type": "array" },
+    "reused_steps": { "type": "array", "items": { "type": "string" } },
+    "llm_required_parts": { "type": "array", "items": { "type": "string" } },
+    "risk_warnings": { "type": "array", "items": { "type": "string" } },
+    "estimated_token_saving_ratio": { "type": "number", "minimum": 0, "maximum": 1 },
+    "execution_policy": {
+      "type": "object",
+      "required": [
+        "llm_called_for_reused_steps",
+        "hidden_chain_of_thought_reused",
+        "reviewable_kibo_only",
+        "quarantined_records_excluded"
+      ],
+      "properties": {
+        "llm_called_for_reused_steps": { "const": false },
+        "llm_allowed_parts": { "type": "array", "items": { "type": "string" } },
+        "hidden_chain_of_thought_reused": { "const": false },
+        "reviewable_kibo_only": { "const": true },
+        "quarantined_records_excluded": { "const": true }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

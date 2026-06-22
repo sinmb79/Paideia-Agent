@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/sinmb79/Paideia-Agent/schemas/reuse_decision.v1.schema.json",
+  "title": "Paideia Kibo Reuse Decision",
+  "type": "object",
+  "required": [
+    "schema",
+    "decision_id",
+    "task_id",
+    "selected_kibo_ids",
+    "similarity_score",
+    "confidence_score",
+    "risk_score",
+    "reuse_mode",
+    "llm_required_parts",
+    "pattern_id",
+    "pattern_status",
+    "exam_validated",
+    "field_validated",
+    "failure_warnings",
+    "critic_required",
+    "user_decision_fit_score",
+    "reason"
+  ],
+  "properties": {
+    "schema": { "const": "paideia-kibo-reuse-decision/v1" },
+    "decision_id": { "type": "string", "minLength": 1 },
+    "task_id": { "type": "string", "minLength": 1 },
+    "selected_kibo_ids": { "type": "array", "items": { "type": "string" } },
+    "similarity_score": { "type": "number", "minimum": 0, "maximum": 1 },
+    "confidence_score": { "type": "number", "minimum": 0, "maximum": 1 },
+    "risk_score": { "type": "number", "minimum": 0, "maximum": 1 },
+    "reuse_mode": {
+      "enum": [
+        "direct_reuse",
+        "partial_reuse",
+        "reference_only",
+        "reject_and_solve_fresh",
+        "quarantine_required"
+      ]
+    },
+    "llm_required_parts": { "type": "array", "items": { "type": "string" } },
+    "pattern_id": { "type": ["string", "null"] },
+    "pattern_status": {
+      "type": ["string", "null"],
+      "enum": [
+        "draft",
+        "exam_validated",
+        "field_validated",
+        "reinforced",
+        "weakened",
+        "quarantined",
+        null
+      ]
+    },
+    "exam_validated": { "type": "boolean" },
+    "field_validated": { "type": "boolean" },
+    "failure_warnings": { "type": "array", "items": { "type": "string" } },
+    "critic_required": { "type": "boolean" },
+    "user_decision_fit_score": { "type": "number", "minimum": 0, "maximum": 1 },
+    "reason": { "type": "string" }
+  },
+  "additionalProperties": false
+}

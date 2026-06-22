@@ -31,7 +31,36 @@ The GitHub `main` branch now contains the installable Paideia Agent preview:
 - Hermes/OpenClaw/generic skill migration into a quarantined compatibility profile. Imported skills stay disabled until the owner reviews required capabilities and test evidence.
 - Parent-controlled projection swarm cycles. A hired talent can split work into task projections, compare them on `projection_synthesis_board`, and promote only the reviewed parent synthesis into the learning ledger.
 - Domain genius derivation. Each talent can develop narrow excellence through fixed-capacity attention allocation, pattern chunking, timed trials, explicit weakness guardrails, and reviewed transfer work.
+- Kibo Reuse Router with Pattern Reinforcement. Reviewed local Kibo records remain concrete cases, while Pattern Candidates capture reusable strategies that must pass exam, field outcome, failure-memory, user-fit, critic, and skill-gap checks before stronger reuse.
 - Public-safe release gates: package install doctor, first-run doctor, public release readiness audit, source hygiene script, security scans, JSON Schema contracts with negative tests, action-policy eval, LLM adapter contracts, and the full regression suite.
+
+## Kibo Reuse Router
+
+```bash
+ai22b-talent-foundry kibo-plan --task examples/investment_research_task.json --kibo-path examples/reasoning_kibo.sample.jsonl --output runs/kibo_plan.json
+ai22b-talent-foundry kibo-report --run runs/kibo_plan.json --output runs/kibo_report.json
+```
+
+The router builds a task fingerprint, searches local JSONL Kibo records, scores reuse fit, separates reusable steps from `llm_required_parts`, and writes a reviewable JSON plan. It uses reviewable summaries only; hidden chain-of-thought, raw private memory, draft records, and quarantined records are not reusable runtime inputs.
+
+Pattern Candidates add Paideia's human-style loop above Kibo reuse:
+
+```text
+learning -> exam -> validation -> field application -> outcome evaluation -> reinforcement or weakening
+```
+
+Use local JSONL artifacts for the MVP:
+
+```bash
+ai22b-talent-foundry pattern-extract --kibo-dir examples --output runs/patterns.jsonl
+ai22b-talent-foundry pattern-exam --pattern-id PATTERN_ID --pattern-path runs/patterns.jsonl --output runs/pattern_exam.json
+ai22b-talent-foundry pattern-outcome --pattern-id PATTERN_ID --task-id example-investment-research-2026 --success true --score 0.82 --output runs/pattern_outcomes.jsonl
+ai22b-talent-foundry critic-report --pattern-id PATTERN_ID --pattern-path runs/patterns.jsonl --output runs/critic_report.json
+ai22b-talent-foundry pattern-reinforce --pattern-id PATTERN_ID --pattern-path runs/patterns.jsonl --exam-path runs/pattern_exam.json --outcome-path runs/pattern_outcomes.jsonl --critic-path runs/critic_report.json --output runs/pattern_reinforcement.json
+ai22b-talent-foundry failure-search --task examples/investment_research_task.json --failure-path examples/failure_memory.sample.jsonl
+```
+
+When a pattern file is supplied to `kibo-plan`, direct reuse is blocked unless the pattern is sufficiently validated. High-risk work requires field validation and a passing critic gate. Failure-memory matches reduce reuse confidence or block direct reuse.
 
 ## Recent Improvements: 2026-06-12 to 2026-06-13
 

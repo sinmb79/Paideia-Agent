@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/sinmb79/Paideia-Agent/schemas/task_fingerprint.v1.schema.json",
+  "title": "Paideia Task Fingerprint",
+  "type": "object",
+  "required": [
+    "schema",
+    "task_id",
+    "owner",
+    "domain",
+    "task_type",
+    "intent",
+    "constraints",
+    "required_capabilities",
+    "risk_level",
+    "freshness_required",
+    "expected_output_type",
+    "user_style_markers"
+  ],
+  "properties": {
+    "schema": { "const": "paideia-task-fingerprint/v1" },
+    "task_id": { "type": "string", "minLength": 1 },
+    "owner": { "type": "string", "minLength": 1 },
+    "domain": { "type": "string", "minLength": 1 },
+    "task_type": { "type": "string", "minLength": 1 },
+    "intent": { "type": "string", "minLength": 1 },
+    "constraints": { "type": "array", "items": { "type": "string" } },
+    "required_capabilities": { "type": "array", "items": { "type": "string" } },
+    "risk_level": { "enum": ["low", "medium", "high"] },
+    "freshness_required": { "type": "boolean" },
+    "expected_output_type": { "type": "string", "minLength": 1 },
+    "user_style_markers": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": false
+}

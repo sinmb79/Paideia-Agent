@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/sinmb79/Paideia-Agent/schemas/pattern_exam_result.v1.schema.json",
+  "title": "Paideia Pattern Exam Result",
+  "type": "object",
+  "required": [
+    "schema",
+    "exam_id",
+    "pattern_id",
+    "task_id",
+    "score",
+    "passed",
+    "mistakes",
+    "improvement_notes"
+  ],
+  "properties": {
+    "schema": { "const": "paideia-pattern-exam-result/v1" },
+    "exam_id": { "type": "string", "minLength": 1 },
+    "pattern_id": { "type": "string", "minLength": 1 },
+    "task_id": { "type": "string", "minLength": 1 },
+    "score": { "type": "number", "minimum": 0, "maximum": 1 },
+    "passed": { "type": "boolean" },
+    "mistakes": { "type": "array", "items": { "type": "string" } },
+    "improvement_notes": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": false
+}
