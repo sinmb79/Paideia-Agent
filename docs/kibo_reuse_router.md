@@ -40,4 +40,16 @@ ai22b-talent-foundry failure-search --task examples/investment_research_task.jso
 ai22b-talent-foundry critic-report --pattern-id PATTERN_ID --pattern-path runs/patterns.jsonl --output runs/critic_report.json
 ```
 
+Curriculum feedback commands:
+
+```bash
+ai22b-talent-foundry weakness-detect --failure-path examples/failure_memory.sample.jsonl --domain investment_research --output runs/weakness_detection.json
+ai22b-talent-foundry curriculum-generate --weakness-path runs/weakness_detection.json --output runs/curricula.jsonl
+ai22b-talent-foundry adaptive-exam --curriculum-path runs/curricula.jsonl --weakness-path runs/weakness_detection.json --output runs/adaptive_exam.json
+ai22b-talent-foundry curriculum-complete --weakness-path runs/weakness_detection.json --passed true --score 0.86 --output runs/curriculum_completion.json
+ai22b-talent-foundry curriculum-report --weakness-path runs/weakness_detection.json --curriculum-path runs/curricula.jsonl --exam-path runs/adaptive_exam.json --output runs/curriculum_report.json
+```
+
+Supplying `--weakness-path` to `kibo-plan` lets active high-severity or repeated weakness records reduce confidence and block direct reuse until remediation succeeds.
+
 High-risk tasks can use only partial or weaker reuse. Freshness-sensitive parts, missing context, ambiguous intent, validation failures, and style rewrites remain LLM-eligible. Hidden chain-of-thought is never stored or reused.

@@ -5,6 +5,8 @@ from .models import (
     KIBO_RECORD_SCHEMA,
     CRITIC_REPORT_SCHEMA,
     FAILURE_MEMORY_SCHEMA,
+    ADAPTIVE_EXAM_SCHEMA,
+    CURRICULUM_PLAN_SCHEMA,
     PATTERN_CANDIDATE_SCHEMA,
     PATTERN_EXAM_RESULT_SCHEMA,
     REUSE_DECISION_SCHEMA,
@@ -12,6 +14,9 @@ from .models import (
     REAL_WORLD_OUTCOME_SCHEMA,
     USER_DECISION_MODEL_SCHEMA,
     TASK_FINGERPRINT_SCHEMA,
+    WEAKNESS_RECORD_SCHEMA,
+    AdaptiveExam,
+    CurriculumPlan,
     CriticReport,
     FailureMemory,
     KiboRecord,
@@ -21,12 +26,21 @@ from .models import (
     ReuseDecision,
     TaskFingerprint,
     UserDecisionModel,
+    WeaknessRecord,
+)
+from .curriculum_loop import (
+    apply_curriculum_completion,
+    detect_weaknesses,
+    generate_adaptive_exam,
+    generate_curriculum_plan,
 )
 from .pattern_layer import reinforce_pattern_candidate
 from .router import build_kibo_reuse_plan, route_task
 
 __all__ = [
     "CRITIC_REPORT_SCHEMA",
+    "ADAPTIVE_EXAM_SCHEMA",
+    "CURRICULUM_PLAN_SCHEMA",
     "FAILURE_MEMORY_SCHEMA",
     "KIBO_RECORD_SCHEMA",
     "PATTERN_CANDIDATE_SCHEMA",
@@ -36,7 +50,10 @@ __all__ = [
     "REAL_WORLD_OUTCOME_SCHEMA",
     "TASK_FINGERPRINT_SCHEMA",
     "USER_DECISION_MODEL_SCHEMA",
+    "WEAKNESS_RECORD_SCHEMA",
+    "AdaptiveExam",
     "CriticReport",
+    "CurriculumPlan",
     "FailureMemory",
     "KiboRecord",
     "PatternCandidate",
@@ -45,8 +62,13 @@ __all__ = [
     "ReuseDecision",
     "TaskFingerprint",
     "UserDecisionModel",
+    "WeaknessRecord",
+    "apply_curriculum_completion",
     "build_kibo_reuse_plan",
     "build_task_fingerprint",
+    "detect_weaknesses",
+    "generate_adaptive_exam",
+    "generate_curriculum_plan",
     "reinforce_pattern_candidate",
     "route_task",
 ]

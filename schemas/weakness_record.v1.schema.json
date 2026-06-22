@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/sinmb79/Paideia-Agent/schemas/weakness_record.v1.schema.json",
+  "title": "Paideia Weakness Record",
+  "type": "object",
+  "required": [
+    "schema",
+    "weakness_id",
+    "owner",
+    "domain",
+    "skill_id",
+    "weakness_type",
+    "evidence_refs",
+    "severity",
+    "recurrence_count"
+  ],
+  "properties": {
+    "schema": { "const": "paideia-weakness-record/v1" },
+    "weakness_id": { "type": "string", "minLength": 1 },
+    "owner": { "type": "string", "minLength": 1 },
+    "domain": { "type": "string", "minLength": 1 },
+    "skill_id": { "type": "string", "minLength": 1 },
+    "weakness_type": {
+      "enum": [
+        "knowledge_gap",
+        "reasoning_gap",
+        "risk_gap",
+        "transfer_gap",
+        "freshness_gap",
+        "counterargument_gap"
+      ]
+    },
+    "evidence_refs": { "type": "array", "items": { "type": "string" } },
+    "severity": { "type": "number", "minimum": 0, "maximum": 1 },
+    "recurrence_count": { "type": "integer", "minimum": 0 }
+  },
+  "additionalProperties": false
+}

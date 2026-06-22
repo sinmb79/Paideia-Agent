@@ -373,6 +373,8 @@ def build_genius_derivation_profile(
             curriculum_topic_count=len(topics),
             practice_ladder_stage_count=len(practice_ladder),
         ),
+        "curriculum_backlog": [],
+        "weakness_records": [],
         "research_basis": [
             {
                 "id": "neural_efficiency",

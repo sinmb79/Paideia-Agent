@@ -65,6 +65,18 @@ In other shells, copy the `pattern_id` value from `runs/patterns.jsonl`.
 
 When a pattern file is supplied to `kibo-plan`, direct reuse is blocked unless the pattern is sufficiently validated. High-risk work requires field validation and a passing critic gate. Failure-memory matches reduce reuse confidence or block direct reuse.
 
+Closed-loop curriculum feedback adds the remediation step after failure:
+
+```bash
+ai22b-talent-foundry weakness-detect --failure-path examples/failure_memory.sample.jsonl --domain investment_research --output runs/weakness_detection.json
+ai22b-talent-foundry curriculum-generate --weakness-path runs/weakness_detection.json --skill-graph examples/skill_graph.sample.json --output runs/curricula.jsonl
+ai22b-talent-foundry adaptive-exam --curriculum-path runs/curricula.jsonl --weakness-path runs/weakness_detection.json --output runs/adaptive_exam.json
+ai22b-talent-foundry curriculum-complete --weakness-path runs/weakness_detection.json --passed true --score 0.86 --output runs/curriculum_completion.json
+ai22b-talent-foundry curriculum-report --weakness-path runs/weakness_detection.json --curriculum-path runs/curricula.jsonl --exam-path runs/adaptive_exam.json --output runs/curriculum_report.json
+```
+
+Supplying `--weakness-path` to `kibo-plan` makes active high-severity or repeated weaknesses reduce confidence and block direct reuse until remediation evidence is recorded.
+
 ## Recent Improvements: 2026-06-12 to 2026-06-13
 
 The latest work tightened Paideia's central philosophy and runtime boundaries:

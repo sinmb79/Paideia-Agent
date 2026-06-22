@@ -4,7 +4,17 @@ import argparse
 import json
 from pathlib import Path
 
-from .models import PatternCandidate
+from .curriculum_loop import (
+    apply_curriculum_completion,
+    build_adaptive_exam_report,
+    build_curriculum_generation_report,
+    build_curriculum_report,
+    build_weakness_detection_report,
+    load_adaptive_exams,
+    load_curriculum_plans,
+    load_weakness_records,
+)
+from .models import CurriculumPlan, PatternCandidate, WeaknessRecord
 from .pattern_layer import (
     build_critic_report,
     build_failure_search_result,
@@ -35,6 +45,11 @@ KIBO_REUSE_COMMANDS = {
     "pattern-reinforce",
     "failure-search",
     "critic-report",
+    "weakness-detect",
+    "curriculum-generate",
+    "curriculum-report",
+    "adaptive-exam",
+    "curriculum-complete",
 }
 
 
@@ -49,10 +64,23 @@ def _paths(values: list[str] | None) -> list[Path] | None:
     return [Path(value) for value in values]
 
 
+def _existing_paths(values: list[str] | None) -> list[Path] | None:
+    paths = [Path(value) for value in values or [] if Path(value).exists()]
+    return paths or None
+
+
 def _append_jsonl(path: Path, payload: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(payload, ensure_ascii=False, sort_keys=True) + "\n")
+
+
+def _write_jsonl(path: Path, rows: list[dict]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "".join(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in rows),
+        encoding="utf-8",
+    )
 
 
 def _bool_arg(value: str) -> bool:
@@ -79,6 +107,28 @@ def _load_pattern_or_raise(pattern_id: str, pattern_path: Path) -> PatternCandid
         if pattern.pattern_id == pattern_id:
             return pattern
     raise ValueError(f"Pattern not found: {pattern_id}")
+
+
+def _select_weakness(weaknesses: list[WeaknessRecord], weakness_id: str | None) -> WeaknessRecord:
+    if weakness_id is None:
+        if not weaknesses:
+            raise ValueError("No weakness records available")
+        return weaknesses[0]
+    for weakness in weaknesses:
+        if weakness.weakness_id == weakness_id:
+            return weakness
+    raise ValueError(f"Weakness not found: {weakness_id}")
+
+
+def _select_curriculum(curricula: list[CurriculumPlan], curriculum_id: str | None) -> CurriculumPlan:
+    if curriculum_id is None:
+        if not curricula:
+            raise ValueError("No curriculum plans available")
+        return curricula[0]
+    for curriculum in curricula:
+        if curriculum.curriculum_id == curriculum_id:
+            return curriculum
+    raise ValueError(f"Curriculum not found: {curriculum_id}")
 
 
 def register_kibo_reuse_commands(subparsers: argparse._SubParsersAction) -> None:
@@ -108,6 +158,7 @@ def register_kibo_reuse_commands(subparsers: argparse._SubParsersAction) -> None
     kibo_plan.add_argument("--kibo-path", action="append")
     kibo_plan.add_argument("--pattern-path", action="append")
     kibo_plan.add_argument("--failure-path", action="append")
+    kibo_plan.add_argument("--weakness-path", action="append")
     kibo_plan.add_argument("--user-model")
     kibo_plan.add_argument("--critic-path", action="append")
     kibo_plan.add_argument("--skill-graph")
@@ -123,6 +174,7 @@ def register_kibo_reuse_commands(subparsers: argparse._SubParsersAction) -> None
     kibo_run.add_argument("--kibo-path", action="append")
     kibo_run.add_argument("--pattern-path", action="append")
     kibo_run.add_argument("--failure-path", action="append")
+    kibo_run.add_argument("--weakness-path", action="append")
     kibo_run.add_argument("--user-model")
     kibo_run.add_argument("--critic-path", action="append")
     kibo_run.add_argument("--skill-graph")
@@ -193,6 +245,53 @@ def register_kibo_reuse_commands(subparsers: argparse._SubParsersAction) -> None
     critic_report.add_argument("--pattern-path", default="data/patterns.jsonl")
     critic_report.add_argument("--output", required=True)
 
+    weakness_detect = subparsers.add_parser(
+        "weakness-detect",
+        help="Convert reviewed failure memory into WeaknessRecords for curriculum remediation.",
+    )
+    weakness_detect.add_argument("--failure-path", action="append", default=["data/failure_memory.jsonl"])
+    weakness_detect.add_argument("--existing-weakness-path", action="append")
+    weakness_detect.add_argument("--owner", default="Boss")
+    weakness_detect.add_argument("--domain", default="general")
+    weakness_detect.add_argument("--output", default="runs/weakness_detection.json")
+
+    curriculum_generate = subparsers.add_parser(
+        "curriculum-generate",
+        help="Generate CurriculumPlans from WeaknessRecords.",
+    )
+    curriculum_generate.add_argument("--weakness-path", action="append", default=["runs/weakness_detection.json"])
+    curriculum_generate.add_argument("--skill-graph")
+    curriculum_generate.add_argument("--output", default="runs/curricula.jsonl")
+
+    curriculum_report = subparsers.add_parser(
+        "curriculum-report",
+        help="Summarize weakness, curriculum, and adaptive exam remediation state.",
+    )
+    curriculum_report.add_argument("--weakness-path", action="append", default=["runs/weakness_detection.json"])
+    curriculum_report.add_argument("--curriculum-path", action="append", default=["runs/curricula.jsonl"])
+    curriculum_report.add_argument("--exam-path", action="append")
+    curriculum_report.add_argument("--output", default="runs/curriculum_report.json")
+
+    adaptive_exam = subparsers.add_parser(
+        "adaptive-exam",
+        help="Generate an AdaptiveExam from a CurriculumPlan.",
+    )
+    adaptive_exam.add_argument("--curriculum-id")
+    adaptive_exam.add_argument("--curriculum-path", action="append", default=["runs/curricula.jsonl"])
+    adaptive_exam.add_argument("--weakness-path", action="append", default=["runs/weakness_detection.json"])
+    adaptive_exam.add_argument("--recent-improvement", action="store_true")
+    adaptive_exam.add_argument("--output", default="runs/adaptive_exam.json")
+
+    curriculum_complete = subparsers.add_parser(
+        "curriculum-complete",
+        help="Apply adaptive exam completion evidence to a WeaknessRecord.",
+    )
+    curriculum_complete.add_argument("--weakness-id")
+    curriculum_complete.add_argument("--weakness-path", action="append", default=["runs/weakness_detection.json"])
+    curriculum_complete.add_argument("--passed", required=True, type=_bool_arg)
+    curriculum_complete.add_argument("--score", required=True, type=float)
+    curriculum_complete.add_argument("--output", default="runs/curriculum_completion.json")
+
 
 def handle_kibo_reuse_command(args: argparse.Namespace) -> int | None:
     if args.command not in KIBO_REUSE_COMMANDS:
@@ -240,6 +339,7 @@ def handle_kibo_reuse_command(args: argparse.Namespace) -> int | None:
             kibo_paths=_paths(args.kibo_path),
             pattern_paths=_paths(args.pattern_path),
             failure_paths=_paths(args.failure_path),
+            weakness_paths=_paths(args.weakness_path),
             user_model_path=Path(args.user_model) if args.user_model else None,
             critic_paths=_paths(args.critic_path),
             skill_graph_path=Path(args.skill_graph) if args.skill_graph else None,
@@ -326,6 +426,78 @@ def handle_kibo_reuse_command(args: argparse.Namespace) -> int | None:
         pattern = _load_pattern_or_raise(args.pattern_id, Path(args.pattern_path))
         result = build_critic_report(pattern).to_dict()
         _write_json(Path(args.output), result)
+        print(str(Path(args.output)))
+        return 0
+
+    if args.command == "weakness-detect":
+        failures = load_failure_memories(_existing_paths(args.failure_path))
+        existing = load_weakness_records(_existing_paths(args.existing_weakness_path))
+        report = build_weakness_detection_report(
+            failures,
+            owner=args.owner,
+            domain=args.domain,
+            existing_weaknesses=existing,
+        )
+        output_path = Path(args.output)
+        if output_path.suffix.lower() == ".jsonl":
+            _write_jsonl(output_path, report["weaknesses"])
+        else:
+            _write_json(output_path, report)
+        print(str(output_path))
+        return 0
+
+    if args.command == "curriculum-generate":
+        weaknesses = load_weakness_records(_existing_paths(args.weakness_path))
+        report = build_curriculum_generation_report(
+            weaknesses,
+            skill_graph_path=Path(args.skill_graph) if args.skill_graph else None,
+        )
+        output_path = Path(args.output)
+        if output_path.suffix.lower() == ".jsonl":
+            _write_jsonl(output_path, report["curricula"])
+        else:
+            _write_json(output_path, report)
+        print(str(output_path))
+        return 0
+
+    if args.command == "curriculum-report":
+        report = build_curriculum_report(
+            weaknesses=load_weakness_records(_existing_paths(args.weakness_path)),
+            curricula=load_curriculum_plans(_existing_paths(args.curriculum_path)),
+            exams=load_adaptive_exams(_existing_paths(args.exam_path)),
+        )
+        _write_json(Path(args.output), report)
+        print(str(Path(args.output)))
+        return 0
+
+    if args.command == "adaptive-exam":
+        curricula = load_curriculum_plans(_existing_paths(args.curriculum_path))
+        curriculum = _select_curriculum(curricula, args.curriculum_id)
+        weaknesses = load_weakness_records(_existing_paths(args.weakness_path))
+        related_weakness = next(
+            (weakness for weakness in weaknesses if weakness.weakness_id == curriculum.weakness_id),
+            None,
+        )
+        report = build_adaptive_exam_report(
+            curriculum,
+            weakness=related_weakness,
+            recent_improvement=args.recent_improvement,
+        )
+        _write_json(Path(args.output), report)
+        print(str(Path(args.output)))
+        return 0
+
+    if args.command == "curriculum-complete":
+        weakness = _select_weakness(
+            load_weakness_records(_existing_paths(args.weakness_path)),
+            args.weakness_id,
+        )
+        report = apply_curriculum_completion(
+            weakness,
+            passed=args.passed,
+            score=args.score,
+        )
+        _write_json(Path(args.output), report)
         print(str(Path(args.output)))
         return 0
 

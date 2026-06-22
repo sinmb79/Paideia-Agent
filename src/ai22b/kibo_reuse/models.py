@@ -16,6 +16,9 @@ USER_DECISION_MODEL_SCHEMA = "paideia-user-decision-model/v1"
 CRITIC_REPORT_SCHEMA = "paideia-critic-report/v1"
 SKILL_NODE_SCHEMA = "paideia-skill-node/v1"
 SKILL_EDGE_SCHEMA = "paideia-skill-edge/v1"
+WEAKNESS_RECORD_SCHEMA = "paideia-weakness-record/v1"
+CURRICULUM_PLAN_SCHEMA = "paideia-curriculum-plan/v1"
+ADAPTIVE_EXAM_SCHEMA = "paideia-adaptive-exam/v1"
 
 REUSE_MODES = {
     "direct_reuse",
@@ -51,6 +54,15 @@ PATTERN_STATUSES = {
     "reinforced",
     "weakened",
     "quarantined",
+}
+
+WEAKNESS_TYPES = {
+    "knowledge_gap",
+    "reasoning_gap",
+    "risk_gap",
+    "transfer_gap",
+    "freshness_gap",
+    "counterargument_gap",
 }
 
 
@@ -551,4 +563,113 @@ class SkillEdge:
             to_skill=_string(data.get("to_skill"), "skill"),
             relation=_string(data.get("relation"), "supports"),
             weight=max(0.0, min(1.0, _float(data.get("weight")))),
+        )
+
+
+@dataclass(frozen=True)
+class WeaknessRecord:
+    weakness_id: str
+    owner: str
+    domain: str
+    skill_id: str
+    weakness_type: str
+    evidence_refs: tuple[str, ...]
+    severity: float
+    recurrence_count: int
+
+    def __post_init__(self) -> None:
+        if not self.weakness_id:
+            raise ValueError("weakness_id is required")
+        if not self.skill_id:
+            raise ValueError("skill_id is required")
+        if self.weakness_type not in WEAKNESS_TYPES:
+            raise ValueError(f"Unsupported weakness_type: {self.weakness_type}")
+        object.__setattr__(self, "severity", max(0.0, min(1.0, float(self.severity))))
+        object.__setattr__(self, "recurrence_count", max(0, int(self.recurrence_count)))
+
+    def to_dict(self) -> dict[str, Any]:
+        data = asdict(self)
+        data["schema"] = WEAKNESS_RECORD_SCHEMA
+        data["evidence_refs"] = list(data["evidence_refs"])
+        data["severity"] = round(float(data["severity"]), 4)
+        return data
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "WeaknessRecord":
+        return cls(
+            weakness_id=_string(data.get("weakness_id"), "weakness"),
+            owner=_string(data.get("owner"), "Boss"),
+            domain=_string(data.get("domain"), "general"),
+            skill_id=_string(data.get("skill_id"), "general_reasoning"),
+            weakness_type=_string(data.get("weakness_type"), "reasoning_gap"),
+            evidence_refs=_tuple_of_strings(data.get("evidence_refs")),
+            severity=max(0.0, min(1.0, _float(data.get("severity")))),
+            recurrence_count=max(0, _int(data.get("recurrence_count"))),
+        )
+
+
+@dataclass(frozen=True)
+class CurriculumPlan:
+    curriculum_id: str
+    weakness_id: str
+    domain: str
+    learning_goals: tuple[str, ...]
+    lesson_units: tuple[str, ...]
+    exam_requirements: tuple[str, ...]
+    target_score: float
+
+    def __post_init__(self) -> None:
+        if not self.curriculum_id:
+            raise ValueError("curriculum_id is required")
+        if not self.weakness_id:
+            raise ValueError("weakness_id is required")
+        object.__setattr__(self, "target_score", max(0.0, min(1.0, float(self.target_score))))
+
+    def to_dict(self) -> dict[str, Any]:
+        data = asdict(self)
+        data["schema"] = CURRICULUM_PLAN_SCHEMA
+        for key in ["learning_goals", "lesson_units", "exam_requirements"]:
+            data[key] = list(data[key])
+        data["target_score"] = round(float(data["target_score"]), 4)
+        return data
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "CurriculumPlan":
+        return cls(
+            curriculum_id=_string(data.get("curriculum_id"), "curriculum"),
+            weakness_id=_string(data.get("weakness_id"), "weakness"),
+            domain=_string(data.get("domain"), "general"),
+            learning_goals=_tuple_of_strings(data.get("learning_goals")),
+            lesson_units=_tuple_of_strings(data.get("lesson_units")),
+            exam_requirements=_tuple_of_strings(data.get("exam_requirements")),
+            target_score=max(0.0, min(1.0, _float(data.get("target_score"), 0.8))),
+        )
+
+
+@dataclass(frozen=True)
+class AdaptiveExam:
+    exam_id: str
+    curriculum_id: str
+    difficulty: str
+    questions: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if self.difficulty not in {"maintenance", "standard", "advanced", "remediation"}:
+            raise ValueError(f"Unsupported exam difficulty: {self.difficulty}")
+        if not self.questions:
+            raise ValueError("AdaptiveExam requires at least one question")
+
+    def to_dict(self) -> dict[str, Any]:
+        data = asdict(self)
+        data["schema"] = ADAPTIVE_EXAM_SCHEMA
+        data["questions"] = list(data["questions"])
+        return data
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "AdaptiveExam":
+        return cls(
+            exam_id=_string(data.get("exam_id"), "exam"),
+            curriculum_id=_string(data.get("curriculum_id"), "curriculum"),
+            difficulty=_string(data.get("difficulty"), "standard"),
+            questions=_tuple_of_strings(data.get("questions")),
         )

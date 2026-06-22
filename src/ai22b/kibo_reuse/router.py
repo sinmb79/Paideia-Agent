@@ -6,6 +6,7 @@ from typing import Any, Iterable
 
 from .fingerprint import build_task_fingerprint
 from .models import TaskFingerprint
+from .curriculum_loop import load_weakness_records
 from .pattern_layer import (
     apply_pattern_layer_to_decision,
     load_critic_reports,
@@ -49,6 +50,7 @@ def route_task(
     kibo_paths: Iterable[Path] | None = None,
     pattern_paths: Iterable[Path] | None = None,
     failure_paths: Iterable[Path] | None = None,
+    weakness_paths: Iterable[Path] | None = None,
     user_model_path: Path | None = None,
     critic_paths: Iterable[Path] | None = None,
     skill_graph_path: Path | None = None,
@@ -63,7 +65,7 @@ def route_task(
     )
     decision = make_reuse_decision(fingerprint, scores)
     pattern_context: dict[str, Any] | None = None
-    if pattern_paths or failure_paths or user_model_path or critic_paths or skill_graph_path:
+    if pattern_paths or failure_paths or weakness_paths or user_model_path or critic_paths or skill_graph_path:
         skill_nodes, _skill_edges = load_skill_graph(skill_graph_path)
         skill_gap_report = build_skill_gap_report(fingerprint, skill_nodes) if skill_graph_path else None
         decision, pattern_context = apply_pattern_layer_to_decision(
@@ -71,6 +73,7 @@ def route_task(
             decision,
             patterns=load_patterns(pattern_paths),
             failures=load_failure_memories(failure_paths),
+            weakness_records=load_weakness_records(weakness_paths),
             user_model=load_user_decision_model(user_model_path),
             critic_reports=load_critic_reports(critic_paths),
             skill_gap_report=skill_gap_report,
@@ -85,6 +88,7 @@ def build_kibo_reuse_plan_from_file(
     kibo_paths: Iterable[Path] | None = None,
     pattern_paths: Iterable[Path] | None = None,
     failure_paths: Iterable[Path] | None = None,
+    weakness_paths: Iterable[Path] | None = None,
     user_model_path: Path | None = None,
     critic_paths: Iterable[Path] | None = None,
     skill_graph_path: Path | None = None,
@@ -97,6 +101,7 @@ def build_kibo_reuse_plan_from_file(
         kibo_paths=kibo_paths,
         pattern_paths=pattern_paths,
         failure_paths=failure_paths,
+        weakness_paths=weakness_paths,
         user_model_path=user_model_path,
         critic_paths=critic_paths,
         skill_graph_path=skill_graph_path,
@@ -115,6 +120,7 @@ def build_kibo_reuse_plan(
     kibo_paths: Iterable[Path] | None = None,
     pattern_paths: Iterable[Path] | None = None,
     failure_paths: Iterable[Path] | None = None,
+    weakness_paths: Iterable[Path] | None = None,
     user_model_path: Path | None = None,
     critic_paths: Iterable[Path] | None = None,
     skill_graph_path: Path | None = None,
@@ -126,6 +132,7 @@ def build_kibo_reuse_plan(
         kibo_paths=kibo_paths,
         pattern_paths=pattern_paths,
         failure_paths=failure_paths,
+        weakness_paths=weakness_paths,
         user_model_path=user_model_path,
         critic_paths=critic_paths,
         skill_graph_path=skill_graph_path,

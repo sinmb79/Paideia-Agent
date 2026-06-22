@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/sinmb79/Paideia-Agent/schemas/curriculum_plan.v1.schema.json",
+  "title": "Paideia Curriculum Plan",
+  "type": "object",
+  "required": [
+    "schema",
+    "curriculum_id",
+    "weakness_id",
+    "domain",
+    "learning_goals",
+    "lesson_units",
+    "exam_requirements",
+    "target_score"
+  ],
+  "properties": {
+    "schema": { "const": "paideia-curriculum-plan/v1" },
+    "curriculum_id": { "type": "string", "minLength": 1 },
+    "weakness_id": { "type": "string", "minLength": 1 },
+    "domain": { "type": "string", "minLength": 1 },
+    "learning_goals": { "type": "array", "items": { "type": "string" } },
+    "lesson_units": { "type": "array", "items": { "type": "string" } },
+    "exam_requirements": { "type": "array", "items": { "type": "string" } },
+    "target_score": { "type": "number", "minimum": 0, "maximum": 1 }
+  },
+  "additionalProperties": false
+}

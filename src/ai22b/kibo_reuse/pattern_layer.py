@@ -17,6 +17,7 @@ from .models import (
     ReuseDecision,
     TaskFingerprint,
     UserDecisionModel,
+    WeaknessRecord,
 )
 from .retriever import load_kibo_records
 from .skill_graph import build_skill_gap_report
@@ -484,6 +485,7 @@ def score_pattern_for_task(
     pattern: PatternCandidate,
     *,
     failures: Iterable[FailureMemory] = (),
+    weakness_records: Iterable[WeaknessRecord] = (),
     user_model: UserDecisionModel | None = None,
     critic_reports: Iterable[CriticReport] = (),
     skill_gap_report: dict[str, Any] | None = None,
@@ -495,8 +497,13 @@ def score_pattern_for_task(
     capability = len({cap for cap in required if cap.casefold() in conditions}) / len(required) if required else 1.0
     fit = user_decision_fit_score(task, pattern, user_model)
     failures_for_pattern = search_failure_memory(task, failures, pattern_id=pattern.pattern_id)
-    warnings = tuple(_failure_warning(failure) for failure in failures_for_pattern)
+    weakness_warnings = tuple(_weakness_warning(weakness) for weakness in _active_weaknesses(task, weakness_records))
+    warnings = tuple(_failure_warning(failure) for failure in failures_for_pattern) + weakness_warnings
     failure_penalty = min(1.0, sum(0.35 if _is_blocking_failure(failure) else 0.15 for failure in failures_for_pattern))
+    weakness_penalty = min(
+        0.6,
+        sum(0.30 if _weakness_blocks_direct_reuse(weakness) else 0.12 for weakness in _active_weaknesses(task, weakness_records)),
+    )
     skill_gaps = tuple((skill_gap_report or {}).get("missing_skills", []) + (skill_gap_report or {}).get("weak_skills", []))
     skill_penalty = min(0.4, 0.08 * len(skill_gaps))
     critic_required = task.risk_level == "high" or pattern.status == "reinforced"
@@ -516,6 +523,7 @@ def score_pattern_for_task(
         + 0.20 * status_score
         + 0.15 * fit
         - 0.30 * failure_penalty
+        - weakness_penalty
         - skill_penalty
     )
     if domain == 0.0:
@@ -535,7 +543,7 @@ def score_pattern_for_task(
             f"pattern_domain={domain:.2f}; task_family={task_family:.2f}; "
             f"capability={capability:.2f}; status={status_score:.2f}; "
             f"user_fit={fit:.2f}; failure_penalty={failure_penalty:.2f}; "
-            f"skill_penalty={skill_penalty:.2f}"
+            f"weakness_penalty={weakness_penalty:.2f}; skill_penalty={skill_penalty:.2f}"
         ),
     )
 
@@ -546,6 +554,7 @@ def apply_pattern_layer_to_decision(
     *,
     patterns: Iterable[PatternCandidate] = (),
     failures: Iterable[FailureMemory] = (),
+    weakness_records: Iterable[WeaknessRecord] = (),
     user_model: UserDecisionModel | None = None,
     critic_reports: Iterable[CriticReport] = (),
     skill_gap_report: dict[str, Any] | None = None,
@@ -555,6 +564,7 @@ def apply_pattern_layer_to_decision(
             task,
             pattern,
             failures=failures,
+            weakness_records=weakness_records,
             user_model=user_model,
             critic_reports=critic_reports,
             skill_gap_report=skill_gap_report,
@@ -565,9 +575,11 @@ def apply_pattern_layer_to_decision(
     scores.sort(key=lambda item: (item.score, item.pattern.reinforcement_score), reverse=True)
     if not scores:
         decision = _apply_skill_gaps_to_decision(base_decision, skill_gap_report)
+        decision = _apply_weaknesses_to_decision(task, decision, weakness_records)
         extras = {
             "pattern_matches": [],
             "skill_gap_report": skill_gap_report,
+            "active_weaknesses": [weakness.to_dict() for weakness in _active_weaknesses(task, weakness_records)],
             "failure_memory_policy": {"warnings_reduce_reuse": True},
         }
         return decision, extras
@@ -614,6 +626,7 @@ def apply_pattern_layer_to_decision(
             "warnings_reduce_reuse": True,
             "blocking_failures_prevent_direct_reuse": True,
         },
+        "active_weaknesses": [weakness.to_dict() for weakness in _active_weaknesses(task, weakness_records)],
     }
     return decision, extras
 
@@ -753,6 +766,7 @@ def _warning_is_blocking(warning: str) -> bool:
     return any(
         marker in lowered
         for marker in [
+            "weakness_blocking",
             ":critical:",
             ":fatal:",
             ":catastrophic:",
@@ -808,4 +822,69 @@ def _apply_skill_gaps_to_decision(
         failure_warnings=decision.failure_warnings,
         critic_required=decision.critic_required,
         user_decision_fit_score=decision.user_decision_fit_score,
+    )
+
+
+def _apply_weaknesses_to_decision(
+    task: TaskFingerprint,
+    decision: ReuseDecision,
+    weakness_records: Iterable[WeaknessRecord],
+) -> ReuseDecision:
+    active = _active_weaknesses(task, weakness_records)
+    if not active:
+        return decision
+    warnings = list(decision.failure_warnings)
+    llm_parts = list(decision.llm_required_parts)
+    for weakness in active:
+        warnings.append(_weakness_warning(weakness))
+        llm_parts.append(f"curriculum_remediation:{weakness.skill_id}")
+    mode = decision.reuse_mode
+    if any(_weakness_blocks_direct_reuse(weakness) for weakness in active):
+        mode = "partial_reuse" if mode == "direct_reuse" else mode
+        if any(weakness.recurrence_count >= 3 for weakness in active):
+            mode = "reference_only" if mode in {"direct_reuse", "partial_reuse"} else mode
+    return ReuseDecision(
+        decision_id=decision.decision_id,
+        task_id=decision.task_id,
+        selected_kibo_ids=decision.selected_kibo_ids,
+        similarity_score=decision.similarity_score,
+        confidence_score=max(0.0, decision.confidence_score - 0.15),
+        risk_score=decision.risk_score,
+        reuse_mode=mode,
+        llm_required_parts=tuple(dict.fromkeys(llm_parts)),
+        reason=decision.reason + "; active_weakness_policy_applied",
+        pattern_id=decision.pattern_id,
+        pattern_status=decision.pattern_status,
+        exam_validated=decision.exam_validated,
+        field_validated=decision.field_validated,
+        failure_warnings=tuple(dict.fromkeys(warnings)),
+        critic_required=decision.critic_required,
+        user_decision_fit_score=decision.user_decision_fit_score,
+    )
+
+
+def _active_weaknesses(
+    task: TaskFingerprint,
+    weakness_records: Iterable[WeaknessRecord],
+) -> list[WeaknessRecord]:
+    active: list[WeaknessRecord] = []
+    task_terms = _term_set([task.domain, task.task_type, task.constraints, task.required_capabilities, task.intent])
+    for weakness in weakness_records:
+        if weakness.domain not in {"general", task.domain}:
+            continue
+        weakness_terms = _term_set([weakness.domain, weakness.skill_id, weakness.weakness_type])
+        if weakness.skill_id.casefold() in task_terms or task_terms & weakness_terms or weakness.domain == task.domain:
+            active.append(weakness)
+    return active
+
+
+def _weakness_blocks_direct_reuse(weakness: WeaknessRecord) -> bool:
+    return weakness.severity >= 0.8 or weakness.recurrence_count >= 3
+
+
+def _weakness_warning(weakness: WeaknessRecord) -> str:
+    prefix = "weakness_blocking" if _weakness_blocks_direct_reuse(weakness) else "weakness"
+    return (
+        f"{prefix}:{weakness.weakness_type}:{weakness.skill_id}:"
+        f"severity={weakness.severity:.2f}:recurrence={weakness.recurrence_count}:{weakness.weakness_id}"
     )

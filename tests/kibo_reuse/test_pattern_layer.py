@@ -414,3 +414,5 @@ def test_sample_artifacts_validate_schemas():
     Draft202012Validator(_schema("real_world_outcome.v1.schema.json")).validate(
         RealWorldOutcome("outcome-1", "pattern-1", "task-1", "2026-06-22T00:00:00Z", "task", True, 0.8, None, 8, None, ()).to_dict()
     )
+    weakness_row = json.loads((examples / "weakness_records.sample.jsonl").read_text(encoding="utf-8").splitlines()[0])
+    Draft202012Validator(_schema("weakness_record.v1.schema.json")).validate(weakness_row)

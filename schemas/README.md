@@ -47,6 +47,9 @@ blocks are intentionally narrow.
 | `user_decision_model.v1.schema.json` | `paideia-user-decision-model/v1` |
 | `critic_report.v1.schema.json` | `paideia-critic-report/v1` |
 | `skill_graph.v1.schema.json` | `paideia-skill-graph/v1` |
+| `weakness_record.v1.schema.json` | `paideia-weakness-record/v1` |
+| `curriculum_plan.v1.schema.json` | `paideia-curriculum-plan/v1` |
+| `adaptive_exam.v1.schema.json` | `paideia-adaptive-exam/v1` |
 
 ## Local Diagnostic Schemas
 
@@ -62,6 +65,11 @@ The Kibo MVP also emits local diagnostic/report artifacts that are reviewable JS
 | `paideia-skill-gap-report/v1` | SkillGraph routing |
 | `paideia-kibo-token-saving-report/v1` | `kibo-report` |
 | `paideia-kibo-promotion-adapter-result/v1` | Kibo promotion adapter |
+| `paideia-weakness-detection-report/v1` | `weakness-detect` |
+| `paideia-curriculum-generation-report/v1` | `curriculum-generate` |
+| `paideia-adaptive-exam-generation-report/v1` | `adaptive-exam` |
+| `paideia-curriculum-feedback-report/v1` | `curriculum-report` |
+| `paideia-curriculum-completion/v1` | `curriculum-complete` |
 
 Regression tests cover both accepted generated artifacts and rejected unsafe
 mutations, including raw output retention, private reasoning trace retention,
