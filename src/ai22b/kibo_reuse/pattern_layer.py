@@ -322,17 +322,15 @@ def reinforce_pattern_candidate(
 ) -> dict[str, Any]:
     related_exams = [exam for exam in exam_results if exam.pattern_id == pattern.pattern_id]
     related_outcomes = [outcome for outcome in outcomes if outcome.pattern_id == pattern.pattern_id]
-    exam_score = (
-        sum(exam.score for exam in related_exams) / len(related_exams)
-        if related_exams
-        else pattern.exam_score
-    )
+    exam_failed = any((not exam.passed) or bool(exam.mistakes) for exam in related_exams)
+    exam_values = [exam.score if exam.passed and not exam.mistakes else 0.0 for exam in related_exams]
+    exam_score = (sum(exam_values) / len(exam_values) if exam_values else pattern.exam_score)
     real_world_score = _real_world_score(related_outcomes, fallback=pattern.real_world_score)
     feedback_score = _feedback_score(related_outcomes)
     failure_penalty = _failure_penalty(related_outcomes)
     critic_passed = any(report.pattern_id == pattern.pattern_id and report.pass_gate for report in critic_reports)
     critical_failure = any(
-        (outcome.error_type or "") in CRITICAL_FAILURE_TYPES
+        (outcome.error_type or "").casefold() in CRITICAL_FAILURE_TYPES
         or any("critical" in note.casefold() for note in outcome.notes)
         for outcome in related_outcomes
         if not outcome.success
@@ -350,6 +348,7 @@ def reinforce_pattern_candidate(
         critical_failure=critical_failure,
         critic_passed=critic_passed,
         current_status=pattern.status,
+        exam_failed=exam_failed,
     )
     updated = PatternCandidate(
         pattern_id=pattern.pattern_id,
@@ -384,9 +383,14 @@ def _status_for_reinforcement(
     critical_failure: bool,
     critic_passed: bool,
     current_status: str,
+    exam_failed: bool = False,
 ) -> str:
+    if current_status == "quarantined":
+        return "quarantined"
     if critical_failure:
         return "quarantined"
+    if exam_failed:
+        return "draft" if score >= 0.40 else "weakened"
     if score >= 0.85:
         return "reinforced" if critic_passed else "field_validated"
     if score >= 0.70:
@@ -394,7 +398,7 @@ def _status_for_reinforcement(
     if score >= 0.55:
         return "exam_validated"
     if score >= 0.40:
-        return "draft" if current_status == "draft" else current_status
+        return "draft"
     return "weakened"
 
 
@@ -557,14 +561,16 @@ def apply_pattern_layer_to_decision(
         )
         for pattern in patterns
     ]
+    scores = [score for score in scores if _pattern_is_relevant(task, base_decision, score)]
     scores.sort(key=lambda item: (item.score, item.pattern.reinforcement_score), reverse=True)
     if not scores:
+        decision = _apply_skill_gaps_to_decision(base_decision, skill_gap_report)
         extras = {
             "pattern_matches": [],
             "skill_gap_report": skill_gap_report,
             "failure_memory_policy": {"warnings_reduce_reuse": True},
         }
-        return base_decision, extras
+        return decision, extras
 
     top = scores[0]
     mode = _mode_with_pattern_policy(task, base_decision.reuse_mode, top)
@@ -620,12 +626,14 @@ def _mode_with_pattern_policy(task: TaskFingerprint, base_mode: str, score: Patt
         return "reject_and_solve_fresh"
     if any(_warning_is_blocking(warning) for warning in score.failure_warnings):
         return "reject_and_solve_fresh"
+    if score.critic_required and not score.critic_passed:
+        return "reference_only" if task.risk_level == "high" or not pattern.exam_validated else "partial_reuse"
     if score.failure_warnings and base_mode == "direct_reuse":
         return "partial_reuse"
     if task.risk_level == "high":
         if not pattern.field_validated or not score.critic_passed:
             return "reference_only"
-        return "direct_reuse" if base_mode == "direct_reuse" else base_mode
+        return "partial_reuse" if base_mode == "direct_reuse" else base_mode
     if pattern.status == "draft":
         return "reference_only"
     if pattern.status == "exam_validated":
@@ -716,7 +724,7 @@ def _failure_penalty(outcomes: list[RealWorldOutcome]) -> float:
         return 0.0
     failures = [outcome for outcome in outcomes if not outcome.success or outcome.error_type]
     penalty = len(failures) / len(outcomes)
-    if any((outcome.error_type or "") in CRITICAL_FAILURE_TYPES for outcome in failures):
+    if any((outcome.error_type or "").casefold() in CRITICAL_FAILURE_TYPES for outcome in failures):
         penalty += 0.5
     return max(0.0, min(1.0, penalty))
 
@@ -742,4 +750,62 @@ def _failure_warning(failure: FailureMemory) -> str:
 
 def _warning_is_blocking(warning: str) -> bool:
     lowered = warning.casefold()
-    return any(marker in lowered for marker in [":critical:", ":fatal:", ":catastrophic:", "domain_mismatch"])
+    return any(
+        marker in lowered
+        for marker in [
+            ":critical:",
+            ":fatal:",
+            ":catastrophic:",
+            "domain_mismatch",
+            "freshness_error",
+            "risk_underestimated",
+            "market_regime_shift",
+        ]
+    )
+
+
+def _pattern_is_relevant(
+    task: TaskFingerprint,
+    base_decision: ReuseDecision,
+    score: PatternScore,
+) -> bool:
+    pattern = score.pattern
+    if pattern.owner != task.owner:
+        return False
+    source_overlap = bool(set(pattern.source_kibo_ids) & set(base_decision.selected_kibo_ids))
+    if source_overlap:
+        return score.score >= 0.10
+    return pattern.domain == task.domain and pattern.task_family == task.task_type and score.score >= 0.45
+
+
+def _apply_skill_gaps_to_decision(
+    decision: ReuseDecision,
+    skill_gap_report: dict[str, Any] | None,
+) -> ReuseDecision:
+    if not skill_gap_report:
+        return decision
+    gaps = list(skill_gap_report.get("missing_skills", [])) + list(skill_gap_report.get("weak_skills", []))
+    if not gaps:
+        return decision
+    llm_parts = list(decision.llm_required_parts)
+    for gap in gaps:
+        llm_parts.append(f"missing_skill:{gap}")
+    mode = "partial_reuse" if decision.reuse_mode == "direct_reuse" else decision.reuse_mode
+    return ReuseDecision(
+        decision_id=decision.decision_id,
+        task_id=decision.task_id,
+        selected_kibo_ids=decision.selected_kibo_ids,
+        similarity_score=decision.similarity_score,
+        confidence_score=max(0.0, decision.confidence_score - 0.10),
+        risk_score=decision.risk_score,
+        reuse_mode=mode,
+        llm_required_parts=tuple(dict.fromkeys(llm_parts)),
+        reason=decision.reason + "; skill_gap_policy_applied",
+        pattern_id=decision.pattern_id,
+        pattern_status=decision.pattern_status,
+        exam_validated=decision.exam_validated,
+        field_validated=decision.field_validated,
+        failure_warnings=decision.failure_warnings,
+        critic_required=decision.critic_required,
+        user_decision_fit_score=decision.user_decision_fit_score,
+    )

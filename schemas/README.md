@@ -48,6 +48,21 @@ blocks are intentionally narrow.
 | `critic_report.v1.schema.json` | `paideia-critic-report/v1` |
 | `skill_graph.v1.schema.json` | `paideia-skill-graph/v1` |
 
+## Local Diagnostic Schemas
+
+The Kibo MVP also emits local diagnostic/report artifacts that are reviewable JSON but not yet frozen as strict public schemas. They are intentionally local-first, contain no hidden chain-of-thought, and may become strict contracts in later `/vN` schema files:
+
+| Artifact schema | Producer |
+| --- | --- |
+| `paideia-kibo-index/v1` | `kibo-index` |
+| `paideia-kibo-search-result/v1` | `kibo-search` |
+| `paideia-pattern-index/v1` | `pattern-extract` |
+| `paideia-pattern-reinforcement-report/v1` | `pattern-reinforce` |
+| `paideia-failure-search-result/v1` | `failure-search` |
+| `paideia-skill-gap-report/v1` | SkillGraph routing |
+| `paideia-kibo-token-saving-report/v1` | `kibo-report` |
+| `paideia-kibo-promotion-adapter-result/v1` | Kibo promotion adapter |
+
 Regression tests cover both accepted generated artifacts and rejected unsafe
 mutations, including raw output retention, private reasoning trace retention,
 absolute artifact paths, side-effect flags, and malformed timestamps.

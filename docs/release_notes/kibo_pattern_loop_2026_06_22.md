@@ -39,9 +39,19 @@ Kibo records remain concrete, reviewable cases. The new Pattern Layer extracts r
 
 ## Validation
 
-- `Paideia-Agent`: 317 tests passed.
-- Pattern Layer targeted tests: 21 tests passed.
+- `Paideia-Agent`: 324 tests passed.
+- Pattern Layer targeted tests: 28 tests passed.
 - Sample CLI flow verified with local JSON/JSONL artifacts.
+
+## Post-Review Hardening
+
+- Direct reuse now fails closed when self-critic validation is required but missing.
+- Unrelated Pattern Candidates no longer downgrade unrelated Kibo reuse decisions.
+- SkillGraph gaps are routed even when no Pattern Candidate is selected.
+- Quarantined patterns remain quarantined across later reinforcement runs.
+- Failed exams prevent pattern validation even when the numeric score is high.
+- Mixed-case risk levels are normalized before routing.
+- Legacy v1 `ReuseDecision` artifacts without pattern fields remain schema-valid.
 
 <details>
 <summary>한국어 설명 보기</summary>
@@ -71,8 +81,18 @@ Kibo record는 검토된 구체 사례로 유지됩니다. 그 위에 새 Patter
 
 ## 검증
 
-- `Paideia-Agent`: 전체 317개 테스트 통과
-- Pattern Layer targeted test: 21개 통과
+- `Paideia-Agent`: 전체 324개 테스트 통과
+- Pattern Layer targeted test: 28개 통과
 - 로컬 JSON/JSONL 샘플 CLI 흐름 검증 완료
+
+## 리뷰 후 보강
+
+- self-critic 검증이 필요한데 누락된 경우 direct reuse가 fail-closed 되도록 보강했습니다.
+- 관련 없는 Pattern Candidate가 무관한 Kibo reuse decision을 낮추지 않도록 필터링했습니다.
+- Pattern Candidate가 없어도 SkillGraph gap이 LLM 필요 영역으로 라우팅됩니다.
+- quarantined pattern은 이후 성공 outcome이 있어도 자동 복구되지 않습니다.
+- failed exam은 숫자 점수가 높아도 pattern validation을 막습니다.
+- 대소문자가 섞인 risk level을 라우팅 전에 정규화합니다.
+- pattern field가 없는 기존 v1 `ReuseDecision` artifact도 schema-valid로 유지됩니다.
 
 </details>

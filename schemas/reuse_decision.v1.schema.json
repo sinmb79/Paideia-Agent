@@ -13,13 +13,6 @@
     "risk_score",
     "reuse_mode",
     "llm_required_parts",
-    "pattern_id",
-    "pattern_status",
-    "exam_validated",
-    "field_validated",
-    "failure_warnings",
-    "critic_required",
-    "user_decision_fit_score",
     "reason"
   ],
   "properties": {

@@ -53,12 +53,15 @@ Use local JSONL artifacts for the MVP:
 
 ```bash
 ai22b-talent-foundry pattern-extract --kibo-dir examples --output runs/patterns.jsonl
-ai22b-talent-foundry pattern-exam --pattern-id PATTERN_ID --pattern-path runs/patterns.jsonl --output runs/pattern_exam.json
-ai22b-talent-foundry pattern-outcome --pattern-id PATTERN_ID --task-id example-investment-research-2026 --success true --score 0.82 --output runs/pattern_outcomes.jsonl
-ai22b-talent-foundry critic-report --pattern-id PATTERN_ID --pattern-path runs/patterns.jsonl --output runs/critic_report.json
-ai22b-talent-foundry pattern-reinforce --pattern-id PATTERN_ID --pattern-path runs/patterns.jsonl --exam-path runs/pattern_exam.json --outcome-path runs/pattern_outcomes.jsonl --critic-path runs/critic_report.json --output runs/pattern_reinforcement.json
+$patternId = (Get-Content runs/patterns.jsonl | Select-Object -First 1 | ConvertFrom-Json).pattern_id
+ai22b-talent-foundry pattern-exam --pattern-id $patternId --pattern-path runs/patterns.jsonl --output runs/pattern_exam.json
+ai22b-talent-foundry pattern-outcome --pattern-id $patternId --task-id example-investment-research-2026 --success true --score 0.82 --output runs/pattern_outcomes.jsonl
+ai22b-talent-foundry critic-report --pattern-id $patternId --pattern-path runs/patterns.jsonl --output runs/critic_report.json
+ai22b-talent-foundry pattern-reinforce --pattern-id $patternId --pattern-path runs/patterns.jsonl --exam-path runs/pattern_exam.json --outcome-path runs/pattern_outcomes.jsonl --critic-path runs/critic_report.json --output runs/pattern_reinforcement.json
 ai22b-talent-foundry failure-search --task examples/investment_research_task.json --failure-path examples/failure_memory.sample.jsonl
 ```
+
+In other shells, copy the `pattern_id` value from `runs/patterns.jsonl`.
 
 When a pattern file is supplied to `kibo-plan`, direct reuse is blocked unless the pattern is sufficiently validated. High-risk work requires field validation and a passing critic gate. Failure-memory matches reduce reuse confidence or block direct reuse.
 
