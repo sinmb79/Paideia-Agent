@@ -11,6 +11,7 @@ from ai22b.kibo_reuse.curriculum_loop import (
     detect_weaknesses,
     generate_adaptive_exam,
     generate_curriculum_plan,
+    load_weakness_records,
 )
 from ai22b.kibo_reuse.models import (
     FailureMemory,
@@ -97,11 +98,30 @@ def test_failure_to_weakness_to_curriculum_to_exam_loop_validates_schemas():
 
     assert weakness.skill_id == "macro_regime_analysis"
     assert "liquidity" in curriculum.learning_goals
-    assert exam.difficulty in {"standard", "advanced"}
+    assert exam.difficulty == "remediation"
     assert completion["updated_weakness"]["severity"] < weakness.severity
     Draft202012Validator(_schema("weakness_record.v1.schema.json")).validate(weakness.to_dict())
     Draft202012Validator(_schema("curriculum_plan.v1.schema.json")).validate(curriculum.to_dict())
     Draft202012Validator(_schema("adaptive_exam.v1.schema.json")).validate(exam.to_dict())
+    Draft202012Validator(_schema("curriculum_completion.v1.schema.json")).validate(completion)
+
+
+def test_existing_weakness_merge_does_not_duplicate_same_evidence():
+    first = detect_weaknesses([_failure()], domain="investment_research")[0]
+    merged = detect_weaknesses([_failure()], domain="investment_research", existing_weaknesses=[first])[0]
+
+    assert merged.evidence_refs == first.evidence_refs
+    assert merged.recurrence_count == 1
+
+
+def test_completion_below_target_increases_weakness():
+    weakness = detect_weaknesses([_failure()], owner="Boss", domain="investment_research")[0]
+
+    completion = apply_curriculum_completion(weakness, passed=True, score=0.6, target_score=0.85)
+
+    assert completion["effective_passed"] is False
+    assert completion["action"] == "weakness_increased"
+    assert completion["updated_weakness"]["severity"] > weakness.severity
 
 
 def test_repeated_failure_increases_weakness_and_adaptive_exam_difficulty():
@@ -152,6 +172,68 @@ def test_weakness_path_blocks_direct_reuse_without_pattern(tmp_path):
     assert plan["reuse_decision"]["failure_warnings"]
 
 
+def test_single_high_failure_weakness_blocks_direct_reuse_without_pattern(tmp_path):
+    kibo_path = tmp_path / "reasoning_kibo.jsonl"
+    weakness_path = tmp_path / "weakness.jsonl"
+    weakness = detect_weaknesses([_failure()], owner="Boss", domain="investment_research")[0]
+    _write_jsonl(kibo_path, [_kibo().to_dict()])
+    _write_jsonl(weakness_path, [weakness.to_dict()])
+
+    plan = build_kibo_reuse_plan(
+        _task(),
+        kibo_paths=[kibo_path],
+        weakness_paths=[weakness_path],
+    )
+
+    assert weakness.severity == 0.75
+    assert plan["reuse_decision"]["reuse_mode"] != "direct_reuse"
+    assert any("weakness_blocking" in warning for warning in plan["reuse_decision"]["failure_warnings"])
+
+
+def test_unrelated_owner_weakness_does_not_block_direct_reuse(tmp_path):
+    kibo_path = tmp_path / "reasoning_kibo.jsonl"
+    weakness_path = tmp_path / "weakness.jsonl"
+    _write_jsonl(kibo_path, [_kibo().to_dict()])
+    _write_jsonl(
+        weakness_path,
+        [
+            WeaknessRecord(
+                "weakness-1",
+                "OtherOwner",
+                "investment_research",
+                "macro_regime_analysis",
+                "knowledge_gap",
+                ("failure-1",),
+                0.95,
+                4,
+            ).to_dict()
+        ],
+    )
+
+    plan = build_kibo_reuse_plan(_task(), kibo_paths=[kibo_path], weakness_paths=[weakness_path])
+
+    assert plan["reuse_decision"]["reuse_mode"] == "direct_reuse"
+
+
+def test_completion_report_can_be_loaded_as_weakness_record(tmp_path):
+    weakness = detect_weaknesses([_failure()], owner="Boss", domain="investment_research")[0]
+    completion = apply_curriculum_completion(
+        weakness,
+        passed=True,
+        score=0.9,
+        target_score=0.85,
+        evidence_refs=("adaptive-exam-1",),
+    )
+    completion_path = tmp_path / "completion.json"
+    completion_path.write_text(json.dumps(completion), encoding="utf-8")
+
+    loaded = load_weakness_records([completion_path])
+
+    assert len(loaded) == 1
+    assert loaded[0].weakness_id == weakness.weakness_id
+    assert loaded[0].severity < weakness.severity
+
+
 def test_curriculum_report_builders_are_reviewable():
     weakness = detect_weaknesses([_failure()], domain="investment_research")[0]
     curriculum_report = build_curriculum_generation_report([weakness])
@@ -173,6 +255,7 @@ def test_curriculum_cli_commands_round_trip(tmp_path):
     curricula_path = tmp_path / "curricula.jsonl"
     exam_path = tmp_path / "exam.json"
     completion_path = tmp_path / "completion.json"
+    updated_weakness_path = tmp_path / "updated_weakness.jsonl"
     report_path = tmp_path / "report.json"
     _write_jsonl(failure_path, [_failure().to_dict()])
 
@@ -206,12 +289,18 @@ def test_curriculum_cli_commands_round_trip(tmp_path):
             "curriculum-complete",
             "--weakness-path",
             str(weakness_path),
+            "--curriculum-path",
+            str(curricula_path),
             "--passed",
             "true",
             "--score",
             "0.9",
+            "--evidence-ref",
+            "adaptive-exam-cli",
             "--output",
             str(completion_path),
+            "--updated-weakness-output",
+            str(updated_weakness_path),
         ],
         [
             "curriculum-report",
@@ -230,4 +319,6 @@ def test_curriculum_cli_commands_round_trip(tmp_path):
     assert json.loads(weakness_path.read_text(encoding="utf-8"))["schema"] == "paideia-weakness-detection-report/v1"
     assert json.loads(exam_path.read_text(encoding="utf-8"))["schema"] == "paideia-adaptive-exam-generation-report/v1"
     assert json.loads(completion_path.read_text(encoding="utf-8"))["action"] == "weakness_reduced"
+    assert load_weakness_records([completion_path])[0].weakness_id
+    assert load_weakness_records([updated_weakness_path])[0].weakness_id
     assert json.loads(report_path.read_text(encoding="utf-8"))["schema"] == "paideia-curriculum-feedback-report/v1"

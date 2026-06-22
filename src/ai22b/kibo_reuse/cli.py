@@ -131,6 +131,20 @@ def _select_curriculum(curricula: list[CurriculumPlan], curriculum_id: str | Non
     raise ValueError(f"Curriculum not found: {curriculum_id}")
 
 
+def _target_score_from_curricula(
+    curricula: list[CurriculumPlan],
+    *,
+    weakness_id: str,
+    curriculum_id: str | None,
+) -> float | None:
+    for curriculum in curricula:
+        if curriculum_id and curriculum.curriculum_id != curriculum_id:
+            continue
+        if curriculum.weakness_id == weakness_id:
+            return curriculum.target_score
+    return None
+
+
 def register_kibo_reuse_commands(subparsers: argparse._SubParsersAction) -> None:
     kibo_index = subparsers.add_parser(
         "kibo-index",
@@ -288,9 +302,14 @@ def register_kibo_reuse_commands(subparsers: argparse._SubParsersAction) -> None
     )
     curriculum_complete.add_argument("--weakness-id")
     curriculum_complete.add_argument("--weakness-path", action="append", default=["runs/weakness_detection.json"])
+    curriculum_complete.add_argument("--curriculum-id")
+    curriculum_complete.add_argument("--curriculum-path", action="append")
     curriculum_complete.add_argument("--passed", required=True, type=_bool_arg)
     curriculum_complete.add_argument("--score", required=True, type=float)
+    curriculum_complete.add_argument("--target-score", type=float)
+    curriculum_complete.add_argument("--evidence-ref", action="append")
     curriculum_complete.add_argument("--output", default="runs/curriculum_completion.json")
+    curriculum_complete.add_argument("--updated-weakness-output")
 
 
 def handle_kibo_reuse_command(args: argparse.Namespace) -> int | None:
@@ -492,12 +511,28 @@ def handle_kibo_reuse_command(args: argparse.Namespace) -> int | None:
             load_weakness_records(_existing_paths(args.weakness_path)),
             args.weakness_id,
         )
+        target_score = args.target_score
+        if target_score is None and args.curriculum_path:
+            target_score = _target_score_from_curricula(
+                load_curriculum_plans(_existing_paths(args.curriculum_path)),
+                weakness_id=weakness.weakness_id,
+                curriculum_id=args.curriculum_id,
+            )
         report = apply_curriculum_completion(
             weakness,
             passed=args.passed,
             score=args.score,
+            target_score=target_score,
+            evidence_refs=args.evidence_ref or (),
         )
         _write_json(Path(args.output), report)
+        if args.updated_weakness_output:
+            updated_path = Path(args.updated_weakness_output)
+            updated_weakness = report["updated_weakness"]
+            if updated_path.suffix.lower() == ".jsonl":
+                _write_jsonl(updated_path, [updated_weakness])
+            else:
+                _write_json(updated_path, updated_weakness)
         print(str(Path(args.output)))
         return 0
 

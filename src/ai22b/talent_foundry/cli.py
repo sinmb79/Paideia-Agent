@@ -4,7 +4,7 @@ import argparse
 import copy
 import json
 from pathlib import Path
-from typing import Sequence
+from typing import Any, Sequence
 
 from ai22b.config import talent_foundry_storage_path
 from ai22b.kibo_reuse.cli import handle_kibo_reuse_command, register_kibo_reuse_commands
@@ -141,6 +141,27 @@ DEFAULT_BUNDLE_OUTPUT_DIR = DEFAULT_RUN_DIR / "shinyong_agent_release_bundle"
 DEFAULT_MANIFEST_OUTPUT = DEFAULT_RUN_DIR / "shinyong_agent_manifest.json"
 DEFAULT_AGENT_RUN_OUTPUT = DEFAULT_RUN_DIR / "shinyong_agent_run.json"
 DEFAULT_AGENT_RUN_LOG = DEFAULT_RUN_DIR / "shinyong_agent_run_log.jsonl"
+
+
+def _read_json_or_jsonl_rows(path: str | None, *, collection_key: str | None = None) -> list[Any] | None:
+    if not path:
+        return None
+    source = Path(path)
+    text = source.read_text(encoding="utf-8")
+    if source.suffix.lower() == ".jsonl":
+        return [json.loads(line) for line in text.splitlines() if line.strip()]
+    payload = json.loads(text)
+    if isinstance(payload, list):
+        return payload
+    if isinstance(payload, dict) and collection_key and isinstance(payload.get(collection_key), list):
+        return payload[collection_key]
+    if isinstance(payload, dict) and isinstance(payload.get("updated_weakness"), dict):
+        return [payload["updated_weakness"]]
+    if isinstance(payload, dict):
+        return [payload]
+    return None
+
+
 BOSS_APPROVAL_SCHEMA = "paideia-boss-approval/v1"
 
 
@@ -456,6 +477,8 @@ def _build_parser() -> argparse.ArgumentParser:
     genius_profile.add_argument("--growth-profile")
     genius_profile.add_argument("--grade-learning-records")
     genius_profile.add_argument("--reasoning-kibo")
+    genius_profile.add_argument("--curriculum-backlog")
+    genius_profile.add_argument("--weakness-records")
     genius_profile.add_argument(
         "--allow-draft",
         action="store_true",
@@ -1371,6 +1394,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 reasoning_kibo={"entries": read_reasoning_kibo_jsonl(Path(args.reasoning_kibo))}
                 if args.reasoning_kibo
                 else None,
+                curriculum_backlog=_read_json_or_jsonl_rows(args.curriculum_backlog, collection_key="curriculum_backlog"),
+                weakness_records=_read_json_or_jsonl_rows(args.weakness_records, collection_key="weaknesses"),
                 output_path=output_path,
             )
         except ValueError as exc:

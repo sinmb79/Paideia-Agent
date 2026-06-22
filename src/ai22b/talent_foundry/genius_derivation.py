@@ -245,6 +245,8 @@ def build_genius_derivation_profile(
     growth_profile: dict[str, Any] | None = None,
     grade_learning_records: dict[str, Any] | list[dict[str, Any]] | None = None,
     reasoning_kibo: dict[str, Any] | None = None,
+    curriculum_backlog: list[Any] | None = None,
+    weakness_records: list[dict[str, Any]] | None = None,
     output_path: Path | None = None,
 ) -> dict[str, Any]:
     """Build a public-safe domain genius derivation profile.
@@ -373,8 +375,8 @@ def build_genius_derivation_profile(
             curriculum_topic_count=len(topics),
             practice_ladder_stage_count=len(practice_ladder),
         ),
-        "curriculum_backlog": [],
-        "weakness_records": [],
+        "curriculum_backlog": _as_list(curriculum_backlog),
+        "weakness_records": [item for item in _as_list(weakness_records) if isinstance(item, dict)],
         "research_basis": [
             {
                 "id": "neural_efficiency",

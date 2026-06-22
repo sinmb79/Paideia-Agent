@@ -41,6 +41,7 @@ SEVERITY_MAP = {
     "catastrophic": 0.95,
     "fatal": 1.00,
 }
+HIGH_WEAKNESS_THRESHOLD = SEVERITY_MAP["high"]
 
 LESSON_MAP: dict[str, tuple[str, ...]] = {
     "freshness_gap": ("source_recency_checks", "current_data_verification", "staleness_risk_review"),
@@ -115,11 +116,12 @@ def detect_weaknesses(
         current = grouped.setdefault(key, {"evidence_refs": [], "severity": 0.0, "recurrence_count": 0})
         current["evidence_refs"].extend(weakness.evidence_refs)
         current["severity"] = max(current["severity"], weakness.severity)
-        current["recurrence_count"] += weakness.recurrence_count
+        current["recurrence_count"] = max(current["recurrence_count"], weakness.recurrence_count)
 
     records: list[WeaknessRecord] = []
     for (record_owner, record_domain, skill_id, weakness_type), values in sorted(grouped.items()):
-        recurrence_count = int(values["recurrence_count"])
+        evidence_refs = tuple(dict.fromkeys(str(item) for item in values["evidence_refs"] if str(item)))
+        recurrence_count = max(int(values["recurrence_count"]), len(evidence_refs))
         severity = min(1.0, float(values["severity"]) + min(0.20, 0.05 * max(0, recurrence_count - 1)))
         records.append(
             WeaknessRecord(
@@ -128,7 +130,7 @@ def detect_weaknesses(
                 domain=record_domain,
                 skill_id=skill_id,
                 weakness_type=weakness_type,
-                evidence_refs=tuple(dict.fromkeys(str(item) for item in values["evidence_refs"] if str(item))),
+                evidence_refs=evidence_refs,
                 severity=severity,
                 recurrence_count=recurrence_count,
             )
@@ -265,11 +267,18 @@ def apply_curriculum_completion(
     *,
     passed: bool,
     score: float,
+    target_score: float | None = None,
+    evidence_refs: Iterable[str] = (),
 ) -> dict[str, Any]:
     normalized_score = max(0.0, min(1.0, float(score)))
-    if passed:
+    target = max(0.0, min(1.0, float(target_score))) if target_score is not None else 0.75
+    completion_refs = tuple(str(ref) for ref in evidence_refs if str(ref))
+    updated_refs = tuple(dict.fromkeys((*weakness.evidence_refs, *completion_refs)))
+    effective_passed = bool(passed and normalized_score >= target)
+    if effective_passed:
         updated = replace(
             weakness,
+            evidence_refs=updated_refs,
             severity=max(0.0, weakness.severity - max(0.10, 0.25 * normalized_score)),
             recurrence_count=max(0, weakness.recurrence_count - 1),
         )
@@ -277,6 +286,7 @@ def apply_curriculum_completion(
     else:
         updated = replace(
             weakness,
+            evidence_refs=updated_refs,
             severity=min(1.0, weakness.severity + 0.10),
             recurrence_count=weakness.recurrence_count + 1,
         )
@@ -285,7 +295,10 @@ def apply_curriculum_completion(
         "schema": CURRICULUM_COMPLETION_SCHEMA,
         "weakness_id": weakness.weakness_id,
         "passed": passed,
+        "effective_passed": effective_passed,
         "score": round(normalized_score, 4),
+        "target_score": round(target, 4),
+        "evidence_refs": list(completion_refs),
         "action": action,
         "updated_weakness": updated.to_dict(),
     }
@@ -300,7 +313,7 @@ def build_curriculum_report(
     weakness_rows = list(weaknesses)
     curriculum_rows = list(curricula)
     exam_rows = list(exams)
-    severe = [weakness for weakness in weakness_rows if weakness.severity >= 0.8]
+    severe = [weakness for weakness in weakness_rows if weakness.severity >= HIGH_WEAKNESS_THRESHOLD]
     repeated = [weakness for weakness in weakness_rows if weakness.recurrence_count >= 3]
     return {
         "schema": CURRICULUM_REPORT_SCHEMA,
@@ -357,11 +370,11 @@ def severity_value(severity: str | float | int) -> float:
 
 
 def weakness_blocks_direct_reuse(weakness: WeaknessRecord) -> bool:
-    return weakness.severity >= 0.8 or weakness.recurrence_count >= 3
+    return weakness.severity >= HIGH_WEAKNESS_THRESHOLD or weakness.recurrence_count >= 3
 
 
 def target_score_for_weakness(weakness: WeaknessRecord) -> float:
-    if weakness.severity >= 0.8 or weakness.recurrence_count >= 3:
+    if weakness.severity >= HIGH_WEAKNESS_THRESHOLD or weakness.recurrence_count >= 3:
         return 0.85
     if weakness.severity >= 0.6:
         return 0.80
@@ -387,6 +400,11 @@ def _read_json_rows(path: Path, *, collection_key: str) -> list[dict[str, Any]]:
         "paideia-adaptive-exam/v1",
     }:
         return [payload]
+    if isinstance(payload, dict) and payload.get("schema") == CURRICULUM_COMPLETION_SCHEMA:
+        updated_weakness = payload.get("updated_weakness")
+        if not isinstance(updated_weakness, dict):
+            raise ValueError(f"{path} does not contain updated_weakness")
+        return [updated_weakness]
     if isinstance(payload, dict) and isinstance(payload.get("exam"), dict):
         return [payload["exam"]]
     if isinstance(payload, dict):
@@ -400,9 +418,9 @@ def _difficulty(weakness: WeaknessRecord | None, *, recent_improvement: bool) ->
         return "maintenance"
     if weakness is None:
         return "standard"
-    if weakness.recurrence_count >= 3:
+    if weakness.recurrence_count >= 3 or weakness.severity >= HIGH_WEAKNESS_THRESHOLD:
         return "remediation"
-    if weakness.severity >= 0.8:
+    if weakness.severity >= 0.6:
         return "advanced"
     return "standard"
 
@@ -415,7 +433,7 @@ def _question_count(weakness: WeaknessRecord | None, *, recent_improvement: bool
     count = 3
     if weakness.severity >= 0.6:
         count += 1
-    if weakness.severity >= 0.8:
+    if weakness.severity >= HIGH_WEAKNESS_THRESHOLD:
         count += 1
     count += min(3, max(0, weakness.recurrence_count - 1))
     return count

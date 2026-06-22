@@ -34,6 +34,7 @@ CRITICAL_FAILURE_TYPES = {
     "risk_underestimated",
     "market_regime_shift",
 }
+HIGH_WEAKNESS_THRESHOLD = 0.75
 
 
 @dataclass(frozen=True)
@@ -868,18 +869,20 @@ def _active_weaknesses(
     weakness_records: Iterable[WeaknessRecord],
 ) -> list[WeaknessRecord]:
     active: list[WeaknessRecord] = []
-    task_terms = _term_set([task.domain, task.task_type, task.constraints, task.required_capabilities, task.intent])
+    task_terms = _term_set([task.task_type, task.constraints, task.required_capabilities, task.intent])
     for weakness in weakness_records:
+        if weakness.owner != task.owner:
+            continue
         if weakness.domain not in {"general", task.domain}:
             continue
-        weakness_terms = _term_set([weakness.domain, weakness.skill_id, weakness.weakness_type])
-        if weakness.skill_id.casefold() in task_terms or task_terms & weakness_terms or weakness.domain == task.domain:
+        weakness_terms = _term_set([weakness.skill_id, weakness.weakness_type])
+        if not weakness.skill_id or weakness.skill_id.casefold() in task_terms or task_terms & weakness_terms:
             active.append(weakness)
     return active
 
 
 def _weakness_blocks_direct_reuse(weakness: WeaknessRecord) -> bool:
-    return weakness.severity >= 0.8 or weakness.recurrence_count >= 3
+    return weakness.severity >= HIGH_WEAKNESS_THRESHOLD or weakness.recurrence_count >= 3
 
 
 def _weakness_warning(weakness: WeaknessRecord) -> str:
