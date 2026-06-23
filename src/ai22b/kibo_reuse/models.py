@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+import math
 from typing import Any
 
 
@@ -95,9 +96,10 @@ def _float(value: Any, default: float = 0.0) -> float:
     if isinstance(value, bool):
         return default
     try:
-        return float(value)
+        numeric = float(value)
     except (TypeError, ValueError):
         return default
+    return numeric if math.isfinite(numeric) else default
 
 
 def _risk_level(value: Any, default: str = "medium") -> str:
@@ -530,7 +532,7 @@ class SkillNode:
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
         data["schema"] = SKILL_NODE_SCHEMA
-        data["mastery_score"] = round(max(0.0, min(1.0, float(data["mastery_score"]))), 4)
+        data["mastery_score"] = round(max(0.0, min(1.0, _float(data["mastery_score"]))), 4)
         return data
 
     @classmethod
@@ -553,7 +555,7 @@ class SkillEdge:
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
         data["schema"] = SKILL_EDGE_SCHEMA
-        data["weight"] = round(max(0.0, min(1.0, float(data["weight"]))), 4)
+        data["weight"] = round(max(0.0, min(1.0, _float(data["weight"]))), 4)
         return data
 
     @classmethod
@@ -584,7 +586,7 @@ class WeaknessRecord:
             raise ValueError("skill_id is required")
         if self.weakness_type not in WEAKNESS_TYPES:
             raise ValueError(f"Unsupported weakness_type: {self.weakness_type}")
-        object.__setattr__(self, "severity", max(0.0, min(1.0, float(self.severity))))
+        object.__setattr__(self, "severity", max(0.0, min(1.0, _float(self.severity))))
         object.__setattr__(self, "recurrence_count", max(0, int(self.recurrence_count)))
 
     def to_dict(self) -> dict[str, Any]:
@@ -623,7 +625,7 @@ class CurriculumPlan:
             raise ValueError("curriculum_id is required")
         if not self.weakness_id:
             raise ValueError("weakness_id is required")
-        object.__setattr__(self, "target_score", max(0.0, min(1.0, float(self.target_score))))
+        object.__setattr__(self, "target_score", max(0.0, min(1.0, _float(self.target_score, 0.75))))
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)

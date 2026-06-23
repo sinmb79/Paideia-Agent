@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from dataclasses import replace
 from pathlib import Path
 from typing import Any, Iterable
@@ -122,7 +123,10 @@ def detect_weaknesses(
     for (record_owner, record_domain, skill_id, weakness_type), values in sorted(grouped.items()):
         evidence_refs = tuple(dict.fromkeys(str(item) for item in values["evidence_refs"] if str(item)))
         recurrence_count = max(int(values["recurrence_count"]), len(evidence_refs))
-        severity = min(1.0, float(values["severity"]) + min(0.20, 0.05 * max(0, recurrence_count - 1)))
+        severity = _bounded_score(
+            _bounded_score(values["severity"], default=0.0) + min(0.20, 0.05 * max(0, recurrence_count - 1)),
+            default=0.0,
+        )
         records.append(
             WeaknessRecord(
                 weakness_id=_stable_id("weakness", record_owner, record_domain, skill_id, weakness_type),
@@ -269,12 +273,14 @@ def apply_curriculum_completion(
     score: float,
     target_score: float | None = None,
     evidence_refs: Iterable[str] = (),
+    transfer_passed: bool = False,
+    retention_passed: bool = False,
 ) -> dict[str, Any]:
-    normalized_score = max(0.0, min(1.0, float(score)))
-    target = max(0.0, min(1.0, float(target_score))) if target_score is not None else 0.75
+    normalized_score = _bounded_score(score, default=0.0)
+    target = _bounded_score(target_score, default=0.75) if target_score is not None else 0.75
     completion_refs = tuple(str(ref) for ref in evidence_refs if str(ref))
     updated_refs = tuple(dict.fromkeys((*weakness.evidence_refs, *completion_refs)))
-    effective_passed = bool(passed and normalized_score >= target)
+    effective_passed = bool(passed and normalized_score >= target and transfer_passed and retention_passed)
     if effective_passed:
         updated = replace(
             weakness,
@@ -299,6 +305,8 @@ def apply_curriculum_completion(
         "score": round(normalized_score, 4),
         "target_score": round(target, 4),
         "evidence_refs": list(completion_refs),
+        "transfer_passed": transfer_passed,
+        "retention_passed": retention_passed,
         "action": action,
         "updated_weakness": updated.to_dict(),
     }
@@ -365,7 +373,7 @@ def weakness_mapping_for_error(error_type: str) -> tuple[str, str]:
 
 def severity_value(severity: str | float | int) -> float:
     if isinstance(severity, (int, float)) and not isinstance(severity, bool):
-        return max(0.0, min(1.0, float(severity)))
+        return _bounded_score(severity, default=SEVERITY_MAP["medium"])
     return SEVERITY_MAP.get(str(severity or "medium").casefold(), 0.50)
 
 
@@ -446,3 +454,15 @@ def _unique(values: Iterable[str]) -> tuple[str, ...]:
 def _stable_id(prefix: str, *parts: object) -> str:
     raw = "|".join(str(part) for part in parts)
     return f"{prefix}-" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:12]
+
+
+def _bounded_score(value: Any, *, default: float) -> float:
+    if isinstance(value, bool):
+        return default
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return default
+    if not math.isfinite(numeric):
+        return default
+    return max(0.0, min(1.0, numeric))

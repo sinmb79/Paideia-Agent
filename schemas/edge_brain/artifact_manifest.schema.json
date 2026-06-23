@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/sinmb79/Paideia-Agent/schemas/edge_brain/artifact_manifest.schema.json",
+  "title": "Paideia Edge Artifact Manifest",
+  "type": "object",
+  "required": ["schema", "manifest_id", "created_at", "artifact_type", "artifact_refs", "artifact_digests", "dependency_digests", "rollback_counter", "signature_ref", "verification_status"],
+  "properties": {
+    "schema": { "const": "paideia-edge-artifact-manifest/v1" },
+    "manifest_id": { "type": "string", "minLength": 1 },
+    "created_at": { "type": "string", "minLength": 1 },
+    "artifact_type": { "type": "string", "minLength": 1 },
+    "artifact_refs": { "type": "array", "items": { "type": "string" } },
+    "artifact_digests": { "type": "array", "items": { "$ref": "#/$defs/digest_ref" } },
+    "dependency_digests": { "type": "array", "items": { "$ref": "#/$defs/digest_ref" } },
+    "rollback_counter": { "type": "integer", "minimum": 0 },
+    "signature_ref": { "type": ["string", "null"] },
+    "verification_status": { "enum": ["unverified", "digest_verified", "signature_verified", "rejected"] }
+  },
+  "$defs": {
+    "digest_ref": {
+      "type": "object",
+      "required": ["ref", "sha256"],
+      "properties": {
+        "ref": { "type": "string", "minLength": 1 },
+        "sha256": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

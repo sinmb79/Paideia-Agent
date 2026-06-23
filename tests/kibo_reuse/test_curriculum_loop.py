@@ -94,7 +94,7 @@ def test_failure_to_weakness_to_curriculum_to_exam_loop_validates_schemas():
     weakness = detect_weaknesses([_failure()], owner="Boss", domain="investment_research")[0]
     curriculum = generate_curriculum_plan(weakness, related_skills=("liquidity",))
     exam = generate_adaptive_exam(curriculum, weakness=weakness)
-    completion = apply_curriculum_completion(weakness, passed=True, score=0.9)
+    completion = apply_curriculum_completion(weakness, passed=True, score=0.9, transfer_passed=True, retention_passed=True)
 
     assert weakness.skill_id == "macro_regime_analysis"
     assert "liquidity" in curriculum.learning_goals
@@ -122,6 +122,59 @@ def test_completion_below_target_increases_weakness():
     assert completion["effective_passed"] is False
     assert completion["action"] == "weakness_increased"
     assert completion["updated_weakness"]["severity"] > weakness.severity
+
+
+def test_completion_requires_transfer_and_retention_before_weakness_reduction():
+    weakness = detect_weaknesses([_failure()], owner="Boss", domain="investment_research")[0]
+
+    completion = apply_curriculum_completion(weakness, passed=True, score=0.95, target_score=0.85)
+
+    assert completion["effective_passed"] is False
+    assert completion["transfer_passed"] is False
+    assert completion["retention_passed"] is False
+    assert completion["action"] == "weakness_increased"
+
+
+def test_completion_rejects_non_finite_score_fail_closed():
+    weakness = detect_weaknesses([_failure()], owner="Boss", domain="investment_research")[0]
+
+    completion = apply_curriculum_completion(
+        weakness,
+        passed=True,
+        score=float("nan"),
+        target_score=0.85,
+        transfer_passed=True,
+        retention_passed=True,
+    )
+
+    assert completion["effective_passed"] is False
+    assert completion["score"] == 0.0
+    assert completion["action"] == "weakness_increased"
+    assert completion["updated_weakness"]["severity"] > weakness.severity
+
+
+def test_weakness_record_rejects_non_finite_severity_fail_closed():
+    weakness = WeaknessRecord(
+        "weakness-nan",
+        "Boss",
+        "investment_research",
+        "macro_regime_analysis",
+        "knowledge_gap",
+        ("failure-1",),
+        float("nan"),
+        1,
+    )
+
+    assert weakness.severity == 0.0
+
+
+def test_curriculum_completion_schema_accepts_legacy_v1_without_transfer_flags():
+    weakness = detect_weaknesses([_failure()], owner="Boss", domain="investment_research")[0]
+    completion = apply_curriculum_completion(weakness, passed=False, score=0.3)
+    del completion["transfer_passed"]
+    del completion["retention_passed"]
+
+    Draft202012Validator(_schema("curriculum_completion.v1.schema.json")).validate(completion)
 
 
 def test_repeated_failure_increases_weakness_and_adaptive_exam_difficulty():
@@ -223,6 +276,8 @@ def test_completion_report_can_be_loaded_as_weakness_record(tmp_path):
         score=0.9,
         target_score=0.85,
         evidence_refs=("adaptive-exam-1",),
+        transfer_passed=True,
+        retention_passed=True,
     )
     completion_path = tmp_path / "completion.json"
     completion_path.write_text(json.dumps(completion), encoding="utf-8")
@@ -297,6 +352,8 @@ def test_curriculum_cli_commands_round_trip(tmp_path):
             "0.9",
             "--evidence-ref",
             "adaptive-exam-cli",
+            "--transfer-passed",
+            "--retention-passed",
             "--output",
             str(completion_path),
             "--updated-weakness-output",

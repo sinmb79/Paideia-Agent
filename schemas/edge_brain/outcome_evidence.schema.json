@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/sinmb79/Paideia-Agent/schemas/edge_brain/outcome_evidence.schema.json",
+  "title": "Paideia Edge Outcome Evidence",
+  "type": "object",
+  "required": ["schema", "outcome_id", "decision_cycle_id", "pattern_id", "action_pattern_id", "immediate_score", "delayed_score", "success", "safety_violations", "error_type", "environment_tags", "confounders", "evidence_refs", "attribution_confidence"],
+  "properties": {
+    "schema": { "const": "paideia-edge-outcome-evidence/v1" },
+    "outcome_id": { "type": "string", "minLength": 1 },
+    "decision_cycle_id": { "type": "string", "minLength": 1 },
+    "pattern_id": { "type": "string", "minLength": 1 },
+    "action_pattern_id": { "type": "string", "minLength": 1 },
+    "immediate_score": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+    "delayed_score": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+    "success": { "type": ["boolean", "null"] },
+    "safety_violations": { "type": "array", "items": { "type": "string" } },
+    "error_type": { "type": ["string", "null"] },
+    "environment_tags": { "type": "array", "items": { "type": "string" } },
+    "confounders": { "type": "array", "items": { "type": "string" } },
+    "evidence_refs": { "type": "array", "items": { "type": "string" } },
+    "attribution_confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+  },
+  "additionalProperties": false
+}

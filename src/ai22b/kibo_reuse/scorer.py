@@ -47,7 +47,7 @@ def _tokens(value: Any) -> set[str]:
         text = " ".join(str(item) for item in value)
     else:
         text = str(value or "")
-    return {token.casefold() for token in re.findall(r"[0-9A-Za-z가-힣_]+", text)}
+    return {token.casefold() for token in re.findall(r"\w+", text, flags=re.UNICODE)}
 
 
 def _compatible_domain(task_domain: str, kibo_domain: str) -> float:

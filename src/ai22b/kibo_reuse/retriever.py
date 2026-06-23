@@ -4,9 +4,11 @@ import json
 from pathlib import Path
 from typing import Iterable
 
+from .applicability import filter_applicable_kibo_records
 from .models import BLOCKED_PROMOTION_STATUSES, KiboRecord
 from .scorer import KiboScore, score_kibo_record
-from .models import TaskFingerprint
+from .models import FailureMemory, TaskFingerprint
+from .sqlite_index import search_sqlite_kibo_index
 
 
 KIBO_INDEX_SCHEMA = "paideia-kibo-index/v1"
@@ -102,14 +104,29 @@ def search_kibo(
     *,
     repo_root: Path | None = None,
     kibo_paths: Iterable[Path] | None = None,
+    sqlite_index_path: Path | None = None,
+    failure_memories: Iterable[FailureMemory] = (),
     limit: int = 5,
 ) -> list[KiboScore]:
     sources = list(kibo_paths or [])
     if repo_root is not None and not sources:
         sources = discover_kibo_sources(repo_root)
     records: list[KiboRecord] = []
+    if sqlite_index_path is not None and sqlite_index_path.exists():
+        query = " ".join([task.domain, task.task_type, task.intent, *task.constraints, *task.required_capabilities])
+        rows = search_sqlite_kibo_index(sqlite_index_path, query, limit=max(limit * 4, limit))
+        records.extend(_record_from_row(row, source_path=sqlite_index_path) for row in rows)
     for source in sources:
         records.extend(load_kibo_records(source))
-    scores = [score_kibo_record(task, record) for record in eligible_records(records)]
+    records = _dedupe_records(records)
+    applicable, _reports = filter_applicable_kibo_records(task, eligible_records(records), failures=failure_memories)
+    scores = [score_kibo_record(task, record) for record in applicable]
     scores.sort(key=lambda item: (item.reuse_score, item.record.success_score, item.record.updated_at), reverse=True)
     return scores[: max(0, limit)]
+
+
+def _dedupe_records(records: Iterable[KiboRecord]) -> list[KiboRecord]:
+    deduped: dict[str, KiboRecord] = {}
+    for record in records:
+        deduped[record.kibo_id] = record
+    return list(deduped.values())

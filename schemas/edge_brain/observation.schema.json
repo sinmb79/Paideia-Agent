@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/sinmb79/Paideia-Agent/schemas/edge_brain/observation.schema.json",
+  "title": "Paideia Edge Observation",
+  "type": "object",
+  "required": ["schema", "observation_id", "source_id", "schema_ref", "observed_at", "received_at", "payload_ref", "payload_digest", "confidence", "freshness_ms", "health_status", "provenance"],
+  "properties": {
+    "schema": { "const": "paideia-edge-observation/v1" },
+    "observation_id": { "type": "string", "minLength": 1 },
+    "source_id": { "type": "string", "minLength": 1 },
+    "schema_ref": { "type": "string", "minLength": 1 },
+    "observed_at": { "type": "string", "minLength": 1 },
+    "received_at": { "type": "string", "minLength": 1 },
+    "payload_ref": { "type": "string" },
+    "payload_digest": { "type": "string" },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+    "freshness_ms": { "type": "integer", "minimum": 0 },
+    "health_status": { "type": "string", "minLength": 1 },
+    "provenance": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": false
+}

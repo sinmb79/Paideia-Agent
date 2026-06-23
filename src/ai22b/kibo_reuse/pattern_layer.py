@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -306,7 +307,7 @@ def build_real_world_outcome(
         applied_at=_now_iso(),
         outcome_type=outcome_type,
         success=success,
-        quantitative_result=None if score is None else max(0.0, min(1.0, float(score))),
+        quantitative_result=None if score is None else _bounded_score(score),
         qualitative_result=None,
         user_feedback_score=user_feedback_score,
         error_type=error_type,
@@ -720,7 +721,7 @@ def _real_world_score(outcomes: list[RealWorldOutcome], *, fallback: float | Non
     scores: list[float] = []
     for outcome in outcomes:
         if outcome.quantitative_result is not None:
-            scores.append(max(0.0, min(1.0, outcome.quantitative_result)))
+            scores.append(_bounded_score(outcome.quantitative_result))
         else:
             scores.append(1.0 if outcome.success else 0.0)
     return sum(scores) / len(scores)
@@ -741,6 +742,18 @@ def _failure_penalty(outcomes: list[RealWorldOutcome]) -> float:
     if any((outcome.error_type or "").casefold() in CRITICAL_FAILURE_TYPES for outcome in failures):
         penalty += 0.5
     return max(0.0, min(1.0, penalty))
+
+
+def _bounded_score(value: Any) -> float:
+    if isinstance(value, bool):
+        return 0.0
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    if not math.isfinite(numeric):
+        return 0.0
+    return max(0.0, min(1.0, numeric))
 
 
 def _severity_rank(severity: str) -> int:

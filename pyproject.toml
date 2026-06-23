@@ -82,3 +82,7 @@ skips = [
   "B608", # Long generated markdown templates are misread as SQL construction.
   "B615", # Local-only Hugging Face loading uses local_files_only=True.
 ]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

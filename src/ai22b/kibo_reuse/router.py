@@ -48,6 +48,7 @@ def route_task(
     *,
     repo_root: Path | None = None,
     kibo_paths: Iterable[Path] | None = None,
+    sqlite_index_path: Path | None = None,
     pattern_paths: Iterable[Path] | None = None,
     failure_paths: Iterable[Path] | None = None,
     weakness_paths: Iterable[Path] | None = None,
@@ -57,10 +58,13 @@ def route_task(
     limit: int = 5,
 ) -> dict[str, Any]:
     fingerprint = task if isinstance(task, TaskFingerprint) else fingerprint_from_task_payload(task)
+    failure_memories = load_failure_memories(failure_paths)
     scores = search_kibo(
         fingerprint,
         repo_root=repo_root,
         kibo_paths=kibo_paths,
+        sqlite_index_path=sqlite_index_path,
+        failure_memories=failure_memories,
         limit=limit,
     )
     decision = make_reuse_decision(fingerprint, scores)
@@ -72,7 +76,7 @@ def route_task(
             fingerprint,
             decision,
             patterns=load_patterns(pattern_paths),
-            failures=load_failure_memories(failure_paths),
+            failures=failure_memories,
             weakness_records=load_weakness_records(weakness_paths),
             user_model=load_user_decision_model(user_model_path),
             critic_reports=load_critic_reports(critic_paths),
@@ -86,6 +90,7 @@ def build_kibo_reuse_plan_from_file(
     *,
     repo_root: Path | None = None,
     kibo_paths: Iterable[Path] | None = None,
+    sqlite_index_path: Path | None = None,
     pattern_paths: Iterable[Path] | None = None,
     failure_paths: Iterable[Path] | None = None,
     weakness_paths: Iterable[Path] | None = None,
@@ -99,6 +104,7 @@ def build_kibo_reuse_plan_from_file(
         _read_task(task_path),
         repo_root=repo_root,
         kibo_paths=kibo_paths,
+        sqlite_index_path=sqlite_index_path,
         pattern_paths=pattern_paths,
         failure_paths=failure_paths,
         weakness_paths=weakness_paths,
@@ -118,6 +124,7 @@ def build_kibo_reuse_plan(
     *,
     repo_root: Path | None = None,
     kibo_paths: Iterable[Path] | None = None,
+    sqlite_index_path: Path | None = None,
     pattern_paths: Iterable[Path] | None = None,
     failure_paths: Iterable[Path] | None = None,
     weakness_paths: Iterable[Path] | None = None,
@@ -130,6 +137,7 @@ def build_kibo_reuse_plan(
         task,
         repo_root=repo_root,
         kibo_paths=kibo_paths,
+        sqlite_index_path=sqlite_index_path,
         pattern_paths=pattern_paths,
         failure_paths=failure_paths,
         weakness_paths=weakness_paths,

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/sinmb79/Paideia-Agent/schemas/edge_brain/action_receipt.schema.json",
+  "title": "Paideia Edge Action Receipt",
+  "type": "object",
+  "required": ["schema", "receipt_id", "decision_cycle_id", "action_pattern_id", "step_id", "capability_id", "requested_at", "completed_at", "status", "input_digest", "output_ref", "output_digest", "observed_side_effects", "error_code", "rollback_status"],
+  "properties": {
+    "schema": { "const": "paideia-edge-action-receipt/v1" },
+    "receipt_id": { "type": "string", "minLength": 1 },
+    "decision_cycle_id": { "type": "string", "minLength": 1 },
+    "action_pattern_id": { "type": "string", "minLength": 1 },
+    "step_id": { "type": "string", "minLength": 1 },
+    "capability_id": { "type": "string", "minLength": 1 },
+    "requested_at": { "type": "string", "minLength": 1 },
+    "completed_at": { "type": ["string", "null"] },
+    "status": { "type": "string", "minLength": 1 },
+    "input_digest": { "type": "string" },
+    "output_ref": { "type": ["string", "null"] },
+    "output_digest": { "type": ["string", "null"] },
+    "observed_side_effects": { "type": "array", "items": { "type": "string" } },
+    "error_code": { "type": ["string", "null"] },
+    "rollback_status": { "type": ["string", "null"] }
+  },
+  "additionalProperties": false
+}

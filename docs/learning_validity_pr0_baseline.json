@@ -1,0 +1,77 @@
+{
+  "schema": "paideia-learning-validity-pr0-baseline/v1",
+  "captured_at": "2026-06-23T10:40:00+09:00",
+  "repository": "sinmb79/Paideia-Agent",
+  "branch": "feature/independent-edge-brain-foundation",
+  "scope": "PR-0 Baseline Freeze and Gap Reproduction",
+  "production_behavior_changed": false,
+  "cli_baseline": {
+    "command": "$env:PYTHONPATH='src'; python -m ai22b.talent_foundry.cli --help",
+    "exit_code": 0,
+    "notable_pattern_loop_commands": [
+      "kibo-index",
+      "kibo-search",
+      "kibo-plan",
+      "kibo-run",
+      "pattern-extract",
+      "pattern-exam",
+      "pattern-outcome",
+      "pattern-reinforce",
+      "failure-search",
+      "critic-report",
+      "weakness-detect",
+      "curriculum-generate",
+      "adaptive-exam",
+      "curriculum-complete"
+    ]
+  },
+  "test_baseline": {
+    "collect_command": "$env:PYTHONPATH='src'; $env:PYTHONDONTWRITEBYTECODE='1'; python -m pytest --collect-only -q -p no:cacheprovider",
+    "collected_tests": 353,
+    "segmented_commands": [
+      {
+        "command": "python -m pytest -q -p no:cacheprovider tests\\edge_brain tests\\kibo_reuse",
+        "result": "54 passed, 3 xfailed"
+      },
+      {
+        "command": "python -m pytest -q -p no:cacheprovider tests\\test_public_artifact_schemas.py",
+        "result": "17 passed"
+      },
+      {
+        "command": "python -m pytest -q -p no:cacheprovider tests\\test_package_smoke.py tests\\test_cli_smoke.py tests\\test_bigram.py",
+        "result": "17 passed"
+      },
+      {
+        "command": "python -m pytest -q -p no:cacheprovider tests\\test_talent_foundry_action_approval.py tests\\test_talent_foundry_execution_proof.py tests\\test_talent_foundry_policy_eval.py tests\\test_talent_foundry_runtime_benchmark.py tests\\test_talent_foundry_telegram_bridge.py",
+        "result": "21 passed"
+      },
+      {
+        "command": "python -m pytest -q -p no:cacheprovider tests\\test_talent_foundry_graham.py tests\\test_talent_foundry_graham_kibo_lifecycle.py tests\\test_talent_foundry_growth_package.py",
+        "result": "20 passed"
+      },
+      {
+        "command": "python -m pytest -q -p no:cacheprovider tests\\test_talent_foundry_llm_clients.py tests\\test_talent_foundry_llm_plan.py tests\\test_talent_foundry_memory_substrate_chat.py",
+        "result": "33 passed"
+      },
+      {
+        "command": "python -m pytest -q -p no:cacheprovider tests\\test_talent_foundry.py",
+        "result": "188 passed in output; command wrapper returned timeout code after 24m21s"
+      }
+    ],
+    "single_full_suite_note": "Single-command full suite exceeded the command wrapper timeout; segmented execution covered the 350 pre-PR-0 tests and PR-0 added 3 strict xfail known-gap tests."
+  },
+  "known_gap_xfail_tests": [
+    {
+      "test": "tests/kibo_reuse/test_learning_validity_known_gaps.py::test_known_gap_structural_exam_passes_without_behavioral_holdout_execution",
+      "reason": "Structural PatternExamResult can pass without behavioral holdout execution."
+    },
+    {
+      "test": "tests/kibo_reuse/test_learning_validity_known_gaps.py::test_known_gap_token_overlap_failure_matching_false_positive",
+      "reason": "FailureMemory search can match on generic token overlap before structured applicability checks."
+    },
+    {
+      "test": "tests/kibo_reuse/test_learning_validity_known_gaps.py::test_known_gap_manual_high_outcome_score_overstates_field_confidence",
+      "reason": "Manual high RealWorldOutcome scores can promote field confidence without verifier provenance."
+    }
+  ]
+}

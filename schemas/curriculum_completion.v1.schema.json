@@ -22,6 +22,8 @@
     "score": { "type": "number", "minimum": 0, "maximum": 1 },
     "target_score": { "type": "number", "minimum": 0, "maximum": 1 },
     "evidence_refs": { "type": "array", "items": { "type": "string" } },
+    "transfer_passed": { "type": "boolean" },
+    "retention_passed": { "type": "boolean" },
     "action": { "enum": ["weakness_reduced", "weakness_increased"] },
     "updated_weakness": {
       "type": "object",

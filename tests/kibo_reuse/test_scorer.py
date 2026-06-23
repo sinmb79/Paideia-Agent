@@ -73,3 +73,23 @@ def test_freshness_required_penalizes_old_kibo():
 
     assert old.freshness_penalty == 1.0
     assert old.reuse_score < fresh.reuse_score
+
+
+def test_unicode_tokens_contribute_to_capability_and_style_scores():
+    task = _task(
+        risk_level="low",
+        freshness_required=False,
+        required_capabilities=("리스크분석",),
+        user_style_markers=("결론우선",),
+    )
+    record = _record(
+        required_inputs=(),
+        reusable_logic=(),
+        problem_signature="포트폴리오 리스크분석 절차",
+        output_template="결론우선 보고서",
+    )
+
+    score = score_kibo_record(task, record, now=datetime(2026, 6, 22, tzinfo=timezone.utc))
+
+    assert score.capability_overlap == 1.0
+    assert score.user_style_score == 1.0

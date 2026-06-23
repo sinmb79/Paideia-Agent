@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/sinmb79/Paideia-Agent/schemas/edge_brain/behavioral_exam_result.schema.json",
+  "title": "Paideia Edge Behavioral Exam Result",
+  "type": "object",
+  "required": ["schema", "exam_id", "action_pattern_id", "scenario_id", "exam_kind", "score", "passed", "receipts", "outcome_evidence_id", "safety_violations", "trace_digest", "replay_digest"],
+  "properties": {
+    "schema": { "const": "paideia-edge-behavioral-exam-result/v1" },
+    "exam_id": { "type": "string", "minLength": 1 },
+    "action_pattern_id": { "type": "string", "minLength": 1 },
+    "scenario_id": { "type": "string", "minLength": 1 },
+    "exam_kind": { "type": "string", "minLength": 1 },
+    "score": { "type": "number", "minimum": 0, "maximum": 1 },
+    "passed": { "type": "boolean" },
+    "receipts": { "type": "array", "items": { "type": "object" } },
+    "outcome_evidence_id": { "type": ["string", "null"] },
+    "safety_violations": { "type": "array", "items": { "type": "string" } },
+    "trace_digest": { "type": "string" },
+    "replay_digest": { "type": "string" }
+  },
+  "additionalProperties": false
+}
